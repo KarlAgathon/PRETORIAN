@@ -240,8 +240,8 @@ private fun PlaylistDetail(pl: Playlist, nav: Nav, onChanged: () -> Unit, onDele
     val counts by load(pl.id, busy) {
         if (busy) null else Triple(
             try { Repo.allChannels(pl).size } catch (e: Exception) { -1 },
-            if (pl.type == SourceType.XTREAM) try { Repo.catalog(pl, "vod").size } catch (e: Exception) { -1 } else -1,
-            if (pl.type == SourceType.XTREAM) try { Repo.catalog(pl, "series").size } catch (e: Exception) { -1 } else -1)
+            if (pl.type == SourceType.XTREAM) try { Repo.catalogCount(pl, "vod") } catch (e: Throwable) { -1 } else -1,
+            if (pl.type == SourceType.XTREAM) try { Repo.catalogCount(pl, "series") } catch (e: Throwable) { -1 } else -1)
     }
     val first = remember { FocusRequester() }
     Page(pl.name, if (pl.type == SourceType.XTREAM) "Xtream Codes · ${pl.server}" else "M3U · ${pl.url}") {

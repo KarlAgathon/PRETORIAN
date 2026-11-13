@@ -263,17 +263,27 @@ object NewContent {
         val x = Xtream(p)
         var added = 0
         for (kind in listOf("vod", "series")) {
-            val all = try { x.catalog(kind) } catch (e: Exception) { continue }
-            if (all.isEmpty()) continue
             val f = File(ctx.filesDir, "snap_${p.id}_$kind.txt")
-            val old = if (f.exists()) f.readText().split(',').toHashSet() else null
+            val old = try { if (f.exists()) f.readText().split(',').toHashSet() else null } catch (e: Throwable) { null }
+            // read piece by piece: keep only the ids and the few new items
+            val ids = StringBuilder()
+            val fresh0 = ArrayList<JSONObject>()
+            val ok = try {
+                x.catalogEach(kind) { o ->
+                    val id = o.str("id")
+                    if (ids.isNotEmpty()) ids.append(',')
+                    ids.append(id)
+                    if (old != null && id !in old && fresh0.size < 2000) fresh0 += o
+                }
+                true
+            } catch (e: Throwable) { false }   // also OutOfMemoryError: never take the app down for the "new" badges
+            if (!ok || ids.isEmpty()) continue
             if (old != null) {
                 val now = System.currentTimeMillis()
-                val fresh0 = all.filter { it.str("id") !in old }
                 fresh0.forEach { fresh[key(p.id, kind, it.str("id"))] = it.put("t", now); added++ }
                 if (fresh0.isNotEmpty()) Notes.add(kind, trf(if (kind == "vod") "Novih filmova: %s" else "Novih serija: %s", fresh0.size) + " · " + p.name)
             }
-            f.writeText(all.joinToString(",") { it.str("id") })
+            f.writeText(ids.toString())
         }
         Prefs.put(stamp, System.currentTimeMillis())
         if (added > 0) save() else rev++

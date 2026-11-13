@@ -161,7 +161,10 @@ object Store {
 object Net {
     const val UA = "Mozilla/5.0 (Linux; Android 10; TV) AppleWebKit/537.36 PRETORIAN/0.1"
 
-    fun get(url: String): String {
+    fun get(url: String): String = open(url) { it.bufferedReader().use { r -> r.readText() } }
+
+    /** opens [url] (following redirects) and hands the body as a stream: big lists are read piece by piece, never whole */
+    fun <T> open(url: String, read: (java.io.InputStream) -> T): T {
         var current = url
         repeat(5) {
             val c = URL(current).openConnection() as HttpURLConnection
@@ -177,7 +180,7 @@ object Net {
                     return@repeat
                 }
                 if (code !in 200..299) throw IOException(trf("Server je odgovorio greškom %s", code))
-                return c.inputStream.bufferedReader().use { r -> r.readText() }
+                return c.inputStream.use(read)
             } finally {
                 c.disconnect()
             }
@@ -253,16 +256,42 @@ class Xtream(private val p: Playlist) {
     }
 
     /** short list of every movie or series: id, category, name, image, rating, url (for the "new" badges) */
-    fun catalog(kind: String): List<JSONObject> {
-        val a = array(api(if (kind == "vod") "get_vod_streams" else "get_series"))
-        return (0 until a.length()).map { i ->
-            val o = a.getJSONObject(i)
-            if (kind == "vod") {
-                val id = o.str("stream_id"); val ext = o.str("container_extension").ifBlank { "mp4" }
-                JSONObject().put("id", id).put("c", o.str("category_id")).put("n", o.str("name")).put("i", o.str("stream_icon"))
-                    .put("r", o.str("rating")).put("u", "$base/movie/${p.user}/${p.pass}/$id.$ext")
-            } else JSONObject().put("id", o.str("series_id")).put("c", o.str("category_id")).put("n", o.str("name")).put("i", o.str("cover"))
-                .put("r", o.str("rating"))
+    fun catalog(kind: String): List<JSONObject> { val out = ArrayList<JSONObject>(); catalogEach(kind) { out += it }; return out }
+
+    /**
+     * every movie or series of the account, one at a time. The list can be hundreds of MB,
+     * so it is read as a stream with only the few fields we need kept (a whole copy would not fit in a TV box's memory).
+     */
+    fun catalogEach(kind: String, each: (JSONObject) -> Unit) {
+        val url = "$base/player_api.php?username=${Net.enc(p.user)}&password=${Net.enc(p.pass)}&action=" +
+            (if (kind == "vod") "get_vod_streams" else "get_series")
+        val want = setOf("stream_id", "series_id", "category_id", "name", "stream_icon", "cover", "rating", "container_extension")
+        Net.open(url) { input ->
+            val r = android.util.JsonReader(java.io.InputStreamReader(input, Charsets.UTF_8))
+            r.isLenient = true
+            if (r.peek() != android.util.JsonToken.BEGIN_ARRAY) return@open
+            r.beginArray()
+            while (r.hasNext()) {
+                if (r.peek() != android.util.JsonToken.BEGIN_OBJECT) { r.skipValue(); continue }
+                val f = HashMap<String, String>()
+                r.beginObject()
+                while (r.hasNext()) {
+                    val n = r.nextName()
+                    if (n in want) when (r.peek()) {
+                        android.util.JsonToken.STRING, android.util.JsonToken.NUMBER -> f[n] = r.nextString()
+                        android.util.JsonToken.BOOLEAN -> f[n] = r.nextBoolean().toString()
+                        else -> r.skipValue()
+                    } else r.skipValue()
+                }
+                r.endObject()
+                val o = if (kind == "vod") {
+                    val id = f["stream_id"] ?: continue; val ext = f["container_extension"].orEmpty().ifBlank { "mp4" }
+                    JSONObject().put("id", id).put("c", f["category_id"].orEmpty()).put("n", f["name"].orEmpty()).put("i", f["stream_icon"].orEmpty())
+                        .put("r", f["rating"].orEmpty()).put("u", "$base/movie/${p.user}/${p.pass}/$id.$ext")
+                } else JSONObject().put("id", f["series_id"] ?: continue).put("c", f["category_id"].orEmpty()).put("n", f["name"].orEmpty())
+                    .put("i", f["cover"].orEmpty()).put("r", f["rating"].orEmpty())
+                each(o)
+            }
         }
     }
 
@@ -450,11 +479,15 @@ object Repo {
         if (p.type != SourceType.XTREAM) emptyList() else cached("cat_${kind}_${p.id}") {
             val f = diskDir?.let { java.io.File(it, "catalog_${kind}_${p.id.hashCode()}.json") }
             val fresh = f != null && f.exists() && System.currentTimeMillis() - f.lastModified() < 24 * 3600_000L
-            val fromDisk = if (fresh) try { org.json.JSONArray(f!!.readText()).let { a -> (0 until a.length()).map { a.getJSONObject(it) } } } catch (e: Exception) { null } else null
+            val fromDisk = if (fresh) try { org.json.JSONArray(f!!.readText()).let { a -> (0 until a.length()).map { a.getJSONObject(it) } } } catch (e: Throwable) { null } else null
             fromDisk ?: Xtream(p).catalog(kind).also { list ->
                 try { f?.writeText(org.json.JSONArray(list).toString()) } catch (_: Exception) {}
             }
         }
+
+    /** how many movies or series a playlist has, counted while reading, nothing kept in memory */
+    suspend fun catalogCount(p: Playlist, kind: String): Int =
+        if (p.type != SourceType.XTREAM) 0 else cached("cnt_${kind}_${p.id}") { var n = 0; Xtream(p).catalogEach(kind) { n++ }; n }
 
     /** "Update all": forget the kept catalog so it is downloaded again. */
     fun dropCatalogs() { diskDir?.listFiles()?.filter { it.name.startsWith("catalog_") }?.forEach { it.delete() } }

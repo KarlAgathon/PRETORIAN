@@ -66,6 +66,7 @@ import java.util.Locale
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        CrashLog.install(this)
         Prefs.init(this)
         Repo.diskDir = cacheDir
         Profiles.onStart(this)
@@ -120,7 +121,7 @@ class Nav(
     val playlistsChanged: () -> Unit,
 )
 
-object BuildInfo { const val VERSION = "0.4.6" }
+object BuildInfo { const val VERSION = "0.4.7" }
 
 @Composable
 fun PretorianApp() {
@@ -232,6 +233,7 @@ fun PretorianApp() {
             ReminderPopup(nav)
             if (Profiles.panel) ProfilePanel(nav)
             DriveDialogs()
+            CrashDialog()
         }
     }
 }
