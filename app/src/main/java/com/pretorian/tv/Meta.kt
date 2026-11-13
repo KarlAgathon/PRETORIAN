@@ -23,6 +23,9 @@ data class Meta(
     val imdbId: String?, val trailerKey: String?, val people: List<Person>,
 )
 
+/** headers of a normal browser: some subtitle sites refuse unknown apps */
+val BROWSER = mapOf("User-Agent" to "Mozilla/5.0 (Linux; Android 12; TV) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36")  // i18n-ignore
+
 /** Small HTTP helper with headers, JSON body and byte download. */
 object Http {
     fun request(url: String, headers: Map<String, String> = emptyMap(), body: String? = null): String {
@@ -44,12 +47,12 @@ object Http {
         } finally { c.disconnect() }
     }
 
-    fun bytes(url: String, max: Int = 50_000_000): ByteArray {
+    fun bytes(url: String, max: Int = 50_000_000, ua: String? = null): ByteArray {
         var cur = url
         repeat(6) {
             val c = URL(cur).openConnection() as HttpURLConnection
             c.connectTimeout = 15_000; c.readTimeout = 60_000; c.instanceFollowRedirects = false
-            c.setRequestProperty("User-Agent", "PRETORIAN v${BuildInfo.VERSION}")
+            c.setRequestProperty("User-Agent", ua ?: "PRETORIAN v${BuildInfo.VERSION}")
             try {
                 val code = c.responseCode
                 if (code in 300..399) { cur = URL(URL(cur), c.getHeaderField("Location") ?: throw IOException("redirect")).toString(); return@repeat }
@@ -178,7 +181,8 @@ object Subs {
         parts += "query-" + Net.enc(title.lowercase()).replace("+", "%20")
         if (season != null) parts += "season-$season"
         parts += "sublanguageid-$l3"
-        val text = Http.request("https://rest.opensubtitles.org/search/" + parts.joinToString("/"), mapOf("X-User-Agent" to "TemporaryUserAgent"))
+        val text = Http.request("https://rest.opensubtitles.org/search/" + parts.joinToString("/"),
+            mapOf("X-User-Agent" to "TemporaryUserAgent", "User-Agent" to "TemporaryUserAgent"))
         val a = org.json.JSONArray(text)
         return (0 until a.length()).mapNotNull { i ->
             val o = a.optJSONObject(i) ?: return@mapNotNull null
@@ -190,13 +194,17 @@ object Subs {
 
     private fun podnapisi(title: String, year: String?, season: Int?, episode: Int?): List<SubResult> {
         val out = ArrayList<SubResult>()
+        var lastError: Exception? = null; var answered = false
+        fun ask(q: String): org.json.JSONArray? = try {
+            val o = JSONObject(Http.request("https://www.podnapisi.net/subtitles/search/advanced?$q", BROWSER))
+            answered = true; o.optJSONArray("data")
+        } catch (e: Exception) { lastError = e; null }
         for (lang in langs().ifEmpty { listOf("en") }.take(4)) {
             var q = "keywords=${Net.enc(title)}&language=$lang"
-            if (season != null) q += "&seasons=$season&movie_type=tv-series" else q += "&movie_type=movie"
+            if (season != null) q += "&seasons=$season"
             if (episode != null) q += "&episodes=$episode"
-            if (year != null && season == null) q += "&year=$year"
-            val o = try { JSONObject(Http.request("https://www.podnapisi.net/subtitles/search/advanced?$q")) } catch (e: Exception) { continue }
-            val data = o.optJSONArray("data") ?: continue
+            // with the year first; when that finds nothing, again without the year and type
+            val data = (if (year != null && season == null) ask("$q&year=$year")?.takeIf { it.length() > 0 } else null) ?: ask(q) ?: continue
             for (i in 0 until data.length()) {
                 val s = data.optJSONObject(i) ?: continue
                 val rel = s.optJSONArray("releases")?.let { r -> (0 until r.length()).joinToString(" ") { r.optString(it) } }?.ifBlank { null }
@@ -205,6 +213,7 @@ object Subs {
                 out += SubResult("Podnapisi", s.str("language").take(2).lowercase().ifBlank { lang }, rel, dl, s.str("id"))
             }
         }
+        if (!answered) lastError?.let { throw it }
         return out
     }
 
@@ -225,7 +234,8 @@ object Subs {
         try { out += legacyOs(title, year, season, episode) } catch (e: Exception) { errors += "OpenSubtitles.org: ${e.message}" }
         if (Prefs.osKey.isNotBlank()) try { out += openSubs(title, year, season, episode) } catch (e: Exception) { errors += "OpenSubtitles: ${e.message}" }
         if (Prefs.subdlKey.isNotBlank()) try { out += subdl(title, year, season, episode) } catch (e: Exception) { errors += "SubDL: ${e.message}" }
-        if (out.isEmpty() && errors.size >= 2) throw IOException(errors.joinToString("\n"))
+        // nothing found and a source failed: say why, instead of "no subtitles"
+        if (out.isEmpty() && errors.isNotEmpty()) throw IOException(errors.joinToString("\n"))
         val order = langs()
         // your languages first; inside a language the release that fits the file best, then the most downloaded
         out.distinctBy { it.provider + it.ref }
@@ -281,11 +291,11 @@ object Subs {
                 Http.bytes(link)
             }
             "OpenSubtitles.org" -> {
-                val gz = Http.bytes(r.ref)
+                val gz = Http.bytes(r.ref, ua = "TemporaryUserAgent")
                 try { java.util.zip.GZIPInputStream(ByteArrayInputStream(gz)).use { it.readBytes() } } catch (e: Exception) { gz }
             }
             "Podnapisi" -> {
-                val zip = Http.bytes("https://www.podnapisi.net/subtitles/${r.ref}/download")
+                val zip = Http.bytes("https://www.podnapisi.net/subtitles/${r.ref}/download", ua = BROWSER["User-Agent"])
                 unzipFirstSrt(zip) ?: throw IOException("U arhivi nema .srt titla")
             }
             else -> {
