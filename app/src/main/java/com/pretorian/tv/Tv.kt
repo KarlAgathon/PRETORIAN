@@ -681,6 +681,7 @@ fun GroupManager(nav: Nav) {
     val ovr = remember(p.id) { Ovr(ctx, p.id) }
     var tab by remember { mutableIntStateOf(0) }
     var rev by remember { mutableIntStateOf(0) }
+    var pickMany by remember { mutableStateOf(false) }   // OK only shows or hides the group
     var chGroup by remember { mutableStateOf<Category?>(null) }      // Channels tab: the group whose channels you edit
     val kind = listOf("live", "vod", "series", "live")[tab]
     val st by load(p.id, kind, rev, keep = true) {
@@ -753,10 +754,18 @@ fun GroupManager(nav: Nav) {
             T(tr("Grupe i kanali") + " · ${p.name}", 22.sp, C.Text, FontWeight.Bold, maxLines = 1)
             T("OK na grupi ili kanalu: uzmi i pomjeri, na vrh, na kraj, naziv, sakrivanje, PIN.", 13.sp, C.Muted, maxLines = 2)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Segmented(listOf("TV", "Filmovi", "Serije", "Kanali"), tab) { tab = it; chGroup = null; carry = null }
-                if (tab == 0) Button("Nova grupa", R.drawable.lc_plus) { newGroup = true }
+                Segmented(listOf("TV", "Filmovi", "Serije", "Kanali"), tab) { tab = it; chGroup = null; carry = null; pickMany = false }
+                if (tab == 0 && !pickMany) Button("Nova grupa", R.drawable.lc_plus) { newGroup = true }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (tab != 3 && pickMany) Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Button("Gotovo", R.drawable.lc_check, primary = true) { pickMany = false }
+                Button("Sakrij sve", R.drawable.lc_eye_off) { ovr.setHidden(kind, groups.map { it.id }, true); rev++; nav.playlistsChanged() }
+                Button("Prikaži sve", R.drawable.lc_eye) { ovr.setHidden(kind, groups.map { it.id }, false); rev++; nav.playlistsChanged() }
+                val vis = groups.count { !ovr.isHidden(kind, it.id) }
+                T(trf("Vidljivo: %s od %s · OK = prikaži/sakrij", vis, groups.size), 13.sp, C.Soft, maxLines = 1, modifier = Modifier.weight(1f))
+            }
+            else Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (tab != 3) Button("Sakrij / prikaži više", R.drawable.lc_eye_off) { pickMany = true; carry = null }
                 if (tab == 0 || tab == 3) Button("Vrati sakrivene kanale", R.drawable.lc_eye) { ovr.unhideAllChannels(); rev++; nav.playlistsChanged() }
                 Button("Vrati sve izmjene", R.drawable.lc_rotate_ccw) { reset = true }
                 if (chanMode) T("›  " + chGroup!!.name, 15.sp, C.Soft, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
@@ -778,6 +787,7 @@ fun GroupManager(nav: Nav) {
                         onClick = {
                             if (carry != null) return@Focusable
                             lastId = k
+                            if (pickMany && g != null) { ovr.toggleHidden(kind, g.id); rev++; nav.playlistsChanged(); return@Focusable }
                             if (tab == 3 && !chanMode) { chGroup = g; lastId = null } else if (ch != null) chMenu = ch else menu = g
                         },
                         onMenu = { if (carry == null) { lastId = k; if (ch != null) chMenu = ch else if (g != null && tab != 3) menu = g } },
@@ -787,6 +797,10 @@ fun GroupManager(nav: Nav) {
                             horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             T("${i + 1}", 12.sp, C.Muted, modifier = Modifier.width(34.dp))
                             if (carried) Ico(R.drawable.lc_hand_grab, 18.dp, C.Amber)
+                            if (pickMany && g != null) Box(Modifier.size(24.dp).clip(Rnd(6.dp)).background(if (hidden) Color.Transparent else C.Green)
+                                .border(2.dp, if (hidden) C.Muted else C.Green, Rnd(6.dp)), contentAlignment = Alignment.Center) {
+                                if (!hidden) Ico(R.drawable.lc_check, 16.dp, Color.White)
+                            }
                             if (ch != null) ChannelLogo(ch.logo, ch.name)
                             T(name, 15.sp, if (hidden) C.Muted else C.Text, FontWeight.Medium, maxLines = 1, modifier = Modifier.weight(1f))
                             if (g != null && g.id.startsWith("my_")) Chip("MOJA", C.CardFocus, C.RedText)

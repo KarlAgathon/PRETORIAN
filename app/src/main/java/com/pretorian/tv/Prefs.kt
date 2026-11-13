@@ -118,6 +118,12 @@ class Ovr(private val ctx: Context, private val pid: String) {
     fun renameGroup(kind: String, id: String, name: String) { map("gName_$kind").put(id, name); save() }
     fun isHidden(kind: String, id: String) = id in list("gHidden_$kind")
     fun toggleHidden(kind: String, id: String) = toggle("gHidden_$kind", id)
+    /** hide or show many groups at once */
+    fun setHidden(kind: String, ids: List<String>, hidden: Boolean) {
+        val cur = list("gHidden_$kind").toMutableSet()
+        if (hidden) cur.addAll(ids) else cur.removeAll(ids.toSet())
+        setList("gHidden_$kind", cur.toList())
+    }
     fun isLocked(kind: String, id: String) = id in list("gLocked_$kind")
     fun toggleLocked(kind: String, id: String) = toggle("gLocked_$kind", id)
 
