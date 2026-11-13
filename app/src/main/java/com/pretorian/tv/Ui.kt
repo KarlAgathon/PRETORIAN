@@ -208,7 +208,7 @@ fun Popup(title: String, onDismiss: () -> Unit, width: Dp = 560.dp, content: @Co
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(
             Modifier.widthIn(max = width).fillMaxWidth(0.9f).clip(RoundedCornerShape(26.dp))
-                .background(if (C.IsLight) Color.White else Color(0xFF151A23))
+                .background(C.Overlay)
                 .border(1.dp, C.Line, RoundedCornerShape(26.dp))
                 .heightIn(max = 640.dp)
                 .padding(28.dp),

@@ -18,6 +18,8 @@ object Look {
     var posterSize by mutableIntStateOf(1)     // 0 small, 1 medium, 2 large
     var tileStyle by mutableIntStateOf(0)      // 0 solid, 1 glass, 2 outline
     var mostWatched by mutableStateOf(true)
+    var overlay by mutableIntStateOf(0)        // menus and info bar: 0 glass, 1 black
+    var preview by mutableStateOf(true)        // live preview of the focused channel
 
     val ACCENTS = listOf(
         "Pretorian crvena" to Color(0xFFE5141B), "Plava" to Color(0xFF2563EB), "Zelena" to Color(0xFF16A34A),
@@ -38,12 +40,15 @@ object Look {
         posterSize = p.getInt("look_poster", 1)
         tileStyle = p.getInt("look_tilestyle", 0)
         mostWatched = p.getBoolean("look_mostwatched", true)
+        overlay = p.getInt("look_overlay", 0)
+        preview = p.getBoolean("look_preview", true)
     }
 
     fun save(c: Context) {
         sp(c).edit().putString("look_theme", theme).putInt("look_accent", accent).putInt("look_shade", shade)
             .putInt("look_opacity", opacity).putInt("look_tile", tileSize).putInt("look_poster", posterSize)
-            .putInt("look_tilestyle", tileStyle).putBoolean("look_mostwatched", mostWatched).apply()
+            .putInt("look_tilestyle", tileStyle).putBoolean("look_mostwatched", mostWatched)
+            .putInt("look_overlay", overlay).putBoolean("look_preview", preview).apply()
     }
 }
 
@@ -100,4 +105,9 @@ object C {
     val Green get() = if (IsLight) Color(0xFF15803D) else Color(0xFF4ADE80)
     val Amber get() = if (IsLight) Color(0xFFB45309) else Color(0xFFFBBF24)
     val Danger = Color(0xFFEF4444)
+    /** background of menus and popups: see-through glass or solid black */
+    val Overlay get() = if (Look.overlay == 1) (if (IsLight) Color.White else Color.Black)
+                        else (if (IsLight) Color(0xE6FFFFFF) else Color(0xCC141922))
+    /** player info bar background */
+    val OverlayBar get() = if (Look.overlay == 1) Color(0xF2000000) else Color(0x99000000)
 }

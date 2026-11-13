@@ -228,7 +228,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
 
         if (showInfo) {
             Box(Modifier.align(Alignment.BottomStart).fillMaxWidth()
-                .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xE6000000))))
+                .background(if (Look.overlay == 1) Brush.verticalGradient(listOf(C.OverlayBar, C.OverlayBar)) else Brush.verticalGradient(listOf(Color.Transparent, Color(0xE6000000))))
                 .padding(start = 48.dp, end = 48.dp, top = 70.dp, bottom = 34.dp)) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {

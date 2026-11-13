@@ -172,6 +172,8 @@ class Ovr(private val ctx: Context, private val pid: String) {
         setList("chOrder_$groupId", urls)
     }
 
+    fun unhideAllChannels() { o.put("chHidden", JSONArray()); save() }
+
     fun countWatch(ch: Channel) { val w = map("watch"); w.put(ch.url, w.optInt(ch.url, 0) + 1); save() }
 
     fun resetAll() { Prefs.put(key, "{}") }

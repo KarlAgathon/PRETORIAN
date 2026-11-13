@@ -276,7 +276,10 @@ private fun LookPage() {
         Segmented(listOf("Puna boja", "Glass", "Obris"), Look.tileStyle) { Look.tileStyle = it; save() }
         Label("Posteri filmova i serija")
         Segmented(listOf("Mali", "Srednji", "Veliki"), Look.posterSize) { Look.posterSize = it; save() }
+        Label("Meniji i info traka preko slike")
+        Segmented(listOf("Stakleno (prozirno)", "Crno"), Look.overlay) { Look.overlay = it; save() }
         Label("Kanali")
+        ToggleRow("Pregled kanala uživo", Look.preview, R.drawable.lc_tv, "Kad staneš na kanal, desno se pušta mala slika i EPG") { Look.preview = it; save() }
         ToggleRow("Najgledaniji na vrhu grupe", Look.mostWatched, R.drawable.lc_arrow_up, "Kanali koje najčešće gledaš sami idu gore (kad nema ručnog redoslijeda)") {
             Look.mostWatched = it; save()
         }
@@ -398,6 +401,8 @@ private fun UpdatePage() {
 @Composable
 private fun AboutPage() {
     Page("O aplikaciji") {
+        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.logo_full), contentDescription = "PRETORIAN",
+            modifier = Modifier.size(180.dp))
         OptionRow("PRETORIAN ${BuildInfo.VERSION}", R.drawable.lc_info, "IPTV player za Android TV") {}
         OptionRow("Izvorni kod", R.drawable.lc_link, "github.com/KarlAgathon/PRETORIAN · MIT licenca") {}
         OptionRow("Ikone i font", R.drawable.lc_type, "Lucide (ISC) · Inter (OFL) · Media3 (Apache 2.0)") {}

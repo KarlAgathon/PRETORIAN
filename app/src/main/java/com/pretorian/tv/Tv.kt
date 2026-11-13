@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -88,6 +89,8 @@ fun TvScreen(nav: Nav) {
     val gWrap = remember { Wrap() }
     val gState = rememberLazyListState()
     WrapEffect(gWrap, gState)
+    var inChannels by remember { mutableStateOf(false) }
+    var focusedCh by remember { mutableStateOf<Channel?>(null) }
 
     LaunchedEffect(focusedGroup) {
         val g = focusedGroup ?: return@LaunchedEffect
@@ -96,6 +99,23 @@ fun TvScreen(nav: Nav) {
     }
 
     Row(Modifier.fillMaxSize()) {
+        if (inChannels) {
+            // groups folded away while you browse channels; Left brings them back
+            Column(Modifier.width(64.dp).fillMaxHeight().padding(top = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Focusable(modifier = Modifier.size(52.dp, 140.dp), onClick = { inChannels = false },
+                    onFocus = {
+                        inChannels = false
+                        val list = (groupsState as? Load.Ok)?.value ?: emptyList()
+                        val idx = (listOf(FAV_GROUP) + list.map { it.id }).indexOf(group?.id ?: FAV_GROUP).coerceAtLeast(0)
+                        gWrap.target = idx
+                    }, normal = C.Card, zoom = 1f) { _ ->
+                    Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Ico(R.drawable.lc_layers, 20.dp, C.Muted)
+                        T("‹", 22.sp, C.Muted, FontWeight.Bold)
+                    }
+                }
+            }
+        } else
         Column(Modifier.width(300.dp).fillMaxHeight().padding(start = 18.dp, end = 12.dp, top = 24.dp)) {
             T("TV", 28.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 10.dp, bottom = 2.dp))
             T(p.name, 13.sp, C.Muted, modifier = Modifier.padding(start = 10.dp, bottom = 12.dp))
@@ -112,7 +132,7 @@ fun TvScreen(nav: Nav) {
                             Focusable(
                                 modifier = Modifier.fillMaxWidth().height(44.dp).wrapKeys(i, n, gWrap),
                                 onClick = { gate.run("g:${g.id}", locked) { group = g } },
-                                onFocus = { focusedGroup = g },
+                                onFocus = { focusedGroup = g; inChannels = false },
                                 onMenu = if (Lock.simple || g.id == FAV_GROUP) null else ({ groupMenu = g }),
                                 focusRequester = gWrap.requester(i, if (i == 0) firstGroup else null),
                                 normal = if (selected) C.CardFocus else Color.Transparent,
@@ -145,7 +165,12 @@ fun TvScreen(nav: Nav) {
         Box(Modifier.weight(1f).fillMaxHeight()) {
             val g = group
             if (g == null) Message("Izaberi grupu", "Meni ili dugi OK na grupi otvara opcije")
-            else key(g.id, rev) { ChannelList(p, ovr, g, nav, gate, s = groupsState) { rev++ } }
+            else Row(Modifier.fillMaxSize()) {
+                Box(Modifier.weight(1f).fillMaxHeight()) {
+                    key(g.id, rev) { ChannelList(p, ovr, g, nav, gate, s = groupsState, onFocusCh = { focusedCh = it; inChannels = true }) { rev++ } }
+                }
+                if (inChannels) EpgPanel(p, focusedCh, Modifier.width(430.dp))
+            }
         }
     }
 
@@ -171,8 +196,8 @@ fun GroupOptions(kind: String, g: Category, ovr: Ovr, current: List<Category>, o
         OptionRow("Pomjeri gore", R.drawable.lc_arrow_up) { ovr.moveGroup(kind, current, g.id, -1); onChanged() }
         OptionRow("Pomjeri dolje", R.drawable.lc_arrow_down) { ovr.moveGroup(kind, current, g.id, 1); onChanged() }
         OptionRow("Preimenuj", R.drawable.lc_pencil) { rename = true }
-        OptionRow(if (ovr.isHidden(kind, g.id)) "Prikaži grupu" else "Sakrij grupu", R.drawable.lc_eye_off) { ovr.toggleHidden(kind, g.id); onChanged() }
-        OptionRow(if (ovr.isLocked(kind, g.id)) "Otključaj (ukloni PIN)" else "Zaključaj PIN-om", R.drawable.lc_lock,
+        OptionRow(if (ovr.isHidden(kind, g.id)) "Prikaži grupu" else if (custom) "Sakrij grupu" else "Sakrij / izbriši grupu", R.drawable.lc_eye_off) { ovr.toggleHidden(kind, g.id); onChanged() }
+        OptionRow(if (ovr.isLocked(kind, g.id)) "Otključaj (ukloni PIN)" else "Zaključaj PIN-om (4 broja)", R.drawable.lc_lock,
             sub = "Za kanale koje djeca ne smiju gledati") {
             if (!Lock.hasPin()) setup = true else { ovr.toggleLocked(kind, g.id); onChanged() }
         }
@@ -181,7 +206,8 @@ fun GroupOptions(kind: String, g: Category, ovr: Ovr, current: List<Category>, o
 }
 
 @Composable
-private fun ChannelList(p: Playlist, ovr: Ovr, g: Category, nav: Nav, gate: PinGate, s: Load<List<Category>>, onChanged: () -> Unit) {
+private fun ChannelList(p: Playlist, ovr: Ovr, g: Category, nav: Nav, gate: PinGate, s: Load<List<Category>>,
+                        onFocusCh: (Channel) -> Unit = {}, onChanged: () -> Unit) {
     val ctx = LocalContext.current
     var favRev by remember { mutableIntStateOf(0) }
     val isFav = g.id == FAV_GROUP
@@ -199,7 +225,7 @@ private fun ChannelList(p: Playlist, ovr: Ovr, g: Category, nav: Nav, gate: PinG
     Column(Modifier.fillMaxSize().padding(start = 22.dp, end = 30.dp, top = 24.dp)) {
         Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             T(g.name, 20.sp, C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
-            T("OK gledaj · Meni ili dugi OK = opcije", 12.sp, C.Muted)
+            T("OK gledaj · Meni = opcije", 12.sp, C.Muted)
         }
         when (val st = state) {
             is Load.Loading -> Loading("Učitavam kanale…")
@@ -224,7 +250,7 @@ private fun ChannelList(p: Playlist, ovr: Ovr, g: Category, nav: Nav, gate: PinG
                                     }
                                 },
                                 onMenu = { menu = ch },
-                                onFocus = { focusIndex = i },
+                                onFocus = { focusIndex = i; onFocusCh(ch) },
                                 focusRequester = cWrap.requester(i, if (i == 0) first else null),
                                 normal = C.Card,
                                 zoom = 1.01f,
@@ -263,7 +289,30 @@ fun ChannelOptions(p: Playlist, ovr: Ovr, g: Category, ch: Channel, list: List<C
     val fav = Store.isFavorite(ctx, p.id, ch)
     var mode by remember { mutableStateOf("menu") }
     when (mode) {
-        "rename" -> { TextDialog("Preimenuj kanal", "Novi naziv", ch.name, onDismiss = { mode = "menu" }) { n -> if (n.isNotBlank()) ovr.renameChannel(ch, n); onChanged(true) }; return }
+        "rename" -> { TextDialog("Preimenuj kanal", "Novi naziv", ch.name, onDismiss = { mode = "menu" }) { n ->
+            if (n.isNotBlank()) { if (isFav) Store.renameFavorite(ctx, p.id, ch, n) else ovr.renameChannel(ch, n) }; onChanged(true) }; return }
+        "info" -> {
+            Popup("Informacije o kanalu", onDismiss = { mode = "menu" }) {
+                OptionRow("Naziv", R.drawable.lc_tv, value = ch.name) {}
+                OptionRow("Grupa", R.drawable.lc_layers, value = if (isFav) "Favoriti" else g.name) {}
+                OptionRow("Broj", R.drawable.lc_list, value = "${ch.num}") {}
+                OptionRow("EPG ID", R.drawable.lc_clock, value = ch.epg ?: "Nema") {}
+                OptionRow("Vrsta strima", R.drawable.lc_file_video, value = when {
+                    ch.url.contains(".m3u8") -> "HLS (.m3u8)"; ch.url.contains(".ts") -> "MPEG-TS (.ts)"; else -> "Direktni strim" }) {}
+                OptionRow("Kvalitet po nazivu", R.drawable.lc_monitor, value = qualityOf(ch.name) ?: "Nije naveden") {}
+                OptionRow("Server", R.drawable.lc_globe, value = try { java.net.URL(ch.url).host } catch (e: Exception) { "—" }) {}
+                OptionRow("Zaključan", R.drawable.lc_lock, value = if (ovr.isChLocked(ch)) "Da" else "Ne") {}
+            }
+            return
+        }
+        "delete" -> {
+            Popup("Izbrisati kanal?", onDismiss = { mode = "menu" }) {
+                T("Kanal \"${ch.name}\" nestaje iz liste. Vraćaš ga u Postavke › Grupe i kanali › Vrati sakrivene kanale.", 14.sp, C.Soft, maxLines = 3)
+                OptionRow("Da, izbriši iz liste", R.drawable.lc_trash_2, color = C.Danger) { if (!ovr.isChHidden(ch)) ovr.toggleChHidden(ch); onChanged(true) }
+                OptionRow("Odustani", R.drawable.lc_x) { mode = "menu" }
+            }
+            return
+        }
         "pin" -> { PinSetupDialog(onDismiss = { mode = "menu" }) { ovr.toggleChLocked(ch); onChanged(false) }; return }
         "newgroup" -> { TextDialog("Nova grupa", "Naziv nove grupe", onDismiss = { mode = "move" }) { n ->
             if (n.isNotBlank()) { val ng = ovr.addGroup(n); ovr.moveChannelTo(ch, ng.id) }; onChanged(true) }; return }
@@ -294,14 +343,16 @@ fun ChannelOptions(p: Playlist, ovr: Ovr, g: Category, ch: Channel, list: List<C
         OptionRow("Pomjeri dolje", R.drawable.lc_arrow_down) {
             if (isFav) Store.moveFavorite(ctx, p.id, ch, 1) else ovr.moveChannel(g.id, list, ch, 1); onChanged(false)
         }
+        OptionRow("Preimenuj kanal", R.drawable.lc_pencil) { mode = "rename" }
         if (!isFav) {
             OptionRow("Premjesti u drugu grupu", R.drawable.lc_layers) { mode = "move" }
-            OptionRow("Preimenuj kanal", R.drawable.lc_pencil) { mode = "rename" }
-            OptionRow(if (ovr.isChHidden(ch)) "Prikaži kanal" else "Sakrij kanal", R.drawable.lc_eye_off) { ovr.toggleChHidden(ch); onChanged(false) }
-            OptionRow(if (ovr.isChLocked(ch)) "Otključaj kanal" else "Zaključaj PIN-om", R.drawable.lc_lock) {
+            OptionRow(if (ovr.isChHidden(ch)) "Prikaži kanal" else "Sakrij kanal", R.drawable.lc_eye_off) { ovr.toggleChHidden(ch); onChanged(true) }
+            OptionRow(if (ovr.isChLocked(ch)) "Otključaj kanal" else "Zaključaj PIN-om (4 broja)", R.drawable.lc_lock) {
                 if (!Lock.hasPin()) mode = "pin" else { ovr.toggleChLocked(ch); onChanged(false) }
             }
+            OptionRow("Izbriši kanal", R.drawable.lc_trash_2, color = C.Danger) { mode = "delete" }
         }
+        OptionRow("Informacije o kanalu", R.drawable.lc_info) { mode = "info" }
     }
 }
 
@@ -347,6 +398,7 @@ fun GroupManager(nav: Nav) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Segmented(listOf("TV", "Filmovi", "Serije"), tab) { tab = it }
             if (tab == 0) Button("Nova grupa", R.drawable.lc_plus) { newGroup = true }
+            if (tab == 0) Button("Vrati sakrivene kanale", R.drawable.lc_eye) { ovr.unhideAllChannels(); rev++; nav.playlistsChanged() }
             Button("Vrati sve izmjene", R.drawable.lc_rotate_ccw) { reset = true }
         }
         when (val s = st) {
@@ -377,3 +429,66 @@ fun GroupManager(nav: Nav) {
         OptionRow("Odustani", R.drawable.lc_x) { reset = false }
     }
 }
+
+/** Right side while browsing channels: live preview + programme guide of the focused channel. */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+@Composable
+fun EpgPanel(p: Playlist, ch: Channel?, modifier: Modifier) {
+    val ctx = LocalContext.current
+    var shown by remember { mutableStateOf<Channel?>(null) }
+    val ovr = remember(p.id) { Ovr(ctx, p.id) }
+    LaunchedEffect(ch?.url) { delay(450); shown = ch }
+    Column(modifier.fillMaxHeight().background(C.Rail).padding(horizontal = 20.dp, vertical = 22.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        val c = shown
+        if (Look.preview) {
+            val player = remember { buildPlayer(ctx) }
+            androidx.compose.runtime.DisposableEffect(Unit) { onDispose { player.release() } }
+            LaunchedEffect(c?.url) {
+                if (c == null || (ovr.isChLocked(c) && "c:${c.url}" !in Lock.unlocked)) { player.stop(); return@LaunchedEffect }
+                player.setMediaItem(androidx.media3.common.MediaItem.fromUri(c.url)); player.prepare(); player.playWhenReady = true
+            }
+            Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(14.dp)).background(Color.Black)) {
+                androidx.compose.ui.viewinterop.AndroidView(factory = { v ->
+                    androidx.media3.ui.PlayerView(v).apply {
+                        this.player = player; useController = false; isFocusable = false
+                        descendantFocusability = android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
+                    }
+                }, modifier = Modifier.fillMaxSize())
+            }
+        }
+        if (c == null) { T("Stani na kanal da vidiš program", 14.sp, C.Muted); return@Column }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            ChannelLogo(c.logo, c.name)
+            T(c.name, 17.sp, C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            qualityOf(c.name)?.let { Chip(it, C.Card, C.Soft) }
+        }
+        val st by load(p.id, c.url) { Repo.epg(p, c, 12) }
+        when (val s = st) {
+            is Load.Loading -> T("Učitavam program…", 13.sp, C.Muted)
+            is Load.Err -> T("Program nije dostupan", 13.sp, C.Muted)
+            is Load.Ok -> if (s.value.isEmpty()) {
+                T("Nema EPG podataka za ovaj kanal.", 14.sp, C.Soft)
+                T("Vlastite EPG izvore (XMLTV link ili fajl) dodaćeš u sljedećoj verziji.", 12.sp, C.Muted, maxLines = 2)
+            } else LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                itemsIndexed(s.value) { i, e ->
+                    val now = i == 0 && e.start <= System.currentTimeMillis()
+                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (now) C.CardFocus else C.Card).padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            T(e.times(), 12.sp, if (now) C.RedText else C.Muted, FontWeight.SemiBold)
+                            if (now) Chip("SADA", C.Red, C.OnRed)
+                        }
+                        T(e.title, 15.sp, C.Text, FontWeight.Medium, maxLines = 2)
+                        if (now) {
+                            Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(C.CardHi)) {
+                                Box(Modifier.fillMaxWidth(e.progress()).height(4.dp).background(C.Red))
+                            }
+                            e.desc?.let { T(it, 12.sp, C.Soft, maxLines = 4) }
+                        } else e.desc?.let { T(it, 12.sp, C.Muted, maxLines = 2) }
+                    }
+                }
+            }
+        }
+    }
+}
+

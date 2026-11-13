@@ -166,7 +166,7 @@ fun Rail(current: Screen, nav: Nav) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Image(painterResource(R.mipmap.ic_launcher), contentDescription = "PRETORIAN", modifier = Modifier.size(46.dp).clip(CircleShape))
+        Image(painterResource(R.drawable.logo_mark), contentDescription = "PRETORIAN", modifier = Modifier.size(52.dp))
         Spacer(Modifier.height(16.dp))
         items.forEach { RailButton(it.icon, it.label, section == it.screen) { nav.root(it.screen) } }
         Spacer(Modifier.weight(1f))
@@ -303,8 +303,8 @@ fun SimpleHome(nav: Nav) {
     var pin by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().padding(horizontal = 56.dp, vertical = 36.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Image(painterResource(R.mipmap.ic_launcher), contentDescription = null, modifier = Modifier.size(54.dp).clip(CircleShape))
-            T("PRETORIAN", 26.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 14.dp).weight(1f))
+            Image(painterResource(R.drawable.logo_mark), contentDescription = null, modifier = Modifier.size(60.dp))
+            T("PRETORIAN", 28.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 14.dp).weight(1f))
             Clock()
         }
         Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {

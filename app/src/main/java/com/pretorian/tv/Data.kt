@@ -55,6 +55,14 @@ data class VodInfo(
     val plot: String?, val genre: String?, val year: String?, val duration: String?,
     val cast: String?, val director: String?, val backdrop: String?, val rating: String?,
 )
+data class EpgItem(val title: String, val desc: String?, val start: Long, val end: Long) {
+    fun times(): String {
+        val f = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+        return "${f.format(java.util.Date(start))}–${f.format(java.util.Date(end))}"
+    }
+    fun progress(now: Long = System.currentTimeMillis()): Float = if (end <= start) 0f else ((now - start).toFloat() / (end - start)).coerceIn(0f, 1f)
+}
+
 data class PlayItem(
     val title: String, val url: String, val logo: String? = null, val subtitle: String? = null, val channel: Channel? = null,
     /** title used to search subtitles, plus season/episode for series */
@@ -93,6 +101,9 @@ object Store {
             Channel(o.str("id"), it + 1, o.str("name"), o.str("logo").orNullIfBlank(), FAV_GROUP, o.str("url"), o.str("epg").orNullIfBlank())
         }
     } catch (e: Exception) { emptyList() }
+
+    fun renameFavorite(c: Context, playlistId: String, ch: Channel, name: String) =
+        saveFavorites(c, playlistId, favorites(c, playlistId).map { if (it.url == ch.url) it.copy(name = name) else it })
 
     fun isFavorite(c: Context, playlistId: String, ch: Channel) = favorites(c, playlistId).any { it.url == ch.url }
 
@@ -166,16 +177,18 @@ class Xtream(private val p: Playlist) {
         return if (exp.isBlank() || exp == "null") "0" else exp
     }
 
-    /** now/next programme of a live stream (Xtream short EPG, titles are base64) */
-    fun shortEpg(streamId: String): List<Pair<String, String>> {
-        val o = try { JSONObject(api("get_short_epg", "&stream_id=${Net.enc(streamId)}&limit=2")) } catch (e: Exception) { return emptyList() }
+    /** coming programmes of a live stream (Xtream short EPG; title and description are base64) */
+    fun epg(streamId: String, limit: Int): List<EpgItem> {
+        val o = try { JSONObject(api("get_short_epg", "&stream_id=${Net.enc(streamId)}&limit=$limit")) } catch (e: Exception) { return emptyList() }
         val a = o.optJSONArray("epg_listings") ?: return emptyList()
-        fun b64(s: String) = try { String(android.util.Base64.decode(s, android.util.Base64.DEFAULT)) } catch (e: Exception) { s }
-        return (0 until a.length()).map {
+        fun b64(s: String) = try { String(android.util.Base64.decode(s, android.util.Base64.DEFAULT)).trim() } catch (e: Exception) { s }
+        val fmt = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US)
+        return (0 until a.length()).mapNotNull {
             val e = a.getJSONObject(it)
-            val start = e.str("start").drop(11).take(5); val end = e.str("end").drop(11).take(5)
-            b64(e.str("title")) to "$start–$end"
-        }
+            val start = e.str("start_timestamp").toLongOrNull()?.times(1000) ?: try { fmt.parse(e.str("start"))?.time } catch (x: Exception) { null } ?: return@mapNotNull null
+            val end = e.str("stop_timestamp").toLongOrNull()?.times(1000) ?: try { fmt.parse(e.str("end"))?.time } catch (x: Exception) { null } ?: start
+            EpgItem(b64(e.str("title")), b64(e.str("description")).orNullIfBlank(), start, end)
+        }.filter { it.end > System.currentTimeMillis() - 60_000 }
     }
 
     private fun cats(action: String): List<Category> {
@@ -329,9 +342,11 @@ object Repo {
 
     suspend fun episodes(p: Playlist, id: String): List<Episode> = cached("ep_${p.id}_$id") { Xtream(p).episodes(id) }
 
-    suspend fun nowNext(p: Playlist, ch: Channel): List<Pair<String, String>> = withContext(Dispatchers.IO) {
-        if (p.type != SourceType.XTREAM || ch.id.isBlank()) emptyList() else try { Xtream(p).shortEpg(ch.id) } catch (e: Exception) { emptyList() }
+    suspend fun epg(p: Playlist, ch: Channel, limit: Int = 10): List<EpgItem> = cached("epg_${p.id}_${ch.url}_$limit") {
+        if (p.type != SourceType.XTREAM || ch.id.isBlank() || !ch.url.contains("/live/")) emptyList() else try { Xtream(p).epg(ch.id, limit) } catch (e: Exception) { emptyList() }
     }
+
+    suspend fun nowNext(p: Playlist, ch: Channel): List<Pair<String, String>> = epg(p, ch, 4).take(2).map { it.title to it.times() }
 
     suspend fun test(p: Playlist): String = withContext(Dispatchers.IO) {
         if (p.type == SourceType.XTREAM) Xtream(p).login()
