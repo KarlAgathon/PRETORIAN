@@ -621,6 +621,10 @@ Preuzeti|Downloaded|Heruntergeladen|=|=|Изтеглени|Descărcate|İndirile
 Zadnje dodano|Last added|Zuletzt hinzugefügt|=|Poslednje dodato|Последно добавени|Adăugate ultima dată|Son eklenenler|Ultimi aggiunti|آخر ما أضيف
 Naziv A–Ž|Name A–Z|Name A–Z|=|=|Име А–Я|Nume A–Z|Ad A–Z|Nome A–Z|الاسم أ–ي
 Naziv Ž–A|Name Z–A|Name Z–A|=|=|Име Я–А|Nume Z–A|Ad Z–A|Nome Z–A|الاسم ي–أ
+Imaš najnoviju verziju|You have the latest version|Du hast die neueste Version|=|Imaš najnoviju verziju|Имаш най-новата версия|Ai cea mai nouă versiune|En son sürüme sahipsin|Hai l'ultima versione|لديك أحدث إصدار
+Instalirano: %s|Installed: %s|Installiert: %s|=|=|Инсталирано: %s|Instalat: %s|Yüklü: %s|Installata: %s|المثبت: %s
+Nema nove verzije|No new version|Keine neue Version|=|=|Няма нова версия|Nicio versiune nouă|Yeni sürüm yok|Nessuna nuova versione|لا يوجد إصدار جديد
+Provjeri i instaliraj novu verziju|Check and install a new version|Neue Version prüfen und installieren|=|Proveri i instaliraj novu verziju|Провери и инсталирай нова версия|Verifică și instalează versiunea nouă|Yeni sürümü kontrol et ve kur|Controlla e installa la nuova versione|تحقق وثبّت الإصدار الجديد
 Nepoznat jezik|Unknown language|Unbekannte Sprache|=|=|Неизвестен език|Limbă necunoscută|Bilinmeyen dil|Lingua sconosciuta|لغة غير معروفة
 """.trimIndent()
 

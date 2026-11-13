@@ -51,8 +51,8 @@ private val SECTIONS = listOf(
     Section("reminders", R.drawable.lc_bell, "Podsjetnici", "Emisije, utakmice, obavještenja"),
     Section("parental", R.drawable.lc_shield_check, "Roditelji i jednostavni mod", "PIN, jednostavni mod"),
     Section("backup", R.drawable.lc_archive, "Backup i vraćanje", "Spasi sve postavke u fajl"),
-    Section("update", R.drawable.lc_download, "Ažuriranje", "Nova verzija aplikacije"),
     Section("about", R.drawable.lc_info, "O aplikaciji", "Verzija i licence"),
+    Section("update", R.drawable.lc_download, "Ažuriranje", "Provjeri i instaliraj novu verziju"),
 )
 
 @Composable
@@ -650,21 +650,28 @@ private fun UpdatePage() {
     val scope = rememberCoroutineScope()
     var checking by remember { mutableStateOf(false) }
     val u = Updater.available
+    val installFr = remember { FocusRequester() }
     Page("Ažuriranje", trf("Instalirana verzija: %s. Provjera ide sama pri pokretanju i svakih 6 sati.", BuildInfo.VERSION)) {
-        if (u != null) {
-            Row(Modifier.fillMaxWidth().clip(Rnd(16.dp)).background(C.CardFocus).border(1.dp, C.Red, Rnd(16.dp)).padding(18.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Ico(R.drawable.lc_download, 26.dp, C.RedText)
-                Column(Modifier.weight(1f)) {
-                    T(trf("Nova verzija %s", u.name), 17.sp, C.Text, FontWeight.SemiBold)
-                    T(if (u.notes.isNotBlank()) u.notes else "Jedan klik: preuzima se i odmah instalira", 13.sp, C.Muted, maxLines = 3)
-                }
-                val pr = Updater.progress
-                if (pr in 0..100) T(trf("Preuzimam %s %%", pr), 15.sp, C.Text)
-                else if (pr == 101) T("Instaliram…", 15.sp, C.Text)
-                else Button("Ažuriraj sada", R.drawable.lc_download, primary = true) { scope.launch { Updater.install(ctx, u) } }
+        // 1. state, big and clear
+        Row(Modifier.fillMaxWidth().clip(Rnd(16.dp)).background(if (u != null) C.CardFocus else C.Card)
+            .border(1.dp, if (u != null) C.Red else C.Line, Rnd(16.dp)).padding(18.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Ico(if (u != null) R.drawable.lc_download else R.drawable.lc_check, 26.dp, if (u != null) C.RedText else C.Green)
+            Column(Modifier.weight(1f)) {
+                T(if (u != null) trf("Nova verzija %s", u.name) else "Imaš najnoviju verziju", 17.sp, C.Text, FontWeight.SemiBold, maxLines = 1)
+                T(if (u != null) (u.notes.ifBlank { tr("Jedan klik: preuzima se i odmah instalira") }) else trf("Instalirano: %s", BuildInfo.VERSION), 13.sp, C.Muted, maxLines = 3)
             }
+            val pr = Updater.progress
+            if (pr in 0..100) T(trf("Preuzimam %s %%", pr), 15.sp, C.Text)
+            else if (pr == 101) T("Instaliram…", 15.sp, C.Text)
         }
+        // 2. update now
+        OptionRow("Ažuriraj sada", R.drawable.lc_download, color = if (u != null) C.Green else null,
+            value = if (u != null) u.name else tr("Nema nove verzije"), focusRequester = installFr) {
+            if (u != null) scope.launch { Updater.install(ctx, u) }
+            else if (!checking) { checking = true; scope.launch { Updater.check(ctx); checking = false } }
+        }
+        // 3. check
         OptionRow(if (checking) "Provjeravam…" else "Provjeri ima li nova verzija", R.drawable.lc_refresh_cw, value = Updater.status) {
             if (!checking) { checking = true; scope.launch { Updater.check(ctx); checking = false } }
         }
