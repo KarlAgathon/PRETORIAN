@@ -172,6 +172,43 @@ ${JSONArray(cands)}"""
         names.flatMap { n -> byName[n] ?: emptyList() }.distinctBy { it.url }.sortedBy { Sports.regionRank(it.name) }.take(8)
     }
 
+    /** one TV station that shows a match: country code and name */
+    data class Station(val country: String, val name: String)
+
+    /**
+     * every TV station that broadcasts this match, worldwide, whether or not it is in your list
+     * (the AI searches the web). Kept 6 hours per match.
+     */
+    suspend fun broadcasters(ev: SportEvent): List<Station> = withContext(Dispatchers.IO) {
+        if (!ready) return@withContext emptyList()
+        val who = if (ev.home != null && ev.away != null) "${ev.home.name} vs ${ev.away.name}" else ev.title
+        val id = "tv|${ev.id}|$provider"
+        val raw = mem[id] ?: readCache(id) ?: run {
+            val date = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(ev.start))
+            val prompt = """Sport event: $who, competition ${ev.league}, start $date.
+Search the web: which TV channels and streaming services broadcast this exact event live, in any country?
+Put first the viewer's country (${Sports.country}), then Bosnia and Herzegovina, Serbia, Croatia, Germany, Austria, Switzerland, then the rest.
+Return ONLY a JSON array, at most 20 items, like [{"c":"BA","n":"Arena Sport 1"},{"c":"DE","n":"DAZN"}] (c = 2-letter country code, n = channel name). Return [] if unknown."""
+            val answer = ask(prompt, search = true)
+            val arr = Regex("\\[[\\s\\S]*\\]").find(answer)?.value ?: "[]"
+            val list = try {
+                JSONArray(arr).let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }
+                    .map { it.optString("c").uppercase().take(3) + "|" + it.optString("n").trim() }.filter { it.substringAfter('|').isNotBlank() } }
+            } catch (e: Exception) { emptyList() }
+            mem[id] = list; writeCache(id, list); list
+        }
+        raw.map { Station(it.substringBefore('|'), it.substringAfter('|')) }.distinctBy { it.country + it.name.lowercase() }
+    }
+
+    /** your channels that carry a station's name ("Arena Sport 1" → "BA| ARENA SPORT 1 HD") */
+    fun matchStation(s: Station, all: List<Channel>): List<Channel> {
+        fun n(x: String) = x.lowercase().replace(Regex("^[a-z]{2,4}\\s*[|:-]\\s*"), "").replace(Regex("\\b(hd|fhd|uhd|4k|sd|hevc|raw|vip|\\+1)\\b"), "").replace(Regex("[^a-z0-9]"), "")
+        val want = n(s.name)
+        if (want.length < 3) return emptyList()
+        return all.filter { val c = n(it.name); c == want || (c.startsWith(want) && c.length - want.length <= 2) }
+            .sortedBy { Sports.regionRank(it.name) }.distinctBy { it.url }.take(3)
+    }
+
     private fun cacheFile() = dir?.let { File(it, "ai_sport.json") }
     private fun readCache(id: String): List<String>? = try {
         val o = JSONObject(cacheFile()!!.readText()).optJSONObject(id) ?: null

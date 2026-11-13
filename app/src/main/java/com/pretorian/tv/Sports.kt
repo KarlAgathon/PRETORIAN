@@ -190,6 +190,8 @@ fun SportsScreen(nav: Nav) {
         }
         // ---------------------------------------------------------------- picture on the left, the match on the right
         if (events is Load.Ok) SportTop(top)
+        // every TV station that shows the match, worldwide; the ones you have are green and play on OK
+        if (events is Load.Ok && top != null) BroadcastRow(top) { chs, i -> play(top, chs, i) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         // ---------------------------------------------------------------- filters (one scrolling row, nothing is hidden)
         AlignStart { LazyRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -398,6 +400,51 @@ private fun HeroCard(ev: SportEvent, fr: FocusRequester, onClick: () -> Unit) {
                     }
                 }
                 if (ev.channels.size > 3) T("+${ev.channels.size - 3}", 12.sp, C.Muted)
+            }
+        }
+    }
+}
+
+/** all stations that broadcast [ev] (AI with a web search), under the picture; yours are green and play */
+@Composable
+private fun BroadcastRow(ev: SportEvent, onPlay: (List<Channel>, Int) -> Unit) {
+    val ctx = LocalContext.current
+    var list by remember(ev.id) { mutableStateOf<List<Pair<SportsAI.Station, List<Channel>>>?>(null) }
+    var busy by remember(ev.id) { mutableStateOf(false) }
+    var err by remember(ev.id) { mutableStateOf<String?>(null) }
+    LaunchedEffect(ev.id) {
+        if (!SportsAI.ready) return@LaunchedEffect
+        delay(1200)                                   // only for the match you stay on, not every card you pass
+        busy = true
+        try {
+            val stations = SportsAI.broadcasters(ev)
+            val all = try { Sports.guide(ctx, Store.actives(ctx)).all } catch (e: Exception) { emptyList() }
+            list = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { stations.map { it to SportsAI.matchStation(it, all) } }
+        } catch (e: Exception) { err = e.message }
+        busy = false
+    }
+    Row(Modifier.fillMaxWidth().height(44.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Ico(R.drawable.lc_tv, 16.dp, AiColor)
+        T("Prenose:", 13.sp, C.Soft, FontWeight.SemiBold)
+        val l = list
+        when {
+            !SportsAI.ready -> T("Dodaj AI ključ u Postavke › Sport i AI da vidiš sve TV prenose", 12.sp, C.Muted, maxLines = 1)
+            busy -> { androidx.compose.material3.CircularProgressIndicator(color = AiColor, strokeWidth = 2.dp, modifier = Modifier.size(14.dp)); T("AI traži TV prenose…", 12.sp, C.Muted) }
+            err != null -> T(err ?: "", 12.sp, C.Muted, maxLines = 1)
+            l != null && l.isEmpty() -> T("AI nije našao TV prenose za ovu utakmicu", 12.sp, C.Muted)
+            l != null -> LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)) {
+                items(l, key = { it.first.country + it.first.name }) { (s, mine) ->
+                    val label = (if (s.country.isNotBlank()) s.country + " · " else "") + s.name
+                    if (mine.isNotEmpty()) Focusable(modifier = Modifier.height(34.dp), onClick = { onPlay(mine, 0) }, shape = Pill,
+                        normal = C.Green.copy(alpha = 0.22f), zoom = 1.06f) { _ ->
+                        Row(Modifier.align(Alignment.Center).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Ico(R.drawable.lc_play, 12.dp, C.Green); T(label, 13.sp, C.Text, FontWeight.SemiBold, maxLines = 1)
+                        }
+                    } else Box(Modifier.height(34.dp).clip(Pill).background(C.Card).border(1.dp, C.Line, Pill).padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
+                        T(label, 13.sp, C.Soft, maxLines = 1)
+                    }
+                }
             }
         }
     }
