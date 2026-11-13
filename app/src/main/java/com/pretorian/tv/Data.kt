@@ -1,0 +1,300 @@
+package com.pretorian.tv
+
+import android.content.Context
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.IOException
+import java.net.HttpURLConnection
+import java.net.URL
+import java.net.URLEncoder
+
+enum class SourceType { XTREAM, M3U }
+
+data class Playlist(
+    val id: String,
+    val name: String,
+    val type: SourceType,
+    val server: String = "",
+    val user: String = "",
+    val pass: String = "",
+    val url: String = "",
+    val active: Boolean = false,
+    val live: Boolean = true,
+    val vod: Boolean = true,
+    val series: Boolean = true,
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("id", id); put("name", name); put("type", type.name)
+        put("server", server); put("user", user); put("pass", pass); put("url", url)
+        put("active", active); put("live", live); put("vod", vod); put("series", series)
+    }
+
+    companion object {
+        fun from(o: JSONObject) = Playlist(
+            id = o.str("id"),
+            name = o.str("name"),
+            type = if (o.str("type") == "M3U") SourceType.M3U else SourceType.XTREAM,
+            server = o.str("server"), user = o.str("user"), pass = o.str("pass"), url = o.str("url"),
+            active = o.optBoolean("active", false),
+            live = o.optBoolean("live", true), vod = o.optBoolean("vod", true), series = o.optBoolean("series", true),
+        )
+    }
+}
+
+data class Category(val id: String, val name: String)
+data class Channel(val id: String, val num: Int, val name: String, val logo: String?, val group: String, val url: String)
+data class Vod(val id: String, val name: String, val poster: String?, val rating: String?, val url: String)
+data class SeriesItem(val id: String, val name: String, val cover: String?, val plot: String?, val rating: String?)
+data class Episode(val id: String, val season: Int, val num: Int, val title: String, val url: String, val plot: String?)
+data class VodInfo(
+    val plot: String?, val genre: String?, val year: String?, val duration: String?,
+    val cast: String?, val director: String?, val backdrop: String?, val rating: String?,
+)
+data class PlayItem(val title: String, val url: String, val logo: String? = null, val subtitle: String? = null, val channel: Channel? = null)
+
+fun JSONObject.str(k: String): String = if (!has(k) || isNull(k)) "" else optString(k, "")
+fun String.orNullIfBlank(): String? = if (isBlank()) null else this
+
+const val FAV_GROUP = "__fav__"
+
+/** Settings and saved lists (SharedPreferences, JSON). */
+object Store {
+    private fun prefs(c: Context) = c.getSharedPreferences("pretorian", Context.MODE_PRIVATE)
+
+    fun playlists(c: Context): List<Playlist> = try {
+        val a = JSONArray(prefs(c).getString("playlists", "[]") ?: "[]")
+        (0 until a.length()).map { Playlist.from(a.getJSONObject(it)) }
+    } catch (e: Exception) { emptyList() }
+
+    fun savePlaylists(c: Context, list: List<Playlist>) {
+        val a = JSONArray(); list.forEach { a.put(it.toJson()) }
+        prefs(c).edit().putString("playlists", a.toString()).apply()
+    }
+
+    fun active(c: Context): Playlist? = playlists(c).firstOrNull { it.active } ?: playlists(c).firstOrNull()
+
+    fun activate(c: Context, id: String) = savePlaylists(c, playlists(c).map { it.copy(active = it.id == id) })
+
+    fun favorites(c: Context, playlistId: String): List<Channel> = try {
+        val a = JSONArray(prefs(c).getString("fav_$playlistId", "[]") ?: "[]")
+        (0 until a.length()).map {
+            val o = a.getJSONObject(it)
+            Channel(o.str("id"), it + 1, o.str("name"), o.str("logo").orNullIfBlank(), FAV_GROUP, o.str("url"))
+        }
+    } catch (e: Exception) { emptyList() }
+
+    fun isFavorite(c: Context, playlistId: String, ch: Channel) = favorites(c, playlistId).any { it.url == ch.url }
+
+    fun toggleFavorite(c: Context, playlistId: String, ch: Channel) {
+        val now = favorites(c, playlistId).toMutableList()
+        if (now.removeAll { it.url == ch.url }.not()) now.add(ch)
+        val a = JSONArray()
+        now.forEach { a.put(JSONObject().put("id", it.id).put("name", it.name).put("logo", it.logo ?: "").put("url", it.url)) }
+        prefs(c).edit().putString("fav_$playlistId", a.toString()).apply()
+    }
+}
+
+object Net {
+    const val UA = "Mozilla/5.0 (Linux; Android 10; TV) AppleWebKit/537.36 PRETORIAN/0.1"
+
+    fun get(url: String): String {
+        var current = url
+        repeat(5) {
+            val c = URL(current).openConnection() as HttpURLConnection
+            c.connectTimeout = 15000
+            c.readTimeout = 90000
+            c.instanceFollowRedirects = false
+            c.setRequestProperty("User-Agent", UA)
+            try {
+                val code = c.responseCode
+                if (code in 300..399) {
+                    val loc = c.getHeaderField("Location") ?: throw IOException("Preusmjerenje bez adrese")
+                    current = URL(URL(current), loc).toString()
+                    return@repeat
+                }
+                if (code !in 200..299) throw IOException("Server je odgovorio greškom $code")
+                return c.inputStream.bufferedReader().use { r -> r.readText() }
+            } finally {
+                c.disconnect()
+            }
+        }
+        throw IOException("Previše preusmjeravanja")
+    }
+
+    fun enc(s: String): String = URLEncoder.encode(s, "UTF-8")
+}
+
+class Xtream(private val p: Playlist) {
+    private val base = p.server.trim().trimEnd('/').let { if (it.startsWith("http")) it else "http://$it" }
+
+    private fun api(action: String?, extra: String = ""): String =
+        Net.get("$base/player_api.php?username=${Net.enc(p.user)}&password=${Net.enc(p.pass)}" +
+            (action?.let { "&action=$it" } ?: "") + extra)
+
+    private fun array(text: String): JSONArray = try { JSONArray(text) } catch (e: Exception) { JSONArray() }
+
+    fun login(): String {
+        val o = try { JSONObject(api(null)) } catch (e: Exception) { throw IOException("Server nije vratio Xtream odgovor. Provjeri adresu.") }
+        val ui = o.optJSONObject("user_info") ?: throw IOException("Server nije vratio podatke o korisniku")
+        if (ui.optInt("auth", 0) != 1) throw IOException("Pogrešno korisničko ime ili lozinka")
+        val status = ui.str("status")
+        if (status.isNotBlank() && !status.equals("Active", true)) throw IOException("Nalog nije aktivan: $status")
+        return ui.str("exp_date")
+    }
+
+    private fun cats(action: String): List<Category> {
+        val a = array(api(action))
+        return (0 until a.length()).map { val o = a.getJSONObject(it); Category(o.str("category_id"), o.str("category_name")) }
+    }
+
+    fun liveCategories() = cats("get_live_categories")
+    fun vodCategories() = cats("get_vod_categories")
+    fun seriesCategories() = cats("get_series_categories")
+
+    fun channels(categoryId: String): List<Channel> {
+        val a = array(api("get_live_streams", "&category_id=${Net.enc(categoryId)}"))
+        return (0 until a.length()).map { i ->
+            val o = a.getJSONObject(i)
+            val id = o.str("stream_id")
+            Channel(id, o.optInt("num", i + 1), o.str("name"), o.str("stream_icon").orNullIfBlank(), categoryId,
+                "$base/live/${p.user}/${p.pass}/$id.ts")
+        }
+    }
+
+    fun movies(categoryId: String): List<Vod> {
+        val a = array(api("get_vod_streams", "&category_id=${Net.enc(categoryId)}"))
+        return (0 until a.length()).map { i ->
+            val o = a.getJSONObject(i)
+            val id = o.str("stream_id")
+            val ext = o.str("container_extension").ifBlank { "mp4" }
+            Vod(id, o.str("name"), o.str("stream_icon").orNullIfBlank(), o.str("rating").orNullIfBlank(),
+                "$base/movie/${p.user}/${p.pass}/$id.$ext")
+        }
+    }
+
+    fun movieInfo(id: String): VodInfo {
+        val o = try { JSONObject(api("get_vod_info", "&vod_id=${Net.enc(id)}")) } catch (e: Exception) { JSONObject() }
+        val i = o.optJSONObject("info") ?: JSONObject()
+        val backdrop = i.optJSONArray("backdrop_path")?.let { if (it.length() > 0) it.optString(0) else null }
+        return VodInfo(
+            plot = i.str("plot").ifBlank { i.str("description") }.orNullIfBlank(),
+            genre = i.str("genre").orNullIfBlank(),
+            year = i.str("releasedate").take(4).orNullIfBlank(),
+            duration = i.str("duration").orNullIfBlank(),
+            cast = i.str("cast").ifBlank { i.str("actors") }.orNullIfBlank(),
+            director = i.str("director").orNullIfBlank(),
+            backdrop = backdrop?.orNullIfBlank() ?: i.str("movie_image").orNullIfBlank(),
+            rating = i.str("rating").orNullIfBlank(),
+        )
+    }
+
+    fun series(categoryId: String): List<SeriesItem> {
+        val a = array(api("get_series", "&category_id=${Net.enc(categoryId)}"))
+        return (0 until a.length()).map { i ->
+            val o = a.getJSONObject(i)
+            SeriesItem(o.str("series_id"), o.str("name"), o.str("cover").orNullIfBlank(), o.str("plot").orNullIfBlank(),
+                o.str("rating").orNullIfBlank())
+        }
+    }
+
+    fun episodes(seriesId: String): List<Episode> {
+        val o = try { JSONObject(api("get_series_info", "&series_id=${Net.enc(seriesId)}")) } catch (e: Exception) { JSONObject() }
+        val eps = o.optJSONObject("episodes") ?: return emptyList()
+        val out = ArrayList<Episode>()
+        eps.keys().forEach { key ->
+            val arr = eps.optJSONArray(key) ?: return@forEach
+            for (j in 0 until arr.length()) {
+                val e = arr.getJSONObject(j)
+                val id = e.str("id")
+                val ext = e.str("container_extension").ifBlank { "mp4" }
+                val info = e.optJSONObject("info")
+                out.add(Episode(id, key.toIntOrNull() ?: e.optInt("season", 1), e.optInt("episode_num", j + 1),
+                    e.str("title"), "$base/series/${p.user}/${p.pass}/$id.$ext", info?.str("plot")?.orNullIfBlank()))
+            }
+        }
+        return out.sortedWith(compareBy({ it.season }, { it.num }))
+    }
+}
+
+object M3u {
+    private val attrCache = HashMap<String, Regex>()
+
+    private fun attr(line: String, key: String): String? {
+        val r = attrCache.getOrPut(key) { Regex("$key=\"([^\"]*)\"") }
+        return r.find(line)?.groupValues?.get(1)?.orNullIfBlank()
+    }
+
+    fun parse(text: String): List<Channel> {
+        val out = ArrayList<Channel>()
+        var name = ""
+        var logo: String? = null
+        var group = "Ostalo"
+        var pending = false
+        text.lineSequence().forEach { raw ->
+            val line = raw.trim()
+            if (line.startsWith("#EXTINF", true)) {
+                val lastQuote = line.lastIndexOf('"').coerceAtLeast(0)
+                val comma = line.indexOf(',', lastQuote)
+                name = if (comma >= 0) line.substring(comma + 1).trim() else line
+                logo = attr(line, "tvg-logo")
+                group = attr(line, "group-title") ?: "Ostalo"
+                pending = true
+            } else if (line.isNotEmpty() && !line.startsWith("#") && pending) {
+                out.add(Channel(out.size.toString(), out.size + 1, name, logo, group, line))
+                pending = false
+            }
+        }
+        if (out.isEmpty() && !text.trimStart().startsWith("#EXTM3U")) throw IOException("Link ne vraća M3U listu")
+        return out
+    }
+}
+
+/** Loads content of the active playlist, with a small in-memory cache. */
+object Repo {
+    private val cache = HashMap<String, Any>()
+    private var m3uFor: String? = null
+    private var m3u: List<Channel> = emptyList()
+
+    fun clear() { cache.clear(); m3uFor = null; m3u = emptyList() }
+
+    @Suppress("UNCHECKED_CAST")
+    private suspend fun <T> cached(key: String, load: () -> T): T = withContext(Dispatchers.IO) {
+        (cache[key] as T?) ?: load().also { cache[key] = it as Any }
+    }
+
+    private fun m3uChannels(p: Playlist): List<Channel> {
+        if (m3uFor != p.id) { m3u = M3u.parse(Net.get(p.url.trim())); m3uFor = p.id }
+        return m3u
+    }
+
+    suspend fun liveGroups(p: Playlist): List<Category> = cached("lg_${p.id}") {
+        if (p.type == SourceType.XTREAM) Xtream(p).liveCategories()
+        else m3uChannels(p).map { it.group }.distinct().map { Category(it, it) }
+    }
+
+    suspend fun channels(p: Playlist, groupId: String): List<Channel> = cached("ch_${p.id}_$groupId") {
+        if (p.type == SourceType.XTREAM) Xtream(p).channels(groupId)
+        else m3uChannels(p).filter { it.group == groupId }
+    }
+
+    suspend fun vodGroups(p: Playlist): List<Category> =
+        if (p.type == SourceType.XTREAM) cached("vg_${p.id}") { Xtream(p).vodCategories() } else emptyList()
+
+    suspend fun movies(p: Playlist, groupId: String): List<Vod> = cached("mv_${p.id}_$groupId") { Xtream(p).movies(groupId) }
+
+    suspend fun movieInfo(p: Playlist, id: String): VodInfo = cached("mi_${p.id}_$id") { Xtream(p).movieInfo(id) }
+
+    suspend fun seriesGroups(p: Playlist): List<Category> =
+        if (p.type == SourceType.XTREAM) cached("sg_${p.id}") { Xtream(p).seriesCategories() } else emptyList()
+
+    suspend fun series(p: Playlist, groupId: String): List<SeriesItem> = cached("se_${p.id}_$groupId") { Xtream(p).series(groupId) }
+
+    suspend fun episodes(p: Playlist, id: String): List<Episode> = cached("ep_${p.id}_$id") { Xtream(p).episodes(id) }
+
+    suspend fun test(p: Playlist): String = withContext(Dispatchers.IO) {
+        if (p.type == SourceType.XTREAM) Xtream(p).login()
+        else { val n = M3u.parse(Net.get(p.url.trim())).size; "$n kanala" }
+    }
+}

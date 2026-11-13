@@ -1,0 +1,70 @@
+name: Build APK
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+      - name: Signing key (from secrets)
+        env:
+          KS: ${{ secrets.LEAD_KEYSTORE_B64 }}
+        run: |
+          if [ -z "$KS" ]; then echo "::error::Secret LEAD_KEYSTORE_B64 is missing"; exit 1; fi
+          echo "$KS" | base64 -d > app/release.keystore
+      - run: gradle assembleRelease --no-daemon
+        env:
+          LEAD_KEY_PASSWORD: ${{ secrets.LEAD_KEY_PASSWORD }}
+      - name: Remove signing key
+        if: always()
+        run: rm -f app/release.keystore
+      - name: Rename APK
+        run: cp app/build/outputs/apk/release/*.apk Pretorian.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Pretorian-apk
+          path: Pretorian.apk
+
+      # New versionName in app/build.gradle.kts on main/master -> automatic release v<versionName>
+      - name: Read version
+        id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          CODE=$(grep -oP 'versionCode = \K[0-9]+' app/build.gradle.kts)
+          NAME=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          if gh release view "v$NAME" --repo "${{ github.repository }}" > /dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Make update.json
+        if: steps.v.outputs.exists == 'false' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
+        run: |
+          echo "{\"versionCode\": ${{ steps.v.outputs.code }}, \"versionName\": \"${{ steps.v.outputs.name }}\", \"apk\": \"https://github.com/${{ github.repository }}/releases/latest/download/Pretorian.apk\", \"notes\": \"\"}" > update.json
+      - uses: softprops/action-gh-release@v2
+        if: steps.v.outputs.exists == 'false' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
+        with:
+          tag_name: v${{ steps.v.outputs.name }}
+          name: PRETORIAN ${{ steps.v.outputs.name }}
+          target_commitish: ${{ github.sha }}
+          make_latest: "true"
+          files: |
+            Pretorian.apk
+            update.json
