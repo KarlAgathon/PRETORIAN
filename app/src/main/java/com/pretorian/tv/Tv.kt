@@ -40,6 +40,12 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
 
+/** Last TV position, so Back from the player returns to the same group and channel. */
+object TvMemory {
+    var group: Category? = null
+    var channel = -1
+}
+
 /** Runs [action] right away, or after the PIN when [locked] and not yet unlocked this session. */
 class PinGate {
     var pending by mutableStateOf<Pair<String, () -> Unit>?>(null)
@@ -81,7 +87,7 @@ fun TvScreen(nav: Nav) {
     var rev by remember { mutableIntStateOf(0) }
     val groupsState by load(p.id, rev) { ovr.groups("live", Repo.liveGroups(p)) }
     var focusedGroup by remember { mutableStateOf<Category?>(null) }
-    var group by remember { mutableStateOf<Category?>(null) }
+    var group by remember { mutableStateOf(TvMemory.group) }
     var groupMenu by remember { mutableStateOf<Category?>(null) }
     var newGroup by remember { mutableStateOf(false) }
     val gate = remember { PinGate() }
@@ -95,7 +101,7 @@ fun TvScreen(nav: Nav) {
     LaunchedEffect(focusedGroup) {
         val g = focusedGroup ?: return@LaunchedEffect
         delay(350)
-        gate.run("g:${g.id}", ovr.isLocked("live", g.id)) { group = g }
+        if (!ovr.isLocked("live", g.id) || "g:${g.id}" in Lock.unlocked) { if (group?.id != g.id) TvMemory.channel = -1; group = g; TvMemory.group = g }
     }
 
     Row(Modifier.fillMaxSize()) {
@@ -131,7 +137,7 @@ fun TvScreen(nav: Nav) {
                             val locked = ovr.isLocked("live", g.id)
                             Focusable(
                                 modifier = Modifier.fillMaxWidth().height(44.dp).wrapKeys(i, n, gWrap),
-                                onClick = { gate.run("g:${g.id}", locked) { group = g } },
+                                onClick = { gate.run("g:${g.id}", locked) { group = g; TvMemory.group = g } },
                                 onFocus = { focusedGroup = g; inChannels = false },
                                 onMenu = if (Lock.simple || g.id == FAV_GROUP) null else ({ groupMenu = g }),
                                 focusRequester = gWrap.requester(i, if (i == 0) firstGroup else null),
@@ -157,14 +163,14 @@ fun TvScreen(nav: Nav) {
                             }
                         }
                     }
-                    LaunchedEffect(Unit) { try { firstGroup.requestFocus() } catch (_: Exception) {} }
+                    LaunchedEffect(Unit) { if (TvMemory.channel < 0) try { firstGroup.requestFocus() } catch (_: Exception) {} }
                 }
             }
         }
         Box(Modifier.width(1.dp).fillMaxHeight().background(C.Line))
         Box(Modifier.weight(1f).fillMaxHeight()) {
             val g = group
-            if (g == null) Message("Izaberi grupu", "Meni ili dugi OK na grupi otvara opcije")
+            if (g == null) Message("Izaberi grupu", "Dugi OK na grupi otvara opcije")
             else Row(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f).fillMaxHeight()) {
                     key(g.id, rev) { ChannelList(p, ovr, g, nav, gate, s = groupsState, onFocusCh = { focusedCh = it; inChannels = true }) { rev++ } }
@@ -225,7 +231,7 @@ private fun ChannelList(p: Playlist, ovr: Ovr, g: Category, nav: Nav, gate: PinG
     Column(Modifier.fillMaxSize().padding(start = 22.dp, end = 30.dp, top = 24.dp)) {
         Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             T(g.name, 20.sp, C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
-            T("OK gledaj · Meni = opcije", 12.sp, C.Muted)
+            T("OK gledaj · drži OK = opcije (favorit, premjesti…)", 12.sp, C.Muted)
         }
         when (val st = state) {
             is Load.Loading -> Loading("Učitavam kanale…")
@@ -234,7 +240,7 @@ private fun ChannelList(p: Playlist, ovr: Ovr, g: Category, nav: Nav, gate: PinG
                 val list = st.value
                 if (list.isEmpty()) {
                     Message(if (isFav) "Nema favorita" else "Grupa je prazna",
-                        if (isFav) "Na kanalu pritisni Meni ili drži OK › Dodaj u favorite" else "Kanale možeš prebaciti ovamo preko opcija kanala")
+                        if (isFav) "Na kanalu drži OK › Dodaj u favorite" else "Kanale možeš prebaciti ovamo preko opcija kanala")
                 } else {
                     val items = list.map { PlayItem(it.name, it.url, it.logo, "${it.num}", it) }
                     val favUrls = Store.favorites(ctx, p.id).map { it.url }.toSet()
@@ -246,6 +252,7 @@ private fun ChannelList(p: Playlist, ovr: Ovr, g: Category, nav: Nav, gate: PinG
                                 onClick = {
                                     gate.run("c:${ch.url}", locked) {
                                         ovr.countWatch(ch)
+                                        TvMemory.channel = i
                                         nav.push(Screen.Player(items, i, live = true))
                                     }
                                 },
@@ -269,6 +276,10 @@ private fun ChannelList(p: Playlist, ovr: Ovr, g: Category, nav: Nav, gate: PinG
                             }
                         }
                     }
+                }
+                LaunchedEffect(list) {
+                    val r = TvMemory.channel
+                    if (r >= 0) { cWrap.target = r.coerceAtMost(list.lastIndex) }
                 }
                 menu?.let { ch ->
                     ChannelOptions(p, ovr, g, ch, list, (s as? Load.Ok)?.value ?: emptyList(), onDismiss = { menu = null }) { reload ->
@@ -394,7 +405,7 @@ fun GroupManager(nav: Nav) {
     var reset by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         T("Grupe i kanali · ${p.name}", 22.sp, C.Text, FontWeight.Bold)
-        T("OK na grupi otvara opcije: redoslijed, naziv, sakrivanje, PIN. Kanale uređuješ u TV-u (Meni na kanalu).", 13.sp, C.Muted, maxLines = 2)
+        T("OK na grupi otvara opcije: redoslijed, naziv, sakrivanje, PIN. Kanale uređuješ u TV-u: drži OK na kanalu.", 13.sp, C.Muted, maxLines = 2)
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Segmented(listOf("TV", "Filmovi", "Serije"), tab) { tab = it }
             if (tab == 0) Button("Nova grupa", R.drawable.lc_plus) { newGroup = true }

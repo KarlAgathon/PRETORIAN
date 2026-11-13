@@ -157,7 +157,7 @@ private fun PlaylistsPage(nav: Nav) {
                 }
             }
         }
-        T("Meni (ili dugi OK) na playlisti: obriši. Datum isteka osvježava \"Ažuriraj sve\".", 12.sp, C.Muted)
+        T("Drži OK na playlisti: obriši. Datum isteka osvježava \"Ažuriraj sve\".", 12.sp, C.Muted)
     }
     del?.let { pl ->
         Popup(pl.name, onDismiss = { del = null }) {
@@ -358,7 +358,7 @@ private fun ParentalPage(nav: Nav) {
             }
             OptionRow(if (Lock.hasPin()) "Resetuj PIN" else "Postavi PIN", R.drawable.lc_key_round,
                 if (Lock.hasPin()) "Ne traži stari PIN, samo novi" else "4 cifre, za napredni mod i zaključane kanale") { setup = "pin" }
-            T("Zaključavanje grupa i kanala: TV › Meni na grupi ili kanalu › Zaključaj PIN-om, ili Postavke › Grupe i kanali.", 12.sp, C.Muted, maxLines = 2)
+            T("Zaključavanje grupa i kanala: TV › drži OK na grupi ili kanalu › Zaključaj PIN-om, ili Postavke › Grupe i kanali.", 12.sp, C.Muted, maxLines = 2)
         }
     }
     when (setup) {

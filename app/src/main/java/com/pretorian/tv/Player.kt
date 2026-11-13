@@ -167,6 +167,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     }
 
     LaunchedEffect(index) {
+        if (s.live) TvMemory.channel = index
         error = null; showInfo = true; videoH = 0
         val cur = s.items[index]
         subFile = cur.subFile
@@ -192,7 +193,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                     Key.DirectionLeft, Key.MediaRewind -> if (!s.live) { player.seekTo((player.currentPosition - 10_000).coerceAtLeast(0)); showInfo = true; true } else false
                     Key.DirectionRight, Key.MediaFastForward -> if (!s.live) { player.seekTo(player.currentPosition + 10_000); showInfo = true; true } else false
                     Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.MediaPlayPause -> {
-                        if (s.live) showInfo = !showInfo
+                        if (s.live) { if (showInfo && e.key != Key.MediaPlayPause) dialog = "menu" else showInfo = true }
                         else { if (player.isPlaying) player.pause() else player.play(); showInfo = true }
                         true
                     }
@@ -257,7 +258,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                             T(fmt(duration), 13.sp, Color(0xFFB6BCC6))
                         }
                     }
-                    T(if (s.live) "▲ ▼ kanal · OK info · Meni = opcije (favorit, audio, titl)"
+                    T(if (s.live) "▲ ▼ kanal · OK još jednom = opcije (favorit, audio, titl, kvalitet)"
                       else "OK pauza · ◀ ▶ 10 s · ▼ ili Meni = audio, titlovi, format slike", 13.sp, Color(0xFFB6BCC6))
                 }
             }

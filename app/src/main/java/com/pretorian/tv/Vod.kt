@@ -128,7 +128,7 @@ private fun VodBrowser(nav: Nav, series: Boolean) {
         Box(Modifier.weight(1f).fillMaxHeight()) {
             val g = group
             if (g == null) {
-                Message("Izaberi kategoriju", "Meni ili dugi OK na kategoriji otvara opcije")
+                Message("Izaberi kategoriju", "Drži OK na kategoriji za opcije")
             } else {
                 val state by load(p.id, g.id, series) {
                     if (series) Repo.series(p, g.id).map { s -> Poster(s.id, s.name, s.cover, s.rating) { nav.push(Screen.SeriesDetail(s)) } }

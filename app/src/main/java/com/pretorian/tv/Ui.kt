@@ -122,15 +122,29 @@ fun Focusable(
     val scale by animateFloatAsState(if (isFocused) zoom else 1f, label = "zoom")
     var m = modifier
     if (focusRequester != null) m = m.focusRequester(focusRequester)
-    if (onMenu != null) m = m.onPreviewKeyEvent { e ->
-        if (e.type == KeyEventType.KeyUp && e.key == Key.Menu) { onMenu(); true } else false
+    val long = onMenu ?: onLongClick
+    if (long != null) {
+        val fired = remember { booleanArrayOf(false) }
+        m = m.onPreviewKeyEvent { e ->
+            val ok = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter
+            when {
+                e.key == Key.Menu && e.type == KeyEventType.KeyUp -> { long(); true }
+                // holding OK sends repeated key-downs: open the options once
+                ok && e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount > 0 -> {
+                    if (!fired[0]) { fired[0] = true; long() }
+                    true
+                }
+                ok && e.type == KeyEventType.KeyUp && fired[0] -> { fired[0] = false; true }
+                else -> false
+            }
+        }
     }
     Box(
         m.graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(shape)
             .background(if (isFocused) (focused ?: C.CardFocus) else normal)
             .border(2.dp, if (isFocused) C.Red else Color.Transparent, shape)
-            .combinedClickable(interactionSource = src, indication = null, onClick = onClick, onLongClick = onLongClick ?: onMenu),
+            .combinedClickable(interactionSource = src, indication = null, onClick = onClick, onLongClick = null),
         content = { content(isFocused) },
     )
 }
