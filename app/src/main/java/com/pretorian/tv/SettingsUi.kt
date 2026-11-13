@@ -480,7 +480,7 @@ private fun LookPage() {
         T("Najviše se vidi u temi Glass.", 12.sp, C.Muted)
         Label("Pločice na Početnoj")
         Segmented(listOf("Male", "Srednje", "Velike"), Look.tileSize) { Look.tileSize = it; save() }
-        Segmented(listOf("Moderne", "Puna boja", "Glass", "Obris"), listOf(3, 0, 1, 2).indexOf(Look.tileStyle).coerceAtLeast(0)) { Look.tileStyle = listOf(3, 0, 1, 2)[it]; save() }
+        Segmented(listOf("Fluent", "Moderne", "Puna boja", "Glass", "Obris"), listOf(4, 3, 0, 1, 2).indexOf(Look.tileStyle).coerceAtLeast(0)) { Look.tileStyle = listOf(4, 3, 0, 1, 2)[it]; save() }
         Label("Posteri filmova i serija")
         Segmented(listOf("Mali", "Srednji", "Veliki"), Look.posterSize) { Look.posterSize = it; save() }
         Label("Meniji i info traka preko slike")

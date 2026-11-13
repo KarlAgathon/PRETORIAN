@@ -17,7 +17,7 @@ object Look {
     var opacity by mutableIntStateOf(80)       // panel opacity in %, steps of 5
     var tileSize by mutableIntStateOf(1)       // 0 small, 1 medium, 2 large
     var posterSize by mutableIntStateOf(1)     // 0 small, 1 medium, 2 large
-    var tileStyle by mutableIntStateOf(3)      // 0 solid, 1 glass, 2 outline, 3 modern
+    var tileStyle by mutableIntStateOf(4)      // 0 solid, 1 glass, 2 outline, 3 modern, 4 fluent
     var mostWatched by mutableStateOf(true)
     var overlay by mutableIntStateOf(0)        // menus and info bar: 0 glass, 1 black
     var preview by mutableStateOf(true)        // live preview of the focused channel (old switch)
@@ -69,6 +69,7 @@ object Look {
         if (p.getInt("look_v", 0) < 3) { tileStyle = 3; p.edit().putInt("look_v", 3).putInt("look_tilestyle", 3).apply() }
         // 0.4.2: inside a group the small picture starts by itself (you asked for it)
         if (p.getInt("look_v", 0) < 4) { previewMode = 2; p.edit().putInt("look_v", 4).putInt("look_previewmode", 2).apply() }
+        if (p.getInt("look_v", 0) < 5) { tileStyle = 4; p.edit().putInt("look_v", 5).putInt("look_tilestyle", 4).apply() }
     }
 
     fun save(c: Context) {

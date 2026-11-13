@@ -462,6 +462,7 @@ fun HomeTile(label: String, icon: Int, fr: FocusRequester? = null, sizeOverride:
     val size = sizeOverride ?: when (Look.tileSize) { 0 -> 180.dp; 2 -> 280.dp; else -> 230.dp }
     val style = Look.tileStyle
     val shape = Rnd(size * 0.13f)
+    if (style == 4) { FluentTile(label, icon, fr, size, badge, onClick); return }
     Box {
         Focusable(
             modifier = Modifier.size(size * 1.12f, size).then(if (style == 1 || style == 2) Modifier.border(1.5.dp, C.Line, shape) else Modifier),
@@ -492,6 +493,38 @@ fun HomeTile(label: String, icon: Int, fr: FocusRequester? = null, sizeOverride:
             }
         }
         if (badge > 0) Box(Modifier.align(Alignment.TopEnd).padding(8.dp)) { Bell(badge) }
+    }
+}
+
+/** filled icon and colours for the main tiles (Fluent style) */
+private fun fluentOf(icon: Int): Triple<Int, Color, Color> = when (icon) {
+    R.drawable.lc_tv -> Triple(R.drawable.ic_fill_tv, Color(0xFF2563EB), Color(0xFF06B6D4))
+    R.drawable.lc_film -> Triple(R.drawable.ic_fill_movie, Color(0xFFDB2777), Color(0xFFF97316))
+    R.drawable.lc_monitor -> Triple(R.drawable.ic_fill_series, Color(0xFF7C3AED), Color(0xFF4F46E5))
+    R.drawable.lc_trophy -> Triple(R.drawable.ic_fill_trophy, Color(0xFF059669), Color(0xFF84CC16))
+    else -> Triple(icon, Color(0xFF475569), Color(0xFF1E293B))
+}
+
+/** Windows 11 / iOS like: colour gradient, big filled icon, name bottom left */
+@Composable
+private fun FluentTile(label: String, icon: Int, fr: FocusRequester?, size: Dp, badge: Int, onClick: () -> Unit) {
+    val (ic, c1, c2) = fluentOf(icon)
+    val shape = Rnd(size * 0.14f)
+    Box {
+        Focusable(modifier = Modifier.size(size * 1.12f, size), onClick = onClick, focusRequester = fr, shape = shape,
+            normal = Color.Transparent, focused = Color.Transparent, zoom = 1.07f) { f ->
+            Box(Modifier.fillMaxSize().clip(shape)
+                .background(Brush.linearGradient(listOf(c1, c2)), alpha = if (f) 1f else 0.7f)
+                .then(if (f) Modifier.border(3.dp, Color.White, shape) else Modifier.border(1.dp, Color.White.copy(alpha = 0.14f), shape))) {
+                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.18f), Color.Transparent, Color.Black.copy(alpha = 0.30f)))))
+                Box(Modifier.align(Alignment.TopEnd).padding(top = size * 0.09f, end = size * 0.09f)) {
+                    androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(ic), null, Modifier.size(size * 0.48f), tint = Color.White)
+                }
+                T(label, (size.value * 0.13f).sp, Color.White, FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.BottomStart).padding(start = size * 0.1f, bottom = size * 0.08f, end = 8.dp))
+            }
+        }
+        if (badge > 0) Box(Modifier.align(Alignment.TopStart).padding(8.dp)) { Bell(badge) }
     }
 }
 
