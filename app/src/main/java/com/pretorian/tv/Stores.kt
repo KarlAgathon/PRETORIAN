@@ -244,14 +244,28 @@ object NewContent {
     }
     private fun save() { val o = JSONObject(); fresh.forEach { (k, v) -> o.put(k, v) }; Prefs.put("new_items", o.toString()); rev++ }
 
+    /** set at start: needed to know which groups you hid */
+    var appCtx: Context? = null
+
+    /** new items whose group you did not hide: a hidden group stays hidden, also for "new" */
+    private fun visible(): List<Map.Entry<String, JSONObject>> {
+        val c = appCtx ?: return fresh.entries.toList()
+        val ovrs = HashMap<String, Ovr>()
+        return fresh.entries.filter { e ->
+            val parts = e.key.split('|'); val pid = parts.getOrNull(0) ?: return@filter true; val kind = parts.getOrNull(1) ?: return@filter true
+            val cat = e.value.str("c")
+            cat.isBlank() || !ovrs.getOrPut(pid) { Ovr(c, pid) }.isHidden(kind, cat)
+        }
+    }
+
     fun isNew(pid: String, kind: String, id: String): Boolean { load(); return fresh.containsKey(key(pid, kind, id)) }
     fun seen(pid: String, kind: String, id: String) { load(); if (fresh.remove(key(pid, kind, id)) != null) save() }
-    fun count(kind: String): Int { load(); return fresh.keys.count { it.split('|').getOrNull(1) == kind } }
-    fun countCat(pid: String, kind: String, cat: String): Int { load(); return fresh.entries.count { it.key.startsWith("$pid|$kind|") && it.value.str("c") == cat } }
+    fun count(kind: String): Int { load(); return visible().count { it.key.split('|').getOrNull(1) == kind } }
+    fun countCat(pid: String, kind: String, cat: String): Int { load(); return visible().count { it.key.startsWith("$pid|$kind|") && it.value.str("c") == cat } }
     fun clear(kind: String? = null) { load(); fresh.keys.removeAll { kind == null || it.split('|').getOrNull(1) == kind }; save() }
 
     /** the new items of a playlist, newest first: (id, name, image, rating, url) */
-    fun items(pid: String, kind: String): List<JSONObject> { load(); return fresh.entries.filter { it.key.startsWith("$pid|$kind|") }
+    fun items(pid: String, kind: String): List<JSONObject> { load(); return visible().filter { it.key.startsWith("$pid|$kind|") }
         .sortedByDescending { it.value.optLong("t") }.map { it.value.put("id", it.key.substringAfterLast('|')) } }
 
     /** compares the playlist's movies and series with the last snapshot (at most once every 12 hours, or [force]) */
@@ -281,7 +295,10 @@ object NewContent {
             if (old != null) {
                 val now = System.currentTimeMillis()
                 fresh0.forEach { fresh[key(p.id, kind, it.str("id"))] = it.put("t", now); added++ }
-                if (fresh0.isNotEmpty()) Notes.add(kind, trf(if (kind == "vod") "Novih filmova: %s" else "Novih serija: %s", fresh0.size) + " · " + p.name)
+                // the message counts only what you can see: nothing from hidden groups
+                val ovr = Ovr(ctx, p.id)
+                val shown = fresh0.count { o -> o.str("c").let { it.isBlank() || !ovr.isHidden(kind, it) } }
+                if (shown > 0) Notes.add(kind, trf(if (kind == "vod") "Novih filmova: %s" else "Novih serija: %s", shown) + " · " + p.name)
             }
             f.writeText(ids.toString())
         }

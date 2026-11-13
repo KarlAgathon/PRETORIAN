@@ -90,16 +90,17 @@ object SearchIndex {
     }
 
     suspend fun channels(ctx: android.content.Context) = part(ctx, "ch") { pls ->
-        pls.flatMap { p -> try { Repo.allChannels(p) } catch (e: Exception) { emptyList() } }.distinctBy { it.url }
+        // hidden groups and hidden channels stay hidden in search too
+        pls.flatMap { p -> val o = Ovr(ctx, p.id); try { Repo.allChannels(p).filter { !o.isHidden("live", it.group) && !o.isChHidden(it) } } catch (e: Exception) { emptyList() } }.distinctBy { it.url }
             .map { Item(norm(it.name), Hit.Ch(it), it.num.toString()) }
     }
     suspend fun movies(ctx: android.content.Context) = part(ctx, "vod") { pls ->
-        pls.flatMap { p -> try { Repo.catalog(p, "vod") } catch (e: Throwable) { emptyList() } }.map {
+        pls.flatMap { p -> val o = Ovr(ctx, p.id); try { Repo.catalog(p, "vod").filter { !o.isHidden("vod", it.str("c")) } } catch (e: Throwable) { emptyList() } }.map {
             Item(norm(it.str("n")), Hit.Movie(Vod(it.str("id"), it.str("n"), it.str("i").orNullIfBlank(), it.str("r").orNullIfBlank(), it.str("u"))))
         }
     }
     suspend fun shows(ctx: android.content.Context) = part(ctx, "series") { pls ->
-        pls.flatMap { p -> try { Repo.catalog(p, "series") } catch (e: Throwable) { emptyList() } }.map {
+        pls.flatMap { p -> val o = Ovr(ctx, p.id); try { Repo.catalog(p, "series").filter { !o.isHidden("series", it.str("c")) } } catch (e: Throwable) { emptyList() } }.map {
             Item(norm(it.str("n")), Hit.Show(SeriesItem(it.str("id"), it.str("n"), it.str("i").orNullIfBlank(), null, it.str("r").orNullIfBlank())))
         }
     }

@@ -68,6 +68,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         CrashLog.install(this)
         Prefs.init(this)
+        NewContent.appCtx = applicationContext
         Repo.diskDir = cacheDir
         Profiles.onStart(this)
         SportsAI.dir = cacheDir
@@ -121,7 +122,7 @@ class Nav(
     val playlistsChanged: () -> Unit,
 )
 
-object BuildInfo { const val VERSION = "0.4.8" }
+object BuildInfo { const val VERSION = "0.4.9" }
 
 @Composable
 fun PretorianApp() {
