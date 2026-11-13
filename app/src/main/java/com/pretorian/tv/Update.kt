@@ -97,6 +97,8 @@ object Updater {
         val pi = ctx.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
         params.setAppPackageName(ctx.packageName)
+        // Android 12+: no confirm screen once PRETORIAN itself installed the current version
+        if (Build.VERSION.SDK_INT >= 31) params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
         val id = pi.createSession(params)
         pi.openSession(id).use { s ->
             apk.inputStream().use { input -> s.openWrite("pretorian.apk", 0, apk.length()).use { out -> input.copyTo(out); s.fsync(out) } }

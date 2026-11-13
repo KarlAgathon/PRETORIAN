@@ -107,7 +107,7 @@ class Nav(
     val playlistsChanged: () -> Unit,
 )
 
-object BuildInfo { const val VERSION = "0.4.1" }
+object BuildInfo { const val VERSION = "0.4.2" }
 
 @Composable
 fun PretorianApp() {
@@ -494,9 +494,33 @@ fun HomeTile(label: String, icon: Int, fr: FocusRequester? = null, sizeOverride:
     }
 }
 
+/** big modern tile for the simple home: colour gradient, filled icon that fills the tile, label below left */
+@Composable
+private fun BigTile(label: String, sub: String, icon: Int, c1: Color, c2: Color, fr: FocusRequester?, onClick: () -> Unit) {
+    val shape = Rnd(30.dp)
+    Focusable(modifier = Modifier.size(300.dp, 250.dp), onClick = onClick, focusRequester = fr, shape = shape,
+        normal = Color.Transparent, focused = Color.Transparent, zoom = 1.07f) { f ->
+        Box(Modifier.fillMaxSize().clip(shape)
+            .background(Brush.linearGradient(listOf(c1, c2)), alpha = if (f) 1f else 0.72f)
+            .then(if (f) Modifier.border(3.dp, Color.White, shape) else Modifier)) {
+            // soft light from the top
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.16f), Color.Transparent, Color.Black.copy(alpha = 0.35f)))))
+            Box(Modifier.align(Alignment.TopEnd).padding(top = 22.dp, end = 22.dp)) {
+                androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(icon), null, Modifier.size(128.dp), tint = Color.White)
+            }
+            Column(Modifier.align(Alignment.BottomStart).padding(start = 24.dp, bottom = 20.dp, end = 16.dp)) {
+                T(label, 32.sp, Color.White, FontWeight.Bold)
+                T(sub, 14.sp, Color.White.copy(alpha = 0.85f), FontWeight.Medium)
+            }
+        }
+    }
+}
+
 /** Simple mode: only TV, Movies, Series, and a small "Advanced mode" button behind the PIN. */
 @Composable
 fun SimpleHome(nav: Nav) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
     val first = remember { FocusRequester() }
     var warn by remember { mutableStateOf(false) }
     var pin by remember { mutableStateOf(false) }
@@ -508,12 +532,20 @@ fun SimpleHome(nav: Nav) {
         }
         Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
             Row(horizontalArrangement = Arrangement.spacedBy(36.dp)) {
-                HomeTile("TV", R.drawable.lc_tv, first, 230.dp) { nav.push(Screen.Tv) }
-                HomeTile("Filmovi", R.drawable.lc_film, null, 230.dp) { nav.push(Screen.Movies) }
-                HomeTile("Serije", R.drawable.lc_monitor, null, 230.dp) { nav.push(Screen.Series) }
+                BigTile("TV", "Kanali uživo", R.drawable.ic_fill_tv, Color(0xFF2563EB), Color(0xFF06B6D4), first) { nav.push(Screen.Tv) }
+                BigTile("Filmovi", "Filmovi na zahtjev", R.drawable.ic_fill_movie, Color(0xFFDB2777), Color(0xFFF97316), null) { nav.push(Screen.Movies) }
+                BigTile("Serije", "Sve serije", R.drawable.ic_fill_series, Color(0xFF7C3AED), Color(0xFF4F46E5), null) { nav.push(Screen.Series) }
             }
         }
-        Button("Napredni mod", R.drawable.lc_lock) { warn = true }
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Button("Napredni mod", R.drawable.lc_lock) { warn = true }
+            Updater.available?.let { u ->
+                val pr = Updater.progress
+                val label = when { pr in 0..100 -> trf("Preuzimam… %s%%", pr); pr == 101 -> tr("Instaliram…"); else -> trf("Ažuriraj na %s", u.name) }
+                Button(label, R.drawable.lc_download, primary = true) { if (pr < 0) scope.launch { Updater.install(ctx, u) } }
+            }
+        }
+        Updater.status?.let { T(it, 13.sp, C.Danger, maxLines = 2, modifier = Modifier.padding(top = 8.dp)) }
     }
     if (warn) Popup("Aktivirati napredni mod?", onDismiss = { warn = false }) {
         T("Pažnja: aktivirate napredni mod i dodatne opcije. Nastavite s pažnjom, jer možete izazvati nepoželjne posljedice i pokvariti podešavanja programa.",

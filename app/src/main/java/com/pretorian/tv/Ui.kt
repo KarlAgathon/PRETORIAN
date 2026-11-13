@@ -280,7 +280,7 @@ fun Popup(title: String, onDismiss: () -> Unit, width: Dp = 560.dp, content: @Co
 /** One choice inside a Popup or a settings page. */
 @Composable
 fun OptionRow(label: String, icon: Int? = null, sub: String? = null, value: String? = null, selected: Boolean = false,
-              focusRequester: FocusRequester? = null, color: Color? = null, onClick: () -> Unit) {
+              focusRequester: FocusRequester? = null, color: Color? = null, valueColor: Color? = null, onClick: () -> Unit) {
     Focusable(
         modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp),
         onClick = onClick,
@@ -297,7 +297,7 @@ fun OptionRow(label: String, icon: Int? = null, sub: String? = null, value: Stri
                 T(label, 15.sp, color ?: C.Text, FontWeight.Medium)
                 if (sub != null) T(sub, 12.sp, C.Muted, maxLines = 2)
             }
-            if (value != null) T(value, 14.sp, C.Soft, FontWeight.Medium, modifier = Modifier.widthIn(max = 260.dp))
+            if (value != null) T(value, 14.sp, valueColor ?: C.Soft, if (valueColor != null) FontWeight.Bold else FontWeight.Medium, modifier = Modifier.widthIn(max = 260.dp))
             if (selected) Ico(R.drawable.lc_check, 18.dp, C.Red)
         }
     }
@@ -370,6 +370,23 @@ fun TextDialog(title: String, label: String, initial: String = "", onDismiss: ()
         Field(label, v, { v = it }, Modifier.fillMaxWidth().focusRequester(fr), onDone = { onOk(v.trim()) })
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button("Spremi", R.drawable.lc_check, primary = true) { onOk(v.trim()) }
+            Button("Odustani", R.drawable.lc_x) { onDismiss() }
+        }
+    }
+    LaunchedEffect(Unit) { try { fr.requestFocus() } catch (_: Exception) {} }
+}
+
+/** two fields: name and link (EPG sources) */
+@Composable
+fun NameLinkDialog(title: String, name0: String = "", link0: String = "", onDismiss: () -> Unit, onOk: (String, String) -> Unit) {
+    var name by remember { mutableStateOf(name0) }
+    var link by remember { mutableStateOf(link0) }
+    val fr = remember { FocusRequester() }
+    Popup(title, onDismiss, width = 640.dp) {
+        Field("Naziv", name, { name = it }, Modifier.fillMaxWidth().focusRequester(fr))
+        Field("Link (http://…/epg.xml ili .xml.gz)", link, { link = it }, Modifier.fillMaxWidth(), KeyboardType.Uri, onDone = { onOk(name.trim(), link.trim()) })
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Button("Spremi", R.drawable.lc_check, primary = true) { onOk(name.trim(), link.trim()) }
             Button("Odustani", R.drawable.lc_x) { onDismiss() }
         }
     }

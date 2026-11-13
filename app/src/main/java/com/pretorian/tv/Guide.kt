@@ -85,7 +85,13 @@ fun TvGuide(nav: Nav, onList: () -> Unit) {
         }
         gridFr.tryFocus()
     }
-    // browsing the groups changes nothing; a group opens only on OK
+    // browsing the groups shows that group's channels on the right; focus stays on the groups
+    LaunchedEffect(focusedGroup) {
+        val f = focusedGroup ?: return@LaunchedEffect
+        delay(250)
+        val locked = f.pid?.let { Ovr(ctx, it).isLocked("live", f.cat.id) } ?: false
+        if (!locked && st.group?.key != f.key) { TvMemory.channel = -1; st.group = f; TvMemory.group = f }
+    }
     fun showGroups() { Chrome.rail = 1; st.focusKey = "g:" + (st.group?.key ?: ""); st.refocus++ }
     BackHandler(enabled = Chrome.rail == 0 && st.groupMenu == null) { showGroups() }
 
@@ -93,7 +99,7 @@ fun TvGuide(nav: Nav, onList: () -> Unit) {
         if (groupsOpen) {
             GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, 250.dp, "TV", null,
                 onFocusGroup = { focusedGroup = it; Chrome.rail = 1 },
-                onOpen = { openGroup(ctx, st, it); Chrome.rail = 0; st.enter++ },
+                onOpen = { openGroup(ctx, st, it); st.enter++ },
                 onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
                 onHeader = { p -> Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
                 onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it },
@@ -147,7 +153,6 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
     val src = remember { MutableInteractionSource() }
     val focused by src.collectIsFocusedAsState()
     LaunchedEffect(Unit) { while (true) { delay(30_000); now = System.currentTimeMillis() } }
-    LaunchedEffect(focused) { if (focused) Chrome.rail = 0 }
 
     // guide of the rows around the focused one
     LaunchedEffect(row, list) {
@@ -353,5 +358,7 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
             if (reload) onReload()
         }
     }
-    LaunchedEffect(list.isNotEmpty(), enter) { if (list.isNotEmpty()) fr.tryFocus() }
+    val enter0 = remember { enter }
+    // the grid takes focus only at start or after OK on a group, never while the groups are being browsed
+    LaunchedEffect(list.isNotEmpty(), enter) { if (list.isNotEmpty() && (Chrome.rail == 0 || enter != enter0)) fr.tryFocus() }
 }

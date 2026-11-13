@@ -268,16 +268,43 @@ class Xtream(private val p: Playlist) {
 
     /** past programmes of a channel with archive (catch-up) */
     fun archive(streamId: String): List<EpgItem> {
-        val o = try { JSONObject(api("get_simple_data_table", "&stream_id=${Net.enc(streamId)}")) } catch (e: Exception) { return emptyList() }
-        val a = o.optJSONArray("epg_listings") ?: return emptyList()
-        fun b64(s: String) = try { String(android.util.Base64.decode(s, android.util.Base64.DEFAULT)).trim() } catch (e: Exception) { s }
-        return (0 until a.length()).mapNotNull {
-            val e = a.getJSONObject(it)
-            val start = e.str("start_timestamp").toLongOrNull()?.times(1000) ?: return@mapNotNull null
-            val end = e.str("stop_timestamp").toLongOrNull()?.times(1000) ?: start
-            // the server's own clock text is what the archive link wants
-            EpgItem(b64(e.str("title")), b64(e.str("description")).orNullIfBlank(), start, end, e.str("start"), e.optInt("has_archive", 1) == 1)
+        val raw = api("get_simple_data_table", "&stream_id=${Net.enc(streamId)}")  // i18n-ignore
+        val a = try { JSONObject(raw).optJSONArray("epg_listings") } catch (e: Exception) { try { org.json.JSONArray(raw) } catch (x: Exception) { null } } ?: return emptyList()
+        val fmt = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US)
+        fun b64(s: String): String {
+            if (s.isBlank()) return s
+            return try {
+                val d = String(android.util.Base64.decode(s, android.util.Base64.DEFAULT), Charsets.UTF_8).trim()
+                if (d.isNotEmpty() && d.none { it == '\uFFFD' || (it < ' ' && it != '\n' && it != '\r' && it != '\t') }) d else s
+            } catch (e: Exception) { s }
         }
+        fun ts(e: JSONObject, k: String, txt: String): Long? {
+            e.opt(k)?.toString()?.toLongOrNull()?.let { return if (it < 10_000_000_000L) it * 1000 else it }
+            val t = e.str(txt).ifBlank { return null }
+            t.toLongOrNull()?.let { return if (it < 10_000_000_000L) it * 1000 else it }
+            return try { fmt.parse(t)?.time } catch (x: Exception) { null }
+        }
+        val items = (0 until a.length()).mapNotNull {
+            val e = a.optJSONObject(it) ?: return@mapNotNull null
+            val start = ts(e, "start_timestamp", "start") ?: return@mapNotNull null
+            val end = ts(e, "stop_timestamp", "end") ?: ts(e, "stop_timestamp", "stop") ?: start
+            val flag = e.opt("has_archive")?.toString()
+            // the server's own clock text is what the archive link wants
+            EpgItem(b64(e.str("title")), b64(e.str("description")).orNullIfBlank(), start, end, e.str("start").takeIf { it.length >= 16 }, flag == null || flag == "1" || flag == "true")
+        }
+        // some servers never mark has_archive: then every past show in the archive window counts
+        val now = System.currentTimeMillis()
+        return if (items.none { it.archived && it.end <= now }) items.map { it.copy(archived = true) } else items
+    }
+
+    /** past shows from the account's own XMLTV, when the archive table is empty */
+    fun archiveFromGuide(epgId: String?, days: Int): List<EpgItem> {
+        val id = epgId?.lowercase()?.ifBlank { null } ?: return emptyList()
+        val now = System.currentTimeMillis()
+        return try {
+            Xmltv.read(xmltvUrl(), setOf(id), now - days * 86_400_000L, now).filter { it.end <= now }
+                .map { EpgItem(it.title, it.desc, it.start, it.end, null, true) }
+        } catch (e: Exception) { emptyList() }
     }
 
     /** link to a past programme: /timeshift/user/pass/minutes/YYYY-MM-DD:HH-MM/stream.ts */

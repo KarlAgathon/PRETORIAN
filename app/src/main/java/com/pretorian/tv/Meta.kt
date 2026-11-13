@@ -157,13 +157,62 @@ object Tmdb {
 
 data class SubResult(val provider: String, val lang: String, val release: String, val downloads: Int, val ref: String)
 
-/** Online subtitles: OpenSubtitles.com (API key) and SubDL (API key). */
+/** Online subtitles. Without any key: Podnapisi.net and OpenSubtitles.org. With old keys also OpenSubtitles.com and SubDL. */
 object Subs {
     private var osToken: String? = null
 
     fun providers(): List<String> = buildList {
+        add("Podnapisi"); add("OpenSubtitles.org")
         if (Prefs.osKey.isNotBlank()) add("OpenSubtitles")
         if (Prefs.subdlKey.isNotBlank()) add("SubDL")
+    }
+
+    /** 2-letter code to the 3-letter one OpenSubtitles.org uses */
+    private val OS3 = mapOf("bs" to "bos", "hr" to "hrv", "sr" to "scc", "en" to "eng", "de" to "ger", "tr" to "tur", "it" to "ita",
+        "bg" to "bul", "ro" to "rum", "ar" to "ara", "fr" to "fre", "es" to "spa", "sl" to "slv", "mk" to "mac")
+
+    private fun legacyOs(title: String, year: String?, season: Int?, episode: Int?): List<SubResult> {
+        val l3 = langs().mapNotNull { OS3[it] }.joinToString(",").ifBlank { "eng" }
+        val parts = ArrayList<String>()
+        if (episode != null) parts += "episode-$episode"
+        parts += "query-" + Net.enc(title.lowercase()).replace("+", "%20")
+        if (season != null) parts += "season-$season"
+        parts += "sublanguageid-$l3"
+        val text = Http.request("https://rest.opensubtitles.org/search/" + parts.joinToString("/"), mapOf("X-User-Agent" to "TemporaryUserAgent"))
+        val a = org.json.JSONArray(text)
+        return (0 until a.length()).mapNotNull { i ->
+            val o = a.optJSONObject(i) ?: return@mapNotNull null
+            if (year != null && season == null && o.str("MovieYear").isNotBlank() && o.str("MovieYear") != year) return@mapNotNull null
+            SubResult("OpenSubtitles.org", o.str("ISO639").ifBlank { o.str("SubLanguageID").take(2) }.lowercase(),
+                o.str("MovieReleaseName").ifBlank { o.str("SubFileName") }, o.str("SubDownloadsCnt").toIntOrNull() ?: 0, o.str("SubDownloadLink"))
+        }
+    }
+
+    private fun podnapisi(title: String, year: String?, season: Int?, episode: Int?): List<SubResult> {
+        val out = ArrayList<SubResult>()
+        for (lang in langs().ifEmpty { listOf("en") }.take(4)) {
+            var q = "keywords=${Net.enc(title)}&language=$lang"
+            if (season != null) q += "&seasons=$season&movie_type=tv-series" else q += "&movie_type=movie"
+            if (episode != null) q += "&episodes=$episode"
+            if (year != null && season == null) q += "&year=$year"
+            val o = try { JSONObject(Http.request("https://www.podnapisi.net/subtitles/search/advanced?$q")) } catch (e: Exception) { continue }
+            val data = o.optJSONArray("data") ?: continue
+            for (i in 0 until data.length()) {
+                val s = data.optJSONObject(i) ?: continue
+                val rel = s.optJSONArray("releases")?.let { r -> (0 until r.length()).joinToString(" ") { r.optString(it) } }?.ifBlank { null }
+                    ?: s.optJSONObject("movie")?.str("title") ?: title
+                val dl = s.optJSONObject("stats")?.optInt("downloads") ?: s.optInt("downloads")
+                out += SubResult("Podnapisi", s.str("language").take(2).lowercase().ifBlank { lang }, rel, dl, s.str("id"))
+            }
+        }
+        return out
+    }
+
+    /** how well a subtitle's release name fits the file you play (more shared words = better) */
+    private fun fit(release: String, wanted: String): Int {
+        fun words(s: String) = s.lowercase().split(Regex("[^a-z0-9]+")).filter { it.length >= 2 }.toSet()
+        val a = words(release); val b = words(wanted)
+        return a.intersect(b).size
     }
 
     private fun langs() = Prefs.subLangs.split(',').map { it.trim().lowercase() }.filter { it.length == 2 }
@@ -172,11 +221,15 @@ object Subs {
         val (title, year) = cleanTitle(rawTitle)
         val out = ArrayList<SubResult>()
         val errors = ArrayList<String>()
+        try { out += podnapisi(title, year, season, episode) } catch (e: Exception) { errors += "Podnapisi: ${e.message}" }
+        try { out += legacyOs(title, year, season, episode) } catch (e: Exception) { errors += "OpenSubtitles.org: ${e.message}" }
         if (Prefs.osKey.isNotBlank()) try { out += openSubs(title, year, season, episode) } catch (e: Exception) { errors += "OpenSubtitles: ${e.message}" }
         if (Prefs.subdlKey.isNotBlank()) try { out += subdl(title, year, season, episode) } catch (e: Exception) { errors += "SubDL: ${e.message}" }
-        if (out.isEmpty() && errors.isNotEmpty()) throw IOException(errors.joinToString("\n"))
+        if (out.isEmpty() && errors.size >= 2) throw IOException(errors.joinToString("\n"))
         val order = langs()
-        out.sortedWith(compareBy({ order.indexOf(it.lang).let { i -> if (i < 0) 99 else i } }, { -it.downloads }))
+        // your languages first; inside a language the release that fits the file best, then the most downloaded
+        out.distinctBy { it.provider + it.ref }
+            .sortedWith(compareBy({ order.indexOf(it.lang).let { i -> if (i < 0) 99 else i } }, { -fit(it.release, rawTitle) }, { -it.downloads }))
     }
 
     private fun osHeaders(): Map<String, String> = buildMap {
@@ -226,6 +279,14 @@ object Subs {
                     JSONObject().put("file_id", r.ref.toLong()).toString()))
                 val link = d.str("link").orNullIfBlank() ?: throw IOException(d.str("message").ifBlank { "Dnevni limit preuzimanja je potrošen" })
                 Http.bytes(link)
+            }
+            "OpenSubtitles.org" -> {
+                val gz = Http.bytes(r.ref)
+                try { java.util.zip.GZIPInputStream(ByteArrayInputStream(gz)).use { it.readBytes() } } catch (e: Exception) { gz }
+            }
+            "Podnapisi" -> {
+                val zip = Http.bytes("https://www.podnapisi.net/subtitles/${r.ref}/download")
+                unzipFirstSrt(zip) ?: throw IOException("U arhivi nema .srt titla")
             }
             else -> {
                 val zip = Http.bytes("https://dl.subdl.com" + r.ref)

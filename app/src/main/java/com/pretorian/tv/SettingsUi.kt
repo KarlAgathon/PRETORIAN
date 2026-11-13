@@ -50,7 +50,7 @@ private val SECTIONS = listOf(
     Section("groups", R.drawable.lc_layers, "Grupe i kanali", "Redoslijed, nazivi, sakrivanje, PIN"),
     Section("language", R.drawable.lc_languages, "Jezik", "Meniji, dugmad i poruke"),
     Section("look", R.drawable.lc_palette, "Izgled", "Tema, boja, prozirnost, veličine"),
-    Section("media", R.drawable.lc_captions, "Filmovi i titlovi", "TMDB, IMDb, titlovi, jezici"),
+    Section("media", R.drawable.lc_play, "Plejer", "Zvuk, titlovi, eksterni plejer"),
     Section("sport", R.drawable.lc_trophy, "Sport i AI", "Država, AI za prenose"),
     Section("reminders", R.drawable.lc_bell, "Podsjetnici", "Emisije, utakmice, obavještenja"),
     Section("parental", R.drawable.lc_shield_check, "Roditelji i jednostavni mod", "PIN, jednostavni mod"),
@@ -149,7 +149,7 @@ private fun PlaylistsPage(nav: Nav) {
     if (opened != null) {
         BackHandler { openId = null }
         PlaylistDetail(opened, nav, onChanged = { refresh() }, onDelete = { del = opened }, onClose = { openId = null })
-    } else Page("Playliste", if (multi) "Uključi jednu ili više. Gornja uključena je otvorena, ostale su sklopljene." else "Aktivna je samo jedna. OK na drugoj je aktivira.") {
+    } else Page("Playliste", if (multi) "OK otvara playlistu, drži OK za brzi meni. Može biti uključeno više playlisti." else "OK otvara playlistu, drži OK za brzi meni.") {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Button("Dodaj playlistu", R.drawable.lc_plus, primary = true) { EditPlaylist.target = null; nav.push(Screen.AddPlaylist) }
             Button(if (busy) "Ažuriram…" else "Ažuriraj sve", R.drawable.lc_refresh_cw) {
@@ -299,8 +299,8 @@ private fun EpgSourcesBlock(pl: Playlist?) {
             s.channels >= 0 -> trf("%s kanala · ažurirano %s", s.channels, java.text.SimpleDateFormat("d. M. HH:mm", java.util.Locale.getDefault()).format(java.util.Date(s.at)))
             else -> tr("Još nije provjeren")
         }
-        OptionRow(s.name, R.drawable.lc_clock, sub = status, value = tr(if (s.on) "Uključen" else "Isključen"),
-            color = if (s.error != null) C.Danger else null) { menu = s }
+        OptionRow(s.name, if (s.on) R.drawable.lc_check else R.drawable.lc_x, sub = status, value = tr(if (s.on) "● Aktivan" else "○ Isključen"),
+            color = if (s.error != null) C.Danger else if (s.on) null else C.Muted, valueColor = if (s.on) C.Green else C.Muted) { menu = s }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Button("Dodaj EPG", R.drawable.lc_plus) { add = true }
@@ -310,14 +310,18 @@ private fun EpgSourcesBlock(pl: Playlist?) {
             scope.launch { list.forEach { try { EpgSources.refresh(it) } catch (_: Exception) {} }; Repo.clear(); updating = false }
         }
     }
-    if (add) TextDialog("Dodaj EPG", "XMLTV link (http://…/epg.xml)", onDismiss = { add = false }) { v ->
+    if (add) NameLinkDialog("Dodaj EPG", onDismiss = { add = false }) { n, v ->
         add = false
-        if (v.isNotBlank()) { val s = EpgSources.add(v, pl?.id); scope.launch { EpgSources.refresh(s); Repo.clear() } }
+        if (v.isNotBlank()) { val s = EpgSources.add(v, pl?.id, n); scope.launch { EpgSources.refresh(s); Repo.clear() } }
     }
     edit?.let { s ->
-        TextDialog("Uredi EPG", "XMLTV link (http://…/epg.xml)", s.url, onDismiss = { edit = null }) { v ->
+        NameLinkDialog("Uredi EPG", s.name, s.url, onDismiss = { edit = null }) { n, v ->
             edit = null
-            if (v.isNotBlank()) { val n = s.copy(url = v.trim(), name = EpgSources.nameOf(v), channels = -1, error = null); EpgSources.update(n); scope.launch { EpgSources.refresh(n); Repo.clear() } }
+            if (v.isNotBlank()) {
+                val changed = v != s.url
+                val e = s.copy(url = v, name = n.ifBlank { EpgSources.nameOf(v) }, channels = if (changed) -1 else s.channels, error = if (changed) null else s.error)
+                EpgSources.update(e); if (changed) scope.launch { EpgSources.refresh(e); Repo.clear() }
+            }
         }
     }
     menu?.let { s ->
@@ -500,7 +504,7 @@ private fun LookPage() {
         Segmented(listOf("Isključen", "Na OK", "Automatski"), Look.previewMode) { Look.previewMode = it; Look.preview = it > 0; save() }
         T(when (Look.previewMode) {
             0 -> "Nema male slike. OK na kanalu ga odmah pušta preko cijelog ekrana."
-            1 -> "Prvi OK na kanalu pušta malu sliku, drugi OK preko cijelog ekrana. Dok listaš, ništa se ne pušta."
+            1 -> "U TV vodiču: OK na emisiji › Pregled u malom prozoru. Dok listaš, ništa se ne pušta."
             else -> "Mala slika se pušta sama kad staneš na kanal."
         }, 12.sp, C.Muted, maxLines = 2)
         ToggleRow("Najgledaniji na vrhu grupe", Look.mostWatched, R.drawable.lc_arrow_up, "Kanali koje najčešće gledaš sami idu gore (kad nema ručnog redoslijeda)") {
@@ -534,25 +538,12 @@ private fun MediaPage() {
     var rev by remember { mutableIntStateOf(0) }
     fun masked(v: String) = if (v.isBlank()) tr("Nije upisan") else "••••" + v.takeLast(4)
     key(rev) {
-        Page("Filmovi i titlovi", "Ključevi su besplatni i čuvaju se samo na ovom uređaju.") {
-            Label("Podaci o filmovima")
-            OptionRow("TMDB API ključ", R.drawable.lc_key_round, "Posteri, opis na tvom jeziku, glumci, trailer · themoviedb.org › Settings › API",
-                value = masked(Prefs.tmdbKey)) { edit = "tmdb" }
-            if (Prefs.tmdbKey.isNotBlank()) OptionRow("Provjeri TMDB ključ", R.drawable.lc_check, value = tmdbStatus) {
-                tmdbStatus = "Provjeravam…"; scope.launch { tmdbStatus = Tmdb.test()?.let { trf("Ne radi: %s", it) } ?: tr("Radi ✓") }
-            }
-            OptionRow("OMDb API ključ (IMDb ocjena)", R.drawable.lc_key_round, "omdbapi.com › API Key › FREE", value = masked(Prefs.omdbKey)) { edit = "omdb" }
-            OptionRow("Jezik opisa filmova", R.drawable.lc_globe, "Ako opisa nema na tom jeziku, prikazuje se engleski",
-                value = if (Prefs.metaLang == "auto") tr("Kao jezik aplikacije") else Langs.label(Prefs.metaLang)) { edit = "metalang" }
+        Page("Plejer", "Zvuk, titlovi, premotavanje, eksterni plejer. Podaci o filmovima i titlovi s interneta rade bez ključeva.") {
             Label("Titlovi")
-            OptionRow("OpenSubtitles API ključ", R.drawable.lc_key_round, "opensubtitles.com › Profil › API consumers", value = masked(Prefs.osKey)) { edit = "os" }
-            OptionRow("OpenSubtitles korisnik (opciono)", R.drawable.lc_user, "Više preuzimanja dnevno", value = Prefs.osUser.ifBlank { "Nije upisan" }) { edit = "osuser" }
-            if (Prefs.osUser.isNotBlank()) OptionRow("OpenSubtitles lozinka", R.drawable.lc_lock, value = if (Prefs.osPass.isBlank()) "Nije upisana" else "••••••") { edit = "ospass" }
-            OptionRow("SubDL API ključ", R.drawable.lc_key_round, "subdl.com › Panel › API", value = masked(Prefs.subdlKey)) { edit = "subdl" }
             OptionRow("Jezici titla", R.drawable.lc_captions, value = langList(Prefs.subLangs)) { edit = "sublangs" }
             ToggleRow("Automatski uključi titl", Prefs.autoSubs, R.drawable.lc_captions,
                 "Ugrađeni titl na tvom jeziku se sam uključi kad film krene") { Prefs.autoSubs = it; rev++ }
-            Label("Plejer")
+            Label("Zvuk i premotavanje")
             OptionRow("Jezici zvuka", R.drawable.lc_volume, value = langList(Prefs.audioLangs)) { edit = "audiolangs" }
             T("Premotavanje lijevo/desno", 14.sp, C.Text, FontWeight.Medium)
             Segmented(listOf("10 s", "20 s", "30 s"), listOf(10, 20, 30).indexOf(Prefs.seekStep).coerceAtLeast(0)) {
@@ -627,6 +618,8 @@ fun langList(codes: String): String = codes.split(',').filter { it.isNotBlank() 
 private fun LanguagePage() {
     val ctx = LocalContext.current
     var pick by remember { mutableStateOf(false) }
+    var pickMeta by remember { mutableStateOf(false) }
+    var metaLang by remember { mutableStateOf(Prefs.metaLang) }
     Page("Jezik") {
         val cur = Langs.APP.firstOrNull { it.code == Look.lang } ?: Langs.APP[0]
         T("Jezik aplikacije", 14.sp, C.Muted, FontWeight.SemiBold)
@@ -654,6 +647,12 @@ private fun LanguagePage() {
                 }
             }
         }
+        T("Opisi filmova i serija", 14.sp, C.Muted, FontWeight.SemiBold)
+        OptionRow("Jezik opisa filmova", R.drawable.lc_globe, "Ako opisa nema na tom jeziku, prikazuje se engleski",
+            value = if (metaLang == "auto") tr("Kao jezik aplikacije") else Langs.label(metaLang)) { pickMeta = true }
+    }
+    if (pickMeta) LangPicker("Jezik opisa filmova", metaLang, Langs.MEDIA, auto = true, onDismiss = { pickMeta = false }) {
+        Prefs.metaLang = it; metaLang = it; pickMeta = false
     }
     if (pick) LangPicker("Jezik aplikacije", Look.lang, onDismiss = { pick = false }) { setAppLang(ctx, it); pick = false }
 }

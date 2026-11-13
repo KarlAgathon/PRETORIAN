@@ -152,3 +152,18 @@ https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart
 AIza…
 aistudio.google.com
 Bearer $k
+bos
+hrv
+scc
+eng
+ger
+tur
+ita
+bul
+rum
+ara
+fre
+spa
+slv
+mac
+TemporaryUserAgent

@@ -79,9 +79,10 @@ fun SubtitlePicker(search: String, season: Int?, episode: Int?, embedded: List<S
             T(cleanTitle(search).first + (season?.let { " · S$it" } ?: "") + (episode?.let { "E$it" } ?: "") + " · " + langList(Prefs.subLangs), 14.sp, C.Muted)
             if (busy) Box(Modifier.fillMaxWidth().height(120.dp)) { Loading("Tražim…") }
             error?.let { T(it, 14.sp, C.Danger, maxLines = 4) }
-            results.take(40).forEach { r ->
-                OptionRow(r.release.ifBlank { "Titl" }, R.drawable.lc_captions,
-                    sub = "${Langs.label(r.lang)} · ${r.provider}" + if (r.downloads > 0) " · ↓ ${r.downloads}" else "") {
+            results.take(40).forEachIndexed { i, r ->
+                OptionRow(r.release.ifBlank { "Titl" }, if (i == 0) R.drawable.lc_check else R.drawable.lc_captions,
+                    sub = (if (i == 0) tr("✓ najbolje odgovara") + " · " else "") + "${Langs.label(r.lang)} · ${r.provider}" + if (r.downloads > 0) " · ↓ ${r.downloads}" else "",
+                    color = if (i == 0) C.Green else null) {
                     busy = true
                     scope.launch {
                         try { onPicked(Subs.download(ctx, r)) }
@@ -101,10 +102,7 @@ fun SubtitlePicker(search: String, season: Int?, episode: Int?, embedded: List<S
                 }
             }
             val prov = Subs.providers()
-            OptionRow("Traži online", R.drawable.lc_search,
-                sub = if (prov.isEmpty()) "Prvo upiši API ključ: Postavke › Filmovi i titlovi" else prov.joinToString(" · ") + " · " + langList(Prefs.subLangs)) {
-                if (prov.isEmpty()) Toast.makeText(ctx, tr("Postavke › Filmovi i titlovi › OpenSubtitles ili SubDL ključ"), Toast.LENGTH_LONG).show() else runSearch()
-            }
+            OptionRow("Traži online", R.drawable.lc_search, sub = prov.joinToString(" · ") + " · " + langList(Prefs.subLangs)) { runSearch() }
             OptionRow("S linka (internet)", R.drawable.lc_link, sub = "Zalijepi link do .srt ili .zip") { mode = "url" }
             OptionRow("Sa diska ili USB-a", R.drawable.lc_folder, sub = ".srt, .ass, .sub, .zip") { mode = "disk" }
             OptionRow("Jezik titla", R.drawable.lc_languages, value = langList(Prefs.subLangs)) { mode = "langs" }

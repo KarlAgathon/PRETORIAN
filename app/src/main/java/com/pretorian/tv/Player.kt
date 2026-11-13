@@ -70,7 +70,7 @@ import java.io.File
 import androidx.media3.common.C as MC
 
 @OptIn(UnstableApi::class)
-fun buildPlayer(ctx: Context): ExoPlayer {
+fun buildPlayer(ctx: Context, preview: Boolean = false): ExoPlayer {
     val http = DefaultHttpDataSource.Factory()
         .setUserAgent(Net.UA)
         .setAllowCrossProtocolRedirects(true)
@@ -79,9 +79,12 @@ fun buildPlayer(ctx: Context): ExoPlayer {
     val renderers = DefaultRenderersFactory(ctx)
         .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
         .setEnableDecoderFallback(true)
-    val player = ExoPlayer.Builder(ctx, renderers)
+    val builder = ExoPlayer.Builder(ctx, renderers)
         .setMediaSourceFactory(DefaultMediaSourceFactory(ctx).setDataSourceFactory(DefaultDataSource.Factory(ctx, http)))
-        .build()
+    // the small picture starts as soon as half a second is loaded
+    if (preview) builder.setLoadControl(androidx.media3.exoplayer.DefaultLoadControl.Builder()
+        .setBufferDurationsMs(2_000, 15_000, 500, 1_000).build())
+    val player = builder.build()
     val audio = Prefs.audioLangs.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toTypedArray()
     val b = player.trackSelectionParameters.buildUpon().setPreferredAudioLanguages(*audio)
     if (Prefs.autoSubs) {

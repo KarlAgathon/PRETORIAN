@@ -55,7 +55,7 @@ object Look {
         mostWatched = p.getBoolean("look_mostwatched", true)
         overlay = p.getInt("look_overlay", 0)
         preview = p.getBoolean("look_preview", true)
-        previewMode = p.getInt("look_previewmode", if (preview) 1 else 0)
+        previewMode = p.getInt("look_previewmode", 2)
         menuOpacity = p.getInt("look_menuopacity", 94)
         rowSize = p.getInt("look_rowsize", 1)
         lang = p.getString("app_lang", "bs") ?: "bs"
@@ -67,6 +67,8 @@ object Look {
         layout = p.getInt("look_layout", 1)
         // 0.3: the new modern home tiles become the default once
         if (p.getInt("look_v", 0) < 3) { tileStyle = 3; p.edit().putInt("look_v", 3).putInt("look_tilestyle", 3).apply() }
+        // 0.4.2: inside a group the small picture starts by itself (you asked for it)
+        if (p.getInt("look_v", 0) < 4) { previewMode = 2; p.edit().putInt("look_v", 4).putInt("look_previewmode", 2).apply() }
     }
 
     fun save(c: Context) {

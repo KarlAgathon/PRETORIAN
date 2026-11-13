@@ -92,7 +92,23 @@ private fun Archive(c: Channel, day: Int, onDay: (Int) -> Unit, nav: Nav) {
     LaunchedEffect(c.url) { delay(350); shown = c }
     val ch = shown ?: return
     val p = Store.byId(ctx, ch.pid) ?: return
-    val list by load(ch.url) { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Xtream(p).archive(ch.id) } }
+    val list by load(ch.url) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val x = Xtream(p)
+            val now = System.currentTimeMillis()
+            val a = try { x.archive(ch.id) } catch (e: Exception) { emptyList() }
+            if (a.any { it.end <= now && it.archived }) a
+            else {
+                // the archive table is empty: take past shows from the guide (own EPG sources first, then the provider's XMLTV)
+                val days = ch.archive.coerceIn(1, 14)
+                val own = EpgSources.urls(p.id).firstNotNullOfOrNull { url ->
+                    val id = ch.epg?.lowercase()?.ifBlank { null } ?: return@firstNotNullOfOrNull null
+                    try { Xmltv.read(url, setOf(id), now - days * 86_400_000L, now).filter { it.end <= now }.ifEmpty { null } } catch (e: Exception) { null }
+                }?.map { EpgItem(it.title, it.desc, it.start, it.end, null, true) }
+                own ?: x.archiveFromGuide(ch.epg, days).ifEmpty { throw Exception(tr("Provider za ovaj kanal ne šalje listu arhiviranih emisija.")) }
+            }
+        }
+    }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             ChannelLogo(ch.logo, ch.name)
@@ -116,7 +132,7 @@ private fun Archive(c: Channel, day: Int, onDay: (Int) -> Unit, nav: Nav) {
                 val now = System.currentTimeMillis()
                 val from = Sports.dayStart(-day); val to = Sports.dayStart(-day + 1)
                 val items = s.value.filter { it.start in from until to && it.end <= now && it.archived }.sortedByDescending { it.start }
-                if (items.isEmpty()) Message("Nema emisija u arhivi za ovaj dan")
+                if (items.isEmpty()) Message("Nema emisija u arhivi za ovaj dan", "Probaj drugi dan gore")
                 else LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
                     items(items, key = { it.start }) { e ->
                         Focusable(modifier = Modifier.fillMaxWidth().height(66.dp), onClick = {

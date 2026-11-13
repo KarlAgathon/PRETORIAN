@@ -35,8 +35,8 @@ object EpgSources {
     fun save(l: List<Src>) { val a = JSONArray(); l.forEach { a.put(it.toJson()) }; Prefs.put("epg_sources", a.toString()); rev++ }
     fun nameOf(url: String) = url.removePrefix("https://").removePrefix("http://").substringBefore("/").ifBlank { "EPG" }
 
-    fun add(url: String, pid: String?): Src {
-        val s = Src("e" + System.currentTimeMillis().toString(36), url.trim(), nameOf(url), true, pid)
+    fun add(url: String, pid: String?, name: String = ""): Src {
+        val s = Src("e" + System.currentTimeMillis().toString(36), url.trim(), name.trim().ifBlank { nameOf(url) }, true, pid)
         save(list() + s); return s
     }
     fun update(s: Src) = save(list().map { if (it.id == s.id) s else it })

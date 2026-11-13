@@ -459,7 +459,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
 
     Column(Modifier.fillMaxSize().padding(start = 20.dp, end = 20.dp, top = 22.dp)) {
         T(g.cat.name, 20.sp, C.Text, FontWeight.SemiBold, modifier = Modifier.fillMaxWidth())
-        T(if (Look.previewMode == 1) "OK mala slika · OK još jednom = cijeli ekran · drži OK = opcije · ◀ grupe" else "OK gledaj · drži OK = opcije · ◀ grupe",
+        T("OK gledaj · drži OK = opcije · ◀ grupe",
             12.sp, C.Muted, maxLines = 1, modifier = Modifier.padding(bottom = 10.dp))
         when (val s = state) {
             is Load.Loading -> Loading("Učitavam kanale…")
@@ -478,7 +478,6 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                 modifier = Modifier.fillMaxWidth().height(Rows.channel).wrapKeys(i, list.size, cWrap),
                                 onClick = {
                                     // preview on OK: the first OK shows the small picture, the second one plays full screen
-                                    if (Look.previewMode == 1 && PreviewSel.ch?.url != ch.url && !locked) { PreviewSel.ch = ch; onFocusCh(ch); return@Focusable }
                                     gate.run("c:${ch.url}", locked) {
                                         ovr.countWatch(ch)
                                         TvMemory.channel = i; TvMemory.group = g; TvMemory.restore = true
@@ -841,24 +840,42 @@ fun GroupManager(nav: Nav) {
 @Composable
 fun PreviewBox(ch: Channel?, modifier: Modifier) {
     val ctx = LocalContext.current
-    val player = remember { buildPlayer(ctx) }
+    val player = remember { buildPlayer(ctx, preview = true) }
+    var ready by remember { mutableStateOf(false) }
+    var failed by remember { mutableStateOf(false) }
     DisposableEffect(Unit) {
         Preview.player = player
-        onDispose { if (Preview.player === player) Preview.player = null; player.release() }
+        val l = object : androidx.media3.common.Player.Listener {
+            override fun onRenderedFirstFrame() { ready = true }
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) { failed = true }
+        }
+        player.addListener(l)
+        onDispose { player.removeListener(l); if (Preview.player === player) Preview.player = null; player.release() }
     }
     LaunchedEffect(ch?.url) {
+        ready = false; failed = false
         val c = ch
         if (c == null || (Ovr(ctx, c.pid).isChLocked(c) && "c:${c.url}" !in Lock.unlocked)) { player.stop(); return@LaunchedEffect }
-        delay(500)
+        player.stop()
+        delay(250)   // while you move quickly over channels, only the one you stop on starts
+        Preview.player = player
         player.setMediaItem(androidx.media3.common.MediaItem.fromUri(c.url)); player.prepare(); player.playWhenReady = true
     }
     Box(modifier.aspectRatio(16f / 9f).clip(Rnd(14.dp)).background(Color.Black)) {
         androidx.compose.ui.viewinterop.AndroidView(factory = { v ->
             androidx.media3.ui.PlayerView(v).apply {
                 this.player = player; useController = false; isFocusable = false
+                setShutterBackgroundColor(android.graphics.Color.BLACK)
                 descendantFocusability = android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
             }
         }, modifier = Modifier.fillMaxSize())
+        // until the picture is there: the channel logo and a small spinner, not a black box
+        if (!ready && ch != null) Column(Modifier.fillMaxSize().background(C.Card), horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically)) {
+            ChannelLogo(ch.logo, ch.name)
+            if (failed) T("Kanal trenutno ne radi", 12.sp, C.Muted)
+            else androidx.compose.material3.CircularProgressIndicator(color = C.Red, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+        }
     }
 }
 
@@ -866,7 +883,9 @@ fun PreviewBox(ch: Channel?, modifier: Modifier) {
 @Composable
 fun EpgList(ch: Channel, limit: Int = 12, modifier: Modifier = Modifier) {
     val ctx = LocalContext.current
-    val st by load(ch.url, limit, Reminders.rev) { Store.byId(ctx, ch.pid)?.let { Repo.epg(it, ch, limit) } ?: emptyList() }
+    // the list is not loaded again when a reminder changes: the focus stays on the show
+    val st by load(ch.url, limit) { Store.byId(ctx, ch.pid)?.let { Repo.epg(it, ch, limit) } ?: emptyList() }
+    val remRev = Reminders.rev
     when (val s = st) {
         is Load.Loading -> T("Učitavam program…", 13.sp, C.Muted)
         is Load.Err -> T("Program nije dostupan", 13.sp, C.Muted)
@@ -876,9 +895,9 @@ fun EpgList(ch: Channel, limit: Int = 12, modifier: Modifier = Modifier) {
                 T(if (!EpgSources.any) "Dodaj EPG izvor: Postavke › Playliste › EPG izvori" else "Ni tvoji EPG izvori nemaju ovaj kanal.", 12.sp, C.Muted, maxLines = 2)
             }
         } else LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            itemsIndexed(s.value) { _, e ->
+            itemsIndexed(s.value, key = { _, e -> e.start }) { _, e ->
                 val now = e.start <= System.currentTimeMillis() && e.end > System.currentTimeMillis()
-                val rem = Reminders.has(e.title, e.start)
+                val rem = remember(remRev) { Reminders.has(e.title, e.start) }
                 Focusable(modifier = Modifier.fillMaxWidth(), onClick = {
                     if (!now) {
                         val on = Reminders.toggle(Reminder("r${e.start}${e.title.hashCode()}", e.title, e.start, ch.url, ch.name, ch.logo, ch.pid, "tv"))
@@ -889,7 +908,7 @@ fun EpgList(ch: Channel, limit: Int = 12, modifier: Modifier = Modifier) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             T(e.times(), 12.sp, if (now) C.RedText else C.Muted, FontWeight.SemiBold)
                             if (now) Chip("SADA", C.Red, C.OnRed)
-                            if (rem) Ico(R.drawable.lc_bell, 14.dp, C.Amber)
+                            if (rem) { Ico(R.drawable.lc_bell, 14.dp, C.Amber); T("OK = ukloni podsjetnik", 11.sp, C.Amber) }
                             if (!now && !rem) T("OK = podsjeti me", 11.sp, C.Muted)
                         }
                         T(e.title, 15.sp, C.Text, FontWeight.Medium, maxLines = 2)
@@ -910,7 +929,7 @@ fun EpgList(ch: Channel, limit: Int = 12, modifier: Modifier = Modifier) {
 @Composable
 fun EpgPanel(ch: Channel?, modifier: Modifier) {
     var shown by remember { mutableStateOf<Channel?>(null) }
-    LaunchedEffect(ch?.url) { delay(450); shown = ch }
+    LaunchedEffect(ch?.url) { delay(150); shown = ch }
     Column(modifier.fillMaxHeight().background(C.Rail).padding(horizontal = 18.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         val c = shown
         when (Look.previewMode) {
