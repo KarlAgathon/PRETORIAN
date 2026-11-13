@@ -85,12 +85,7 @@ fun TvGuide(nav: Nav, onList: () -> Unit) {
         }
         gridFr.tryFocus()
     }
-    LaunchedEffect(focusedGroup) {
-        val g = focusedGroup ?: return@LaunchedEffect
-        delay(350)
-        val locked = g.pid?.let { Ovr(ctx, it).isLocked("live", g.cat.id) } ?: false
-        if (!locked || "g:${g.key}" in Lock.unlocked) { if (st.group?.key != g.key) TvMemory.channel = -1; st.group = g; TvMemory.group = g }
-    }
+    // browsing the groups changes nothing; a group opens only on OK
     fun showGroups() { Chrome.rail = 1; st.focusKey = "g:" + (st.group?.key ?: ""); st.refocus++ }
     BackHandler(enabled = Chrome.rail == 0 && st.groupMenu == null) { showGroups() }
 
@@ -98,7 +93,7 @@ fun TvGuide(nav: Nav, onList: () -> Unit) {
         if (groupsOpen) {
             GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, 250.dp, "TV", null,
                 onFocusGroup = { focusedGroup = it; Chrome.rail = 1 },
-                onOpen = { openGroup(ctx, st, it); Chrome.rail = 0 },
+                onOpen = { openGroup(ctx, st, it); Chrome.rail = 0; st.enter++ },
                 onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
                 onHeader = { p -> Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
                 onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it },
@@ -124,14 +119,18 @@ fun TvGuide(nav: Nav, onList: () -> Unit) {
         val g = st.group
         Box(Modifier.weight(1f).fillMaxHeight()) {
             if (g == null) Loading("Učitavam grupe…")
-            else androidx.compose.runtime.key(g.key, st.rev) { GuideGrid(g, nav, st.gate, gridFr, onLeftEdge = { showGroups() }) }
+            else androidx.compose.runtime.key(g.key, st.rev) {
+                val groups = (rows as? Load.Ok)?.value?.mapNotNull { (it as? GRow.Group)?.ref }?.filter { it.pid != null && it.pid == g.pid && it.cat.id != ALL_GROUP }?.map { it.cat } ?: emptyList()
+                GuideGrid(g, nav, st.gate, gridFr, groups, st.enter, onLeftEdge = { showGroups() }, onReload = { st.rev++ })
+            }
         }
     }
     TvDialogs(st, rows)
 }
 
 @Composable
-private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, onLeftEdge: () -> Unit) {
+private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, groups: List<Category>, enter: Int,
+                      onLeftEdge: () -> Unit, onReload: () -> Unit) {
     val ctx = LocalContext.current
     val chans by load(g.key, Favs.rev) { channelsOf(ctx, g) }
     val list = (chans as? Load.Ok)?.value ?: emptyList()
@@ -139,8 +138,10 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
     var row by remember { mutableIntStateOf(if (TvMemory.group?.key == g.key) TvMemory.channel.coerceAtLeast(0) else 0) }
     val now0 = remember { System.currentTimeMillis() }
     var focusTime by remember { mutableLongStateOf(now0) }
-    var viewStart by remember { mutableLongStateOf(floorHalf(now0) - HALF) }
-    var detail by remember { mutableStateOf<Pair<Channel, EpgItem>?>(null) }
+    var viewStart by remember { mutableLongStateOf(floorHalf(now0)) }
+    var detail by remember { mutableStateOf<Pair<Channel, EpgItem?>?>(null) }
+    var chMenu by remember { mutableStateOf<Channel?>(null) }
+    var longFired by remember { mutableStateOf(false) }
     var now by remember { mutableLongStateOf(now0) }
     val listState = rememberLazyListState()
     val src = remember { MutableInteractionSource() }
@@ -154,7 +155,8 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
             val ch = list[i]
             if (epg.containsKey(ch.url)) continue
             val p = Store.byId(ctx, ch.pid) ?: continue
-            epg[ch.url] = try { Repo.epg(p, ch, 40) } catch (e: Exception) { emptyList() }
+            val short = try { Repo.epg(p, ch, 40) } catch (e: Exception) { emptyList() }
+            epg[ch.url] = short.ifEmpty { try { ProgIndex.forChannel(ctx, ch) } catch (e: Exception) { emptyList() } }
         }
     }
     LaunchedEffect(row) {
@@ -170,14 +172,14 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
     }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val nameW = 210.dp
+        val nameW = 300.dp
         val ppm = 4.5f  // dp per minute
         val gridW = maxWidth - nameW - 16.dp
         val spanMin = (gridW.value / ppm).toLong()
         val viewEnd = viewStart + spanMin * MIN
 
         fun keepVisible(start: Long) {
-            if (start < viewStart) viewStart = floorHalf(start).coerceAtLeast(floorHalf(now) - HALF)
+            if (start < viewStart) viewStart = floorHalf(start).coerceAtLeast(floorHalf(now))
             else if (start > viewEnd - HALF) viewStart = floorHalf(start) - HALF
         }
 
@@ -185,7 +187,10 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
             // ---------------------------------------------------------------- picture and show
             val cur = current()
             Row(Modifier.fillMaxWidth().height(176.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                PreviewBox(cur?.first, Modifier.height(170.dp))
+                when (Look.previewMode) {
+                    2 -> PreviewBox(cur?.first, Modifier.height(170.dp))
+                    1 -> PreviewSel.ch?.let { PreviewBox(it, Modifier.height(170.dp)) }
+                }
                 Column(Modifier.weight(1f).padding(top = 4.dp, end = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     val pr = cur?.second
                     T(pr?.title ?: cur?.first?.name ?: "", 22.sp, C.Text, FontWeight.Bold, maxLines = 2)
@@ -200,7 +205,7 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
                         if (Reminders.has(pr.title, pr.start)) Ico(R.drawable.lc_bell, 15.dp, C.Amber)
                     }
                     cur?.first?.let { T(it.name, 13.sp, C.RedText, FontWeight.SemiBold) }
-                    pr?.desc?.let { T(it, 13.sp, C.Soft, maxLines = 4) }
+                    cleanDesc(pr?.desc)?.let { T(it, 13.sp, C.Soft, maxLines = 4) }
                 }
             }
             // ---------------------------------------------------------------- time ruler
@@ -223,6 +228,14 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
                 is Load.Err -> Message("Kanali se nisu učitali", s.message)
                 is Load.Ok -> if (list.isEmpty()) Message("Grupa je prazna") else LazyColumn(state = listState, userScrollEnabled = false,
                     modifier = Modifier.fillMaxSize().focusRequester(fr).onPreviewKeyEvent { e ->
+                        val okKey = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter
+                        if (okKey && e.type == KeyEventType.KeyUp) {
+                            // short OK: menu of the show; long OK (handled while held): channel options
+                            if (longFired) { longFired = false; return@onPreviewKeyEvent true }
+                            val ch = list.getOrNull(row) ?: return@onPreviewKeyEvent true
+                            detail = ch to progsOf(ch).firstOrNull { it.start <= focusTime && it.end > focusTime }
+                            return@onPreviewKeyEvent true
+                        }
                         if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                         val ch = list.getOrNull(row)
                         val progs = progsOf(ch)
@@ -245,15 +258,7 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
                                 }
                             }
                             Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
-                                if (e.nativeKeyEvent.repeatCount > 0) return@onPreviewKeyEvent true
-                                if (ch == null) return@onPreviewKeyEvent true
-                                if (curP == null || curP.start <= now) {
-                                    val ovr = Ovr(ctx, ch.pid)
-                                    gate.run("c:${ch.url}", ovr.isChLocked(ch)) {
-                                        TvMemory.channel = row; TvMemory.group = g; TvMemory.restore = true
-                                        playChannels(nav, list, row)
-                                    }
-                                } else detail = ch to curP
+                                if (e.nativeKeyEvent.repeatCount > 0 && !longFired && ch != null) { longFired = true; chMenu = ch }
                                 true
                             }
                             else -> false
@@ -266,7 +271,7 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
                                 .padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 T("${ch.num}", 12.sp, if (i == row) C.RedText else C.Muted, modifier = Modifier.width(28.dp))
                                 ChannelLogo(ch.logo, ch.name)
-                                T(ch.name, 13.sp, if (i == row) C.Text else C.Soft, if (i == row) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
+                                T(ch.name, 13.sp, if (i == row) C.Text else C.Soft, if (i == row) FontWeight.SemiBold else FontWeight.Normal, maxLines = 2, modifier = Modifier.weight(1f))
                             }
                             Box(Modifier.weight(1f).fillMaxHeight().clip(Rnd(4.dp))) {
                                 val progs = progsOf(ch).filter { it.end > viewStart && it.start < viewEnd }
@@ -275,7 +280,7 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
                                         .background(if (sel) C.Red.copy(alpha = 0.35f) else C.Card)
                                         .then(if (sel) Modifier.border(2.dp, C.Red, Rnd(8.dp)) else Modifier).padding(horizontal = 10.dp),
                                         contentAlignment = Alignment.CenterStart) {
-                                        T(if (epg.containsKey(ch.url)) "Nema informacija" else "Učitavam…", 13.sp, C.Muted)
+                                        T(if (epg.containsKey(ch.url)) "Bez programa" else "Učitavam…", 13.sp, C.Muted)
                                     }
                                 } else progs.forEach { pr ->
                                     val x = ((pr.start.coerceAtLeast(viewStart) - viewStart) / MIN) * ppm
@@ -302,23 +307,51 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
         }
     }
 
-    detail?.let { (ch, pr) ->
-        val has = Reminders.has(pr.title, pr.start)
-        Popup(pr.title, onDismiss = { detail = null }) {
-            T(pr.times() + " · " + ch.name, 14.sp, C.Soft)
-            pr.desc?.let { T(it, 13.sp, C.Muted, maxLines = 6) }
-            OptionRow(if (has) "Ukloni podsjetnik" else "Podsjeti me", R.drawable.lc_bell, color = if (has) null else C.Amber) {
-                val on = Reminders.toggle(Reminder("r${pr.start}${pr.title.hashCode()}", pr.title, pr.start, ch.url, ch.name, ch.logo, ch.pid, "tv"))
-                Toast.makeText(ctx, tr(if (on) "Podsjetnik postavljen" else "Podsjetnik uklonjen"), Toast.LENGTH_SHORT).show()
-                detail = null
-            }
-            OptionRow("Gledaj kanal sada", R.drawable.lc_play) {
-                detail = null
-                val i = list.indexOfFirst { it.url == ch.url }.coerceAtLeast(0)
-                TvMemory.channel = i; TvMemory.group = g; TvMemory.restore = true
-                playChannels(nav, list, i)
-            }
+    fun play(ch: Channel) {
+        val i = list.indexOfFirst { it.url == ch.url }.coerceAtLeast(0)
+        gate.run("c:${ch.url}", Ovr(ctx, ch.pid).isChLocked(ch)) {
+            TvMemory.channel = i; TvMemory.group = g; TvMemory.restore = true
+            playChannels(nav, list, i)
         }
     }
-    LaunchedEffect(list.isNotEmpty()) { if (list.isNotEmpty()) fr.tryFocus() }
+    detail?.let { (ch, pr) ->
+        val nowT = System.currentTimeMillis()
+        val isNow = pr == null || (pr.start <= nowT && pr.end > nowT)
+        val past = pr != null && pr.end <= nowT
+        Popup(pr?.title ?: ch.name, onDismiss = { detail = null }) {
+            T((pr?.times()?.plus(" · ") ?: "") + ch.name, 14.sp, C.Soft, maxLines = 1)
+            cleanDesc(pr?.desc)?.let { T(it, 13.sp, C.Muted, maxLines = 6) }
+            when {
+                isNow -> {
+                    OptionRow("Gledaj preko cijelog ekrana", R.drawable.lc_play, color = C.Green) { detail = null; play(ch) }
+                    if (Look.previewMode != 2) OptionRow("Pregled u malom prozoru", R.drawable.lc_tv) { PreviewSel.ch = ch; detail = null }
+                }
+                past -> {
+                    if (ch.archive > 0 && pr != null) OptionRow("Gledaj od početka (arhiva)", R.drawable.lc_history, color = C.Green) {
+                        detail = null
+                        val p = Store.byId(ctx, ch.pid)
+                        if (p != null) { Preview.stop(); nav.push(Screen.Player(listOf(PlayItem(pr.title, Xtream(p).timeshiftUrl(ch.id, pr), ch.logo, ch.name, null)), 0, live = false)) }
+                    }
+                    OptionRow("Gledaj kanal sada", R.drawable.lc_play) { detail = null; play(ch) }
+                }
+                else -> {
+                    val has = Reminders.has(pr!!.title, pr.start)
+                    OptionRow(if (has) "Ne podsjećaj me" else "Podsjeti me", R.drawable.lc_bell, color = if (has) null else C.Amber) {
+                        val on = Reminders.toggle(Reminder("r${pr.start}${pr.title.hashCode()}", pr.title, pr.start, ch.url, ch.name, ch.logo, ch.pid, "tv"))
+                        Toast.makeText(ctx, tr(if (on) "Podsjetnik postavljen" else "Podsjetnik uklonjen"), Toast.LENGTH_SHORT).show()
+                        detail = null
+                    }
+                    OptionRow("Gledaj kanal sada", R.drawable.lc_play) { detail = null; play(ch) }
+                }
+            }
+            OptionRow("Opcije kanala", R.drawable.lc_settings, sub = "Naziv, grupa, sakrij, PIN, favoriti") { detail = null; chMenu = ch }
+        }
+    }
+    chMenu?.let { ch ->
+        ChannelOptions(g, ch, list, groups, onDismiss = { chMenu = null; try { fr.requestFocus() } catch (_: Exception) {} }) { reload, close ->
+            if (close) chMenu = null
+            if (reload) onReload()
+        }
+    }
+    LaunchedEffect(list.isNotEmpty(), enter) { if (list.isNotEmpty()) fr.tryFocus() }
 }

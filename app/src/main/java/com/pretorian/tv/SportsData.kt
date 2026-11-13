@@ -6,6 +6,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -218,7 +219,10 @@ object Sports {
      * Your channels (all of them, of every turned-on playlist) and the matches in their TV guide.
      * Cached for 3 hours in memory and on the box, so the provider is asked rarely.
      */
-    suspend fun guide(ctx: android.content.Context, pls: List<Playlist>): Guide = withContext(Dispatchers.IO) {
+    /** one download at a time: a second caller waits for the first one instead of starting again */
+    private val guideLock = kotlinx.coroutines.sync.Mutex()
+    suspend fun guide(ctx: android.content.Context, pls: List<Playlist>): Guide = guideLock.withLock { guideNow(ctx, pls) }
+    private suspend fun guideNow(ctx: android.content.Context, pls: List<Playlist>): Guide = withContext(Dispatchers.IO) {
         val key = pls.joinToString(",") { it.id }
         val cur = guideData
         if (guideFor == key && cur != null && System.currentTimeMillis() - guideAt < 3 * 3600_000L) return@withContext cur
@@ -232,7 +236,7 @@ object Sports {
             progs = pls.filter { it.type == SourceType.XTREAM }.flatMap { p ->
                 Xmltv.read(Xtream(p).xmltvUrl(), byEpg.keys, from, to) { t -> vsWords.containsMatchIn(t) }
             }
-            if (Prefs.epgUrl.isNotBlank()) progs = progs + Xmltv.read(Prefs.epgUrl, byEpg.keys, from, to) { t -> vsWords.containsMatchIn(t) }
+            EpgSources.urls(null).forEach { u -> progs = progs + try { Xmltv.read(u, byEpg.keys, from, to) { t -> vsWords.containsMatchIn(t) } } catch (e: Exception) { emptyList() } }
             try { writeProgs(cache, progs) } catch (_: Exception) {}
         }
         val g = Guide(progs, byEpg, all, trf("Pretraženo %s kanala · program za %s · %s emisija", all.size, byEpg.size, progs.size))
@@ -442,10 +446,12 @@ object Sports {
         }
         (near + listOf("UK", "GB", "EU", "INT", "FR", "IT", "ES", "NL", "PT", "TR", "PL")).distinct()
     }
-    fun regionRank(name: String): Int {
-        val m = Regex("^\\s*[\\[(|]?\\s*([A-Z-]{2,6})\\s*[|:\\])-]").find(name.uppercase()) ?: return 40
+    private val PREFIX = Regex("^\\s*[\\[(|]?\\s*([A-Z-]{2,6})\\s*[|:\\])-]")
+    private val rankCache = java.util.concurrent.ConcurrentHashMap<String, Int>()
+    fun regionRank(name: String): Int = rankCache.getOrPut(name) {
+        val m = PREFIX.find(name.uppercase()) ?: return@getOrPut 40
         val i = REGION.indexOf(m.groupValues[1])
-        return if (i < 0) 80 else i
+        if (i < 0) 80 else i
     }
 
     private fun guessSport(t: String): String = when {
@@ -525,26 +531,32 @@ object Xmltv {
 
 /** Your own TV guide (XMLTV link from Settings), used when the provider sends no programme for a channel. */
 object OwnGuide {
-    private var forUrl: String? = null
-    private var at = 0L
-    private var data: Map<String, List<Sports.Prog>> = emptyMap()
+    private class Cache(val at: Long, val data: Map<String, List<Sports.Prog>>)
+    private val caches = HashMap<String, Cache>()
     private val lock = kotlinx.coroutines.sync.Mutex()
+    fun drop(url: String) { caches.remove(url) }
 
-    suspend fun of(epgId: String?, name: String): List<EpgItem> = withContext(Dispatchers.IO) {
-        val url = Prefs.epgUrl.trim()
-        if (url.isBlank()) return@withContext emptyList()
+    private suspend fun data(url: String): Map<String, List<Sports.Prog>> {
         lock.lock()
         try {
-            if (forUrl != url || System.currentTimeMillis() - at > 6 * 3600_000L) {
-                val now = System.currentTimeMillis()
-                data = Xmltv.read(url, null, now - 3 * 3600_000L, now + 36 * 3600_000L).groupBy { it.channel }
-                forUrl = url; at = now
-            }
+            val c = caches[url]
+            if (c != null && System.currentTimeMillis() - c.at < 6 * 3600_000L) return c.data
+            val now = System.currentTimeMillis()
+            val d = try { Xmltv.read(url, null, now - 3 * 3600_000L, now + 36 * 3600_000L).groupBy { it.channel } } catch (e: Exception) { emptyMap() }
+            caches[url] = Cache(now, d)
+            return d
         } finally { lock.unlock() }
-        val list = epgId?.lowercase()?.let { data[it] }
-            ?: data[Sports.norm(name).replace(" ", "")]
-            ?: emptyList()
+    }
+
+    /** guide of a channel from your own sources (the playlist's own first) */
+    suspend fun of(epgId: String?, name: String, pid: String? = null): List<EpgItem> = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
-        list.filter { it.end > now - 60_000 }.sortedBy { it.start }.take(12).map { EpgItem(it.title, it.desc, it.start, it.end) }
+        for (url in EpgSources.urls(pid)) {
+            val d = data(url)
+            val list = epgId?.lowercase()?.ifBlank { null }?.let { d[it] } ?: d[Sports.norm(name).replace(" ", "")]
+            if (!list.isNullOrEmpty()) return@withContext list.filter { it.end > now - 60_000 }.sortedBy { it.start }.take(40)
+                .map { EpgItem(it.title, it.desc, it.start, it.end) }
+        }
+        emptyList()
     }
 }

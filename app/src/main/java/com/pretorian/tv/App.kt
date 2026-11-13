@@ -107,7 +107,7 @@ class Nav(
     val playlistsChanged: () -> Unit,
 )
 
-object BuildInfo { const val VERSION = "0.4" }
+object BuildInfo { const val VERSION = "0.4.1" }
 
 @Composable
 fun PretorianApp() {
@@ -186,7 +186,8 @@ fun PretorianApp() {
                 }
             } else {
                 val content: @Composable () -> Unit = {
-                        key(version, top) {
+                        // Settings are not rebuilt when something is saved there: you stay on the page and row you were on
+                        key(if (top == Screen.Settings) 0 else version, top) {
                             when (top) {
                                 Screen.Home -> HomeScreen(nav)
                                 Screen.Tv -> TvScreen(nav)

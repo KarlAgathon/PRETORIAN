@@ -450,8 +450,8 @@ object Repo {
         val provider = cached("epg_${p.id}_${ch.url}_$limit") {
             if (p.type != SourceType.XTREAM || ch.id.isBlank() || !ch.url.contains("/live/")) emptyList() else try { Xtream(p).epg(ch.id, limit) } catch (e: Exception) { emptyList() }
         }
-        if (provider.isNotEmpty() || Prefs.epgUrl.isBlank()) return provider
-        return try { OwnGuide.of(ch.epg, ch.name).take(limit) } catch (e: Exception) { emptyList() }
+        if (provider.isNotEmpty() || !EpgSources.any) return provider
+        return try { OwnGuide.of(ch.epg, ch.name, p.id).take(limit) } catch (e: Exception) { emptyList() }
     }
 
     suspend fun nowNext(p: Playlist, ch: Channel): List<Pair<String, String>> = epg(p, ch, 4).take(2).map { it.title to it.times() }

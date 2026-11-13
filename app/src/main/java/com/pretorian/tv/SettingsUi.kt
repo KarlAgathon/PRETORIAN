@@ -1,5 +1,7 @@
 package com.pretorian.tv
 
+import androidx.activity.compose.BackHandler
+
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.background
@@ -49,7 +51,7 @@ private val SECTIONS = listOf(
     Section("language", R.drawable.lc_languages, "Jezik", "Meniji, dugmad i poruke"),
     Section("look", R.drawable.lc_palette, "Izgled", "Tema, boja, prozirnost, veličine"),
     Section("media", R.drawable.lc_captions, "Filmovi i titlovi", "TMDB, IMDb, titlovi, jezici"),
-    Section("sport", R.drawable.lc_trophy, "Sport i AI", "Država, Gemini AI za prenose"),
+    Section("sport", R.drawable.lc_trophy, "Sport i AI", "Država, AI za prenose"),
     Section("reminders", R.drawable.lc_bell, "Podsjetnici", "Emisije, utakmice, obavještenja"),
     Section("parental", R.drawable.lc_shield_check, "Roditelji i jednostavni mod", "PIN, jednostavni mod"),
     Section("backup", R.drawable.lc_archive, "Backup i vraćanje", "Spasi sve postavke u fajl"),
@@ -59,15 +61,17 @@ private val SECTIONS = listOf(
 
 @Composable
 fun SettingsScreen(nav: Nav) {
-    var section by remember { mutableStateOf(SettingsNav.section?.also { SettingsNav.section = null } ?: if (Updater.available != null) "update" else "playlists") }
+    var section by remember { mutableStateOf(SettingsNav.section?.also { SettingsNav.section = null } ?: SettingsNav.last ?: if (Updater.available != null) "update" else "playlists") }
+    LaunchedEffect(section) { SettingsNav.last = section }
     val first = remember { FocusRequester() }
     Row(Modifier.fillMaxSize()) {
         Column(Modifier.width(320.dp).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 12.dp, top = 20.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             T("Postavke", 26.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 10.dp, bottom = 8.dp))
             SECTIONS.forEachIndexed { i, s ->
                 val sel = s.id == section
-                Focusable(modifier = Modifier.fillMaxWidth().height(50.dp), onClick = { section = s.id }, onFocus = { section = s.id },
-                    focusRequester = if (i == 0) first else null, normal = if (sel) C.CardFocus else Color.Transparent, zoom = 1f) { _ ->
+                // a section opens on OK, not by just moving over it
+                Focusable(modifier = Modifier.fillMaxWidth().height(50.dp), onClick = { section = s.id },
+                    focusRequester = if (s.id == section) first else null, normal = if (sel) C.CardFocus else Color.Transparent, zoom = 1f) { _ ->
                     Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Box(Modifier.size(30.dp).clip(Rnd(9.dp)).background(if (sel) C.Red else C.Card), contentAlignment = Alignment.Center) {
                             Ico(s.icon, 16.dp, if (sel) C.OnRed else C.Text)
@@ -120,6 +124,12 @@ private fun Label(text: String) = T(text, 13.sp, C.Muted, FontWeight.SemiBold, m
 
 /* ---------------------------------------------------------------- playlists */
 
+/** Playlist being edited in "Add playlist" (null = a new one). */
+object EditPlaylist { var target: Playlist? = null }
+
+/** remembers an opened playlist page while you are in Settings */
+object PlNav { var open: String? = null }
+
 @Composable
 private fun PlaylistsPage(nav: Nav) {
     val ctx = LocalContext.current
@@ -128,12 +138,20 @@ private fun PlaylistsPage(nav: Nav) {
     var busy by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf<Playlist?>(null) }
     var del by remember { mutableStateOf<Playlist?>(null) }
-    var epg by remember { mutableStateOf(false) }
+    var openId by remember { mutableStateOf(PlNav.open) }
     var multi by remember { mutableStateOf(Store.multi) }
-    fun refresh() { list = Store.playlists(ctx); nav.playlistsChanged() }
-    Page("Playliste", if (multi) "Uključi jednu ili više. Gornja uključena je otvorena, ostale su sklopljene." else "Aktivna je samo jedna. OK na drugoj je aktivira.") {
+    val rowFr = remember { FocusRequester() }
+    var lastId by remember { mutableStateOf<String?>(null) }
+    fun refresh() { list = Store.playlists(ctx); Repo.clear() }
+    LaunchedEffect(openId) { PlNav.open = openId }
+
+    val opened = list.firstOrNull { it.id == openId }
+    if (opened != null) {
+        BackHandler { openId = null }
+        PlaylistDetail(opened, nav, onChanged = { refresh() }, onDelete = { del = opened }, onClose = { openId = null })
+    } else Page("Playliste", if (multi) "Uključi jednu ili više. Gornja uključena je otvorena, ostale su sklopljene." else "Aktivna je samo jedna. OK na drugoj je aktivira.") {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Button("Dodaj playlistu", R.drawable.lc_plus, primary = true) { nav.push(Screen.AddPlaylist) }
+            Button("Dodaj playlistu", R.drawable.lc_plus, primary = true) { EditPlaylist.target = null; nav.push(Screen.AddPlaylist) }
             Button(if (busy) "Ažuriram…" else "Ažuriraj sve", R.drawable.lc_refresh_cw) {
                 if (busy) return@Button
                 busy = true
@@ -145,6 +163,7 @@ private fun PlaylistsPage(nav: Nav) {
                     Store.savePlaylists(ctx, updated); list = updated
                     Repo.clear()
                     updated.filter { it.active }.forEach { pl -> try { NewContent.scan(ctx, pl, force = true) } catch (_: Exception) {} }
+                    EpgSources.list().filter { it.on }.forEach { try { EpgSources.refresh(it) } catch (_: Exception) {} }
                     busy = false
                     Toast.makeText(ctx, tr("Playliste su ažurirane"), Toast.LENGTH_SHORT).show()
                 }
@@ -159,8 +178,9 @@ private fun PlaylistsPage(nav: Nav) {
             val exp = expiryText(pl.exp)
             Focusable(
                 modifier = Modifier.fillMaxWidth().height(78.dp).then(if (pl.active) Modifier.border(2.dp, C.Red, Rnd(14.dp)) else Modifier),
-                onClick = { Store.activate(ctx, pl.id); refresh() },
-                onMenu = { menu = pl },
+                onClick = { lastId = pl.id; openId = pl.id },
+                onMenu = { lastId = pl.id; menu = pl },
+                focusRequester = if (pl.id == lastId) rowFr else null,
                 normal = if (pl.active) C.CardFocus else C.Card, zoom = 1.01f,
             ) { _ ->
                 Row(Modifier.fillMaxSize().padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -178,27 +198,24 @@ private fun PlaylistsPage(nav: Nav) {
                             when (level) { 2 -> C.Danger; 1 -> C.Amber; else -> C.Soft })
                     }
                     if (pl.active) Chip(tr(if (Store.active(ctx)?.id == pl.id) "OTVORENA" else "AKTIVNA"), C.Red, C.OnRed)
+                    Ico(R.drawable.lc_chevron_right, 18.dp, C.Muted)
                 }
             }
         }
-        T("Drži OK na playlisti: pomjeri, otvori, obriši. Datum isteka osvježava \"Ažuriraj sve\".", 12.sp, C.Muted, maxLines = 2)
-        Label("TV program (EPG)")
-        OptionRow("Vlastiti EPG izvor (XMLTV link)", R.drawable.lc_clock, "Koristi se kad provider za kanal ne šalje program. Link do .xml ili .xml.gz",
-            value = if (Prefs.epgUrl.isBlank()) tr("Nije upisan") else Prefs.epgUrl.removePrefix("https://").removePrefix("http://").take(28)) { epg = true }
+        T("OK na playlisti: uredi, ažuriraj, EPG, uključi. Drži OK za brzi meni.", 12.sp, C.Muted, maxLines = 2)
+        EpgSourcesBlock(null)
     }
-    if (epg) TextDialog("Vlastiti EPG izvor", "XMLTV link (http://…/epg.xml)", Prefs.epgUrl, onDismiss = { epg = false }) { v ->
-        Prefs.epgUrl = v; epg = false; Repo.clear()
-        Toast.makeText(ctx, tr("Spremljeno"), Toast.LENGTH_SHORT).show()
-    }
+    LaunchedEffect(openId) { if (openId == null && lastId != null) rowFr.tryFocus() }
     menu?.let { pl ->
         val i = list.indexOfFirst { it.id == pl.id }
         Popup(pl.name, onDismiss = { menu = null }) {
             if (i >= 0) T("${i + 1} / ${list.size}", 13.sp, C.Muted)
+            OptionRow("Otvori stranicu playliste", R.drawable.lc_chevron_right) { menu = null; openId = pl.id }
             OptionRow(if (pl.active) "Isključi" else "Uključi", R.drawable.lc_check) { Store.activate(ctx, pl.id); refresh(); menu = null }
             OptionRow("Otvori (gore u TV-u)", R.drawable.lc_chevron_down) { Store.open(ctx, pl.id); refresh(); menu = null }
             OptionRow("Pomjeri gore", R.drawable.lc_arrow_up) { Store.movePlaylist(ctx, pl.id, -1); list = Store.playlists(ctx) }
             OptionRow("Pomjeri dolje", R.drawable.lc_arrow_down) { Store.movePlaylist(ctx, pl.id, 1); list = Store.playlists(ctx) }
-            OptionRow("Obriši playlistu", R.drawable.lc_trash_2, color = C.Danger) { menu = null; del = pl }
+            OptionRow("Obriši", R.drawable.lc_trash_2, color = C.Danger) { menu = null; del = pl }
         }
     }
     del?.let { pl ->
@@ -206,9 +223,112 @@ private fun PlaylistsPage(nav: Nav) {
             OptionRow("Da, obriši", R.drawable.lc_trash_2, color = C.Danger) {
                 val rest = Store.playlists(ctx).filter { it.id != pl.id }
                 Store.savePlaylists(ctx, if (rest.none { it.active } && rest.isNotEmpty()) rest.mapIndexed { i, x -> x.copy(active = i == 0) } else rest)
-                del = null; refresh()
+                del = null; openId = null; refresh()
             }
             OptionRow("Odustani", R.drawable.lc_x) { del = null }
+        }
+    }
+}
+
+/** One playlist: details, edit, update, its own EPG, on/off, delete. */
+@Composable
+private fun PlaylistDetail(pl: Playlist, nav: Nav, onChanged: () -> Unit, onDelete: () -> Unit, onClose: () -> Unit) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    var info by remember { mutableStateOf<String?>(null) }
+    val counts by load(pl.id, busy) {
+        if (busy) null else Triple(
+            try { Repo.allChannels(pl).size } catch (e: Exception) { -1 },
+            if (pl.type == SourceType.XTREAM) try { Repo.catalog(pl, "vod").size } catch (e: Exception) { -1 } else -1,
+            if (pl.type == SourceType.XTREAM) try { Repo.catalog(pl, "series").size } catch (e: Exception) { -1 } else -1)
+    }
+    val first = remember { FocusRequester() }
+    Page(pl.name, if (pl.type == SourceType.XTREAM) "Xtream Codes · ${pl.server}" else "M3U · ${pl.url}") {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            expiryText(pl.exp)?.let { Chip(it.first, C.Card, if (it.second > 0) C.Amber else C.Soft) }
+            if (pl.active) Chip(tr(if (Store.active(ctx)?.id == pl.id) "OTVORENA" else "AKTIVNA"), C.Red, C.OnRed)
+            val cs = (counts as? Load.Ok)?.value
+            if (cs != null) {
+                val (c, m, s) = cs
+                T(listOfNotNull(if (c >= 0) trf("%s kanala", c) else null, if (m >= 0) trf("Filmova: %s", m) else null,
+                    if (s >= 0) trf("Serija: %s", s) else null).joinToString(" · "), 13.sp, C.Muted, maxLines = 1)
+            } else T("Učitavam…", 13.sp, C.Muted)
+        }
+        OptionRow("Uredi playlistu", R.drawable.lc_pencil, sub = if (pl.type == SourceType.XTREAM) tr("Naziv, server, korisničko ime, lozinka") else tr("Naziv, M3U link"),
+            focusRequester = first) { EditPlaylist.target = pl; nav.push(Screen.AddPlaylist) }
+        OptionRow(if (busy) "Ažuriram…" else "Ažuriraj ovu playlistu", R.drawable.lc_refresh_cw, sub = info ?: tr("Kanali, filmovi, serije i datum isteka")) {
+            if (busy) return@OptionRow
+            busy = true; info = null
+            scope.launch {
+                try {
+                    Repo.dropCatalogs(); Repo.clear()
+                    val e = Repo.test(pl)
+                    if (pl.type == SourceType.XTREAM) Store.savePlaylists(ctx, Store.playlists(ctx).map { if (it.id == pl.id) it.copy(exp = e) else it })
+                    try { NewContent.scan(ctx, pl, force = true) } catch (_: Exception) {}
+                    info = tr("Ažurirano ✓")
+                } catch (ex: Exception) { info = trf("Nije uspjelo: %s", ex.message ?: ex.javaClass.simpleName) }
+                busy = false; onChanged()
+            }
+        }
+        OptionRow(if (pl.active) "Isključi playlistu" else "Uključi playlistu", R.drawable.lc_check, color = if (pl.active) null else C.Green) {
+            Store.activate(ctx, pl.id); onChanged()
+        }
+        if (pl.active) OptionRow("Otvori (gore u TV-u)", R.drawable.lc_chevron_down) { Store.open(ctx, pl.id); onChanged() }
+        EpgSourcesBlock(pl)
+        OptionRow("Obriši playlistu", R.drawable.lc_trash_2, color = C.Danger) { onDelete() }
+        OptionRow("Nazad na playliste", R.drawable.lc_arrow_left) { onClose() }
+    }
+    LaunchedEffect(pl.id) { first.tryFocus() }
+}
+
+/** EPG sources: for every playlist ([pl] null) or only for one playlist. */
+@Composable
+private fun EpgSourcesBlock(pl: Playlist?) {
+    val scope = rememberCoroutineScope()
+    var add by remember { mutableStateOf(false) }
+    var edit by remember { mutableStateOf<EpgSources.Src?>(null) }
+    var menu by remember { mutableStateOf<EpgSources.Src?>(null) }
+    var updating by remember { mutableStateOf(false) }
+    val list = remember(EpgSources.rev) { EpgSources.list().filter { it.pid == pl?.id } }
+    Label(if (pl == null) tr("EPG izvori (za sve playliste)") else tr("EPG samo za ovu playlistu"))
+    T("XMLTV link (.xml ili .xml.gz). Koristi se kad provider za kanal nema program.", 12.sp, C.Muted, maxLines = 2)
+    list.forEach { s ->
+        val status = when {
+            s.error != null -> trf("Greška: %s", s.error)
+            s.channels >= 0 -> trf("%s kanala · ažurirano %s", s.channels, java.text.SimpleDateFormat("d. M. HH:mm", java.util.Locale.getDefault()).format(java.util.Date(s.at)))
+            else -> tr("Još nije provjeren")
+        }
+        OptionRow(s.name, R.drawable.lc_clock, sub = status, value = tr(if (s.on) "Uključen" else "Isključen"),
+            color = if (s.error != null) C.Danger else null) { menu = s }
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Button("Dodaj EPG", R.drawable.lc_plus) { add = true }
+        if (list.isNotEmpty()) Button(if (updating) "Ažuriram…" else "Ažuriraj sve EPG-ove", R.drawable.lc_refresh_cw) {
+            if (updating) return@Button
+            updating = true
+            scope.launch { list.forEach { try { EpgSources.refresh(it) } catch (_: Exception) {} }; Repo.clear(); updating = false }
+        }
+    }
+    if (add) TextDialog("Dodaj EPG", "XMLTV link (http://…/epg.xml)", onDismiss = { add = false }) { v ->
+        add = false
+        if (v.isNotBlank()) { val s = EpgSources.add(v, pl?.id); scope.launch { EpgSources.refresh(s); Repo.clear() } }
+    }
+    edit?.let { s ->
+        TextDialog("Uredi EPG", "XMLTV link (http://…/epg.xml)", s.url, onDismiss = { edit = null }) { v ->
+            edit = null
+            if (v.isNotBlank()) { val n = s.copy(url = v.trim(), name = EpgSources.nameOf(v), channels = -1, error = null); EpgSources.update(n); scope.launch { EpgSources.refresh(n); Repo.clear() } }
+        }
+    }
+    menu?.let { s ->
+        Popup(s.name, { menu = null }) {
+            T(s.url, 12.sp, C.Muted, maxLines = 3)
+            OptionRow("Uredi", R.drawable.lc_pencil) { menu = null; edit = s }
+            OptionRow("Ažuriraj", R.drawable.lc_refresh_cw) { menu = null; scope.launch { EpgSources.refresh(s); Repo.clear() } }
+            OptionRow(if (s.on) "Isključi" else "Uključi", R.drawable.lc_check) { EpgSources.update(s.copy(on = !s.on)); Repo.clear(); menu = null }
+            OptionRow("Pomjeri gore", R.drawable.lc_arrow_up) { EpgSources.move(s, -1) }
+            OptionRow("Pomjeri dolje", R.drawable.lc_arrow_down) { EpgSources.move(s, 1) }
+            OptionRow("Obriši", R.drawable.lc_trash_2, color = C.Danger) { EpgSources.delete(s); Repo.clear(); menu = null }
         }
     }
 }
@@ -217,20 +337,21 @@ private fun PlaylistsPage(nav: Nav) {
 fun AddPlaylistScreen(nav: Nav) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    var tab by remember { mutableIntStateOf(0) }
-    var name by remember { mutableStateOf("") }
-    var server by remember { mutableStateOf("") }
-    var user by remember { mutableStateOf("") }
-    var pass by remember { mutableStateOf("") }
-    var url by remember { mutableStateOf("") }
-    var live by remember { mutableStateOf(true) }
-    var vod by remember { mutableStateOf(true) }
-    var series by remember { mutableStateOf(true) }
+    val old = remember { EditPlaylist.target }
+    var tab by remember { mutableIntStateOf(if (old?.type == SourceType.M3U) 1 else 0) }
+    var name by remember { mutableStateOf(old?.name ?: "") }
+    var server by remember { mutableStateOf(old?.server ?: "") }
+    var user by remember { mutableStateOf(old?.user ?: "") }
+    var pass by remember { mutableStateOf(old?.pass ?: "") }
+    var url by remember { mutableStateOf(old?.url ?: "") }
+    var live by remember { mutableStateOf(old?.live ?: true) }
+    var vod by remember { mutableStateOf(old?.vod ?: true) }
+    var series by remember { mutableStateOf(old?.series ?: true) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
     Column(Modifier.fillMaxSize()) {
-        Header("Dodaj playlistu")
+        Header(if (old != null) "Uredi playlistu" else "Dodaj playlistu")
         Column(Modifier.fillMaxSize().padding(horizontal = 36.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Segmented(listOf("Xtream Codes", "M3U playlista", "Stalker portal"), tab) {
                 if (it == 2) Toast.makeText(ctx, tr("Stalker portal dolazi u sljedećoj verziji"), Toast.LENGTH_SHORT).show() else tab = it
@@ -255,10 +376,10 @@ fun AddPlaylistScreen(nav: Nav) {
                 Button(if (busy) "Provjeravam…" else "Spremi i učitaj", R.drawable.lc_check, primary = true) {
                     if (busy) return@Button
                     val base = Playlist(
-                        id = System.currentTimeMillis().toString(),
+                        id = old?.id ?: System.currentTimeMillis().toString(),
                         name = name.trim().ifBlank { if (tab == 0) "Xtream" else "M3U" },
                         type = if (tab == 0) SourceType.XTREAM else SourceType.M3U,
-                        server = server.trim(), user = user.trim(), pass = pass.trim(), url = url.trim(), active = true,
+                        server = server.trim(), user = user.trim(), pass = pass.trim(), url = url.trim(), active = old?.active ?: true,
                         live = live, vod = vod, series = series,
                     )
                     if (tab == 0 && (base.server.isBlank() || base.user.isBlank() || base.pass.isBlank())) { error = "Unesi server, korisničko ime i lozinku"; return@Button }
@@ -268,15 +389,21 @@ fun AddPlaylistScreen(nav: Nav) {
                         try {
                             val info = Repo.test(base)
                             val pl = if (base.type == SourceType.XTREAM) base.copy(exp = info) else base
-                            Store.savePlaylists(ctx, Store.playlists(ctx).map { it.copy(active = false) } + pl)
-                            Toast.makeText(ctx, if (pl.type == SourceType.XTREAM) "Povezano ✓" else trf("Učitano: %s", info), Toast.LENGTH_LONG).show()
-                            nav.playlistsChanged(); nav.root(Screen.Home)
+                            if (old != null) {
+                                Store.savePlaylists(ctx, Store.playlists(ctx).map { if (it.id == old.id) pl else it })
+                                Toast.makeText(ctx, tr("Spremljeno"), Toast.LENGTH_SHORT).show()
+                                EditPlaylist.target = null; Repo.clear(); Repo.dropCatalogs(); nav.playlistsChanged(); nav.back()
+                            } else {
+                                Store.savePlaylists(ctx, Store.playlists(ctx).map { it.copy(active = false) } + pl)
+                                Toast.makeText(ctx, if (pl.type == SourceType.XTREAM) tr("Povezano ✓") else trf("Učitano: %s", info), Toast.LENGTH_LONG).show()
+                                nav.playlistsChanged(); nav.root(Screen.Home)
+                            }
                         } catch (e: Exception) {
                             error = trf("Nije uspjelo: %s", e.message ?: e.javaClass.simpleName)
                         } finally { busy = false }
                     }
                 }
-                if (Store.playlists(ctx).isNotEmpty()) Button("Odustani", R.drawable.lc_x) { nav.back() }
+                if (Store.playlists(ctx).isNotEmpty()) Button("Odustani", R.drawable.lc_x) { EditPlaylist.target = null; nav.back() }
             }
         }
     }
@@ -369,7 +496,13 @@ private fun LookPage() {
         Label("Rezolucija u uglu plejera")
         Segmented(listOf("Isključeno", "Pri pokretanju", "Uvijek"), Look.resBadge) { Look.resBadge = it; save() }
         Label("Kanali")
-        ToggleRow("Pregled kanala uživo", Look.preview, R.drawable.lc_tv, "Kad staneš na kanal, desno se pušta mala slika i EPG") { Look.preview = it; save() }
+        Label("Pregled kanala (mala slika)")
+        Segmented(listOf("Isključen", "Na OK", "Automatski"), Look.previewMode) { Look.previewMode = it; Look.preview = it > 0; save() }
+        T(when (Look.previewMode) {
+            0 -> "Nema male slike. OK na kanalu ga odmah pušta preko cijelog ekrana."
+            1 -> "Prvi OK na kanalu pušta malu sliku, drugi OK preko cijelog ekrana. Dok listaš, ništa se ne pušta."
+            else -> "Mala slika se pušta sama kad staneš na kanal."
+        }, 12.sp, C.Muted, maxLines = 2)
         ToggleRow("Najgledaniji na vrhu grupe", Look.mostWatched, R.drawable.lc_arrow_up, "Kanali koje najčešće gledaš sami idu gore (kad nema ručnog redoslijeda)") {
             Look.mostWatched = it; save()
         }
@@ -696,6 +829,7 @@ private fun SportPage() {
     val scope = rememberCoroutineScope()
     var pickCountry by remember { mutableStateOf(false) }
     var keyDlg by remember { mutableStateOf(false) }
+    var pickAi by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
     var rev by remember { mutableIntStateOf(0) }
     key(rev) {
@@ -703,16 +837,27 @@ private fun SportPage() {
             val cur = Prefs.str("sport_country")
             OptionRow("Država", R.drawable.lc_map_pin, sub = "Koje lige su važnije (npr. Njemačka: Bundesliga)",
                 value = tr(COUNTRIES.firstOrNull { it.first == cur }?.second ?: cur) + if (cur.isBlank()) " · " + Sports.country else "") { pickCountry = true }
-            Label("AI pretraga prenosa (Gemini)")
-            T("Za utakmice koje nisu u TV programu, Gemini pretraži internet ko ih prenosi u tvojoj državi i izabere tvoje kanale. Označeno je ljubičasto i kao procjena.", 12.sp, C.Muted, maxLines = 3)
-            OptionRow("Gemini API ključ", R.drawable.lc_sparkles, sub = "Besplatno: aistudio.google.com › Get API key",
+            Label("AI pretraga prenosa")
+            T("Za utakmice koje nisu u TV programu, AI traži ko ih prenosi u tvojoj državi i bira tvoje kanale. Označeno je ljubičasto i kao procjena.", 12.sp, C.Muted, maxLines = 3)
+            val pv = SportsAI.prov
+            OptionRow("AI", R.drawable.lc_sparkles, sub = tr(if (pv.free) "besplatno" else "plaća se po upitu") + " · " + tr(if (pv.search) "pretraga interneta" else "bez pretrage interneta"),
+                value = pv.name) { pickAi = true }
+            OptionRow(trf("%s ključ", pv.name), R.drawable.lc_key_round, sub = pv.site,
                 value = tr(if (SportsAI.ready) "Upisan" else "Nije upisan")) { keyDlg = true }
             if (SportsAI.ready) OptionRow(status ?: tr("Provjeri ključ"), R.drawable.lc_refresh_cw) {
                 status = tr("Provjeravam…"); scope.launch { status = SportsAI.test()?.let { trf("Ne radi: %s", it) } ?: tr("Radi ✓") }
             }
         }
     }
-    if (keyDlg) TextDialog("Gemini API ključ", "Ključ (AIza…)", SportsAI.key, onDismiss = { keyDlg = false }) { v -> SportsAI.key = v; keyDlg = false; rev++ }
+    if (pickAi) Popup(tr("AI"), { pickAi = false }) {
+        SportsAI.PROVIDERS.forEach { p ->
+            OptionRow(p.name, if (p.id == SportsAI.provider) R.drawable.lc_check else R.drawable.lc_sparkles,
+                sub = tr(if (p.free) "besplatno" else "plaća se po upitu") + " · " + tr(if (p.search) "pretraga interneta" else "bez pretrage interneta") + " · " + p.site) {
+                SportsAI.provider = p.id; status = null; pickAi = false; rev++
+            }
+        }
+    }
+    if (keyDlg) TextDialog(trf("%s ključ", SportsAI.prov.name), trf("Ključ (%s)", SportsAI.prov.keyHint), SportsAI.key, onDismiss = { keyDlg = false }) { v -> SportsAI.key = v; keyDlg = false; status = null; rev++ }
     if (pickCountry) Popup(tr("Država"), { pickCountry = false }) {
         COUNTRIES.forEach { (code, name) ->
             OptionRow(name, if (Prefs.str("sport_country") == code) R.drawable.lc_check else R.drawable.lc_map_pin) {

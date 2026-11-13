@@ -256,6 +256,7 @@ class TvState {
     var groupMenu by mutableStateOf<GroupRef?>(null)
     var newGroupFor by mutableStateOf<String?>(null)
     var newFav by mutableStateOf(false)
+    var enter by mutableIntStateOf(0)
     val gate = PinGate()
     val focusFr = FocusRequester()
     val wrap = Wrap()
@@ -289,6 +290,17 @@ fun TvDialogs(st: TvState, rows: Load<List<GRow>>) {
 }
 
 /** Opens a group (after the PIN when locked). */
+/** The channel shown in the small picture when the preview starts on OK. */
+object PreviewSel { var ch by mutableStateOf<Channel?>(null) }
+
+/** Repeated text from some providers ("A. B. A. B.") shown once. */
+fun cleanDesc(s: String?): String? {
+    val t = s?.trim()?.ifBlank { null } ?: return null
+    val head = t.take(40)
+    val again = if (head.length >= 20) t.indexOf(head, 20) else -1
+    return if (again > 0) t.substring(0, again).trim() else t
+}
+
 fun openGroup(ctx: android.content.Context, st: TvState, g: GroupRef) {
     val locked = g.pid?.let { Ovr(ctx, it).isLocked("live", g.cat.id) } ?: false
     st.gate.run("g:${g.key}", locked) { if (st.group?.key != g.key) TvMemory.channel = -1; st.group = g; TvMemory.group = g }
@@ -310,18 +322,14 @@ private fun TvList(nav: Nav, onGuide: () -> Unit) {
     fun backToGroups() { st.focusKey = "g:" + (st.group?.key ?: ""); inChannels = false; st.refocus++ }
     BackHandler(enabled = inChannels && st.groupMenu == null) { backToGroups() }
 
-    LaunchedEffect(focusedGroup) {
-        val g = focusedGroup ?: return@LaunchedEffect
-        delay(350)
-        val locked = g.pid?.let { Ovr(ctx, it).isLocked("live", g.cat.id) } ?: false
-        if (!locked || "g:${g.key}" in Lock.unlocked) { if (st.group?.key != g.key) TvMemory.channel = -1; st.group = g; TvMemory.group = g }
-    }
+    // a group opens only on OK: browsing the groups changes nothing
+    var enterTick by remember { mutableIntStateOf(0) }
 
     Row(Modifier.fillMaxSize()) {
         if (!inChannels) {
             GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, 290.dp, "TV", null,
                 onFocusGroup = { focusedGroup = it },
-                onOpen = { openGroup(ctx, st, it) },
+                onOpen = { openGroup(ctx, st, it); enterTick++ },
                 onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
                 onHeader = { p -> Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
                 onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it },
@@ -356,7 +364,7 @@ private fun TvList(nav: Nav, onGuide: () -> Unit) {
                     if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { backToGroups(); true } else false
                 }) {
                     key(g.key, st.rev) {
-                        ChannelList(g, nav, st.gate, rows, onFocusCh = { focusedCh = it; inChannels = true }) { st.rev++ }
+                        ChannelList(g, nav, st.gate, rows, enterTick, onFocusCh = { focusedCh = it; inChannels = true }) { st.rev++ }
                     }
                 }
                 if (inChannels) EpgPanel(focusedCh, Modifier.width(340.dp))
@@ -437,7 +445,7 @@ fun playChannels(nav: Nav, list: List<Channel>, index: Int) {
 }
 
 @Composable
-private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GRow>>, onFocusCh: (Channel) -> Unit = {}, onChanged: () -> Unit) {
+private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GRow>>, enterTick: Int = 0, onFocusCh: (Channel) -> Unit = {}, onChanged: () -> Unit) {
     val ctx = LocalContext.current
     var listRev by remember { mutableIntStateOf(0) }
     val isFav = g.pid == null
@@ -451,7 +459,8 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
 
     Column(Modifier.fillMaxSize().padding(start = 20.dp, end = 20.dp, top = 22.dp)) {
         T(g.cat.name, 20.sp, C.Text, FontWeight.SemiBold, modifier = Modifier.fillMaxWidth())
-        T("OK gledaj · drži OK = opcije · ◀ grupe", 12.sp, C.Muted, modifier = Modifier.padding(bottom = 10.dp))
+        T(if (Look.previewMode == 1) "OK mala slika · OK još jednom = cijeli ekran · drži OK = opcije · ◀ grupe" else "OK gledaj · drži OK = opcije · ◀ grupe",
+            12.sp, C.Muted, maxLines = 1, modifier = Modifier.padding(bottom = 10.dp))
         when (val s = state) {
             is Load.Loading -> Loading("Učitavam kanale…")
             is Load.Err -> Message("Kanali se nisu učitali", s.message)
@@ -468,6 +477,8 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                             Focusable(
                                 modifier = Modifier.fillMaxWidth().height(Rows.channel).wrapKeys(i, list.size, cWrap),
                                 onClick = {
+                                    // preview on OK: the first OK shows the small picture, the second one plays full screen
+                                    if (Look.previewMode == 1 && PreviewSel.ch?.url != ch.url && !locked) { PreviewSel.ch = ch; onFocusCh(ch); return@Focusable }
                                     gate.run("c:${ch.url}", locked) {
                                         ovr.countWatch(ch)
                                         TvMemory.channel = i; TvMemory.group = g; TvMemory.restore = true
@@ -498,6 +509,8 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                     // back from the player: focus the channel that was playing (once)
                     if (TvMemory.restore && TvMemory.channel >= 0) { TvMemory.restore = false; cWrap.target = TvMemory.channel.coerceAtMost(list.lastIndex) }
                 }
+                // OK on a group: the focus goes into its channels
+                LaunchedEffect(enterTick, list.isNotEmpty()) { if (enterTick > 0 && list.isNotEmpty()) cWrap.target = TvMemory.channel.coerceIn(0, list.lastIndex) }
                 menu?.let { ch ->
                     val groups = (rows as? Load.Ok)?.value?.mapNotNull { (it as? GRow.Group)?.ref }
                         ?.filter { it.pid != null && it.pid == ch.pid.ifBlank { g.pid } && it.cat.id != ALL_GROUP }?.map { it.cat } ?: emptyList()
@@ -699,7 +712,7 @@ fun GroupManager(nav: Nav) {
     fun moveTo(id: String, to: Int) {
         val l = ids.toMutableList(); val i = l.indexOf(id); if (i < 0) return
         l.removeAt(i); l.add(to.coerceIn(0, l.size), id); save(l); lastId = id
-        scope.launch { delay(150); listState.scrollToItem((to - 3).coerceIn(0, (l.size - 1).coerceAtLeast(0))); refocus++ }
+        scope.launch { delay(150); listState.scrollToItem(if (to < 5) 0 else (to - 3).coerceAtMost((l.size - 1).coerceAtLeast(0))); refocus++ }
     }
     BackHandler(enabled = carry != null) { carry = null }
     BackHandler(enabled = carry == null && tab == 3 && chGroup != null) { chGroup = null }
@@ -712,24 +725,35 @@ fun GroupManager(nav: Nav) {
         when (e.key) {
             Key.DirectionUp, Key.DirectionDown -> {
                 val i = carryList.indexOf(id); val j = (i + if (e.key == Key.DirectionUp) -step else step).coerceIn(0, carryList.lastIndex)
-                if (i >= 0 && j != i) { carryList.removeAt(i); carryList.add(j, id); scope.launch { listState.scrollToItem((j - 3).coerceAtLeast(0)) } }
+                if (i >= 0 && j != i) { carryList.removeAt(i); carryList.add(j, id); scope.launch { listState.scrollToItem(if (j < 5) 0 else j - 3) } }
                 true
             }
             Key.DirectionCenter, Key.Enter -> { save(carryList.toList()); carry = null; refocus++; true }
             else -> true
         }
     }, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        T(tr("Grupe i kanali") + " · ${p.name}", 22.sp, C.Text, FontWeight.Bold, maxLines = 1)
-        T(if (carry != null) "▲ ▼ pomjeraj (drži za brže) · OK spusti ovdje · Nazad vrati gdje je bila"
-          else "OK na grupi ili kanalu: uzmi i pomjeri, na vrh, na kraj, naziv, sakrivanje, PIN.", 13.sp, if (carry != null) C.Amber else C.Muted, maxLines = 2)
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Segmented(listOf("TV", "Filmovi", "Serije", "Kanali"), tab) { tab = it; chGroup = null; carry = null }
-            if (tab == 0) Button("Nova grupa", R.drawable.lc_plus) { newGroup = true }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (tab == 0 || tab == 3) Button("Vrati sakrivene kanale", R.drawable.lc_eye) { ovr.unhideAllChannels(); rev++; nav.playlistsChanged() }
-            Button("Vrati sve izmjene", R.drawable.lc_rotate_ccw) { reset = true }
-            if (chanMode) T("›  " + chGroup!!.name, 15.sp, C.Soft, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
+        if (carry != null) {
+            // while carrying, the top folds into one line so the list gets the whole screen
+            val pos = carryList.indexOf(carry) + 1
+            val nm = if (chanMode) chans.firstOrNull { it.url == carry }?.name else groups.firstOrNull { it.id == carry }?.name
+            Row(Modifier.fillMaxWidth().clip(Rnd(12.dp)).background(C.Amber.copy(alpha = 0.15f)).padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Ico(R.drawable.lc_hand_grab, 18.dp, C.Amber)
+                T(trf("Pomjeraš: %s · pozicija %s / %s", nm ?: "", pos, carryList.size), 15.sp, C.Text, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
+                T("▲ ▼ · OK spusti · Nazad vrati", 13.sp, C.Amber, maxLines = 1)
+            }
+        } else {
+            T(tr("Grupe i kanali") + " · ${p.name}", 22.sp, C.Text, FontWeight.Bold, maxLines = 1)
+            T("OK na grupi ili kanalu: uzmi i pomjeri, na vrh, na kraj, naziv, sakrivanje, PIN.", 13.sp, C.Muted, maxLines = 2)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Segmented(listOf("TV", "Filmovi", "Serije", "Kanali"), tab) { tab = it; chGroup = null; carry = null }
+                if (tab == 0) Button("Nova grupa", R.drawable.lc_plus) { newGroup = true }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (tab == 0 || tab == 3) Button("Vrati sakrivene kanale", R.drawable.lc_eye) { ovr.unhideAllChannels(); rev++; nav.playlistsChanged() }
+                Button("Vrati sve izmjene", R.drawable.lc_rotate_ccw) { reset = true }
+                if (chanMode) T("›  " + chGroup!!.name, 15.sp, C.Soft, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
+            }
         }
         when {
             st is Load.Loading || (chanMode && chSt is Load.Loading && chans.isEmpty()) -> Loading()
@@ -742,7 +766,7 @@ fun GroupManager(nav: Nav) {
                     val hidden = if (g != null) ovr.isHidden(kind, g.id) else ch?.let { ovr.isChHidden(it) } == true
                     val locked = if (g != null) ovr.isLocked(kind, g.id) else ch?.let { ovr.isChLocked(it) } == true
                     val carried = carry == k
-                    Focusable(modifier = Modifier.fillMaxWidth().height(Rows.channel - 4.dp)
+                    Focusable(modifier = Modifier.fillMaxWidth().height(if (carry != null) 42.dp else Rows.channel - 4.dp)
                         .then(if (carried) Modifier.border(2.dp, C.Amber, Rnd(14.dp)) else Modifier),
                         onClick = {
                             if (carry != null) return@Focusable
@@ -849,7 +873,7 @@ fun EpgList(ch: Channel, limit: Int = 12, modifier: Modifier = Modifier) {
         is Load.Ok -> if (s.value.isEmpty()) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 T("Nema EPG podataka za ovaj kanal.", 14.sp, C.Soft)
-                T(if (Prefs.epgUrl.isBlank()) "Dodaj vlastiti EPG: Postavke › Playliste › Vlastiti EPG izvor" else "Ni tvoj EPG izvor nema ovaj kanal.", 12.sp, C.Muted, maxLines = 2)
+                T(if (!EpgSources.any) "Dodaj EPG izvor: Postavke › Playliste › EPG izvori" else "Ni tvoji EPG izvori nemaju ovaj kanal.", 12.sp, C.Muted, maxLines = 2)
             }
         } else LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             itemsIndexed(s.value) { _, e ->
@@ -873,8 +897,8 @@ fun EpgList(ch: Channel, limit: Int = 12, modifier: Modifier = Modifier) {
                             Box(Modifier.fillMaxWidth().height(4.dp).clip(Rnd(2.dp)).background(C.CardHi)) {
                                 Box(Modifier.fillMaxWidth(e.progress()).height(4.dp).background(C.Red))
                             }
-                            e.desc?.let { T(it, 12.sp, C.Soft, maxLines = 4) }
-                        } else e.desc?.let { T(it, 12.sp, C.Muted, maxLines = 2) }
+                            cleanDesc(e.desc)?.let { T(it, 12.sp, C.Soft, maxLines = 4) }
+                        } else cleanDesc(e.desc)?.let { T(it, 12.sp, C.Muted, maxLines = 2) }
                     }
                 }
             }
@@ -889,7 +913,10 @@ fun EpgPanel(ch: Channel?, modifier: Modifier) {
     LaunchedEffect(ch?.url) { delay(450); shown = ch }
     Column(modifier.fillMaxHeight().background(C.Rail).padding(horizontal = 18.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         val c = shown
-        if (Look.preview) PreviewBox(c, Modifier.fillMaxWidth())
+        when (Look.previewMode) {
+            2 -> PreviewBox(c, Modifier.fillMaxWidth())
+            1 -> PreviewSel.ch?.let { PreviewBox(it, Modifier.fillMaxWidth()) }
+        }
         if (c == null) { T("Stani na kanal da vidiš program", 14.sp, C.Muted); return@Column }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             ChannelLogo(c.logo, c.name)

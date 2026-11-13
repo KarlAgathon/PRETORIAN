@@ -71,7 +71,7 @@ object Profiles {
     private val SHARED = setOf("playlists", "pl_multi", "pl_open", "epg_url", "tmdb_key", "omdb_key", "os_key", "os_user", "os_pass", "subdl_key",
         "upd_last", "backup_auto", "backup_auto_at", "ext_player", "file_app", "reminders", "rem_action", "rem_before", "rem_popup", "rem_wake",
         "notes", "new_items", "pin_hash", "pin_salt", "gemini_key", "sport_country")
-    private val SHARED_PREFIX = listOf("prof", "gd_", "sync_")
+    private val SHARED_PREFIX = listOf("prof", "gd_", "sync_", "ai_")
     fun isShared(k: String) = k in SHARED || SHARED_PREFIX.any { k.startsWith(it) }
 
     var panel by mutableStateOf(false)
@@ -165,6 +165,19 @@ object Profiles {
         val cur = current(c).id
         o.keys().forEach { id -> if (id != cur) File(dir(c), "$id.json").writeText(o.getJSONObject(id).toString()) }
         o.optJSONObject(cur)?.let { apply(c, it) }
+    }
+
+    /** deletes the profile you are in: moves to [target] first, then removes it */
+    fun deleteCurrentAndSwitch(c: Context, target: Profile) {
+        val cur = current(c)
+        if (cur.id == target.id || list(c).size <= 1) return
+        val snap = File(dir(c), target.id + ".json").takeIf { it.exists() }?.let { try { JSONObject(it.readText()) } catch (e: Exception) { null } }
+        apply(c, snap)
+        val left = list(c).filter { it.id != cur.id }
+        val a = JSONArray(); left.forEach { a.put(it.toJson()) }
+        sp(c).edit().putString("profiles", a.toString()).putString("profile_cur", target.id).putBoolean("profile_skip_ask", true).commit()
+        File(dir(c), cur.id + ".json").delete()
+        restart(c)
     }
 
     fun switchTo(c: Context, target: Profile) {
@@ -305,15 +318,28 @@ fun ProfileEditor(p: Profile?, onDismiss: () -> Unit) {
                 if (p == null) Profiles.add(ctx, name, avatar, color) else Profiles.update(ctx, p.copy(name = name.ifBlank { p.name }, avatar = avatar, color = color))
                 onDismiss()
             }
-            if (p != null && !isCur && Profiles.list(ctx).size > 1) Button("Obriši profil", R.drawable.lc_trash_2) { confirmDelete = true }
+            if (p != null && Profiles.list(ctx).size > 1) Button("Obriši profil", R.drawable.lc_trash_2) { confirmDelete = true }
         }
     }
     if (pinSet && p != null) PinDialog(tr("Novi PIN profila"), tr("Izaberi 4 cifre"), onDismiss = { pinSet = false }) { pin ->
         Profiles.update(ctx, p.copy(pinHash = Profiles.hash(p.id, pin))); pinSet = false; onDismiss(); null
     }
-    if (confirmDelete && p != null) Popup(trf("Obrisati profil %s?", p.name), { confirmDelete = false }) {
+    if (confirmDelete && p != null) DeleteProfile(p, onDone = { confirmDelete = false; onDismiss() })
+}
+
+/** Asks first; deleting the profile you are in moves you to another one. */
+@Composable
+fun DeleteProfile(p: Profile, onDone: () -> Unit) {
+    val ctx = LocalContext.current
+    val isCur = p.id == Profiles.current(ctx).id
+    val others = Profiles.list(ctx).filter { it.id != p.id }
+    Popup(trf("Obrisati profil %s?", p.name), onDone) {
         T("Njegovi favoriti, gledano i izgled se brišu. Playliste ostaju.", 14.sp, C.Soft, maxLines = 3)
-        OptionRow("Da, obriši", R.drawable.lc_trash_2, color = C.Danger) { Profiles.delete(ctx, p); confirmDelete = false; onDismiss() }
+        if (isCur) {
+            T("Ovo je profil u kojem si sad. Izaberi u koji profil da pređeš:", 13.sp, C.Muted, maxLines = 2)
+            others.forEach { o -> OptionRow(trf("Obriši i pređi u: %s", o.name), R.drawable.lc_trash_2, color = C.Danger) { Profiles.deleteCurrentAndSwitch(ctx, o) } }
+        } else OptionRow("Da, obriši", R.drawable.lc_trash_2, color = C.Danger) { Profiles.delete(ctx, p); onDone() }
+        OptionRow("Odustani", R.drawable.lc_x) { onDone() }
     }
 }
 
@@ -327,6 +353,8 @@ fun ProfilePanel(nav: Nav) {
     var adding by remember { mutableStateOf(false) }
     var pinFor by remember { mutableStateOf<Profile?>(null) }
     var syncing by remember { mutableStateOf(false) }
+    var del by remember { mutableStateOf<Profile?>(null) }
+    var profMenu by remember { mutableStateOf<Profile?>(null) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     Popup(tr("Profil"), { Profiles.panel = false }, width = 640.dp) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -340,7 +368,7 @@ fun ProfilePanel(nav: Nav) {
             T("Promijeni profil", 13.sp, C.Muted, FontWeight.SemiBold)
             LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 itemsIndexed(others, key = { _, p -> p.id }) { _, p ->
-                    Focusable(onClick = { if (p.pinHash != null) pinFor = p else Profiles.switchTo(ctx, p) }, shape = Rnd(16.dp), normal = C.Card, zoom = 1.05f,
+                    Focusable(onClick = { if (p.pinHash != null) pinFor = p else Profiles.switchTo(ctx, p) }, onMenu = { profMenu = p }, shape = Rnd(16.dp), normal = C.Card, zoom = 1.05f,
                         modifier = Modifier.width(120.dp).height(118.dp)) { _ ->
                         Column(Modifier.fillMaxSize().padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Avatar(p, 62.dp)
@@ -352,6 +380,7 @@ fun ProfilePanel(nav: Nav) {
         }
         OptionRow("Dodaj profil", R.drawable.lc_user_plus) { adding = true }
         OptionRow("Uredi ovaj profil", R.drawable.lc_pencil, sub = "Ime, slika, boja, PIN") { edit = cur }
+        if (others.isNotEmpty()) OptionRow("Obriši profil", R.drawable.lc_trash_2, sub = "Drži OK na profilu gore za drugi profil") { del = cur }
         OptionRow("Pitaj \"Ko gleda?\" pri pokretanju", R.drawable.lc_users, value = tr(if (Profiles.askAtStart) "Da" else "Ne")) {
             Profiles.askAtStart = !Profiles.askAtStart; Profiles.rev++
         }
@@ -371,6 +400,13 @@ fun ProfilePanel(nav: Nav) {
     }
     if (adding) ProfileEditor(null, onDismiss = { adding = false })
     edit?.let { p -> ProfileEditor(p, onDismiss = { edit = null }) }
+    del?.let { p -> DeleteProfile(p, onDone = { del = null }) }
+    profMenu?.let { p ->
+        Popup(p.name, { profMenu = null }) {
+            OptionRow("Uredi profil", R.drawable.lc_pencil) { profMenu = null; edit = p }
+            OptionRow("Obriši profil", R.drawable.lc_trash_2, color = C.Danger) { profMenu = null; del = p }
+        }
+    }
     pinFor?.let { p ->
         PinDialog(p.name, tr("Unesi PIN profila"), onDismiss = { pinFor = null }) { pin ->
             if (Profiles.hash(p.id, pin) == p.pinHash) { pinFor = null; Profiles.switchTo(ctx, p); null } else tr("Pogrešan PIN")
@@ -389,7 +425,7 @@ fun ProfileButton(size: Dp) {
 }
 
 /** Lets other screens open a settings section (e.g. Backup from the profile panel). */
-object SettingsNav { var section: String? = null }
+object SettingsNav { var section: String? = null; var last: String? = null }
 
 /** launch that never crashes the app */
 fun kotlinx.coroutines.CoroutineScope.launchSafe(block: suspend () -> Unit) =

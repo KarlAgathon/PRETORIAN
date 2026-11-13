@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -53,6 +54,20 @@ import java.util.Date
 import java.util.Locale
 
 val AiColor = Color(0xFFA78BFA)
+
+/** Rows scroll so the card you stand on starts at the left edge: no half cut card before it. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+private val StartAligned = object : androidx.compose.foundation.gestures.BringIntoViewSpec {
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float =
+        if (offset >= 0 && offset + size <= containerSize) 0f else offset
+}
+
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun AlignStart(content: @Composable () -> Unit) =
+    androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides StartAligned) { content() }
+
+private fun watchRank(e: SportEvent) = when { e.channels.isNotEmpty() -> 0; e.ai.isNotEmpty() -> 1; e.maybe.isNotEmpty() -> 2; else -> 3 }
 
 private fun hhmm(ms: Long) = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(ms))
 
@@ -140,7 +155,8 @@ fun SportsScreen(nav: Nav) {
     }
     val sections = remember(shown, hero) {
         val rest = shown.filter { it != hero }
-        Triple(rest.filter { it.live }, rest.filter { it.state == "pre" }, rest.filter { it.state == "post" })
+        fun s(l: List<SportEvent>) = l.sortedWith(compareBy({ watchRank(it) }, { it.start }))
+        Triple(s(rest.filter { it.live }), s(rest.filter { it.state == "pre" }), rest.filter { it.state == "post" }.sortedBy { watchRank(it) })
     }
     val leagues = remember(all, sport) { (all ?: emptyList()).filter { sport == "all" || it.sport == sport }.map { it.league to it.leagueAbbr }.distinct().take(20) }
     val liveCount = remember(all) { all?.count { it.live } ?: 0 }
@@ -169,7 +185,7 @@ fun SportsScreen(nav: Nav) {
             DayTabs(day, dayFr) { day = it; league = null }
         }
         // ---------------------------------------------------------------- filters (one scrolling row, nothing is hidden)
-        LazyRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        AlignStart { LazyRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(listOf("all" to "Sve", "live" to "Uživo sada", "done" to "Završeno")) { (id, label) ->
                 val sel = view == id
                 Focusable(onClick = { view = id }, shape = Pill, normal = if (sel) C.Red else C.Card, focused = if (sel) C.Red else C.CardHi,
@@ -183,13 +199,12 @@ fun SportsScreen(nav: Nav) {
                 }
             }
             item {
-                Focusable(onClick = { mine = !mine }, shape = Pill, normal = if (mine) C.Green.copy(alpha = 0.25f) else C.Card,
-                    focused = C.Green.copy(alpha = 0.35f), zoom = 1.04f,
-                    modifier = Modifier.height(38.dp).border(1.5.dp, C.Green.copy(alpha = if (mine) 1f else 0.5f), Pill)) { _ ->
+                Focusable(onClick = { mine = !mine }, shape = Pill, normal = if (mine) C.Green else C.Card,
+                    focused = if (mine) C.Green else C.CardHi, zoom = 1.04f, modifier = Modifier.height(38.dp)) { _ ->
                     Row(Modifier.align(Alignment.Center).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                        Ico(R.drawable.lc_tv, 16.dp, C.Green)
-                        T("Samo moji kanali", 14.sp, C.Green, FontWeight.SemiBold)
+                        Ico(if (mine) R.drawable.lc_check else R.drawable.lc_tv, 16.dp, if (mine) Color.White else C.Soft)
+                        T("Samo moji kanali", 14.sp, if (mine) Color.White else C.Text, FontWeight.SemiBold, maxLines = 1)
                     }
                 }
             }
@@ -205,7 +220,7 @@ fun SportsScreen(nav: Nav) {
                     }
                 }
             }
-        }
+        } }
         if ((guide is Load.Loading || (matching && !guideFailed)) && p != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             androidx.compose.material3.CircularProgressIndicator(color = C.Red, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
             T("Tražim prenose u tvom TV programu…", 12.sp, C.Muted)
@@ -343,7 +358,7 @@ private fun HeroCard(ev: SportEvent, fr: FocusRequester, onClick: () -> Unit) {
                 else if (ev.state == "pre") T(hhmm(ev.start), 34.sp, C.Text, FontWeight.Bold)
             }
             Box(Modifier.width(1.dp).fillMaxHeight().background(C.Line))
-            Column(Modifier.width(240.dp).fillMaxHeight().padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            Column(Modifier.width(220.dp).fillMaxHeight().padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 T("PRENOSE", 11.sp, C.Muted, FontWeight.Bold)
                 if (ev.channels.isEmpty() && ev.maybe.isEmpty() && ev.ai.isEmpty()) T("Prenos nije pronađen u tvojoj listi", 13.sp, C.Muted, maxLines = 3)
                 if (ev.channels.isEmpty()) ev.ai.take(3).forEach { ch ->
@@ -397,17 +412,18 @@ private fun Section(title: String, list: List<SportEvent>, live: Boolean = false
             T(title, 18.sp, C.Text, FontWeight.SemiBold)
             T("· ${list.size}", 15.sp, C.Muted)
         }
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(end = 12.dp)) {
+        AlignStart { LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(end = 12.dp)) {
             items(list, key = { it.id }) { ev -> EventCard(ev) { onOpen(ev) } }
-        }
+        } }
     }
 }
 
 @Composable
 private fun EventCard(ev: SportEvent, onClick: () -> Unit) {
+    val none = ev.channels.isEmpty() && ev.ai.isEmpty() && ev.maybe.isEmpty()
     Focusable(modifier = Modifier.width(272.dp).height(138.dp), onClick = onClick, shape = Rnd(18.dp),
-        normal = C.Card, focused = C.CardFocus, zoom = 1.03f) { _ ->
-        Column(Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 11.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        normal = C.Card, focused = C.CardFocus, zoom = 1.03f) { f ->
+        Column(Modifier.fillMaxSize().then(if (none && !f) Modifier.alpha(0.6f) else Modifier).padding(horizontal = 14.dp, vertical = 11.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Dot(Sports.sportColor(ev.sport), 6.dp)
                 T(tr(ev.league), 12.sp, C.Muted, modifier = Modifier.weight(1f).padding(start = 6.dp))
@@ -479,7 +495,7 @@ private fun EventPopup(ev: SportEvent, onDismiss: () -> Unit, onPlay: (List<Chan
             var asking by remember { mutableStateOf(false) }
             var aiErr by remember { mutableStateOf<String?>(null) }
             val aiList = askAi ?: ev.ai
-            if (aiList.isNotEmpty()) T("AI (Gemini) · procjena s interneta", 12.sp, AiColor, FontWeight.Bold)
+            if (aiList.isNotEmpty()) T(SportsAI.prov.name + " · " + tr(if (SportsAI.lastSearch) "procjena s interneta" else "procjena (bez interneta)"), 12.sp, AiColor, FontWeight.Bold)
             aiList.forEachIndexed { i, ch -> ChannelChoice(ch, AiColor) { onPlay(aiList, i) } }
             if (ev.channels.isEmpty() && aiList.isEmpty() && ev.home != null) {
                 val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -493,7 +509,7 @@ private fun EventPopup(ev: SportEvent, onDismiss: () -> Unit, onPlay: (List<Chan
                         } catch (e: Exception) { aiErr = e.message }
                         asking = false
                     }
-                } else T("AI pretraga: dodaj besplatni Gemini ključ u Postavke › Sport i AI", 12.sp, C.Muted, maxLines = 2)
+                } else T("AI pretraga: dodaj AI ključ u Postavke › Sport i AI", 12.sp, C.Muted, maxLines = 2)
                 aiErr?.let { T(it, 12.sp, C.Muted, maxLines = 2) }
             }
             if (ev.maybe.isNotEmpty()) T("Mogući prenos (po ligi, nije sigurno)", 12.sp, C.Amber, FontWeight.Bold)

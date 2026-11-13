@@ -20,7 +20,8 @@ object Look {
     var tileStyle by mutableIntStateOf(3)      // 0 solid, 1 glass, 2 outline, 3 modern
     var mostWatched by mutableStateOf(true)
     var overlay by mutableIntStateOf(0)        // menus and info bar: 0 glass, 1 black
-    var preview by mutableStateOf(true)        // live preview of the focused channel
+    var preview by mutableStateOf(true)        // live preview of the focused channel (old switch)
+    var previewMode by mutableIntStateOf(1)    // small live picture: 0 off, 1 only after OK, 2 by itself when you stop on a channel
     var menuOpacity by mutableIntStateOf(94)   // how solid menus/popups are, in %
     var rowSize by mutableIntStateOf(1)        // channel and group rows: 0 small, 1 medium, 2 large
     var lang by mutableStateOf("bs")           // app language
@@ -54,6 +55,7 @@ object Look {
         mostWatched = p.getBoolean("look_mostwatched", true)
         overlay = p.getInt("look_overlay", 0)
         preview = p.getBoolean("look_preview", true)
+        previewMode = p.getInt("look_previewmode", if (preview) 1 else 0)
         menuOpacity = p.getInt("look_menuopacity", 94)
         rowSize = p.getInt("look_rowsize", 1)
         lang = p.getString("app_lang", "bs") ?: "bs"
@@ -71,7 +73,7 @@ object Look {
         sp(c).edit().putString("look_theme", theme).putInt("look_accent", accent).putInt("look_shade", shade)
             .putInt("look_opacity", opacity).putInt("look_tile", tileSize).putInt("look_poster", posterSize)
             .putInt("look_tilestyle", tileStyle).putBoolean("look_mostwatched", mostWatched)
-            .putInt("look_overlay", overlay).putBoolean("look_preview", preview)
+            .putInt("look_overlay", overlay).putBoolean("look_preview", preview).putInt("look_previewmode", previewMode)
             .putInt("look_menuopacity", menuOpacity).putInt("look_rowsize", rowSize).putString("app_lang", lang)
             .putString("look_iconset", iconSet).putInt("look_iconstyle", iconStyle).putInt("look_corner", corner)
             .putBoolean("look_groupframe", groupFrame).putInt("look_resbadge", resBadge).putInt("look_layout", layout).apply()

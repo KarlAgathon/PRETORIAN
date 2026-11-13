@@ -59,8 +59,17 @@ object ProgIndex {
         val now = System.currentTimeMillis()
         val progs = pls.filter { it.type == SourceType.XTREAM }.flatMap { p -> Xmltv.read(Xtream(p).xmltvUrl(), byEpg.keys, now - 3600_000L, now + 30 * 3600_000L) }
         data = progs.mapNotNull { pr -> byEpg[pr.channel]?.firstOrNull()?.let { it to EpgItem(pr.title, pr.desc, pr.start, pr.end) } }
+        byId = data.groupBy({ it.first.epg?.lowercase() ?: "" }, { it.second }).mapValues { (_, l) -> l.sortedBy { it.start } }
         at = now
         data
+    }
+    private var byId: Map<String, List<EpgItem>> = emptyMap()
+
+    /** the provider's full guide (XMLTV) for one channel: used when its short guide is empty */
+    suspend fun forChannel(ctx: android.content.Context, ch: Channel): List<EpgItem> {
+        val id = ch.epg?.lowercase()?.ifBlank { null } ?: return emptyList()
+        get(ctx)
+        return byId[id] ?: emptyList()
     }
 }
 
