@@ -94,8 +94,8 @@ private suspend fun postersOf(ctx: Context, nav: Nav, p: Playlist, g: Category, 
             else { val v = Vod(o.str("id"), o.str("n"), o.str("i").orNullIfBlank(), o.str("r").orNullIfBlank(), o.str("u"))
                 Poster(v.id, v.name, v.poster, v.rating, v.url, true, { nav.push(Screen.MovieDetail(v)) }) }
         }
-        else -> if (series) Repo.series(p, g.id).map { s -> Poster(s.id, s.name, s.cover, s.rating, null, NewContent.isNew(p.id, kind, s.id)) { nav.push(Screen.SeriesDetail(s)) } }
-        else Repo.movies(p, g.id).map { v -> Poster(v.id, v.name, v.poster, v.rating, v.url, NewContent.isNew(p.id, kind, v.id)) { nav.push(Screen.MovieDetail(v)) } }
+        else -> if (series) Repo.series(p, g.id).map { s -> Poster(s.id, s.name, s.cover, s.rating, null, NewContent.isNew(p.id, kind, s.id), open = { nav.push(Screen.SeriesDetail(s)) }) }
+        else Repo.movies(p, g.id).map { v -> Poster(v.id, v.name, v.poster, v.rating, v.url, NewContent.isNew(p.id, kind, v.id), open = { nav.push(Screen.MovieDetail(v)) }) }
     }
 }
 
@@ -345,8 +345,8 @@ private fun VodClassic(nav: Nav, series: Boolean) {
                             else { val v = Vod(o.str("id"), o.str("n"), o.str("i").orNullIfBlank(), o.str("r").orNullIfBlank(), o.str("u"))
                                 Poster(v.id, v.name, v.poster, v.rating, v.url, true, { nav.push(Screen.MovieDetail(v)) }) }
                         }
-                        else -> if (series) Repo.series(p, g.id).map { s -> Poster(s.id, s.name, s.cover, s.rating, null, NewContent.isNew(p.id, kind, s.id)) { nav.push(Screen.SeriesDetail(s)) } }
-                        else Repo.movies(p, g.id).map { v -> Poster(v.id, v.name, v.poster, v.rating, v.url, NewContent.isNew(p.id, kind, v.id)) { nav.push(Screen.MovieDetail(v)) } }
+                        else -> if (series) Repo.series(p, g.id).map { s -> Poster(s.id, s.name, s.cover, s.rating, null, NewContent.isNew(p.id, kind, s.id), open = { nav.push(Screen.SeriesDetail(s)) }) }
+                        else Repo.movies(p, g.id).map { v -> Poster(v.id, v.name, v.poster, v.rating, v.url, NewContent.isNew(p.id, kind, v.id), open = { nav.push(Screen.MovieDetail(v)) }) }
                     }
                 }
                 when (val s = state) {
