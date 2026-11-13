@@ -682,6 +682,9 @@ fun GroupManager(nav: Nav) {
     var tab by remember { mutableIntStateOf(0) }
     var rev by remember { mutableIntStateOf(0) }
     var pickMany by remember { mutableStateOf(false) }   // OK only shows or hides the group
+    // the rest of the app is refreshed once, when you leave this screen (refreshing at once rebuilt this screen and lost your place)
+    val changed = remember { booleanArrayOf(false) }
+    DisposableEffect(Unit) { onDispose { if (changed[0]) nav.playlistsChanged() } }
     var chGroup by remember { mutableStateOf<Category?>(null) }      // Channels tab: the group whose channels you edit
     val kind = listOf("live", "vod", "series", "live")[tab]
     val st by load(p.id, kind, rev, keep = true) {
@@ -714,7 +717,7 @@ fun GroupManager(nav: Nav) {
     val shownIds: List<String> = if (carry != null) carryList.toList() else ids
     fun save(order: List<String>) {
         if (chanMode) ovr.setChannelOrder(chGroup!!.id, order) else ovr.setGroupOrder(kind, order)
-        rev++; nav.playlistsChanged()
+        rev++; changed[0] = true
     }
     fun pick(id: String) { carryList.clear(); carryList.addAll(ids); carryStart = ids; carry = id; lastId = id }
     fun moveTo(id: String, to: Int) {
@@ -759,14 +762,14 @@ fun GroupManager(nav: Nav) {
             }
             if (tab != 3 && pickMany) Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Button("Gotovo", R.drawable.lc_check, primary = true) { pickMany = false }
-                Button("Sakrij sve", R.drawable.lc_eye_off) { ovr.setHidden(kind, groups.map { it.id }, true); rev++; nav.playlistsChanged() }
-                Button("Prikaži sve", R.drawable.lc_eye) { ovr.setHidden(kind, groups.map { it.id }, false); rev++; nav.playlistsChanged() }
+                Button("Sakrij sve", R.drawable.lc_eye_off) { ovr.setHidden(kind, groups.map { it.id }, true); rev++; changed[0] = true }
+                Button("Prikaži sve", R.drawable.lc_eye) { ovr.setHidden(kind, groups.map { it.id }, false); rev++; changed[0] = true }
                 val vis = groups.count { !ovr.isHidden(kind, it.id) }
                 T(trf("Vidljivo: %s od %s · OK = prikaži/sakrij", vis, groups.size), 13.sp, C.Soft, maxLines = 1, modifier = Modifier.weight(1f))
             }
             else Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (tab != 3) Button("Sakrij / prikaži više", R.drawable.lc_eye_off) { pickMany = true; carry = null }
-                if (tab == 0 || tab == 3) Button("Vrati sakrivene kanale", R.drawable.lc_eye) { ovr.unhideAllChannels(); rev++; nav.playlistsChanged() }
+                if (tab == 0 || tab == 3) Button("Vrati sakrivene kanale", R.drawable.lc_eye) { ovr.unhideAllChannels(); rev++; changed[0] = true }
                 Button("Vrati sve izmjene", R.drawable.lc_rotate_ccw) { reset = true }
                 if (chanMode) T("›  " + chGroup!!.name, 15.sp, C.Soft, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
             }
@@ -787,7 +790,7 @@ fun GroupManager(nav: Nav) {
                         onClick = {
                             if (carry != null) return@Focusable
                             lastId = k
-                            if (pickMany && g != null) { ovr.toggleHidden(kind, g.id); rev++; nav.playlistsChanged(); return@Focusable }
+                            if (pickMany && g != null) { ovr.toggleHidden(kind, g.id); rev++; changed[0] = true; return@Focusable }
                             if (tab == 3 && !chanMode) { chGroup = g; lastId = null } else if (ch != null) chMenu = ch else menu = g
                         },
                         onMenu = { if (carry == null) { lastId = k; if (ch != null) chMenu = ch else if (g != null && tab != 3) menu = g } },
@@ -830,7 +833,7 @@ fun GroupManager(nav: Nav) {
             OptionRow("Na sam vrh", R.drawable.lc_chevrons_up) { chMenu = null; moveTo(c.url, 0) }
             OptionRow("Na sam kraj", R.drawable.lc_chevrons_down) { chMenu = null; moveTo(c.url, chans.size) }
             OptionRow("Na poziciju…", R.drawable.lc_hash) { chMenu = null; posFor = c.url }
-            OptionRow(if (ovr.isChHidden(c)) "Prikaži kanal" else "Sakrij kanal", R.drawable.lc_eye_off) { ovr.toggleChHidden(c); chMenu = null; rev++; nav.playlistsChanged() }
+            OptionRow(if (ovr.isChHidden(c)) "Prikaži kanal" else "Sakrij kanal", R.drawable.lc_eye_off) { ovr.toggleChHidden(c); chMenu = null; rev++; changed[0] = true }
             OptionRow(if (ovr.isChLocked(c)) "Otključaj (ukloni PIN)" else "Zaključaj PIN-om (4 broja)", R.drawable.lc_lock) {
                 if (Lock.hasPin()) { ovr.toggleChLocked(c); chMenu = null; rev++ } else Toast.makeText(ctx, tr("Prvo postavi PIN: Postavke › Roditelji"), Toast.LENGTH_LONG).show()
             }
@@ -852,7 +855,7 @@ fun GroupManager(nav: Nav) {
     if (newGroup) TextDialog("Nova grupa", "Naziv", onDismiss = { newGroup = false }) { n -> if (n.isNotBlank()) ovr.addGroup(n); newGroup = false; rev++ }
     if (reset) Popup("Vratiti sve izmjene?", onDismiss = { reset = false }) {
         T("Briše tvoj redoslijed, nazive, sakrivene i zaključane grupe i kanale, i tvoje grupe za ovu playlistu.", 14.sp, C.Soft, maxLines = 3)
-        OptionRow("Da, vrati kako je bilo", R.drawable.lc_rotate_ccw, color = C.Danger) { ovr.resetAll(); reset = false; rev++; nav.playlistsChanged() }
+        OptionRow("Da, vrati kako je bilo", R.drawable.lc_rotate_ccw, color = C.Danger) { ovr.resetAll(); reset = false; rev++; changed[0] = true }
         OptionRow("Odustani", R.drawable.lc_x) { reset = false }
     }
 }

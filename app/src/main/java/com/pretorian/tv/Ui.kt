@@ -208,7 +208,9 @@ sealed class Load<out V> {
 fun <V> load(vararg keys: Any?, keep: Boolean = false, block: suspend () -> V): State<Load<V>> =
     produceState<Load<V>>(Load.Loading, *keys) {
         if (!keep || value !is Load.Ok) value = Load.Loading
-        value = try { Load.Ok(block()) } catch (e: Exception) { Load.Err(e.message ?: e.javaClass.simpleName) }
+        value = try { Load.Ok(block()) }
+        catch (e: kotlinx.coroutines.CancellationException) { throw e }   // the screen was left: not an error to show
+        catch (e: Exception) { Load.Err(e.message ?: e.javaClass.simpleName) }
     }
 
 /** Focus a requester whose item may still be composing: tries a few times. */
