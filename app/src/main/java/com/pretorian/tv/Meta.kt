@@ -1,5 +1,7 @@
 package com.pretorian.tv
 
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.RequestBody.Companion.toRequestBody
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -28,7 +30,46 @@ val BROWSER = mapOf("User-Agent" to "Mozilla/5.0 (Linux; Android 12; TV) AppleWe
 
 /** Small HTTP helper with headers, JSON body and byte download. */
 object Http {
-    fun request(url: String, headers: Map<String, String> = emptyMap(), body: String? = null): String {
+    /** when the network's DNS does not know a host, ask Cloudflare or Google DNS over HTTPS */
+    private fun dohLookup(host: String): List<java.net.InetAddress> {
+        for (u in listOf("https://1.1.1.1/dns-query?name=$host&type=A", "https://8.8.8.8/resolve?name=$host&type=A")) {
+            try {
+                val c = URL(u).openConnection() as HttpURLConnection
+                c.connectTimeout = 8000; c.readTimeout = 8000
+                c.setRequestProperty("Accept", "application/dns-json")
+                val a = JSONObject(c.inputStream.bufferedReader().use { it.readText() }).optJSONArray("Answer") ?: continue
+                val ips = (0 until a.length()).mapNotNull { a.optJSONObject(it) }.filter { it.optInt("type") == 1 }
+                    .mapNotNull { try { java.net.InetAddress.getByName(it.str("data")) } catch (e: Exception) { null } }
+                if (ips.isNotEmpty()) return ips
+            } catch (_: Exception) {}
+        }
+        return emptyList()
+    }
+    private val client by lazy {
+        okhttp3.OkHttpClient.Builder()
+            .dns(object : okhttp3.Dns {
+                override fun lookup(hostname: String): List<java.net.InetAddress> =
+                    try { okhttp3.Dns.SYSTEM.lookup(hostname) } catch (e: java.net.UnknownHostException) { dohLookup(hostname).ifEmpty { throw e } }
+            })
+            .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS).readTimeout(60, java.util.concurrent.TimeUnit.SECONDS).build()
+    }
+    private fun viaDoh(url: String, headers: Map<String, String>, body: String?): okhttp3.Response {
+        val b = okhttp3.Request.Builder().url(url).header("User-Agent", "PRETORIAN v${BuildInfo.VERSION}").header("Accept", "application/json")
+        headers.forEach { (k, v) -> b.header(k, v) }
+        if (body != null) b.post(body.toRequestBody("application/json".toMediaTypeOrNull()))
+        return client.newCall(b.build()).execute()
+    }
+
+    fun request(url: String, headers: Map<String, String> = emptyMap(), body: String? = null): String =
+        try { requestPlain(url, headers, body) } catch (e: java.net.UnknownHostException) {
+            viaDoh(url, headers, body).use { r ->
+                val text = r.body?.string() ?: ""
+                if (!r.isSuccessful) throw IOException("HTTP ${r.code} ${text.take(120)}")
+                text
+            }
+        }
+
+    private fun requestPlain(url: String, headers: Map<String, String>, body: String?): String {
         val c = URL(url).openConnection() as HttpURLConnection
         c.connectTimeout = 15_000; c.readTimeout = 30_000
         c.setRequestProperty("User-Agent", "PRETORIAN v${BuildInfo.VERSION}")
@@ -47,7 +88,15 @@ object Http {
         } finally { c.disconnect() }
     }
 
-    fun bytes(url: String, max: Int = 50_000_000, ua: String? = null): ByteArray {
+    fun bytes(url: String, max: Int = 50_000_000, ua: String? = null): ByteArray =
+        try { bytesPlain(url, max, ua) } catch (e: java.net.UnknownHostException) {
+            viaDoh(url, if (ua != null) mapOf("User-Agent" to ua) else emptyMap(), null).use { r ->
+                if (!r.isSuccessful) throw IOException("HTTP ${r.code}")
+                r.body?.bytes() ?: ByteArray(0)
+            }
+        }
+
+    private fun bytesPlain(url: String, max: Int, ua: String?): ByteArray {
         var cur = url
         repeat(6) {
             val c = URL(cur).openConnection() as HttpURLConnection
@@ -174,8 +223,21 @@ object Subs {
     private val OS3 = mapOf("bs" to "bos", "hr" to "hrv", "sr" to "scc", "en" to "eng", "de" to "ger", "tr" to "tur", "it" to "ita",
         "bg" to "bul", "ro" to "rum", "ar" to "ara", "fr" to "fre", "es" to "spa", "sl" to "slv", "mk" to "mac")
 
+    /** the Podnapisi address that answered last (some networks resolve only one of them) */
+    @Volatile private var podHost = "https://www.podnapisi.net"
+
     private fun legacyOs(title: String, year: String?, season: Int?, episode: Int?): List<SubResult> {
-        val l3 = langs().mapNotNull { OS3[it] }.joinToString(",").ifBlank { "eng" }
+        // the server takes one language per request
+        val out = ArrayList<SubResult>()
+        var err: Exception? = null; var ok = false
+        for (l3 in langs().mapNotNull { OS3[it] }.ifEmpty { listOf("eng") }.distinct().take(4)) {
+            try { out += legacyOsOne(title, year, season, episode, l3); ok = true } catch (e: Exception) { err = e }
+        }
+        if (!ok) err?.let { throw it }
+        return out
+    }
+
+    private fun legacyOsOne(title: String, year: String?, season: Int?, episode: Int?, l3: String): List<SubResult> {
         val parts = ArrayList<String>()
         if (episode != null) parts += "episode-$episode"
         parts += "query-" + Net.enc(title.lowercase()).replace("+", "%20")
@@ -195,10 +257,15 @@ object Subs {
     private fun podnapisi(title: String, year: String?, season: Int?, episode: Int?): List<SubResult> {
         val out = ArrayList<SubResult>()
         var lastError: Exception? = null; var answered = false
-        fun ask(q: String): org.json.JSONArray? = try {
-            val o = JSONObject(Http.request("https://www.podnapisi.net/subtitles/search/advanced?$q", BROWSER))
-            answered = true; o.optJSONArray("data")
-        } catch (e: Exception) { lastError = e; null }
+        fun ask(q: String): org.json.JSONArray? {
+            for (host in listOf(podHost, "https://podnapisi.net", "https://www.podnapisi.net").distinct()) {
+                try {
+                    val o = JSONObject(Http.request("$host/subtitles/search/advanced?$q", BROWSER))
+                    answered = true; podHost = host; return o.optJSONArray("data")
+                } catch (e: Exception) { lastError = e }
+            }
+            return null
+        }
         for (lang in langs().ifEmpty { listOf("en") }.take(4)) {
             var q = "keywords=${Net.enc(title)}&language=$lang"
             if (season != null) q += "&seasons=$season"
@@ -295,7 +362,7 @@ object Subs {
                 try { java.util.zip.GZIPInputStream(ByteArrayInputStream(gz)).use { it.readBytes() } } catch (e: Exception) { gz }
             }
             "Podnapisi" -> {
-                val zip = Http.bytes("https://www.podnapisi.net/subtitles/${r.ref}/download", ua = BROWSER["User-Agent"])
+                val zip = Http.bytes("$podHost/subtitles/${r.ref}/download", ua = BROWSER["User-Agent"])
                 unzipFirstSrt(zip) ?: throw IOException("U arhivi nema .srt titla")
             }
             else -> {

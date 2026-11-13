@@ -77,9 +77,21 @@ class MainActivity : ComponentActivity() {
         setContent { PretorianApp() }
     }
 
+    private var stoppedAt = 0L
+
+    // back in the app after being away (Home button, other app): ask "Who is watching?" again,
+    // but not when coming back from the external player
+    override fun onRestart() {
+        super.onRestart()
+        val away = System.currentTimeMillis() - stoppedAt
+        val fromExternal = ExtPlayer.launchedAt > 0 && ExtPlayer.launchedAt >= stoppedAt - 10_000
+        if (stoppedAt > 0 && away > 15_000 && !fromExternal && Profiles.askAtStart) Profiles.picker = true
+    }
+
     // leaving the app: send changes to Google Drive
     override fun onStop() {
         super.onStop()
+        stoppedAt = System.currentTimeMillis()
         val app = applicationContext
         @Suppress("OPT_IN_USAGE")
         kotlinx.coroutines.GlobalScope.launch { try { Drive.autoSync(app) } catch (_: Exception) {} }
@@ -108,7 +120,7 @@ class Nav(
     val playlistsChanged: () -> Unit,
 )
 
-object BuildInfo { const val VERSION = "0.4.4" }
+object BuildInfo { const val VERSION = "0.4.5" }
 
 @Composable
 fun PretorianApp() {

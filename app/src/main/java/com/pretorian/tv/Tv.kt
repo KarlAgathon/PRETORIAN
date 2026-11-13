@@ -322,8 +322,14 @@ private fun TvList(nav: Nav, onGuide: () -> Unit) {
     fun backToGroups() { st.focusKey = "g:" + (st.group?.key ?: ""); inChannels = false; st.refocus++ }
     BackHandler(enabled = inChannels && st.groupMenu == null) { backToGroups() }
 
-    // a group opens only on OK: browsing the groups changes nothing
+    // browsing the groups shows that group's channels on the right at once; focus stays on the groups, OK or Right goes in
     var enterTick by remember { mutableIntStateOf(0) }
+    LaunchedEffect(focusedGroup) {
+        val f = focusedGroup ?: return@LaunchedEffect
+        delay(200)
+        val locked = f.pid?.let { Ovr(ctx, it).isLocked("live", f.cat.id) } ?: false
+        if (!locked && st.group?.key != f.key && !inChannels) { TvMemory.channel = -1; st.group = f; TvMemory.group = f }
+    }
 
     Row(Modifier.fillMaxSize()) {
         if (!inChannels) {
@@ -509,7 +515,9 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                     if (TvMemory.restore && TvMemory.channel >= 0) { TvMemory.restore = false; cWrap.target = TvMemory.channel.coerceAtMost(list.lastIndex) }
                 }
                 // OK on a group: the focus goes into its channels
-                LaunchedEffect(enterTick, list.isNotEmpty()) { if (enterTick > 0 && list.isNotEmpty()) cWrap.target = TvMemory.channel.coerceIn(0, list.lastIndex) }
+                val enter0 = remember { enterTick }
+                // the channels take focus only after OK on a group, never while the groups are being browsed
+                LaunchedEffect(enterTick, list.isNotEmpty()) { if (enterTick != enter0 && list.isNotEmpty()) cWrap.target = TvMemory.channel.coerceIn(0, list.lastIndex) }
                 menu?.let { ch ->
                     val groups = (rows as? Load.Ok)?.value?.mapNotNull { (it as? GRow.Group)?.ref }
                         ?.filter { it.pid != null && it.pid == ch.pid.ifBlank { g.pid } && it.cat.id != ALL_GROUP }?.map { it.cat } ?: emptyList()

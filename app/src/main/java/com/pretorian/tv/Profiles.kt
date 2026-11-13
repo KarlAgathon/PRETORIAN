@@ -202,7 +202,7 @@ object Profiles {
     fun onStart(c: Context) {
         val skip = Prefs.bool("profile_skip_ask")
         if (skip) Prefs.put("profile_skip_ask", false)
-        picker = !skip && askAtStart && list(c).size > 1
+        picker = !skip && askAtStart && list(c).isNotEmpty()
     }
 }
 
