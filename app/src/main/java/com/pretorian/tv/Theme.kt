@@ -39,7 +39,7 @@ object Look {
         "Narandžasta" to Color(0xFFEA580C), "Ljubičasta" to Color(0xFF9333EA), "Tirkizna" to Color(0xFF0891B2),
         "Roza" to Color(0xFFDB2777), "Zlatna" to Color(0xFFCA8A04),
     )
-    val THEMES = listOf("dark" to "Tamna", "light" to "Svijetla", "bw" to "Crno-bijela", "glass" to "Glass")
+    val THEMES = listOf("dark" to "Tamna", "light" to "Svijetla", "bw" to "Crno-bijela", "glass" to "Glass", "dew" to "Winter Dew")
 
     private fun sp(c: Context) = c.getSharedPreferences("pretorian", Context.MODE_PRIVATE)
 
@@ -98,6 +98,8 @@ private fun palette(): Palette {
             Color.White, Color(0xFFA6A6A6), Color(0xFFDDDDDD), Color(0xFF151515), false)
         "glass" -> Palette(Color(0xFF16202B), alpha(Color(0xFF26323F), o), Color(0x1AFFFFFF), Color(0x24FFFFFF),
             Color(0xFFF4F6F8), Color(0xFFA9B3BE), Color(0xFFD5DBE1), alpha(Color(0xFF2E3C4A), o), false)
+        "dew" -> Palette(Color(0xFF221B36), alpha(Color(0xFF2A2340), (o * 0.55f).toInt().coerceAtLeast(25)), Color(0x1CFFFFFF), Color(0x2EFFFFFF),
+            Color(0xFFF7F4FA), Color(0xFFB9B0C8), Color(0xFFE2DCEA), Color(0x26FFFFFF), false)
         else -> Palette(Color(0xFF0B0D12), alpha(Color(0xFF0E1117), o.coerceAtLeast(60)), Color(0x0FFFFFFF), Color(0x14FFFFFF),
             Color(0xFFF2F3F5), Color(0xFF9AA1AD), Color(0xFFC9CED6), Color(0xFF1A1F2A), false)
     }
@@ -115,6 +117,12 @@ object C {
     val Soft get() = palette().soft
     val Tile get() = palette().tile
     val IsLight get() = palette().light
+    /** app background: Winter Dew is a frosted dusk gradient, the others a plain colour */
+    val BgBrush: androidx.compose.ui.graphics.Brush
+        get() = if (Look.theme == "dew") androidx.compose.ui.graphics.Brush.linearGradient(
+            listOf(Color(0xFF1C2140), Color(0xFF2E2347), Color(0xFF4A2A48), Color(0xFF5C3045)),
+            start = androidx.compose.ui.geometry.Offset(0f, 0f), end = androidx.compose.ui.geometry.Offset(2400f, 1400f))
+        else androidx.compose.ui.graphics.SolidColor(palette().bg)
 
     /** accent colour with the chosen shade; black-and-white theme uses white */
     val Red: Color
@@ -131,7 +139,7 @@ object C {
     /** text drawn on top of the accent colour */
     val OnRed get() = if (Look.theme == "bw") Color.Black else Color.White
     val RedText get() = if (Look.theme == "bw") Color.White else lerp(Red, if (IsLight) Color.Black else Color.White, if (IsLight) 0.2f else 0.35f)
-    val CardFocus get() = Red.copy(alpha = 0.18f)
+    val CardFocus get() = if (Look.theme == "dew") Color(0x40FFFFFF) else Red.copy(alpha = 0.18f)
     val Green get() = if (IsLight) Color(0xFF15803D) else Color(0xFF4ADE80)
     val Amber get() = if (IsLight) Color(0xFFB45309) else Color(0xFFFBBF24)
     val Danger = Color(0xFFEF4444)

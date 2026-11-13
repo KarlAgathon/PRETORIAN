@@ -481,8 +481,8 @@ Ne radi na svim uređajima. Ako je box potpuno ugašen, podsjetnik ne može doć
 Tvoji podsjetnici|Your reminders|Deine Erinnerungen|Tvoji podsjetnici|Твоји подсетници|Твоите напомняния|Mementourile tale|Hatırlatıcıların|I tuoi promemoria|تذكيراتك
 Nema podsjetnika.|No reminders.|Keine Erinnerungen.|Nema podsjetnika.|Нема подсетника.|Няма напомняния.|Niciun memento.|Hatırlatıcı yok.|Nessun promemoria.|لا توجد تذكيرات.
 Obriši|Delete|Löschen|Obriši|Обриши|Изтрий|Șterge|Sil|Elimina|حذف
-Backup je spremljen|Backup saved|Backup gespeichert|Sigurnosna kopija je spremljenaaaaaa|Бекап је сачуван|Копието е запазено|Backup salvat|Yedek kaydedildi|Backup salvato|تم حفظ النسخة
-Backup nije spremljen|Backup not saved|Backup nicht gespeichert|Sigurnosna kopija nije spremljenaaaaaa|Бекап није сачуван|Копието не е запазено|Backup nesalvat|Yedek kaydedilmedi|Backup non salvato|لم تُحفظ النسخة
+Backup je spremljen|Backup saved|Backup gespeichert|Sigurnosna kopija je spremljenaaaaaaa|Бекап је сачуван|Копието е запазено|Backup salvat|Yedek kaydedildi|Backup salvato|تم حفظ النسخة
+Backup nije spremljen|Backup not saved|Backup nicht gespeichert|Sigurnosna kopija nije spremljenaaaaaaa|Бекап није сачуван|Копието не е запазено|Backup nesalvat|Yedek kaydedilmedi|Backup non salvato|لم تُحفظ النسخة
 Sve je vraćeno. PRETORIAN se ponovo pokreće.|Everything restored. PRETORIAN restarts.|Alles wiederhergestellt. PRETORIAN startet neu.|Sve je vraćeno. PRETORIAN se ponovo pokreće.|Све је враћено. PRETORIAN се поново покреће.|Всичко е възстановено. PRETORIAN се рестартира.|Totul a fost restaurat. PRETORIAN repornește.|Her şey geri yüklendi. PRETORIAN yeniden başlıyor.|Tutto ripristinato. PRETORIAN si riavvia.|تمت الاستعادة. يُعاد تشغيل PRETORIAN.
 Vraćanje nije uspjelo|Restore failed|Wiederherstellung fehlgeschlagen|Vraćanje nije uspjelo|Враћање није успело|Възстановяването не успя|Restaurarea a eșuat|Geri yükleme başarısız|Ripristino non riuscito|فشلت الاستعادة
 Backup i vraćanje|Backup and restore|Sichern und wiederherstellen|Sigurnosna kopija i vraćanje|Бекап и враћање|Резервно копие|Backup și restaurare|Yedekle ve geri yükle|Backup e ripristino|النسخ والاستعادة
@@ -873,6 +873,10 @@ Kanali uživo|Live channels|Live-Sender|Kanali uživo|Канали уживо|К
 Filmovi na zahtjev|Movies on demand|Filme auf Abruf|Filmovi na zahtjev|Филмови на захтев|Филми при поискване|Filme la cerere|İsteğe bağlı filmler|Film on demand|أفلام عند الطلب
 Sve serije|All series|Alle Serien|Sve serije|Све серије|Всички сериали|Toate serialele|Tüm diziler|Tutte le serie|كل المسلسلات
 Zvuk, titlovi, eksterni plejer|Audio, subtitles, external player|Ton, Untertitel, externer Player|Zvuk, podnaslovi, vanjski player|Звук, титлови, екстерни плејер|Звук, субтитри, външен плейър|Sunet, subtitrări, player extern|Ses, altyazı, harici oynatıcı|Audio, sottotitoli, player esterno|الصوت والترجمات والمشغل الخارجي
+Za ovu utakmicu još nije pronađen kanal|No channel found for this match yet|Noch kein Sender für dieses Spiel gefunden|Za ovu utakmicu još nije pronađen kanal|За ову утакмицу још није пронађен канал|Все още няма намерен канал за този мач|Încă nu s-a găsit niciun canal pentru acest meci|Bu maç için henüz kanal bulunamadı|Nessun canale ancora trovato per questa partita|لم يتم العثور على قناة لهذه المباراة بعد
+Počinje u %s · %s|Starts at %s · %s|Beginnt um %s · %s|Počinje u %s · %s|Почиње у %s · %s|Започва в %s · %s|Începe la %s · %s|%s'de başlıyor · %s|Inizia alle %s · %s|يبدأ في %s · %s
+Završeno · %s|Finished · %s|Beendet · %s|Završeno · %s|Завршено · %s|Приключил · %s|Încheiat · %s|Bitti · %s|Terminata · %s|انتهت · %s
+Izaberi utakmicu|Pick a match|Wähle ein Spiel|Odaberi utakmicu|Изабери утакмицу|Избери мач|Alege un meci|Bir maç seç|Scegli una partita|اختر مباراة
 Nepoznat jezik|Unknown language|Unbekannte Sprache|Nepoznat jezik|Непознат језик|Неизвестен език|Limbă necunoscută|Bilinmeyen dil|Lingua sconosciuta|لغة غير معروفة
 """.trimIndent()
 

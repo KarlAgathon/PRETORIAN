@@ -3,6 +3,9 @@ package com.pretorian.tv
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -153,8 +156,10 @@ fun SportsScreen(nav: Nav) {
                 (view == "all" || (view == "live" && e.live) || (view == "done" && e.state == "post")) && e.channels.isEmpty() && e.maybe.isEmpty() && e.ai.isEmpty()
         }
     }
-    val sections = remember(shown, hero) {
-        val rest = shown.filter { it != hero }
+    var sel by remember { mutableStateOf<SportEvent?>(null) }
+    val top = remember(sel, shown, hero) { sel?.let { x -> shown.find { it.id == x.id } ?: x } ?: hero }
+    val sections = remember(shown) {
+        val rest = shown
         fun s(l: List<SportEvent>) = l.sortedWith(compareBy({ watchRank(it) }, { it.start }))
         Triple(s(rest.filter { it.live }), s(rest.filter { it.state == "pre" }), rest.filter { it.state == "post" }.sortedBy { watchRank(it) })
     }
@@ -162,15 +167,14 @@ fun SportsScreen(nav: Nav) {
     val liveCount = remember(all) { all?.count { it.live } ?: 0 }
 
     fun play(ev: SportEvent, chs: List<Channel>, i: Int) {
-        TvMemory.restore = false
+        Preview.stop(); TvMemory.restore = false
         nav.push(Screen.Player(chs.map { PlayItem(it.name, it.url, it.logo, ev.title, it) }, i, live = true))
     }
     fun open(ev: SportEvent) {
         if (ev.channels.size == 1 && ev.maybe.isEmpty() && ev.live) play(ev, ev.channels, 0) else pick = ev
     }
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 28.dp, end = 28.dp, top = 20.dp, bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(Modifier.fillMaxSize().padding(start = 28.dp, end = 28.dp, top = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // ---------------------------------------------------------------- top
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Column(Modifier.weight(1f)) {
@@ -184,6 +188,9 @@ fun SportsScreen(nav: Nav) {
             }
             DayTabs(day, dayFr) { day = it; league = null }
         }
+        // ---------------------------------------------------------------- picture on the left, the match on the right
+        if (events is Load.Ok) SportTop(top)
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         // ---------------------------------------------------------------- filters (one scrolling row, nothing is hidden)
         AlignStart { LazyRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(listOf("all" to "Sve", "live" to "Uživo sada", "done" to "Završeno")) { (id, label) ->
@@ -242,10 +249,10 @@ fun SportsScreen(nav: Nav) {
                         Message(if (view == "live") "Trenutno nema utakmica uživo" else "Nema utakmica za ovaj dan")
                     }
                 }
-                if (hero != null) HeroCard(hero, heroFr) { open(hero) }
-                Section("Uživo sada", sections.first, live = true) { open(it) }
-                Section("Kasnije", sections.second) { open(it) }
-                Section("Završeno", sections.third) { open(it) }
+                val firstSec = listOf(sections.first, sections.second, sections.third).indexOfFirst { it.isNotEmpty() }
+                Section("Uživo sada", sections.first, live = true, if (firstSec == 0) heroFr else null, { sel = it }) { open(it) }
+                Section("Kasnije", sections.second, false, if (firstSec == 1) heroFr else null, { sel = it }) { open(it) }
+                Section("Završeno", sections.third, false, if (firstSec == 2) heroFr else null, { sel = it }) { open(it) }
                 // ---------------------------------------------------------- leagues
                 if (leagues.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     T("Lige", 14.sp, C.Muted, FontWeight.SemiBold)
@@ -270,13 +277,15 @@ fun SportsScreen(nav: Nav) {
             }
         }
     }
+    }
 
     pick?.let { ev -> EventPopup(ev, onDismiss = { pick = null }) { chs, i -> pick = null; play(ev, chs, i) } }
     var focused by remember { mutableStateOf(false) }
     LaunchedEffect(events is Load.Ok) {
         if (focused || events !is Load.Ok) return@LaunchedEffect
         focused = true
-        if (hero != null) heroFr.tryFocus() else dayFr.tryFocus()
+        delay(100)
+        if (shown.isNotEmpty()) heroFr.tryFocus() else dayFr.tryFocus()
     }
 }
 
@@ -394,6 +403,67 @@ private fun HeroCard(ev: SportEvent, fr: FocusRequester, onClick: () -> Unit) {
     }
 }
 
+/** top of Sports: live picture of the match on the left, score and details on the right */
+@Composable
+private fun SportTop(ev: SportEvent?) {
+    val ch = ev?.let { it.channels.firstOrNull() ?: it.ai.firstOrNull() }
+    // the picture starts only when you stay on a match for a moment
+    var pv by remember { mutableStateOf<Channel?>(null) }
+    LaunchedEffect(ch?.url, ev?.live) { pv = null; if (ch != null && ev.live && Look.previewMode != 0) { delay(600); pv = ch } }
+    Row(Modifier.fillMaxWidth().height(200.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Box(Modifier.fillMaxHeight().aspectRatio(16f / 9f)) {
+            val c = pv
+            if (c != null) PreviewBox(c, Modifier.fillMaxSize())
+            else Column(Modifier.fillMaxSize().clip(Rnd(18.dp)).background(Color.Black.copy(alpha = 0.55f)).border(1.dp, C.Line, Rnd(18.dp)),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically)) {
+                if (ch != null) ChannelLogo(ch.logo, ch.name) else Ico(R.drawable.lc_tv, 34.dp, C.Soft)
+                T(when {
+                    ev == null -> tr("Izaberi utakmicu")
+                    ch == null -> tr("Za ovu utakmicu još nije pronađen kanal")
+                    ev.state == "pre" -> trf("Počinje u %s · %s", hhmm(ev.start), ch.name)
+                    ev.state == "post" -> trf("Završeno · %s", ch.name)
+                    else -> ch.name
+                }, 13.sp, C.Soft, maxLines = 2, modifier = Modifier.padding(horizontal = 16.dp))
+            }
+        }
+        Box(Modifier.weight(1f).fillMaxHeight().clip(Rnd(18.dp)).background(C.Card).border(1.dp, C.Line, Rnd(18.dp))) {
+            if (ev == null) { Message("Izaberi utakmicu"); return@Box }
+            // big crest in the background, like a watermark
+            ev.home?.let { h -> Box(Modifier.align(Alignment.CenterEnd).padding(end = 10.dp).alpha(0.10f)) { Crest(h, 180.dp) } }
+            Column(Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Dot(Sports.sportColor(ev.sport), 7.dp)
+                    T(tr(ev.league) + (ev.round?.let { " · $it" } ?: ""), 13.sp, C.Soft, modifier = Modifier.weight(1f))
+                    StateBadge(ev, big = true)
+                }
+                if (ev.home != null && ev.away != null) {
+                    TopTeam(ev.home, if (ev.state != "pre") ev.home.score else null)
+                    TopTeam(ev.away, if (ev.state != "pre") ev.away.score else null)
+                } else T(ev.title, 22.sp, C.Text, FontWeight.Bold, maxLines = 2)
+                Spacer(Modifier.weight(1f))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    when {
+                        ev.channels.isNotEmpty() -> { Ico(R.drawable.lc_tv, 14.dp, C.Green); T(ev.channels.joinToString(" · ") { it.name }, 12.sp, C.Green, maxLines = 1, modifier = Modifier.weight(1f)) }
+                        ev.ai.isNotEmpty() -> { Ico(R.drawable.lc_sparkles, 14.dp, AiColor); T("AI: " + ev.ai.joinToString(" · ") { it.name }, 12.sp, AiColor, maxLines = 1, modifier = Modifier.weight(1f)) }
+                        else -> { Ico(R.drawable.lc_tv, 14.dp, C.Muted); T("Za ovu utakmicu još nije pronađen kanal", 12.sp, C.Muted, maxLines = 1, modifier = Modifier.weight(1f)) }
+                    }
+                    if (ev.state == "pre") T(hhmm(ev.start), 13.sp, C.Soft, FontWeight.SemiBold)
+                    else ev.venue?.let { T(it, 12.sp, C.Muted, maxLines = 1, modifier = Modifier.widthIn(max = 220.dp)) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TopTeam(t: Team, score: String?) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Crest(t, 40.dp)
+        T(t.name, 24.sp, C.Text, FontWeight.Bold, modifier = Modifier.weight(1f))
+        if (score != null) T(score, 32.sp, C.Text, FontWeight.Bold)
+    }
+}
+
 @Composable
 private fun HeroTeam(t: Team) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -404,7 +474,8 @@ private fun HeroTeam(t: Team) {
 }
 
 @Composable
-private fun Section(title: String, list: List<SportEvent>, live: Boolean = false, onOpen: (SportEvent) -> Unit) {
+private fun Section(title: String, list: List<SportEvent>, live: Boolean = false, fr: FocusRequester? = null,
+                    onFocus: (SportEvent) -> Unit = {}, onOpen: (SportEvent) -> Unit) {
     if (list.isEmpty()) return
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -413,15 +484,15 @@ private fun Section(title: String, list: List<SportEvent>, live: Boolean = false
             T("· ${list.size}", 15.sp, C.Muted)
         }
         AlignStart { LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(end = 12.dp)) {
-            items(list, key = { it.id }) { ev -> EventCard(ev) { onOpen(ev) } }
+            itemsIndexed(list, key = { _, e -> e.id }) { i, ev -> EventCard(ev, if (i == 0) fr else null, { onFocus(ev) }) { onOpen(ev) } }
         } }
     }
 }
 
 @Composable
-private fun EventCard(ev: SportEvent, onClick: () -> Unit) {
+private fun EventCard(ev: SportEvent, fr: FocusRequester? = null, onFocus: () -> Unit = {}, onClick: () -> Unit) {
     val none = ev.channels.isEmpty() && ev.ai.isEmpty() && ev.maybe.isEmpty()
-    Focusable(modifier = Modifier.width(272.dp).height(138.dp), onClick = onClick, shape = Rnd(18.dp),
+    Focusable(modifier = Modifier.width(272.dp).height(138.dp), onClick = onClick, shape = Rnd(18.dp), focusRequester = fr, onFocus = onFocus,
         normal = C.Card, focused = C.CardFocus, zoom = 1.03f) { f ->
         Column(Modifier.fillMaxSize().then(if (none && !f) Modifier.alpha(0.6f) else Modifier).padding(horizontal = 14.dp, vertical = 11.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

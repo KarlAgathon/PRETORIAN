@@ -107,7 +107,7 @@ class Nav(
     val playlistsChanged: () -> Unit,
 )
 
-object BuildInfo { const val VERSION = "0.4.2" }
+object BuildInfo { const val VERSION = "0.4.3" }
 
 @Composable
 fun PretorianApp() {
@@ -171,7 +171,7 @@ fun PretorianApp() {
             } else if (top is Screen.Player) {
                 PlayerScreen(top, nav)
             } else if (Lock.simple) {
-                Box(Modifier.fillMaxSize().background(C.Bg)) {
+                Box(Modifier.fillMaxSize().background(C.BgBrush)) {
                     key(version, top) {
                         when (top) {
                             Screen.Tv -> TvScreen(nav)
@@ -204,11 +204,11 @@ fun PretorianApp() {
                             }
                         }
                 }
-                if (Look.age && !Chrome.driven) Column(Modifier.fillMaxSize().background(C.Bg)) {
+                if (Look.age && !Chrome.driven) Column(Modifier.fillMaxSize().background(C.BgBrush)) {
                     TopBar(top, nav)
                     Box(Modifier.weight(1f).fillMaxWidth()) { content() }
                     if (Look.wave) HintBar()
-                } else Row(Modifier.fillMaxSize().background(C.Bg)) {
+                } else Row(Modifier.fillMaxSize().background(C.BgBrush)) {
                     Rail(top, nav)
                     Column(Modifier.weight(1f).fillMaxHeight()) {
                         Box(Modifier.weight(1f).fillMaxWidth()) { content() }

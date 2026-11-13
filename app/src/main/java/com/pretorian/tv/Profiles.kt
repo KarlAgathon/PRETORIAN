@@ -235,7 +235,7 @@ fun ProfilePicker() {
     val first = remember { FocusRequester() }
     fun choose(p: Profile) { if (p.pinHash != null && p.id != cur.id) pinFor = p else Profiles.switchTo(ctx, p) }
     androidx.activity.compose.BackHandler { Profiles.picker = false }
-    Box(Modifier.fillMaxSize().background(C.Bg), contentAlignment = Alignment.Center) {
+    Box(Modifier.fillMaxSize().background(C.BgBrush), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(30.dp)) {
             androidx.compose.foundation.Image(painterResource(R.drawable.logo_mark), contentDescription = null, modifier = Modifier.size(64.dp))
             T("Ko gleda?", 34.sp, C.Text, FontWeight.Bold)
