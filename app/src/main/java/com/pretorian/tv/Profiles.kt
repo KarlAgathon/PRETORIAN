@@ -239,7 +239,9 @@ fun ProfilePicker() {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(30.dp)) {
             androidx.compose.foundation.Image(painterResource(R.drawable.logo_mark), contentDescription = null, modifier = Modifier.size(64.dp))
             T("Ko gleda?", 34.sp, C.Text, FontWeight.Bold)
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(26.dp)) {
+            // room around the cards: the focused one grows and must not be cut at the edge
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(26.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 40.dp, vertical = 24.dp)) {
                 itemsIndexed(list, key = { _, p -> p.id }) { i, p ->
                     Focusable(onClick = { choose(p) }, onMenu = { edit = p }, focusRequester = if (p.id == cur.id || (i == 0 && list.none { it.id == cur.id })) first else null,
                         shape = Rnd(24.dp), normal = Color.Transparent, focused = C.CardFocus, zoom = 1.08f, modifier = Modifier.width(170.dp).height(210.dp)) { f ->
@@ -366,7 +368,7 @@ fun ProfilePanel(nav: Nav) {
         }
         if (others.isNotEmpty()) {
             T("Promijeni profil", 13.sp, C.Muted, FontWeight.SemiBold)
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 8.dp)) {
                 itemsIndexed(others, key = { _, p -> p.id }) { _, p ->
                     Focusable(onClick = { if (p.pinHash != null) pinFor = p else Profiles.switchTo(ctx, p) }, onMenu = { profMenu = p }, shape = Rnd(16.dp), normal = C.Card, zoom = 1.05f,
                         modifier = Modifier.width(120.dp).height(118.dp)) { _ ->
