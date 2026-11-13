@@ -60,19 +60,19 @@ fun SettingsScreen(nav: Nav) {
     var section by remember { mutableStateOf(if (Updater.available != null) "update" else "playlists") }
     val first = remember { FocusRequester() }
     Row(Modifier.fillMaxSize()) {
-        Column(Modifier.width(320.dp).fillMaxHeight().padding(start = 18.dp, end = 12.dp, top = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            T("Postavke", 28.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 10.dp, bottom = 12.dp))
+        Column(Modifier.width(320.dp).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 12.dp, top = 20.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            T("Postavke", 26.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 10.dp, bottom = 8.dp))
             SECTIONS.forEachIndexed { i, s ->
                 val sel = s.id == section
-                Focusable(modifier = Modifier.fillMaxWidth().height(58.dp), onClick = { section = s.id }, onFocus = { section = s.id },
+                Focusable(modifier = Modifier.fillMaxWidth().height(50.dp), onClick = { section = s.id }, onFocus = { section = s.id },
                     focusRequester = if (i == 0) first else null, normal = if (sel) C.CardFocus else Color.Transparent, zoom = 1f) { _ ->
                     Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Box(Modifier.size(34.dp).clip(Rnd(10.dp)).background(if (sel) C.Red else C.Card), contentAlignment = Alignment.Center) {
-                            Ico(s.icon, 18.dp, if (sel) C.OnRed else C.Text)
+                        Box(Modifier.size(30.dp).clip(Rnd(9.dp)).background(if (sel) C.Red else C.Card), contentAlignment = Alignment.Center) {
+                            Ico(s.icon, 16.dp, if (sel) C.OnRed else C.Text)
                         }
                         Column(Modifier.weight(1f)) {
-                            T(s.title, 14.sp, C.Text, FontWeight.Medium)
-                            T(s.sub, 11.sp, C.Muted)
+                            T(s.title, 14.sp, C.Text, FontWeight.Medium, maxLines = 1)
+                            T(s.sub, 11.sp, C.Muted, maxLines = 1)
                         }
                         if (s.id == "update" && Updater.available != null) Box(Modifier.size(18.dp).clip(CircleShape).background(C.Danger), contentAlignment = Alignment.Center) {
                             T("1", 10.sp, Color.White, FontWeight.Bold)

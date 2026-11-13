@@ -62,7 +62,7 @@ fun MoviesScreen(nav: Nav) = VodBrowser(nav, series = false)
 fun SeriesScreen(nav: Nav) = VodBrowser(nav, series = true)
 
 private data class Poster(val id: String, val name: String, val image: String?, val rating: String?, val url: String?, val isNew: Boolean,
-                          val open: () -> Unit, val play: (() -> Unit)? = null)
+                          val open: () -> Unit, val play: (() -> Unit)? = null, val added: Long = 0)
 
 private const val G_CONTINUE = "__continue__"
 private const val G_NEW = "__new__"
@@ -94,12 +94,14 @@ private suspend fun postersOf(ctx: Context, nav: Nav, p: Playlist, g: Category, 
             else { val v = Vod(o.str("id"), o.str("n"), o.str("i").orNullIfBlank(), o.str("r").orNullIfBlank(), o.str("u"))
                 Poster(v.id, v.name, v.poster, v.rating, v.url, true, { nav.push(Screen.MovieDetail(v)) }) }
         }
-        else -> if (series) Repo.series(p, g.id).map { s -> Poster(s.id, s.name, s.cover, s.rating, null, NewContent.isNew(p.id, kind, s.id), open = { nav.push(Screen.SeriesDetail(s)) }) }
-        else Repo.movies(p, g.id).map { v -> Poster(v.id, v.name, v.poster, v.rating, v.url, NewContent.isNew(p.id, kind, v.id), open = { nav.push(Screen.MovieDetail(v)) }) }
+        else -> if (series) Repo.series(p, g.id).map { s -> Poster(s.id, s.name, s.cover, s.rating, null, NewContent.isNew(p.id, kind, s.id), open = { nav.push(Screen.SeriesDetail(s)) }, added = s.added) }
+        else Repo.movies(p, g.id).map { v -> Poster(v.id, v.name, v.poster, v.rating, v.url, NewContent.isNew(p.id, kind, v.id), open = { nav.push(Screen.MovieDetail(v)) }, added = v.added) }
     }
 }
 
 /** New Wave / New Age: categories as chips on top, posters across the whole screen (New Age: a row per category). */
+private val SORTS = listOf("Kao kod providera", "Zadnje dodano", "Naziv A–Ž", "Naziv Ž–A", "Ocjena")
+
 @Composable
 private fun WaveBrowser(nav: Nav, series: Boolean) {
     val ctx = LocalContext.current
@@ -119,7 +121,8 @@ private fun WaveBrowser(nav: Nav, series: Boolean) {
         out
     }
     var group by remember { mutableStateOf<Category?>(null) }
-    var sort by remember { mutableIntStateOf(0) }
+    var sort by remember { mutableIntStateOf(Prefs.long("vod_sort", 0).toInt().coerceIn(0, SORTS.size - 1)) }
+    var sortMenu by remember { mutableStateOf(false) }
     var groupMenu by remember { mutableStateOf<Category?>(null) }
     val gate = remember { PinGate() }
     val firstChip = remember { FocusRequester() }
@@ -133,10 +136,11 @@ private fun WaveBrowser(nav: Nav, series: Boolean) {
                     T(pl.name, 13.sp, C.Text, if (sel) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.align(Alignment.Center).padding(horizontal = 12.dp))
                 }
             }
-            Focusable(onClick = { sort = (sort + 1) % 3 }, shape = Pill, normal = C.Card, zoom = 1.04f, modifier = Modifier.height(34.dp)) { _ ->
-                Row(Modifier.align(Alignment.Center).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Focusable(onClick = { sortMenu = true }, shape = Pill, normal = C.Card, zoom = 1.04f, modifier = Modifier.height(34.dp)) { _ ->
+                Row(Modifier.align(Alignment.Center).padding(start = 12.dp, end = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Ico(R.drawable.lc_list, 14.dp, C.Soft)
-                    T(tr("Sortiraj") + ": " + tr(listOf("Kao kod providera", "A–Z", "Ocjena")[sort]), 13.sp, C.Text)
+                    T(tr("Sortiraj") + ": " + tr(SORTS[sort]), 13.sp, C.Text, maxLines = 1)
+                    Ico(R.drawable.lc_chevron_down, 14.dp, C.Soft)
                 }
             }
         }
@@ -180,11 +184,23 @@ private fun WaveBrowser(nav: Nav, series: Boolean) {
                         is Load.Loading -> Loading()
                         is Load.Err -> Message("Nije se učitalo", ps.message)
                         is Load.Ok -> {
-                            val sorted = when (sort) { 1 -> ps.value.sortedBy { cleanTitle(it.name).first.lowercase() }; 2 -> ps.value.sortedByDescending { it.rating?.toDoubleOrNull() ?: 0.0 }; else -> ps.value }
+                            val sorted = remember(ps.value, sort) { when (sort) {
+                                1 -> ps.value.sortedByDescending { it.added }
+                                2 -> ps.value.sortedBy { cleanTitle(it.name).first.lowercase() }
+                                3 -> ps.value.sortedByDescending { cleanTitle(it.name).first.lowercase() }
+                                4 -> ps.value.sortedByDescending { it.rating?.toDoubleOrNull() ?: 0.0 }
+                                else -> ps.value } }
                             if (sorted.isEmpty()) Message("Kategorija je prazna") else PosterGrid(g.name, sorted, g.id == G_NEW, kind, p.id, wide = true)
                         }
                     }
                 }
+            }
+        }
+    }
+    if (sortMenu) Popup("Sortiraj", { sortMenu = false }) {
+        SORTS.forEachIndexed { i, label ->
+            OptionRow(label, if (i == sort) R.drawable.lc_check else R.drawable.lc_list, color = if (i == sort) C.Green else null) {
+                sort = i; Prefs.put("vod_sort", i.toLong()); sortMenu = false
             }
         }
     }
@@ -345,8 +361,8 @@ private fun VodClassic(nav: Nav, series: Boolean) {
                             else { val v = Vod(o.str("id"), o.str("n"), o.str("i").orNullIfBlank(), o.str("r").orNullIfBlank(), o.str("u"))
                                 Poster(v.id, v.name, v.poster, v.rating, v.url, true, { nav.push(Screen.MovieDetail(v)) }) }
                         }
-                        else -> if (series) Repo.series(p, g.id).map { s -> Poster(s.id, s.name, s.cover, s.rating, null, NewContent.isNew(p.id, kind, s.id), open = { nav.push(Screen.SeriesDetail(s)) }) }
-                        else Repo.movies(p, g.id).map { v -> Poster(v.id, v.name, v.poster, v.rating, v.url, NewContent.isNew(p.id, kind, v.id), open = { nav.push(Screen.MovieDetail(v)) }) }
+                        else -> if (series) Repo.series(p, g.id).map { s -> Poster(s.id, s.name, s.cover, s.rating, null, NewContent.isNew(p.id, kind, s.id), open = { nav.push(Screen.SeriesDetail(s)) }, added = s.added) }
+                        else Repo.movies(p, g.id).map { v -> Poster(v.id, v.name, v.poster, v.rating, v.url, NewContent.isNew(p.id, kind, v.id), open = { nav.push(Screen.MovieDetail(v)) }, added = v.added) }
                     }
                 }
                 when (val s = state) {

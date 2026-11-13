@@ -45,6 +45,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import androidx.compose.runtime.produceState
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -72,16 +75,33 @@ fun SportsScreen(nav: Nav) {
     LaunchedEffect(day) { while (day == 0) { delay(60_000); tick++ } }
 
     val g = (guide as? Load.Ok)?.value
-    val all: List<SportEvent>? = remember(events, guide, day) {
-        (events as? Load.Ok)?.value?.let { ev -> if (g != null) Sports.combine(ev, g, day) else ev }
+    // matching matches to your guide is heavy: it runs in the background, the screen keeps the old result meanwhile
+    val evs = (events as? Load.Ok)?.value
+    val combined by produceState<List<SportEvent>?>(null, evs, g, day) {
+        if (evs == null) { value = null; return@produceState }
+        if (value == null) value = evs
+        value = if (g == null) evs else try {
+            withContext(Dispatchers.Default) { Sports.combine(evs, g, day) }
+        } catch (e: Exception) { evs }
     }
-    val shown = all?.filter { e ->
-        (sport == "all" || e.sport == sport) && (league == null || e.league == league) && (!mine || e.channels.isNotEmpty() || e.maybe.isNotEmpty()) &&
-            (view == "all" || (view == "live" && e.live) || (view == "done" && e.state == "post"))
-    } ?: emptyList()
+    val all: List<SportEvent>? = combined
+    val shown = remember(all, sport, league, mine, view) {
+        all?.filter { e ->
+            (sport == "all" || e.sport == sport) && (league == null || e.league == league) && (!mine || e.channels.isNotEmpty() || e.maybe.isNotEmpty()) &&
+                (view == "all" || (view == "live" && e.live) || (view == "done" && e.state == "post"))
+        } ?: emptyList()
+    }
     // the big card: the most important match that is on now, else the next one
-    val hero = if (view == "done") null else (shown.filter { it.live }.minByOrNull { Sports.priority(it) }
-        ?: shown.filter { it.state == "pre" }.minWithOrNull(compareBy({ Sports.priority(it) }, { it.start })))
+    val hero = remember(shown, view) {
+        if (view == "done") null else (shown.filter { it.live }.minByOrNull { Sports.priority(it) }
+            ?: shown.filter { it.state == "pre" }.minWithOrNull(compareBy({ Sports.priority(it) }, { it.start })))
+    }
+    val sections = remember(shown, hero) {
+        val rest = shown.filter { it != hero }
+        Triple(rest.filter { it.live }, rest.filter { it.state == "pre" }, rest.filter { it.state == "post" })
+    }
+    val leagues = remember(all) { (all ?: emptyList()).map { it.league to it.leagueAbbr }.distinct().take(20) }
+    val liveCount = remember(all) { all?.count { it.live } ?: 0 }
 
     fun play(ev: SportEvent, chs: List<Channel>, i: Int) {
         TvMemory.restore = false
@@ -98,7 +118,7 @@ fun SportsScreen(nav: Nav) {
             Column(Modifier.weight(1f)) {
                 T("Sports Center", 26.sp, C.Text, FontWeight.Bold)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    val live = all?.count { it.live } ?: 0
+                    val live = liveCount
                     T(dayName(day) + " · " + trf("%s utakmica", all?.size ?: 0), 13.sp, C.Muted)
                     if (live > 0) T(" · " + trf("%s uživo", live), 13.sp, Color(0xFFFF4D55), FontWeight.SemiBold)
                     if (updated > 0) T(" · " + trf("ažurirano %s", hhmm(updated)), 13.sp, C.Muted)
@@ -154,12 +174,10 @@ fun SportsScreen(nav: Nav) {
                     Message(if (view == "live") "Trenutno nema utakmica uživo" else "Nema utakmica za ovaj dan")
                 }
                 if (hero != null) HeroCard(hero, heroFr) { open(hero) }
-                val rest = shown.filter { it != hero }
-                Section("Uživo sada", rest.filter { it.live }, live = true) { open(it) }
-                Section("Kasnije", rest.filter { it.state == "pre" }) { open(it) }
-                Section("Završeno", rest.filter { it.state == "post" }) { open(it) }
+                Section("Uživo sada", sections.first, live = true) { open(it) }
+                Section("Kasnije", sections.second) { open(it) }
+                Section("Završeno", sections.third) { open(it) }
                 // ---------------------------------------------------------- leagues
-                val leagues = (all ?: emptyList()).map { it.league to it.leagueAbbr }.distinct().take(20)
                 if (leagues.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     T("Lige", 14.sp, C.Muted, FontWeight.SemiBold)
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -185,7 +203,12 @@ fun SportsScreen(nav: Nav) {
     }
 
     pick?.let { ev -> EventPopup(ev, onDismiss = { pick = null }) { chs, i -> pick = null; play(ev, chs, i) } }
-    LaunchedEffect(hero != null) { if (hero != null) heroFr.tryFocus() else dayFr.tryFocus() }
+    var focused by remember { mutableStateOf(false) }
+    LaunchedEffect(events is Load.Ok) {
+        if (focused || events !is Load.Ok) return@LaunchedEffect
+        focused = true
+        if (hero != null) heroFr.tryFocus() else dayFr.tryFocus()
+    }
 }
 
 private fun dayName(offset: Int): String = when (offset) {

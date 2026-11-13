@@ -618,6 +618,9 @@ UEFA Liga nacija|UEFA Nations League|UEFA Nations League|=|=|Лига на на�
 Kvalifikacije SP (Evropa)|World Cup qualifiers (Europe)|WM-Qualifikation (Europa)|Kvalifikacije SP (Europa)|=|Квалификации за СП (Европа)|Calificări CM (Europa)|Dünya Kupası elemeleri (Avrupa)|Qualificazioni Mondiali (Europa)|تصفيات كأس العالم (أوروبا)
 Prijateljske utakmice|Friendlies|Freundschaftsspiele|=|=|Приятелски мачове|Amicale|Hazırlık maçları|Amichevoli|مباريات ودية
 Preuzeti|Downloaded|Heruntergeladen|=|=|Изтеглени|Descărcate|İndirilen|Scaricati|منزّلة
+Zadnje dodano|Last added|Zuletzt hinzugefügt|=|Poslednje dodato|Последно добавени|Adăugate ultima dată|Son eklenenler|Ultimi aggiunti|آخر ما أضيف
+Naziv A–Ž|Name A–Z|Name A–Z|=|=|Име А–Я|Nume A–Z|Ad A–Z|Nome A–Z|الاسم أ–ي
+Naziv Ž–A|Name Z–A|Name Z–A|=|=|Име Я–А|Nume Z–A|Ad Z–A|Nome Z–A|الاسم ي–أ
 Nepoznat jezik|Unknown language|Unbekannte Sprache|=|=|Неизвестен език|Limbă necunoscută|Bilinmeyen dil|Lingua sconosciuta|لغة غير معروفة
 """.trimIndent()
 

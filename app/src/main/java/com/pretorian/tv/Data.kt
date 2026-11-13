@@ -48,8 +48,8 @@ data class Playlist(
 
 data class Category(val id: String, val name: String)
 data class Channel(val id: String, val num: Int, val name: String, val logo: String?, val group: String, val url: String, val epg: String? = null, val pid: String = "", val archive: Int = 0)
-data class Vod(val id: String, val name: String, val poster: String?, val rating: String?, val url: String)
-data class SeriesItem(val id: String, val name: String, val cover: String?, val plot: String?, val rating: String?)
+data class Vod(val id: String, val name: String, val poster: String?, val rating: String?, val url: String, val added: Long = 0)
+data class SeriesItem(val id: String, val name: String, val cover: String?, val plot: String?, val rating: String?, val added: Long = 0)
 data class Episode(val id: String, val season: Int, val num: Int, val title: String, val url: String, val plot: String?)
 data class VodInfo(
     val plot: String?, val genre: String?, val year: String?, val duration: String?,
@@ -298,7 +298,7 @@ class Xtream(private val p: Playlist) {
             val id = o.str("stream_id")
             val ext = o.str("container_extension").ifBlank { "mp4" }
             Vod(id, o.str("name"), o.str("stream_icon").orNullIfBlank(), o.str("rating").orNullIfBlank(),
-                "$base/movie/${p.user}/${p.pass}/$id.$ext")
+                "$base/movie/${p.user}/${p.pass}/$id.$ext", o.str("added").toLongOrNull() ?: 0L)
         }
     }
 
@@ -323,7 +323,7 @@ class Xtream(private val p: Playlist) {
         return (0 until a.length()).map { i ->
             val o = a.getJSONObject(i)
             SeriesItem(o.str("series_id"), o.str("name"), o.str("cover").orNullIfBlank(), o.str("plot").orNullIfBlank(),
-                o.str("rating").orNullIfBlank())
+                o.str("rating").orNullIfBlank(), o.str("last_modified").toLongOrNull() ?: 0L)
         }
     }
 

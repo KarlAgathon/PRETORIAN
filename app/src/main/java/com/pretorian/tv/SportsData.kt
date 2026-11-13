@@ -266,9 +266,9 @@ object Sports {
         "WTA" to listOf("SPORT KLUB", "SPORTKLUB", "ARENA SPORT", "SKY SPORT", "EUROSPORT"),
     )
 
-    private fun maybeFor(ev: SportEvent, all: List<Channel>): List<Channel> {
+    private fun maybeFor(ev: SportEvent, all: List<Pair<Channel, String>>): List<Channel> {
         val words = RIGHTS[ev.leagueAbbr] ?: return emptyList()
-        return all.filter { c -> val n = " " + c.name.uppercase() + " "; words.any { n.contains(it) } }
+        return all.filter { (_, n) -> words.any { n.contains(it) } }.map { it.first }
             .distinctBy { it.url }
             .sortedWith(compareBy({ words.indexOfFirst { w -> (" " + it.name.uppercase() + " ").contains(w) } }, { qualityRank(it.name) }, { it.name }))
             .take(12)
@@ -307,8 +307,10 @@ object Sports {
     private val ALIAS = mapOf("internazionale" to "inter", "munich" to "munchen", "bayern munich" to "bayern", "crvena zvezda" to "zvezda",
         "red star belgrade" to "zvezda", "paris saint-germain" to "psg", "wolverhampton wanderers" to "wolves")
 
-    fun norm(s: String): String = Normalizer.normalize(s.lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
-        .replace("ø", "o").replace("đ", "dj").replace("ß", "ss").replace(Regex("[^a-z0-9]+"), " ").trim()
+    private val MARKS = Regex("\\p{M}+")
+    private val NON_ALNUM = Regex("[^a-z0-9]+")
+    fun norm(s: String): String = Normalizer.normalize(s.lowercase(), Normalizer.Form.NFD).replace(MARKS, "")
+        .replace("ø", "o").replace("đ", "dj").replace("ß", "ss").replace(NON_ALNUM, " ").trim()
 
     private fun tokens(name: String): Set<String> {
         val n = norm(name)
@@ -317,8 +319,8 @@ object Sports {
         return t
     }
 
-    private fun teamIn(team: Team, words: Set<String>): Boolean {
-        val t = tokens(team.name)
+    private fun teamIn(team: Team, words: Set<String>): Boolean = teamIn(tokens(team.name), words)
+    private fun teamIn(t: Set<String>, words: Set<String>): Boolean {
         if (t.isEmpty()) return false
         val distinct = t.filter { it !in GENERIC }
         return if (distinct.isNotEmpty()) distinct.any { it in words } else t.all { it in words }
@@ -327,26 +329,38 @@ object Sports {
     private val REPLAY = Regex("(\\(r\\)|\\(snimak\\)|snimka|snimak|reprise|highlights|sažetak|sazetak|najava|magazin|studio|emisija)", RegexOption.IGNORE_CASE)
 
     /** Adds your channels to each match and returns extra matches found only in your guide. */
+    /** Heavy: always call off the main thread (see [combineAsync]). */
     fun combine(events: List<SportEvent>, g: Guide, offset: Int): List<SportEvent> {
         val progs = g.progs; val chans = g.byEpg
         val from = dayStart(offset); val to = dayStart(offset + 1)
-        val day = progs.filter { it.start < to + 2 * 3600_000L && it.end > from && !REPLAY.containsMatchIn(it.title) }
+        val day = progs.filter { it.start < to + 2 * 3600_000L && it.end > from && !REPLAY.containsMatchIn(it.title) }.sortedBy { it.start }
+        val starts = LongArray(day.size) { day[it].start }
+        val normTitle = HashMap<Prog, String>(day.size * 2)
+        val words = HashMap<Prog, Set<String>>(day.size * 2)
+        fun nt(p: Prog) = normTitle.getOrPut(p) { norm(p.title) }
+        fun wd(p: Prog) = words.getOrPut(p) { nt(p).split(' ').toSet() }
+        /** programmes starting within [win] of [t], found by binary search instead of scanning the whole day */
+        fun near(t: Long, win: Long): List<Prog> {
+            var lo = java.util.Arrays.binarySearch(starts, t - win).let { if (it < 0) -it - 1 else it }
+            while (lo > 0 && starts[lo - 1] >= t - win) lo--
+            val out = ArrayList<Prog>()
+            var i = lo
+            while (i < day.size && starts[i] <= t + win) { out.add(day[i]); i++ }
+            return out
+        }
+        val upperAll = g.all.map { it to (" " + it.name.uppercase() + " ") }
         val used = HashSet<Prog>()
         val withCh = events.map { ev ->
             if (ev.home == null || ev.away == null) {
                 // races: guide titles with "Formula 1" / "Grand Prix" around the start
                 if (ev.sport != "f1") return@map ev
-                val hits = day.filter { kotlin.math.abs(it.start - ev.start) <= 90 * 60_000L &&
-                    norm(it.title).let { t -> t.contains("formula") || t.contains("grand prix") || t.contains(" f1") || t.startsWith("f1") } }
+                val hits = near(ev.start, 90 * 60_000L).filter {
+                    nt(it).let { t -> t.contains("formula") || t.contains("grand prix") || t.contains(" f1") || t.startsWith("f1") } }
                 used.addAll(hits)
                 return@map ev.copy(channels = hits.flatMap { chans[it.channel] ?: emptyList() }.distinctBy { it.url })
             }
-            val hits = day.filter { pr ->
-                kotlin.math.abs(pr.start - ev.start) <= 75 * 60_000L && run {
-                    val w = norm(pr.title).split(' ').toSet()
-                    teamIn(ev.home, w) && teamIn(ev.away, w)
-                }
-            }
+            val th = tokens(ev.home.name); val ta = tokens(ev.away.name)
+            val hits = near(ev.start, 75 * 60_000L).filter { pr -> val w = wd(pr); teamIn(th, w) && teamIn(ta, w) }
             used.addAll(hits)
             ev.copy(channels = hits.flatMap { chans[it.channel] ?: emptyList() }.distinctBy { it.url })
         }
@@ -372,7 +386,7 @@ object Sports {
                     channels = list.flatMap { chans[it.first.channel] ?: emptyList() }.distinctBy { it.url }, fromGuide = true,
                 )
             }
-        return (withCh.map { it.copy(maybe = if (it.channels.isEmpty()) maybeFor(it, g.all) else emptyList()) } + extra).sortedBy { it.start }
+        return (withCh.map { it.copy(maybe = if (it.channels.isEmpty()) maybeFor(it, upperAll) else emptyList()) } + extra).sortedBy { it.start }
     }
 
     private fun guessSport(t: String): String = when {
