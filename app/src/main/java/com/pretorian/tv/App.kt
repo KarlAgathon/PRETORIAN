@@ -81,6 +81,12 @@ class MainActivity : ComponentActivity() {
 
     private var stoppedAt = 0L
 
+    override fun onResume() {
+        super.onResume()
+        // give the system confirm screen a moment to send its answer first
+        window.decorView.postDelayed({ Updater.onResume() }, 1500)
+    }
+
     // back in the app after being away (Home button, other app): ask "Who is watching?" again,
     // but not when coming back from the external player
     override fun onRestart() {
@@ -122,7 +128,7 @@ class Nav(
     val playlistsChanged: () -> Unit,
 )
 
-object BuildInfo { const val VERSION = "0.5.0" }
+object BuildInfo { const val VERSION = "0.5.1" }
 
 @Composable
 fun PretorianApp() {

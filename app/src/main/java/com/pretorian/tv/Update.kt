@@ -52,7 +52,10 @@ object Updater {
     }
 
     suspend fun install(ctx: Context, info: UpdateInfo) {
-        if (progress >= 0) return
+        // only a download in progress blocks a new click; a confirm screen that was closed without an answer does not
+        if (progress in 0..100) return
+        withContext(Dispatchers.IO) { abandonOld(ctx) }
+        progress = -1
         status = null
         try {
             val file = withContext(Dispatchers.IO) { download(ctx, info.apk) }
@@ -92,6 +95,15 @@ object Updater {
         }
         throw IOException("Previše preusmjeravanja")
     }
+
+    /** forget install sessions that were never answered (confirm screen closed with Back) */
+    private fun abandonOld(ctx: Context) {
+        val pi = ctx.packageManager.packageInstaller
+        try { pi.mySessions.forEach { s -> try { pi.abandonSession(s.sessionId) } catch (_: Exception) {} } } catch (_: Exception) {}
+    }
+
+    /** back in the app while "installing": the confirm screen was closed, so the button works again */
+    fun onResume() { if (progress == 101) { progress = -1; status = tr("Instalacija nije završena: otkazano") } }
 
     private fun commit(ctx: Context, apk: File) {
         val pi = ctx.packageManager.packageInstaller
