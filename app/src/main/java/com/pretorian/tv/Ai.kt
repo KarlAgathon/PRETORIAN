@@ -1,5 +1,7 @@
 package com.pretorian.tv
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -111,7 +113,7 @@ object SportsAI {
     private fun openai(prompt: String, web: Boolean, k: String): String {
         val body = JSONObject().put("model", "gpt-4.1-mini").put("input", prompt)
         if (web) body.put("tools", JSONArray().put(JSONObject().put("type", "web_search")))
-        val r = post("https://api.openai.com/v1/responses", body, mapOf("Authorization" to "Bearer $k")  // i18n-ignore)
+        val r = post("https://api.openai.com/v1/responses", body, mapOf("Authorization" to "Bearer $k"))
         if (r.code !in 200..299) fail(r.code, r.text)
         val out = JSONObject(r.text).optJSONArray("output") ?: return ""
         val sb = StringBuilder()
@@ -138,7 +140,7 @@ object SportsAI {
 
     private fun chat(url: String, model: String, prompt: String, k: String): String {
         val body = JSONObject().put("model", model).put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", prompt)))
-        val r = post(url, body, mapOf("Authorization" to "Bearer $k")  // i18n-ignore)
+        val r = post(url, body, mapOf("Authorization" to "Bearer $k"))
         if (r.code !in 200..299) fail(r.code, r.text)
         return JSONObject(r.text).optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("message")?.str("content") ?: ""
     }
