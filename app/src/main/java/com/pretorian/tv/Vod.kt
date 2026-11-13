@@ -495,7 +495,7 @@ fun openTrailer(ctx: Context, title: String, youtubeKey: String?) {
         ctx.startActivity(Intent(Intent.ACTION_SEARCH).setPackage("com.google.android.youtube.tv").putExtra("query", "${cleanTitle(title).first} trailer"))
     } catch (e: Exception) {
         try { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=" + Uri.encode("${cleanTitle(title).first} trailer")))) }
-        catch (e2: Exception) { Toast.makeText(ctx, "YouTube nije instaliran", Toast.LENGTH_LONG).show() }
+        catch (e2: Exception) { Toast.makeText(ctx, tr("YouTube nije instaliran"), Toast.LENGTH_LONG).show() }
     }
 }
 

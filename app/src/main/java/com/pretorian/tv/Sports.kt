@@ -77,13 +77,19 @@ fun SportsScreen(nav: Nav) {
     val g = (guide as? Load.Ok)?.value
     // matching matches to your guide is heavy: it runs in the background, the screen keeps the old result meanwhile
     val evs = (events as? Load.Ok)?.value
-    val combined by produceState<List<SportEvent>?>(null, evs, g, day) {
-        if (evs == null) { value = null; return@produceState }
+    var matching by remember { mutableStateOf(true) }
+    val combined by produceState(Sports.lastCombined[day], evs, g, day) {
+        Sports.lastCombined[day]?.let { value = it }
+        if (evs == null) { if (value == null) matching = true; return@produceState }
         if (value == null) value = evs
-        value = if (g == null) evs else try {
-            withContext(Dispatchers.Default) { Sports.combine(evs, g, day) }
-        } catch (e: Exception) { evs }
+        if (g == null) { matching = true; return@produceState }
+        matching = true
+        val r = try { withContext(Dispatchers.Default) { Sports.combine(evs, g, day) } } catch (e: Exception) { evs }
+        Sports.lastCombined[day] = r
+        value = r
+        matching = false
     }
+    val guideFailed = guide is Load.Err
     val all: List<SportEvent>? = combined
     val shown = remember(all, sport, league, mine, view) {
         all?.filter { e ->
@@ -92,15 +98,23 @@ fun SportsScreen(nav: Nav) {
         } ?: emptyList()
     }
     // the big card: the most important match that is on now, else the next one
+    // the big card is always a real match from the results, never something found only in a TV guide
     val hero = remember(shown, view) {
-        if (view == "done") null else (shown.filter { it.live }.minByOrNull { Sports.priority(it) }
-            ?: shown.filter { it.state == "pre" }.minWithOrNull(compareBy({ Sports.priority(it) }, { it.start })))
+        val real = shown.filter { !it.fromGuide }
+        if (view == "done") null else (real.filter { it.live }.minByOrNull { Sports.priority(it) }
+            ?: real.filter { it.state == "pre" }.minWithOrNull(compareBy({ Sports.priority(it) }, { it.start })))
+    }
+    val hiddenByMine = remember(all, sport, league, view, mine) {
+        if (!mine) 0 else (all ?: emptyList()).count { e ->
+            (sport == "all" || e.sport == sport) && (league == null || e.league == league) &&
+                (view == "all" || (view == "live" && e.live) || (view == "done" && e.state == "post")) && e.channels.isEmpty() && e.maybe.isEmpty()
+        }
     }
     val sections = remember(shown, hero) {
         val rest = shown.filter { it != hero }
         Triple(rest.filter { it.live }, rest.filter { it.state == "pre" }, rest.filter { it.state == "post" })
     }
-    val leagues = remember(all) { (all ?: emptyList()).map { it.league to it.leagueAbbr }.distinct().take(20) }
+    val leagues = remember(all, sport) { (all ?: emptyList()).filter { sport == "all" || it.sport == sport }.map { it.league to it.leagueAbbr }.distinct().take(20) }
     val liveCount = remember(all) { all?.count { it.live } ?: 0 }
 
     fun play(ev: SportEvent, chs: List<Channel>, i: Int) {
@@ -154,7 +168,7 @@ fun SportsScreen(nav: Nav) {
             item { Box(Modifier.width(1.dp).height(38.dp).background(C.Line)) }
             items(Sports.SPORTS) { (id, label) ->
                 val sel = sport == id
-                Focusable(onClick = { sport = id }, shape = Pill, normal = if (sel) C.Text else C.Card,
+                Focusable(onClick = { sport = id; league = null }, shape = Pill, normal = if (sel) C.Text else C.Card,
                     focused = if (sel) C.Text else C.CardHi, zoom = 1.04f, modifier = Modifier.height(38.dp)) { _ ->
                     Row(Modifier.align(Alignment.Center).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -164,14 +178,26 @@ fun SportsScreen(nav: Nav) {
                 }
             }
         }
-        if (guide is Load.Loading && p != null) T("Tražim prenose u tvom TV programu…", 12.sp, C.Muted)
+        if ((guide is Load.Loading || (matching && !guideFailed)) && p != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            androidx.compose.material3.CircularProgressIndicator(color = C.Red, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
+            T("Tražim prenose u tvom TV programu…", 12.sp, C.Muted)
+        }
 
         when (val s = events) {
             is Load.Loading -> Box(Modifier.fillMaxWidth().height(260.dp)) { Loading("Učitavam utakmice…") }
             is Load.Err -> Box(Modifier.fillMaxWidth().height(260.dp)) { Message("Greška", s.message) }
             is Load.Ok -> {
-                if (shown.isEmpty()) Box(Modifier.fillMaxWidth().height(220.dp)) {
-                    Message(if (view == "live") "Trenutno nema utakmica uživo" else "Nema utakmica za ovaj dan")
+                val stillMatching = (guide is Load.Loading || matching) && !guideFailed && p != null
+                if (shown.isEmpty()) {
+                    if (stillMatching && mine) Box(Modifier.fillMaxWidth().height(220.dp)) { Loading("Tražim prenose u tvom TV programu…") }
+                    else if (hiddenByMine > 0) Column(Modifier.fillMaxWidth().padding(vertical = 40.dp), horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        T(trf("%s utakmica sakriveno jer nije pronađen tvoj kanal", hiddenByMine), 18.sp, C.Text, FontWeight.SemiBold, maxLines = 2)
+                        Button("Prikaži sve", R.drawable.lc_eye, primary = true) { mine = false }
+                    }
+                    else Box(Modifier.fillMaxWidth().height(220.dp)) {
+                        Message(if (view == "live") "Trenutno nema utakmica uživo" else "Nema utakmica za ovaj dan")
+                    }
                 }
                 if (hero != null) HeroCard(hero, heroFr) { open(hero) }
                 Section("Uživo sada", sections.first, live = true) { open(it) }
@@ -190,7 +216,7 @@ fun SportsScreen(nav: Nav) {
                                     Box(Modifier.size(28.dp).clip(CircleShape).background(C.Red.copy(alpha = 0.25f)), contentAlignment = Alignment.Center) {
                                         T(abbr.take(4), 9.sp, C.Text, FontWeight.Bold)
                                     }
-                                    T(tr(name), 14.sp, C.Text, FontWeight.Medium, modifier = Modifier.width(150.dp))
+                                    T(tr(name), 14.sp, C.Text, FontWeight.Medium, maxLines = 1)
                                 }
                             }
                         }

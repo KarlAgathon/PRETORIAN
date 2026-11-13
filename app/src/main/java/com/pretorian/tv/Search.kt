@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -65,51 +66,54 @@ object ProgIndex {
 
 private fun norm(s: String) = Sports.norm(s)
 
-/** Everything you can search, with names already normalised. Built once in the background and kept. */
+/** Everything you can search, split in parts that load one after another: channels, movies, series, programmes. */
 object SearchIndex {
     class Item(val n: String, val hit: Hit, val num: String? = null)
-    private var key = ""
-    private var items: List<Item>? = null
-    private var progKey = ""
-    private var progs: List<Item>? = null
+    private val parts = HashMap<String, Pair<String, List<Item>>>()
 
-    suspend fun get(ctx: android.content.Context): List<Item> = withContext(Dispatchers.IO) {
+    private suspend fun part(ctx: android.content.Context, name: String, build: suspend (List<Playlist>) -> List<Item>): List<Item> = withContext(Dispatchers.IO) {
         val pls = Store.actives(ctx)
         val k = pls.joinToString { it.id }
-        items?.takeIf { key == k }?.let { return@withContext it }
-        val out = ArrayList<Item>()
-        pls.flatMap { p -> try { Repo.allChannels(p) } catch (e: Exception) { emptyList() } }.distinctBy { it.url }
-            .forEach { out.add(Item(norm(it.name), Hit.Ch(it), it.num.toString())) }
-        pls.flatMap { p -> try { Repo.catalog(p, "vod") } catch (e: Exception) { emptyList() } }.forEach {
-            out.add(Item(norm(it.str("n")), Hit.Movie(Vod(it.str("id"), it.str("n"), it.str("i").orNullIfBlank(), it.str("r").orNullIfBlank(), it.str("u")))))
-        }
-        pls.flatMap { p -> try { Repo.catalog(p, "series") } catch (e: Exception) { emptyList() } }.forEach {
-            out.add(Item(norm(it.str("n")), Hit.Show(SeriesItem(it.str("id"), it.str("n"), it.str("i").orNullIfBlank(), null, it.str("r").orNullIfBlank()))))
-        }
-        key = k; items = out; out
-    }
-
-    suspend fun progs(ctx: android.content.Context): List<Item> = withContext(Dispatchers.IO) {
-        val k = Store.actives(ctx).joinToString { it.id }
-        progs?.takeIf { progKey == k }?.let { return@withContext it }
-        val out = ProgIndex.get(ctx).map { (ch, e) -> Item(norm(e.title), Hit.Prog(ch, e)) }
-        progKey = k; progs = out; out
-    }
-
-    /** Runs on a background thread; at most 60 results per kind. */
-    suspend fun find(list: List<Item>, q: String): List<Hit> = withContext(Dispatchers.Default) {
-        val words = norm(q).split(' ').filter { it.isNotBlank() }
-        if (words.isEmpty()) return@withContext emptyList()
-        val counts = HashMap<Class<*>, Int>()
-        val out = ArrayList<Hit>()
-        for (it in list) {
-            val c = counts[it.hit.javaClass] ?: 0
-            if (c >= 60) continue
-            if (words.all { w -> it.n.contains(w) } || (it.num != null && it.num == q.trim())) {
-                out.add(it.hit); counts[it.hit.javaClass] = c + 1
-            }
-        }
+        parts[name]?.takeIf { it.first == k }?.let { return@withContext it.second }
+        val out = build(pls)
+        parts[name] = k to out
         out
+    }
+
+    suspend fun channels(ctx: android.content.Context) = part(ctx, "ch") { pls ->
+        pls.flatMap { p -> try { Repo.allChannels(p) } catch (e: Exception) { emptyList() } }.distinctBy { it.url }
+            .map { Item(norm(it.name), Hit.Ch(it), it.num.toString()) }
+    }
+    suspend fun movies(ctx: android.content.Context) = part(ctx, "vod") { pls ->
+        pls.flatMap { p -> try { Repo.catalog(p, "vod") } catch (e: Exception) { emptyList() } }.map {
+            Item(norm(it.str("n")), Hit.Movie(Vod(it.str("id"), it.str("n"), it.str("i").orNullIfBlank(), it.str("r").orNullIfBlank(), it.str("u"))))
+        }
+    }
+    suspend fun shows(ctx: android.content.Context) = part(ctx, "series") { pls ->
+        pls.flatMap { p -> try { Repo.catalog(p, "series") } catch (e: Exception) { emptyList() } }.map {
+            Item(norm(it.str("n")), Hit.Show(SeriesItem(it.str("id"), it.str("n"), it.str("i").orNullIfBlank(), null, it.str("r").orNullIfBlank())))
+        }
+    }
+    suspend fun progs(ctx: android.content.Context) = part(ctx, "prog") { _ ->
+        ProgIndex.get(ctx).map { (ch, e) -> Item(norm(e.title), Hit.Prog(ch, e)) }
+    }
+    /** prepare everything quietly (called once after start) */
+    suspend fun get(ctx: android.content.Context) { channels(ctx); movies(ctx); shows(ctx) }
+
+    /** Runs on a background thread. Exact channel number first, then names that start with the text, then the rest. */
+    suspend fun find(list: List<Item>, q: String, max: Int = 60): List<Hit> = withContext(Dispatchers.Default) {
+        val t = q.trim()
+        val words = norm(t).split(' ').filter { it.isNotBlank() }
+        if (words.isEmpty()) return@withContext emptyList()
+        val exact = ArrayList<Hit>(); val starts = ArrayList<Hit>(); val other = ArrayList<Hit>()
+        for (it in list) {
+            if (it.num != null && it.num == t) { exact.add(it.hit); continue }
+            if (words.all { w -> it.n.contains(w) }) {
+                if (it.n.startsWith(words[0])) { if (starts.size < max) starts.add(it.hit) } else if (other.size < max) other.add(it.hit)
+            }
+            if (exact.size + starts.size >= max) break
+        }
+        (exact + starts + other).take(max)
     }
 }
 
@@ -124,25 +128,32 @@ fun SearchScreen(nav: Nav) {
     val fr = remember { FocusRequester() }
     val firstFr = remember { FocusRequester() }
     var jump by remember { mutableStateOf(0) }
-    LaunchedEffect(q) { delay(700); query = q.trim() }
+    LaunchedEffect(q) { delay(600); query = q.trim() }
 
-    val index by load(Unit) { SearchIndex.get(ctx) }
+    // each part loads by itself; channels are usually already in memory from TV
+    val chIdx by load(Unit) { SearchIndex.channels(ctx) }
+    val vodIdx by load(Unit) { SearchIndex.movies(ctx) }
+    val serIdx by load(Unit) { SearchIndex.shows(ctx) }
     val wantProgs = query.length >= 3 && (filter == "all" || filter == "prog")
     val progIdx by load(wantProgs) { if (wantProgs) SearchIndex.progs(ctx) else emptyList() }
 
-    val nq = norm(query)
-    val hits by androidx.compose.runtime.produceState<List<Hit>>(emptyList(), nq, index, progIdx) {
-        if (nq.length < 2) { value = emptyList(); return@produceState }
-        val a = (index as? Load.Ok)?.value?.let { SearchIndex.find(it, query) } ?: emptyList()
-        val b = (progIdx as? Load.Ok)?.value?.let { SearchIndex.find(it, query) } ?: emptyList()
-        val ch = a.filterIsInstance<Hit.Ch>()
-        value = ch + b.sortedBy { (it as Hit.Prog).e.start } + a.filter { it !is Hit.Ch }
+    @Composable
+    fun hitsOf(idx: Load<List<SearchIndex.Item>>): State<List<Hit>> = androidx.compose.runtime.produceState(emptyList<Hit>(), query, idx) {
+        value = if (query.length < 2) emptyList() else (idx as? Load.Ok)?.value?.let { SearchIndex.find(it, query) } ?: emptyList()
     }
+    val chHits by hitsOf(chIdx)
+    val vodHits by hitsOf(vodIdx)
+    val serHits by hitsOf(serIdx)
+    val progHits by hitsOf(progIdx)
+    val hits = remember(chHits, progHits, vodHits, serHits) { chHits + vodHits + serHits + progHits.sortedBy { (it as Hit.Prog).e.start } }
+    val nq = norm(query)
     val shown = remember(hits, filter) {
         hits.filter { h -> when (filter) { "ch" -> h is Hit.Ch; "prog" -> h is Hit.Prog; "vod" -> h is Hit.Movie; "series" -> h is Hit.Show; else -> true } }
     }
     // after "Done" on the keyboard: close it and go to the first result
     LaunchedEffect(jump, shown.isNotEmpty()) { if (jump > 0 && shown.isNotEmpty()) firstFr.tryFocus() }
+    val loadingOf = mapOf("ch" to (chIdx is Load.Loading), "vod" to (vodIdx is Load.Loading), "series" to (serIdx is Load.Loading),
+        "prog" to (wantProgs && progIdx is Load.Loading))
 
     Column(Modifier.fillMaxSize().padding(start = 28.dp, end = 28.dp, top = 22.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -158,15 +169,16 @@ fun SearchScreen(nav: Nav) {
                 val sel = filter == id
                 Focusable(onClick = { filter = id }, shape = Pill, normal = if (sel) C.Red else C.Card, focused = if (sel) C.Red else C.CardHi,
                     zoom = 1.04f, modifier = Modifier.height(38.dp)) { _ ->
-                    T(tr(label) + " · ${counts[id] ?: 0}", 14.sp, if (sel) C.OnRed else C.Text, FontWeight.SemiBold,
+                    T(tr(label) + " · " + (if (loadingOf[id] == true) "…" else "${counts[id] ?: 0}"), 14.sp, if (sel) C.OnRed else C.Text, FontWeight.SemiBold,
                         modifier = Modifier.align(Alignment.Center).padding(horizontal = 14.dp))
                 }
             }
         }
-        val busy = index is Load.Loading || (progIdx is Load.Loading && wantProgs)
-        if (busy) T("Učitavam listu za pretragu…", 12.sp, C.Muted)
+        val busy = loadingOf.values.any { it }
+        if (busy && nq.length >= 2) T(loadingOf.filter { it.value }.keys.joinToString(" · ") { tr(mapOf("ch" to "Kanali", "vod" to "Filmovi", "series" to "Serije", "prog" to "Emisije")[it]!!) } + " · " + tr("učitavam…"), 12.sp, C.Muted)
         if (nq.length < 2) Message("Upiši bar 2 slova", "Tastatura daljinskog ili Google TV aplikacija na telefonu")
         else if (shown.isEmpty() && !busy) Message("Ništa nije pronađeno")
+        else if (shown.isEmpty()) Loading("Tražim…")
         else LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(bottom = 30.dp)) {
             items(shown.size, key = { i -> shown[i].let { h -> when (h) { is Hit.Ch -> "c" + h.ch.url; is Hit.Prog -> "p" + h.ch.url + h.e.start; is Hit.Movie -> "m" + h.v.id; is Hit.Show -> "s" + h.s.id } } }) { i ->
                 val h = shown[i]

@@ -46,7 +46,7 @@ object Updater {
             status = if (newer == null) "Imaš najnoviju verziju" else null
             newer
         } catch (e: Exception) {
-            status = "Provjera nije uspjela: ${e.message}"
+            status = trf("Provjera nije uspjela: %s", e.message ?: "")
             null
         }
     }
@@ -60,7 +60,7 @@ object Updater {
             withContext(Dispatchers.IO) { commit(ctx, file) }
         } catch (e: Exception) {
             progress = -1
-            status = "Ažuriranje nije uspjelo: ${e.message}"
+            status = trf("Ažuriranje nije uspjelo: %s", e.message ?: "")
         }
     }
 
@@ -119,8 +119,8 @@ class UpdateResultReceiver : BroadcastReceiver() {
             else -> {
                 Updater.progress = -1
                 val msg = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "otkazano"
-                Updater.status = "Instalacija nije završena: $msg"
-                Toast.makeText(ctx, "Ažuriranje nije završeno", Toast.LENGTH_LONG).show()
+                Updater.status = trf("Instalacija nije završena: %s", msg)
+                Toast.makeText(ctx, tr("Ažuriranje nije završeno"), Toast.LENGTH_LONG).show()
             }
         }
     }

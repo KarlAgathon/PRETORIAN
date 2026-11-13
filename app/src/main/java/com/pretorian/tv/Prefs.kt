@@ -67,11 +67,11 @@ object Lock {
     /** null = correct, else the error to show */
     fun check(pin: String): String? {
         val now = System.currentTimeMillis()
-        if (now < blockedUntil) return "Previše pokušaja. Sačekaj ${((blockedUntil - now) / 1000) + 1} s."
+        if (now < blockedUntil) return trf("Previše pokušaja. Sačekaj %s s.", ((blockedUntil - now) / 1000) + 1)
         if (hash(pin, Prefs.str("pin_salt")) == Prefs.str("pin_hash")) { fails = 0; return null }
         fails++
         if (fails >= 5) { fails = 0; blockedUntil = now + 60_000; return "Pogrešan PIN. Unos blokiran 1 minut." }
-        return "Pogrešan PIN (${5 - fails} pokušaja preostalo)"
+        return trf("Pogrešan PIN (%s pokušaja preostalo)", 5 - fails)
     }
 }
 

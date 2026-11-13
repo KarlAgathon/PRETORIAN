@@ -67,6 +67,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Prefs.init(this)
+        Repo.diskDir = cacheDir
         Look.load(this)
         Lock.load()
         Notes.load()
@@ -96,7 +97,7 @@ class Nav(
     val playlistsChanged: () -> Unit,
 )
 
-object BuildInfo { const val VERSION = "0.3.1" }
+object BuildInfo { const val VERSION = "0.3.2" }
 
 @Composable
 fun PretorianApp() {
@@ -124,6 +125,12 @@ fun PretorianApp() {
             try { Follow.check(ctx) } catch (_: Exception) {}
             delay(6 * 3600_000L)
         }
+    }
+    // Sports Center guide and search list are prepared quietly in the background, so they open at once
+    LaunchedEffect(Unit) {
+        delay(8_000)
+        try { Sports.guide(ctx, Store.actives(ctx)) } catch (_: Exception) {}
+        try { SearchIndex.get(ctx) } catch (_: Exception) {}
     }
     // reminders: checked every 15 seconds, wherever you are in the app
     LaunchedEffect(Unit) {

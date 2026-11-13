@@ -133,6 +133,7 @@ private fun PlaylistsPage(nav: Nav) {
             Button(if (busy) "Ažuriram…" else "Ažuriraj sve", R.drawable.lc_refresh_cw) {
                 if (busy) return@Button
                 busy = true
+                Repo.dropCatalogs(); Sports.lastCombined.clear()
                 scope.launch {
                     val updated = Store.playlists(ctx).map { pl ->
                         try { if (pl.type == SourceType.XTREAM) pl.copy(exp = Repo.test(pl)) else { Repo.test(pl); pl } } catch (e: Exception) { pl }
@@ -232,7 +233,7 @@ fun AddPlaylistScreen(nav: Nav) {
         Header("Dodaj playlistu")
         Column(Modifier.fillMaxSize().padding(horizontal = 36.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Segmented(listOf("Xtream Codes", "M3U playlista", "Stalker portal"), tab) {
-                if (it == 2) Toast.makeText(ctx, "Stalker portal dolazi u sljedećoj verziji", Toast.LENGTH_SHORT).show() else tab = it
+                if (it == 2) Toast.makeText(ctx, tr("Stalker portal dolazi u sljedećoj verziji"), Toast.LENGTH_SHORT).show() else tab = it
             }
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Field("Naziv playliste", name, { name = it }, Modifier.weight(1f))
@@ -268,10 +269,10 @@ fun AddPlaylistScreen(nav: Nav) {
                             val info = Repo.test(base)
                             val pl = if (base.type == SourceType.XTREAM) base.copy(exp = info) else base
                             Store.savePlaylists(ctx, Store.playlists(ctx).map { it.copy(active = false) } + pl)
-                            Toast.makeText(ctx, if (pl.type == SourceType.XTREAM) "Povezano ✓" else "Učitano: $info", Toast.LENGTH_LONG).show()
+                            Toast.makeText(ctx, if (pl.type == SourceType.XTREAM) "Povezano ✓" else trf("Učitano: %s", info), Toast.LENGTH_LONG).show()
                             nav.playlistsChanged(); nav.root(Screen.Home)
                         } catch (e: Exception) {
-                            error = "Nije uspjelo: ${e.message ?: e.javaClass.simpleName}"
+                            error = trf("Nije uspjelo: %s", e.message ?: e.javaClass.simpleName)
                         } finally { busy = false }
                     }
                 }
@@ -398,7 +399,7 @@ private fun MediaPage() {
             OptionRow("TMDB API ključ", R.drawable.lc_key_round, "Posteri, opis na tvom jeziku, glumci, trailer · themoviedb.org › Settings › API",
                 value = masked(Prefs.tmdbKey)) { edit = "tmdb" }
             if (Prefs.tmdbKey.isNotBlank()) OptionRow("Provjeri TMDB ključ", R.drawable.lc_check, value = tmdbStatus) {
-                tmdbStatus = "Provjeravam…"; scope.launch { tmdbStatus = Tmdb.test()?.let { "Ne radi: $it" } ?: "Radi ✓" }
+                tmdbStatus = "Provjeravam…"; scope.launch { tmdbStatus = Tmdb.test()?.let { trf("Ne radi: %s", it) } ?: tr("Radi ✓") }
             }
             OptionRow("OMDb API ključ (IMDb ocjena)", R.drawable.lc_key_round, "omdbapi.com › API Key › FREE", value = masked(Prefs.omdbKey)) { edit = "omdb" }
             OptionRow("Jezik opisa filmova", R.drawable.lc_globe, "Ako opisa nema na tom jeziku, prikazuje se engleski",
@@ -636,7 +637,7 @@ private fun ParentalPage(nav: Nav) {
         }
     }
     when (setup) {
-        "pin" -> PinSetupDialog(onDismiss = { setup = null }) { setup = null; rev++; Toast.makeText(ctx, "PIN je postavljen", Toast.LENGTH_SHORT).show() }
+        "pin" -> PinSetupDialog(onDismiss = { setup = null }) { setup = null; rev++; Toast.makeText(ctx, tr("PIN je postavljen"), Toast.LENGTH_SHORT).show() }
         "simple" -> PinSetupDialog(onDismiss = { setup = null }) { setup = null; Lock.switchSimple(true); nav.root(Screen.Home) }
         else -> {}
     }

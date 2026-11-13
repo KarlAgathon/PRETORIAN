@@ -270,7 +270,7 @@ object Sports {
         val words = RIGHTS[ev.leagueAbbr] ?: return emptyList()
         return all.filter { (_, n) -> words.any { n.contains(it) } }.map { it.first }
             .distinctBy { it.url }
-            .sortedWith(compareBy({ words.indexOfFirst { w -> (" " + it.name.uppercase() + " ").contains(w) } }, { qualityRank(it.name) }, { it.name }))
+            .sortedWith(compareBy({ regionRank(it.name) }, { words.indexOfFirst { w -> (" " + it.name.uppercase() + " ").contains(w) } }, { qualityRank(it.name) }, { it.name }))
             .take(12)
     }
     private fun qualityRank(n: String) = when (qualityOf(n)) { "4K" -> 0; "FHD" -> 1; "HD" -> 2; else -> 3 }
@@ -304,13 +304,13 @@ object Sports {
         "cp", "sl", "ss", "us", "nk", "hnk", "kk", "rk", "ok", "bc", "the", "de", "la", "le", "vs", "v", "club", "fsv", "if", "bk", "sk", "ogc", "losc")
     private val GENERIC = setOf("real", "city", "united", "athletic", "atletico", "sporting", "borussia", "olympique", "racing", "dynamo", "dinamo",
         "red", "star", "saint", "sankt", "st", "new", "west", "sport", "internacional", "manchester", "madrid", "munchen", "munich", "london", "young")
-    private val ALIAS = mapOf("internazionale" to "inter", "munich" to "munchen", "bayern munich" to "bayern", "crvena zvezda" to "zvezda",
+    private val ALIAS = mapOf("internazionale" to "inter", "munich" to "munchen", "bayern munich" to "bayern", "crvena zvezda" to "zvezda",  // i18n-ignore
         "red star belgrade" to "zvezda", "paris saint-germain" to "psg", "wolverhampton wanderers" to "wolves")
 
     private val MARKS = Regex("\\p{M}+")
     private val NON_ALNUM = Regex("[^a-z0-9]+")
     fun norm(s: String): String = Normalizer.normalize(s.lowercase(), Normalizer.Form.NFD).replace(MARKS, "")
-        .replace("ø", "o").replace("đ", "dj").replace("ß", "ss").replace(NON_ALNUM, " ").trim()
+        .replace("ø", "o").replace("đ", "dj").replace("ß", "ss").replace(NON_ALNUM, " ").trim()  // i18n-ignore
 
     private fun tokens(name: String): Set<String> {
         val n = norm(name)
@@ -329,7 +329,10 @@ object Sports {
     private val REPLAY = Regex("(\\(r\\)|\\(snimak\\)|snimka|snimak|reprise|highlights|sažetak|sazetak|najava|magazin|studio|emisija)", RegexOption.IGNORE_CASE)
 
     /** Adds your channels to each match and returns extra matches found only in your guide. */
-    /** Heavy: always call off the main thread (see [combineAsync]). */
+    /** Last result per day, shown at once when you come back to the Sports Center. */
+    val lastCombined = HashMap<Int, List<SportEvent>>()
+
+    /** Heavy: always call off the main thread. */
     fun combine(events: List<SportEvent>, g: Guide, offset: Int): List<SportEvent> {
         val progs = g.progs; val chans = g.byEpg
         val from = dayStart(offset); val to = dayStart(offset + 1)
@@ -366,8 +369,13 @@ object Sports {
         }
         // matches that only your guide knows: "Team A - Team B" on a sport channel
         val vs = Regex("^(?:(.{2,40}?):\\s*)?(.{2,40}?)\\s+(?:-|–|vs\\.?|v\\.?)\\s+(.{2,40}?)(?:\\s*[(\\[].*)?$", RegexOption.IGNORE_CASE)
-        val extra = day.filter { it !in used && it.start in from until to }.mapNotNull { pr ->
+        val extra = day.filter { it !in used && it.start in from until to && !NOT_SPORT.containsMatchIn(it.title) }.mapNotNull { pr ->
             val m = vs.find(pr.title.trim()) ?: return@mapNotNull null
+            // only real matches: on a sports channel, in a sports category, or naming a sport / club
+            val chName = chans[pr.channel]?.joinToString(" ") { it.name } ?: ""
+            val sporty = SPORT_CH.containsMatchIn(chName) || (pr.category?.let { SPORT_CAT.containsMatchIn(it) } == true) ||
+                guessSport((pr.title + " " + (pr.category ?: "")).lowercase()) != "other"
+            if (!sporty) return@mapNotNull null
             val (lgName, a, b) = m.destructured
             if (a.any { it.isDigit() } && b.any { it.isDigit() }) return@mapNotNull null
             Triple(pr, lgName.ifBlank { pr.category ?: "" }, a.trim() to b.trim())
@@ -386,16 +394,42 @@ object Sports {
                     channels = list.flatMap { chans[it.first.channel] ?: emptyList() }.distinctBy { it.url }, fromGuide = true,
                 )
             }
-        return (withCh.map { it.copy(maybe = if (it.channels.isEmpty()) maybeFor(it, upperAll) else emptyList()) } + extra).sortedBy { it.start }
+        return (withCh.map { it.copy(maybe = if (it.channels.isEmpty()) maybeFor(it, upperAll) else emptyList()) } + extra)
+            .map { it.copy(channels = it.channels.sortedBy { c -> regionRank(c.name) }) }
+            .sortedBy { it.start }
+    }
+
+    private val SPORT_CH = Regex("sport|arena|dazn|eurosport|espn|bein|setanta|klub|bundesliga|laliga|premier|golf|tennis|ufc|fight|nba|nfl|nhl|mlb|tsn|bt sport|tnt sport|ziggo|digi sport|polsat sport|eleven|ssc|sky sport|canal\\+ sport|movistar|match|sportitalia|sport tv|nova s|max sport|supersport", RegexOption.IGNORE_CASE)
+    private val SPORT_CAT = Regex("sport|fudbal|nogomet|football|fußball|fussball|soccer|basket|košark|tenis|tennis|rukomet|handball|odbojk|volley|motor|formula", RegexOption.IGNORE_CASE)
+    private val NOT_SPORT = Regex("news|vijesti|vesti|nachrichten|dnevnik|morning|jutarnj|frühstück|talk|kitchen|cooking|oxygen|shop|teleshop|infomercial|paid program|weather|vrijeme|horoskop|documentary|dokumentar|episode|epizoda|folge|staffel|season|film|movie|cartoon|crtani", RegexOption.IGNORE_CASE)
+
+    /** Channels from your part of the world first (BA| RS| HR| DE| ...), far-away ones (US| ...) last. */
+    private val REGION: List<String> by lazy {
+        val c = Locale.getDefault().country.uppercase()
+        val balkan = listOf("BA", "RS", "HR", "ME", "SI", "MK", "EXYU", "EX-YU", "YU", "BALKAN")
+        val dach = listOf("DE", "AT", "CH")
+        val near = when (c) {
+            in balkan -> listOf(c) + balkan + dach
+            in dach -> listOf(c) + dach + balkan
+            "US", "CA" -> listOf("US", "CA")
+            "GB", "UK", "IE" -> listOf("UK", "GB", "IE")
+            else -> listOf(c) + balkan + dach
+        }
+        (near + listOf("UK", "GB", "EU", "INT", "FR", "IT", "ES", "NL", "PT", "TR", "PL")).distinct()
+    }
+    fun regionRank(name: String): Int {
+        val m = Regex("^\\s*[\\[(|]?\\s*([A-Z-]{2,6})\\s*[|:\\])-]").find(name.uppercase()) ?: return 40
+        val i = REGION.indexOf(m.groupValues[1])
+        return if (i < 0) 80 else i
     }
 
     private fun guessSport(t: String): String = when {
-        listOf("košark", "kosark", "basket", "nba", "aba ", "euroleague", "evroliga", "euroliga", "kk ").any { t.contains(it) } -> "basketball"
-        listOf("rukomet", "handball", "ehf", "rk ").any { t.contains(it) } -> "handball"
+        listOf("košark", "kosark", "basket", "nba", "aba ", "euroleague", "evroliga", "euroliga", "kk ").any { t.contains(it) } -> "basketball"  // i18n-ignore
+        listOf("rukomet", "handball", "ehf", "rk ").any { t.contains(it) } -> "handball"  // i18n-ignore
         listOf("odbojk", "volley", "ok ").any { t.contains(it) } -> "volleyball"
-        listOf("tenis", "tennis", "atp", "wta").any { t.contains(it) } -> "tennis"
+        listOf("tenis", "tennis", "atp", "wta").any { t.contains(it) } -> "tennis"  // i18n-ignore
         listOf("formula", "grand prix", "f1").any { t.contains(it) } -> "f1"
-        listOf("fudbal", "nogomet", "football", "fussball", "liga", "league", "cup", "kup", "fk ", "nk ", "fc ").any { t.contains(it) } -> "football"
+        listOf("fudbal", "nogomet", "football", "fussball", "liga", "league", "cup", "kup", "fk ", "nk ", "fc ").any { t.contains(it) } -> "football"  // i18n-ignore
         else -> "other"
     }
 }

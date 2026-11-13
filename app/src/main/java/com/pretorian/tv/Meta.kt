@@ -76,7 +76,7 @@ object Tmdb {
     private fun get(path: String, query: String): JSONObject {
         val key = Prefs.tmdbKey
         val bearer = key.length > 40
-        val url = "https://api.themoviedb.org/3$path?$query" + if (bearer) "" else "&api_key=${Net.enc(key)}"
+        val url = "https://api.themoviedb.org/3$path?$query" + if (bearer) "" else "&api_key=${Net.enc(key)}"  // i18n-ignore
         return JSONObject(Http.request(url, if (bearer) mapOf("Authorization" to "Bearer $key") else emptyMap()))
     }
 
@@ -199,7 +199,7 @@ object Subs {
     }
 
     private fun subdl(title: String, year: String?, season: Int?, episode: Int?): List<SubResult> {
-        var q = "api_key=${Net.enc(Prefs.subdlKey)}&film_name=${Net.enc(title)}&languages=${langs().joinToString(",") { it.uppercase() }}&subs_per_page=30"
+        var q = "api_key=${Net.enc(Prefs.subdlKey)}&film_name=${Net.enc(title)}&languages=${langs().joinToString(",") { it.uppercase() }}&subs_per_page=30"  // i18n-ignore
         if (season != null) q += "&type=tv&season_number=$season" else q += "&type=movie"
         if (episode != null) q += "&episode_number=$episode"
         if (year != null && season == null) q += "&year=$year"

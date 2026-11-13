@@ -35,6 +35,7 @@ def args(src, start):
     return ''
 
 missing, templated = {}, {}
+LATIN_OK = set(open(os.path.join(os.path.dirname(__file__), 'i18n_latin_ok.txt'), encoding='utf-8').read().split())
 for fn in sorted(os.listdir(SRC)):
     if not fn.endswith('.kt') or fn == 'I18n.kt': continue
     src = open(os.path.join(SRC, fn), encoding='utf-8').read()
@@ -52,6 +53,30 @@ for fn in sorted(os.listdir(SRC)):
             templated.setdefault(t, fn); continue
         if t.replace('\\"', '"') not in known and t not in known:
             missing.setdefault(t, fn)
+# second pass: ANY Bosnian-looking text anywhere in the code (errors, statuses, toasts, labels in lists)
+bswords = set()
+for k in known:
+    for w in re.findall(r"[a-zčćšžđ]+", k.lower()):
+        if len(w) >= 3: bswords.add(w)
+bswords -= set(open(os.path.join(os.path.dirname(__file__), 'i18n_shared_words.txt'), encoding='utf-8').read().split())
+for fn in sorted(os.listdir(SRC)):
+    if not fn.endswith('.kt') or fn == 'I18n.kt': continue
+    for ln, line in enumerate(open(os.path.join(SRC, fn), encoding='utf-8'), 1):
+        st = line.strip()
+        if 'Regex(' in line or st.startswith('//') or st.startswith('*') or st.startswith('/**') or 'i18n-ignore' in line: continue
+        for t in lit.findall(line):
+            plain = re.sub(r'\$\{[^}]*\}|\$[A-Za-z_]\w*', '', t).replace('\\"', '"')
+            if t in known or t.replace('\\"', '"') in known or t in keep or t.strip() in keep: continue
+            ws = re.findall(r"[a-zčćšžđ]+", plain.lower())
+            if re.search('[čćšžđČĆŠŽĐ]', plain) or any(w in bswords for w in ws):
+                if '$' in t: templated.setdefault(t, f'{fn}:{ln}')
+                else: missing.setdefault(t, f'{fn}:{ln}')
+# Serbian must be Cyrillic, Croatian must not be a plain copy of long Bosnian sentences with Bosnian-only words
+BS_ONLY = re.compile(r'\b(fajl\w*|sedmic\w*|fudbal\w*|tastatur\w*|historij\w*)\b', re.I)
+for k, parts in known.items():
+    if re.search(r'[A-Za-zČĆŠŽĐčćšžđ]{4,}', re.sub(r'S%sE%s|%s|https?://\S+|\b(?:' + '|'.join(re.escape(x) for x in LATIN_OK) + r')\b', '', parts[4])):
+        bad_rows.append('sr not Cyrillic: ' + parts[4][:50])
+    if BS_ONLY.search(parts[3]): bad_rows.append('hr uses Bosnian word: ' + parts[3][:50])
 if bad_rows: print('Broken table rows:', *bad_rows, sep='\n  ')
 if templated: print('Texts with a variable inside (use trf):', *[f'{k}  ({v})' for k, v in templated.items()], sep='\n  ')
 if missing: print('Texts without translation:', *[f'{k}  ({v})' for k, v in missing.items()], sep='\n  ')

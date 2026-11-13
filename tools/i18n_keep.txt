@@ -117,3 +117,8 @@ This product uses the TMDB API but is not endorsed or certified by TMDB.
 github.com/KarlAgathon/PRETORIAN · MIT licenca
 XMLTV link (http://…/epg.xml)
 %s d
+
+ch
+prog
+vod
+series

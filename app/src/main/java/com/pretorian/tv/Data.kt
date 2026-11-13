@@ -176,7 +176,7 @@ object Net {
                     current = URL(URL(current), loc).toString()
                     return@repeat
                 }
-                if (code !in 200..299) throw IOException("Server je odgovorio greškom $code")
+                if (code !in 200..299) throw IOException(trf("Server je odgovorio greškom %s", code))
                 return c.inputStream.bufferedReader().use { r -> r.readText() }
             } finally {
                 c.disconnect()
@@ -202,14 +202,14 @@ class Xtream(private val p: Playlist) {
         val ui = o.optJSONObject("user_info") ?: throw IOException("Server nije vratio podatke o korisniku")
         if (ui.optInt("auth", 0) != 1) throw IOException("Pogrešno korisničko ime ili lozinka")
         val status = ui.str("status")
-        if (status.isNotBlank() && !status.equals("Active", true)) throw IOException("Nalog nije aktivan: $status")
+        if (status.isNotBlank() && !status.equals("Active", true)) throw IOException(trf("Nalog nije aktivan: %s", status))
         val exp = ui.str("exp_date")
         return if (exp.isBlank() || exp == "null") "0" else exp
     }
 
     /** coming programmes of a live stream (Xtream short EPG; title and description are base64) */
     fun epg(streamId: String, limit: Int): List<EpgItem> {
-        val o = try { JSONObject(api("get_short_epg", "&stream_id=${Net.enc(streamId)}&limit=$limit")) } catch (e: Exception) { return emptyList() }
+        val o = try { JSONObject(api("get_short_epg", "&stream_id=${Net.enc(streamId)}&limit=$limit")) } catch (e: Exception) { return emptyList() }  // i18n-ignore
         val a = o.optJSONArray("epg_listings") ?: return emptyList()
         fun b64(s: String) = try { String(android.util.Base64.decode(s, android.util.Base64.DEFAULT)).trim() } catch (e: Exception) { s }
         val fmt = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US)
@@ -289,7 +289,7 @@ class Xtream(private val p: Playlist) {
     }
 
     /** full TV guide of the account, XMLTV */
-    fun xmltvUrl() = "$base/xmltv.php?username=${Net.enc(p.user)}&password=${Net.enc(p.pass)}"
+    fun xmltvUrl() = "$base/xmltv.php?username=${Net.enc(p.user)}&password=${Net.enc(p.pass)}"  // i18n-ignore
 
     fun movies(categoryId: String): List<Vod> {
         val a = array(api("get_vod_streams", "&category_id=${Net.enc(categoryId)}"))
@@ -415,8 +415,22 @@ object Repo {
     }
 
     /** every movie / series of the playlist (search) */
+    /** Folder for lists kept on the box between starts (search catalog). Set at start. */
+    var diskDir: java.io.File? = null
+
+    /** Every movie or series of a playlist. Kept in memory and on the box for 24 hours, so search is instant. */
     suspend fun catalog(p: Playlist, kind: String): List<JSONObject> =
-        if (p.type == SourceType.XTREAM) cached("cat_${kind}_${p.id}") { Xtream(p).catalog(kind) } else emptyList()
+        if (p.type != SourceType.XTREAM) emptyList() else cached("cat_${kind}_${p.id}") {
+            val f = diskDir?.let { java.io.File(it, "catalog_${kind}_${p.id.hashCode()}.json") }
+            val fresh = f != null && f.exists() && System.currentTimeMillis() - f.lastModified() < 24 * 3600_000L
+            val fromDisk = if (fresh) try { org.json.JSONArray(f!!.readText()).let { a -> (0 until a.length()).map { a.getJSONObject(it) } } } catch (e: Exception) { null } else null
+            fromDisk ?: Xtream(p).catalog(kind).also { list ->
+                try { f?.writeText(org.json.JSONArray(list).toString()) } catch (_: Exception) {}
+            }
+        }
+
+    /** "Update all": forget the kept catalog so it is downloaded again. */
+    fun dropCatalogs() { diskDir?.listFiles()?.filter { it.name.startsWith("catalog_") }?.forEach { it.delete() } }
 
     suspend fun vodGroups(p: Playlist): List<Category> =
         if (p.type == SourceType.XTREAM) cached("vg_${p.id}") { Xtream(p).vodCategories() } else emptyList()
@@ -444,7 +458,7 @@ object Repo {
 
     suspend fun test(p: Playlist): String = withContext(Dispatchers.IO) {
         if (p.type == SourceType.XTREAM) Xtream(p).login()
-        else { val n = M3u.parse(Net.get(p.url.trim())).size; "$n kanala" }
+        else { val n = M3u.parse(Net.get(p.url.trim())).size; trf("%s kanala", n) }
     }
 }
 
