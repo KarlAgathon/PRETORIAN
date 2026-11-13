@@ -324,7 +324,7 @@ fun SimpleHome(nav: Nav) {
     }
     if (pin) PinDialog("PIN za napredni mod", onDismiss = { pin = false }) { entered ->
         val err = Lock.check(entered)
-        if (err == null) { pin = false; Lock.setSimple(false); nav.root(Screen.Home) }
+        if (err == null) { pin = false; Lock.switchSimple(false); nav.root(Screen.Home) }
         err
     }
     LaunchedEffect(Unit) { try { first.requestFocus() } catch (_: Exception) {} }

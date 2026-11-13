@@ -46,7 +46,7 @@ object Lock {
 
     fun load() { simple = Prefs.bool("simple_mode") }
 
-    fun setSimple(on: Boolean) { simple = on; Prefs.put("simple_mode", on) }
+    fun switchSimple(on: Boolean) { simple = on; Prefs.put("simple_mode", on) }
 
     fun hasPin() = Prefs.str("pin_hash").isNotEmpty()
 

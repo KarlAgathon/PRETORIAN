@@ -351,7 +351,7 @@ private fun ParentalPage(nav: Nav) {
     key(rev) {
         Page("Roditelji i jednostavni mod", "Jednostavni mod ostavlja samo TV, Filmove i Serije. Izlaz iz njega traži PIN.") {
             OptionRow("Uključi jednostavni mod", R.drawable.lc_layout_grid, "Za starije i djecu: bez postavki, ništa se ne može pokvariti") {
-                if (!Lock.hasPin()) setup = "simple" else { Lock.setSimple(true); nav.root(Screen.Home) }
+                if (!Lock.hasPin()) setup = "simple" else { Lock.switchSimple(true); nav.root(Screen.Home) }
             }
             OptionRow(if (Lock.hasPin()) "Resetuj PIN" else "Postavi PIN", R.drawable.lc_key_round,
                 if (Lock.hasPin()) "Ne traži stari PIN, samo novi" else "4 cifre, za napredni mod i zaključane kanale") { setup = "pin" }
@@ -360,7 +360,7 @@ private fun ParentalPage(nav: Nav) {
     }
     when (setup) {
         "pin" -> PinSetupDialog(onDismiss = { setup = null }) { setup = null; rev++; Toast.makeText(ctx, "PIN je postavljen", Toast.LENGTH_SHORT).show() }
-        "simple" -> PinSetupDialog(onDismiss = { setup = null }) { setup = null; Lock.setSimple(true); nav.root(Screen.Home) }
+        "simple" -> PinSetupDialog(onDismiss = { setup = null }) { setup = null; Lock.switchSimple(true); nav.root(Screen.Home) }
         else -> {}
     }
 }
