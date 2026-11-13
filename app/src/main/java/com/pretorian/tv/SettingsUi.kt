@@ -44,6 +44,7 @@ private data class Section(val id: String, val icon: Int, val title: String, val
 private val SECTIONS = listOf(
     Section("playlists", R.drawable.lc_list, "Playliste", "Dodaj, aktiviraj, ažuriraj"),
     Section("groups", R.drawable.lc_layers, "Grupe i kanali", "Redoslijed, nazivi, sakrivanje, PIN"),
+    Section("language", R.drawable.lc_languages, "Jezik", "Meniji, dugmad i poruke"),
     Section("look", R.drawable.lc_palette, "Izgled", "Tema, boja, prozirnost, veličine"),
     Section("media", R.drawable.lc_captions, "Filmovi i titlovi", "TMDB, IMDb, titlovi, jezici"),
     Section("parental", R.drawable.lc_shield_check, "Roditelji i jednostavni mod", "PIN, jednostavni mod"),
@@ -84,6 +85,7 @@ fun SettingsScreen(nav: Nav) {
                     "playlists" -> PlaylistsPage(nav)
                     "groups" -> GroupManager(nav)
                     "look" -> LookPage()
+                    "language" -> LanguagePage()
                     "media" -> MediaPage()
                     "parental" -> ParentalPage(nav)
                     "update" -> UpdatePage()
@@ -116,6 +118,7 @@ private fun PlaylistsPage(nav: Nav) {
     var list by remember { mutableStateOf(Store.playlists(ctx)) }
     var busy by remember { mutableStateOf(false) }
     var del by remember { mutableStateOf<Playlist?>(null) }
+    var epg by remember { mutableStateOf(false) }
     Page("Playliste", "Aktivna je samo jedna. OK na drugoj je aktivira, Meni otvara opcije.") {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Button("Dodaj playlistu", R.drawable.lc_plus, primary = true) { nav.push(Screen.AddPlaylist) }
@@ -158,6 +161,13 @@ private fun PlaylistsPage(nav: Nav) {
             }
         }
         T("Drži OK na playlisti: obriši. Datum isteka osvježava \"Ažuriraj sve\".", 12.sp, C.Muted)
+        Label("TV program (EPG)")
+        OptionRow("Vlastiti EPG izvor (XMLTV link)", R.drawable.lc_clock, "Koristi se kad provider za kanal ne šalje program. Link do .xml ili .xml.gz",
+            value = if (Prefs.epgUrl.isBlank()) "Nije upisan" else Prefs.epgUrl.removePrefix("https://").removePrefix("http://").take(28)) { epg = true }
+    }
+    if (epg) TextDialog("Vlastiti EPG izvor", "XMLTV link (http://…/epg.xml)", Prefs.epgUrl, onDismiss = { epg = false }) { v ->
+        Prefs.epgUrl = v; epg = false; Repo.clear()
+        Toast.makeText(ctx, tr("Spremljeno"), Toast.LENGTH_SHORT).show()
     }
     del?.let { pl ->
         Popup(pl.name, onDismiss = { del = null }) {
@@ -278,6 +288,17 @@ private fun LookPage() {
         Segmented(listOf("Mali", "Srednji", "Veliki"), Look.posterSize) { Look.posterSize = it; save() }
         Label("Meniji i info traka preko slike")
         Segmented(listOf("Stakleno (prozirno)", "Crno"), Look.overlay) { Look.overlay = it; save() }
+        Label(tr("Providnost menija") + ": ${100 - Look.menuOpacity} %")
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Button("− 5 %", R.drawable.lc_minus) { Look.menuOpacity = (Look.menuOpacity + 5).coerceAtMost(100); save() }
+            Box(Modifier.width(260.dp).height(10.dp).clip(RoundedCornerShape(5.dp)).background(C.CardHi)) {
+                Box(Modifier.fillMaxWidth((100 - Look.menuOpacity) / 40f).height(10.dp).background(C.Red))
+            }
+            Button("+ 5 %", R.drawable.lc_plus) { Look.menuOpacity = (Look.menuOpacity - 5).coerceAtLeast(60); save() }
+        }
+        T("0 % = puni meni, ništa se ne vidi kroz njega. Najviše 40 %.", 12.sp, C.Muted)
+        Label("Veličina redova (kanali i grupe)")
+        Segmented(listOf("Mala", "Srednja", "Velika"), Look.rowSize) { Look.rowSize = it; save() }
         Label("Kanali")
         ToggleRow("Pregled kanala uživo", Look.preview, R.drawable.lc_tv, "Kad staneš na kanal, desno se pušta mala slika i EPG") { Look.preview = it; save() }
         ToggleRow("Najgledaniji na vrhu grupe", Look.mostWatched, R.drawable.lc_arrow_up, "Kanali koje najčešće gledaš sami idu gore (kad nema ručnog redoslijeda)") {
@@ -304,44 +325,106 @@ private fun MediaPage() {
                 tmdbStatus = "Provjeravam…"; scope.launch { tmdbStatus = Tmdb.test()?.let { "Ne radi: $it" } ?: "Radi ✓" }
             }
             OptionRow("OMDb API ključ (IMDb ocjena)", R.drawable.lc_key_round, "omdbapi.com › API Key › FREE", value = masked(Prefs.omdbKey)) { edit = "omdb" }
-            OptionRow("Jezik opisa", R.drawable.lc_globe, "Ako opisa nema na tom jeziku, prikazuje se engleski", value = Subs.langName(Prefs.metaLang)) { edit = "metalang" }
+            OptionRow("Jezik opisa filmova", R.drawable.lc_globe, "Ako opisa nema na tom jeziku, prikazuje se engleski",
+                value = if (Prefs.metaLang == "auto") tr("Kao jezik aplikacije") else Langs.label(Prefs.metaLang)) { edit = "metalang" }
             Label("Titlovi")
             OptionRow("OpenSubtitles API ključ", R.drawable.lc_key_round, "opensubtitles.com › Profil › API consumers", value = masked(Prefs.osKey)) { edit = "os" }
             OptionRow("OpenSubtitles korisnik (opciono)", R.drawable.lc_user, "Više preuzimanja dnevno", value = Prefs.osUser.ifBlank { "Nije upisan" }) { edit = "osuser" }
             if (Prefs.osUser.isNotBlank()) OptionRow("OpenSubtitles lozinka", R.drawable.lc_lock, value = if (Prefs.osPass.isBlank()) "Nije upisana" else "••••••") { edit = "ospass" }
             OptionRow("SubDL API ključ", R.drawable.lc_key_round, "subdl.com › Panel › API", value = masked(Prefs.subdlKey)) { edit = "subdl" }
-            OptionRow("Jezici titla (redom)", R.drawable.lc_captions, value = Prefs.subLangs.uppercase()) { edit = "sublangs" }
-            OptionRow("Jezici zvuka (redom)", R.drawable.lc_volume, value = Prefs.audioLangs.uppercase()) { edit = "audiolangs" }
+            OptionRow("Jezici titla", R.drawable.lc_captions, value = langList(Prefs.subLangs)) { edit = "sublangs" }
+            ToggleRow("Automatski uključi titl", Prefs.autoSubs, R.drawable.lc_captions,
+                "Ugrađeni titl na tvom jeziku se sam uključi kad film krene") { Prefs.autoSubs = it; rev++ }
+            Label("Plejer")
+            OptionRow("Jezici zvuka", R.drawable.lc_volume, value = langList(Prefs.audioLangs)) { edit = "audiolangs" }
+            T("Premotavanje lijevo/desno", 14.sp, C.Text, FontWeight.Medium)
+            Segmented(listOf("10 s", "20 s", "30 s"), listOf(10, 20, 30).indexOf(Prefs.seekStep).coerceAtLeast(0)) {
+                Prefs.seekStep = listOf(10, 20, 30)[it]; rev++
+            }
         }
     }
     val e = edit
-    if (e != null) {
-        val pair = when (e) {
-            "tmdb" -> "TMDB API ključ" to Prefs.tmdbKey
-            "omdb" -> "OMDb API ključ" to Prefs.omdbKey
-            "os" -> "OpenSubtitles API ključ" to Prefs.osKey
-            "osuser" -> "OpenSubtitles korisničko ime" to Prefs.osUser
-            "ospass" -> "OpenSubtitles lozinka" to ""
-            "subdl" -> "SubDL API ključ" to Prefs.subdlKey
-            "sublangs" -> "Jezici titla, npr. bs,hr,sr,en" to Prefs.subLangs
-            "audiolangs" -> "Jezici zvuka, npr. en,bs,de" to Prefs.audioLangs
-            else -> "Jezik opisa (bs, hr, sr, en, de…)" to Prefs.metaLang
+    val ctx = LocalContext.current
+    when (e) {
+        null -> {}
+        "metalang" -> LangPicker("Jezik opisa filmova", Prefs.metaLang, Langs.MEDIA, auto = true, onDismiss = { edit = null }) {
+            Prefs.metaLang = it; edit = null; rev++; Toast.makeText(ctx, tr("Spremljeno"), Toast.LENGTH_SHORT).show()
         }
-        TextDialog(pair.first, pair.first, pair.second, onDismiss = { edit = null }) { v ->
-            when (e) {
-                "tmdb" -> Prefs.tmdbKey = v
-                "omdb" -> Prefs.omdbKey = v
-                "os" -> Prefs.osKey = v
-                "osuser" -> Prefs.osUser = v
-                "ospass" -> Prefs.osPass = v
-                "subdl" -> Prefs.subdlKey = v
-                "sublangs" -> Prefs.subLangs = v.lowercase().replace(" ", "")
-                "audiolangs" -> Prefs.audioLangs = v.lowercase().replace(" ", "")
-                else -> Prefs.metaLang = v.lowercase().take(2).ifBlank { "bs" }
+        "sublangs" -> LangOrderPicker("Jezici titla", Prefs.subLangs.split(',').filter { it.isNotBlank() }, onDismiss = { edit = null }) {
+            if (it.isNotEmpty()) Prefs.subLangs = it.joinToString(","); edit = null; rev++; Toast.makeText(ctx, tr("Spremljeno"), Toast.LENGTH_SHORT).show()
+        }
+        "audiolangs" -> LangOrderPicker("Jezici zvuka", Prefs.audioLangs.split(',').filter { it.isNotBlank() }, onDismiss = { edit = null }) {
+            if (it.isNotEmpty()) Prefs.audioLangs = it.joinToString(","); edit = null; rev++; Toast.makeText(ctx, tr("Spremljeno"), Toast.LENGTH_SHORT).show()
+        }
+        else -> {
+            val pair = when (e) {
+                "tmdb" -> "TMDB API ključ" to Prefs.tmdbKey
+                "omdb" -> "OMDb API ključ" to Prefs.omdbKey
+                "os" -> "OpenSubtitles API ključ" to Prefs.osKey
+                "osuser" -> "OpenSubtitles korisničko ime" to Prefs.osUser
+                "ospass" -> "OpenSubtitles lozinka" to ""
+                else -> "SubDL API ključ" to Prefs.subdlKey
             }
-            edit = null; rev++
+            TextDialog(pair.first, pair.first, pair.second, onDismiss = { edit = null }) { v ->
+                when (e) {
+                    "tmdb" -> Prefs.tmdbKey = v
+                    "omdb" -> Prefs.omdbKey = v
+                    "os" -> Prefs.osKey = v
+                    "osuser" -> Prefs.osUser = v
+                    "ospass" -> Prefs.osPass = v
+                    else -> Prefs.subdlKey = v
+                }
+                edit = null; rev++
+                Toast.makeText(ctx, tr("Spremljeno"), Toast.LENGTH_SHORT).show()
+            }
         }
     }
+}
+
+/** "Bosanski, Hrvatski, Engleski" from "bs,hr,en" */
+fun langList(codes: String): String = codes.split(',').filter { it.isNotBlank() }.joinToString(", ") { Langs.label(it) }
+
+/* ---------------------------------------------------------------- language */
+
+@Composable
+private fun LanguagePage() {
+    val ctx = LocalContext.current
+    var pick by remember { mutableStateOf(false) }
+    Page("Jezik") {
+        val cur = Langs.APP.firstOrNull { it.code == Look.lang } ?: Langs.APP[0]
+        T("Jezik aplikacije", 14.sp, C.Muted, FontWeight.SemiBold)
+        Focusable(modifier = Modifier.fillMaxWidth().height(72.dp), onClick = { pick = true }, normal = C.Card, zoom = 1.01f) { _ ->
+            Row(Modifier.fillMaxSize().padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Flag(cur.flag, 42)
+                Column(Modifier.weight(1f)) {
+                    T(cur.native, 18.sp, C.Text, FontWeight.SemiBold)
+                    T("Meniji, dugmad i poruke", 12.sp, C.Muted)
+                }
+                Ico(R.drawable.lc_languages, 20.dp, C.Soft)
+            }
+        }
+        // all languages right on the page as well: one click and done
+        Langs.APP.forEach { l ->
+            Focusable(modifier = Modifier.fillMaxWidth().height(52.dp), onClick = { setAppLang(ctx, l.code) },
+                normal = if (l.code == Look.lang) C.CardFocus else C.Card, zoom = 1.01f) { _ ->
+                Row(Modifier.fillMaxSize().padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Flag(l.flag, 32)
+                    T(l.native, 15.sp, C.Text, FontWeight.Medium, modifier = Modifier.weight(1f))
+                    T(Langs.label(l.code), 13.sp, C.Muted)
+                    if (l.code == Look.lang) Ico(R.drawable.lc_check, 18.dp, C.Red)
+                }
+            }
+        }
+    }
+    if (pick) LangPicker("Jezik aplikacije", Look.lang, onDismiss = { pick = false }) { setAppLang(ctx, it); pick = false }
+}
+
+fun setAppLang(ctx: android.content.Context, code: String) {
+    Look.lang = code; Look.save(ctx)
+    val l = Langs.of(code)
+    Toast.makeText(ctx, tr("Jezik promijenjen") + ": " + (l?.native ?: code), Toast.LENGTH_SHORT).show()
 }
 
 /* ---------------------------------------------------------------- parental */

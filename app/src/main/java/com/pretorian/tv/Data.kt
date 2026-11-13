@@ -67,8 +67,13 @@ data class PlayItem(
     val title: String, val url: String, val logo: String? = null, val subtitle: String? = null, val channel: Channel? = null,
     /** title used to search subtitles, plus season/episode for series */
     val search: String? = null, val season: Int? = null, val episode: Int? = null,
-    /** subtitle file chosen before playing, and preferred audio language */
+    /** subtitle file chosen before playing, and the chosen audio track (language + label) */
     val subFile: String? = null, val audioLang: String? = null,
+    val audioLabel: String? = null,
+    /** "no subtitles" was chosen */
+    val subOff: Boolean = false,
+    /** built-in subtitle chosen before playing: language + label */
+    val subLang: String? = null, val subLabel: String? = null,
 )
 
 fun JSONObject.str(k: String): String = if (!has(k) || isNull(k)) "" else optString(k, "")
@@ -210,6 +215,20 @@ class Xtream(private val p: Playlist) {
         }
     }
 
+    /** every live channel of the account (for the sports guide) */
+    fun allChannels(): List<Channel> {
+        val a = array(api("get_live_streams"))
+        return (0 until a.length()).map { i ->
+            val o = a.getJSONObject(i)
+            val id = o.str("stream_id")
+            Channel(id, o.optInt("num", i + 1), o.str("name"), o.str("stream_icon").orNullIfBlank(), o.str("category_id"),
+                "$base/live/${p.user}/${p.pass}/$id.ts", o.str("epg_channel_id").orNullIfBlank())
+        }
+    }
+
+    /** full TV guide of the account, XMLTV */
+    fun xmltvUrl() = "$base/xmltv.php?username=${Net.enc(p.user)}&password=${Net.enc(p.pass)}"
+
     fun movies(categoryId: String): List<Vod> {
         val a = array(api("get_vod_streams", "&category_id=${Net.enc(categoryId)}"))
         return (0 until a.length()).map { i ->
@@ -342,8 +361,12 @@ object Repo {
 
     suspend fun episodes(p: Playlist, id: String): List<Episode> = cached("ep_${p.id}_$id") { Xtream(p).episodes(id) }
 
-    suspend fun epg(p: Playlist, ch: Channel, limit: Int = 10): List<EpgItem> = cached("epg_${p.id}_${ch.url}_$limit") {
-        if (p.type != SourceType.XTREAM || ch.id.isBlank() || !ch.url.contains("/live/")) emptyList() else try { Xtream(p).epg(ch.id, limit) } catch (e: Exception) { emptyList() }
+    suspend fun epg(p: Playlist, ch: Channel, limit: Int = 10): List<EpgItem> {
+        val provider = cached("epg_${p.id}_${ch.url}_$limit") {
+            if (p.type != SourceType.XTREAM || ch.id.isBlank() || !ch.url.contains("/live/")) emptyList() else try { Xtream(p).epg(ch.id, limit) } catch (e: Exception) { emptyList() }
+        }
+        if (provider.isNotEmpty() || Prefs.epgUrl.isBlank()) return provider
+        return try { OwnGuide.of(ch.epg, ch.name).take(limit) } catch (e: Exception) { emptyList() }
     }
 
     suspend fun nowNext(p: Playlist, ch: Channel): List<Pair<String, String>> = epg(p, ch, 4).take(2).map { it.title to it.times() }

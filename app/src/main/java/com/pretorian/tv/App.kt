@@ -67,6 +67,7 @@ sealed class Screen {
     object Tv : Screen()
     object Movies : Screen()
     object Series : Screen()
+    object Sports : Screen()
     object Settings : Screen()
     object AddPlaylist : Screen()
     data class MovieDetail(val vod: Vod) : Screen()
@@ -81,7 +82,7 @@ class Nav(
     val playlistsChanged: () -> Unit,
 )
 
-object BuildInfo { const val VERSION = "0.2" }
+object BuildInfo { const val VERSION = "0.2.1" }
 
 @Composable
 fun PretorianApp() {
@@ -106,6 +107,9 @@ fun PretorianApp() {
     val scheme = if (C.IsLight) lightColorScheme(primary = C.Red, background = C.Bg, surface = C.Bg)
                  else darkColorScheme(primary = C.Red, background = C.Bg, surface = C.Bg)
     MaterialTheme(colorScheme = scheme) {
+      androidx.compose.runtime.CompositionLocalProvider(
+          androidx.compose.ui.platform.LocalLayoutDirection provides
+              if (Look.lang == "ar") androidx.compose.ui.unit.LayoutDirection.Rtl else androidx.compose.ui.unit.LayoutDirection.Ltr) {
         val top = stack.last()
         if (top is Screen.Player) {
             PlayerScreen(top, nav)
@@ -116,6 +120,7 @@ fun PretorianApp() {
                         Screen.Tv -> TvScreen(nav)
                         Screen.Movies -> MoviesScreen(nav)
                         Screen.Series -> SeriesScreen(nav)
+                        Screen.Sports -> SportsScreen(nav)
                         is Screen.MovieDetail -> MovieDetailScreen(top.vod, nav)
                         is Screen.SeriesDetail -> SeriesDetailScreen(top.item, nav)
                         else -> SimpleHome(nav)
@@ -136,12 +141,14 @@ fun PretorianApp() {
                             Screen.AddPlaylist -> AddPlaylistScreen(nav)
                             is Screen.MovieDetail -> MovieDetailScreen(top.vod, nav)
                             is Screen.SeriesDetail -> SeriesDetailScreen(top.item, nav)
+                            Screen.Sports -> SportsScreen(nav)
                             is Screen.Player -> {}
                         }
                     }
                 }
             }
         }
+      }
     }
 }
 
@@ -154,6 +161,7 @@ fun Rail(current: Screen, nav: Nav) {
         RailItem(Screen.Tv, R.drawable.lc_tv, "TV"),
         RailItem(Screen.Movies, R.drawable.lc_film, "Filmovi"),
         RailItem(Screen.Series, R.drawable.lc_monitor, "Serije"),
+        RailItem(Screen.Sports, R.drawable.lc_trophy, "Sport"),
     )
     val section = when (current) {
         is Screen.MovieDetail -> Screen.Movies
@@ -202,7 +210,7 @@ fun Clock() {
     LaunchedEffect(Unit) { while (true) { now = Date(); delay(15_000) } }
     Column(horizontalAlignment = Alignment.End) {
         T(SimpleDateFormat("HH:mm", Locale.getDefault()).format(now), 22.sp, C.Text, FontWeight.SemiBold)
-        T(SimpleDateFormat("EEE, d. MMM", Locale("bs")).format(now), 12.sp, C.Muted)
+        T(SimpleDateFormat("EEE, d. MMM", Locale(Look.lang)).format(now), 12.sp, C.Muted)
     }
 }
 

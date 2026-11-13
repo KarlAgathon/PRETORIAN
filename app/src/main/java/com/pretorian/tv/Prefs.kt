@@ -32,8 +32,12 @@ object Prefs {
     /** preferred subtitle languages, first = most wanted (ISO 639-1) */
     var subLangs: String get() = str("sub_langs", "bs,hr,sr,en"); set(v) = put("sub_langs", v)
     var audioLangs: String get() = str("audio_langs", "en,bs,hr,sr,de"); set(v) = put("audio_langs", v)
-    var metaLang: String get() = str("meta_lang", "bs"); set(v) = put("meta_lang", v)
-    var autoSubs: Boolean get() = bool("auto_subs", true); set(v) = put("auto_subs", v)
+    var metaLang: String get() = str("meta_lang", "auto"); set(v) = put("meta_lang", v)
+    var autoSubs: Boolean get() = bool("auto_subs", false); set(v) = put("auto_subs", v)
+    /** your own XMLTV guide link */
+    var epgUrl: String get() = str("epg_url"); set(v) = put("epg_url", v.trim())
+    /** seconds for Left/Right in movies and series: 10, 20 or 30 */
+    var seekStep: Int get() = str("seek_step", "10").toIntOrNull() ?: 10; set(v) = put("seek_step", v.toString())
 }
 
 /** Simple mode + PIN. The PIN is stored only as a salted SHA-256 hash. */

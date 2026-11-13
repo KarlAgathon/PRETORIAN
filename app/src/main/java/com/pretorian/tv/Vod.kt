@@ -240,16 +240,32 @@ private fun PeopleRow(people: List<Person>) {
     }
 }
 
-/** Subtitle + audio buttons shown next to Play: green frame when a subtitle is ready. */
+/** What was picked on the movie page before playing. */
+data class TrackChoice(val subFile: File? = null, val subOff: Boolean = false, val sub: StreamTrack? = null, val audio: StreamTrack? = null) {
+    fun apply(i: PlayItem) = i.copy(subFile = subFile?.path, subOff = subOff, subLang = sub?.lang, subLabel = sub?.label,
+        audioLang = audio?.lang, audioLabel = audio?.label)
+}
+
+/** Subtitle + audio buttons next to Play: green frame when a subtitle is ready. */
 @Composable
-private fun TrackButtons(search: String, season: Int?, episode: Int?, sub: File?, audio: String?, onSub: (File?) -> Unit, onAudio: (String?) -> Unit) {
+private fun TrackButtons(search: String, season: Int?, episode: Int?, url: String, choice: TrackChoice, onChange: (TrackChoice) -> Unit) {
     var showSubs by remember { mutableStateOf(false) }
     var showAudio by remember { mutableStateOf(false) }
-    Button(if (sub != null) "Titl: ${Subs.langName(sub.nameWithoutExtension.substringAfterLast('_'))}" else "Titlovi",
-        R.drawable.lc_captions, outline = if (sub != null) C.Green else null) { showSubs = true }
-    Button(if (audio != null) "Audio: ${audio.uppercase()}" else "Audio", R.drawable.lc_volume) { showAudio = true }
-    if (showSubs) SubtitlePicker(search, season, episode, onDismiss = { showSubs = false }) { f -> onSub(f); showSubs = false }
-    if (showAudio) AudioPicker(audio, onDismiss = { showAudio = false }) { a -> onAudio(a); showAudio = false }
+    val subText = when {
+        choice.subFile != null -> tr("Titl") + ": " + Langs.label(choice.subFile.nameWithoutExtension.substringAfterLast('_'))
+        choice.sub != null -> tr("Titl") + ": " + choice.sub.title.substringBefore(" · ")
+        choice.subOff -> tr("Bez titla")
+        else -> tr("Titlovi")
+    }
+    Button(subText, R.drawable.lc_captions, outline = if (choice.subFile != null || choice.sub != null) C.Green else null) { showSubs = true }
+    Button(if (choice.audio != null) tr("Audio") + ": " + choice.audio.title.substringBefore(" · ") else tr("Audio"), R.drawable.lc_volume) { showAudio = true }
+    if (showSubs) SubtitlePicker(search, season, episode, probeUrl = url,
+        onProbed = { t -> onChange(choice.copy(sub = t, subFile = null, subOff = false)); showSubs = false },
+        onDismiss = { showSubs = false }) { f ->
+        onChange(if (f == null) choice.copy(subFile = null, sub = null, subOff = true) else choice.copy(subFile = f, sub = null, subOff = false))
+        showSubs = false
+    }
+    if (showAudio) AudioPicker(url, choice.audio?.title, onDismiss = { showAudio = false }) { t -> onChange(choice.copy(audio = t)); showAudio = false }
 }
 
 @Composable
@@ -258,8 +274,7 @@ fun MovieDetailScreen(v: Vod, nav: Nav) {
     val p = remember { Store.active(ctx) } ?: return
     val info by load(v.id) { Repo.movieInfo(p, v.id) }
     val meta by load(v.name, Prefs.tmdbKey) { Tmdb.find(v.name, tv = false) }
-    var sub by remember { mutableStateOf<File?>(null) }
-    var audio by remember { mutableStateOf<String?>(null) }
+    var choice by remember { mutableStateOf(TrackChoice()) }
     val playFr = remember { FocusRequester() }
     val i = (info as? Load.Ok)?.value
     val m = (meta as? Load.Ok)?.value
@@ -286,18 +301,18 @@ fun MovieDetailScreen(v: Vod, nav: Nav) {
                 }
                 val plot = m?.overview ?: i?.plot
                 if (meta is Load.Loading && plot == null) T("Učitavam opis…", 14.sp, C.Muted)
-                plot?.let { T(it + if (m?.overviewLang == "en" && Prefs.metaLang != "en") "  (EN)" else "", 15.sp, C.Soft, maxLines = 5) }
+                plot?.let { T(it + if (m?.overviewLang == "en" && metaLanguage() != "en") "  (EN)" else "", 15.sp, C.Soft, maxLines = 5) }
                 if (m != null) PeopleRow(m.people) else {
                     i?.cast?.let { T("Glumci: $it", 13.sp, C.Muted, maxLines = 2) }
                     i?.director?.let { T("Režija: $it", 13.sp, C.Muted) }
                 }
-                if (!Tmdb.enabled()) T("Za postere, opis na bosanskom i glumce upiši TMDB ključ: Postavke › Filmovi i titlovi", 12.sp, C.Muted, maxLines = 2)
+                if (!Tmdb.enabled()) T("Za postere, opis na tvom jeziku i glumce upiši TMDB ključ: Postavke › Filmovi i titlovi", 12.sp, C.Muted, maxLines = 2)
                 Spacer(Modifier.height(4.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Button("Pokreni", R.drawable.lc_play, primary = true, focusRequester = playFr) {
-                        nav.push(Screen.Player(listOf(PlayItem(m?.title ?: v.name, v.url, v.poster, null, null, v.name, null, null, sub?.path, audio)), 0, live = false))
+                        nav.push(Screen.Player(listOf(choice.apply(PlayItem(m?.title ?: v.name, v.url, v.poster, null, null, v.name))), 0, live = false))
                     }
-                    TrackButtons(v.name, null, null, sub, audio, { sub = it }, { audio = it })
+                    TrackButtons(v.name, null, null, v.url, choice) { choice = it }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Button("Eksterni player", R.drawable.lc_link) { openExternal(ctx, v.url, v.name) }
@@ -317,8 +332,7 @@ fun SeriesDetailScreen(s: SeriesItem, nav: Nav) {
     val meta by load(s.name, Prefs.tmdbKey) { Tmdb.find(s.name, tv = true) }
     val m = (meta as? Load.Ok)?.value
     var season by remember { mutableIntStateOf(-1) }
-    var audio by remember { mutableStateOf<String?>(null) }
-    var showAudio by remember { mutableStateOf(false) }
+    var choice by remember { mutableStateOf(TrackChoice()) }
     val firstFr = remember { FocusRequester() }
     Box(Modifier.fillMaxSize()) {
         Backdrop(m?.backdrop ?: s.cover)
@@ -334,8 +348,6 @@ fun SeriesDetailScreen(s: SeriesItem, nav: Nav) {
                     m?.year?.let { Chip(it) }; m?.genres?.let { Chip(it.take(36)) }
                     m?.imdbRating?.let { Chip("IMDb $it", Color(0xFFF5C518), Color(0xFF0B0D12)) }
                     m?.tmdbRating?.let { Chip("TMDB ${(it * 10).toInt()}%", Color(0x2901B4E4), Color(0xFF67D4F5)) }
-                    Spacer(Modifier.weight(1f))
-                    Button(if (audio != null) "Audio: ${audio!!.uppercase()}" else "Audio", R.drawable.lc_volume) { showAudio = true }
                 }
                 (m?.overview ?: s.plot)?.let { T(it, 14.sp, C.Soft, maxLines = 3) }
                 when (val st = eps) {
@@ -356,8 +368,12 @@ fun SeriesDetailScreen(s: SeriesItem, nav: Nav) {
                         }
                         val list = all.filter { it.season == cur }
                         val play = list.map {
-                            PlayItem("${m?.title ?: cleanTitle(s.name).first} · S${it.season}E${it.num}", it.url, s.cover, it.title,
-                                null, s.name, it.season, it.num, null, audio)
+                            (if (it == list.first()) choice else choice.copy(subFile = null)).apply(PlayItem("${m?.title ?: cleanTitle(s.name).first} · S${it.season}E${it.num}", it.url, s.cover, it.title,
+                                null, s.name, it.season, it.num))
+                        }
+                        // audio and subtitles for the whole season, read from its first episode
+                        list.firstOrNull()?.let { e1 ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) { TrackButtons(s.name, e1.season, e1.num, e1.url, choice) { choice = it } }
                         }
                         val wrap = remember { Wrap() }
                         val ls = rememberLazyListState()
@@ -384,5 +400,4 @@ fun SeriesDetailScreen(s: SeriesItem, nav: Nav) {
             }
         }
     }
-    if (showAudio) AudioPicker(audio, onDismiss = { showAudio = false }) { a -> audio = a; showAudio = false }
 }

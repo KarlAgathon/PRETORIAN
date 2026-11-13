@@ -92,7 +92,7 @@ fun T(
     align: TextAlign? = null,
 ) {
     Text(
-        text = text,
+        text = tr(text),
         modifier = modifier,
         style = TextStyle(fontFamily = Inter, fontSize = size, color = color, fontWeight = weight, lineHeight = size * 1.35f),
         maxLines = maxLines,
@@ -129,6 +129,8 @@ fun Focusable(
             val ok = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter
             when {
                 e.key == Key.Menu && e.type == KeyEventType.KeyUp -> { long(); true }
+                // a new press: forget a hold whose release went to the menu window
+                ok && e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount == 0 -> { fired[0] = false; false }
                 // holding OK sends repeated key-downs: open the options once
                 ok && e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount > 0 -> {
                     if (!fired[0]) { fired[0] = true; long() }
@@ -186,12 +188,23 @@ sealed class Load<out V> {
     data class Err(val message: String) : Load<Nothing>()
 }
 
+/** Loads in the background. With [keep], a reload keeps showing the old result until the new one is ready
+ *  (no flashing list, focus stays where it was). */
 @Composable
-fun <V> load(vararg keys: Any?, block: suspend () -> V): State<Load<V>> =
+fun <V> load(vararg keys: Any?, keep: Boolean = false, block: suspend () -> V): State<Load<V>> =
     produceState<Load<V>>(Load.Loading, *keys) {
-        value = Load.Loading
+        if (!keep || value !is Load.Ok) value = Load.Loading
         value = try { Load.Ok(block()) } catch (e: Exception) { Load.Err(e.message ?: e.javaClass.simpleName) }
     }
+
+/** Focus a requester whose item may still be composing: tries a few times. */
+suspend fun FocusRequester.tryFocus(attempts: Int = 12): Boolean {
+    repeat(attempts) {
+        try { requestFocus(); return true } catch (_: Exception) {}
+        kotlinx.coroutines.delay(40)
+    }
+    return false
+}
 
 @Composable
 fun Loading(text: String = "Učitavam…") {
@@ -216,20 +229,36 @@ fun Dot(color: Color, size: Dp = 8.dp) {
 
 /* ------------------------------------------------------------------ dialogs */
 
-/** A centred card over the screen; Back closes it. */
+/**
+ * A centred card over a darkened screen; Back closes it.
+ * The OK press that opened it (holding OK) is still going on when the card appears: its repeats and
+ * its release are swallowed, so the card stays open and nothing inside gets clicked by accident.
+ */
 @Composable
 fun Popup(title: String, onDismiss: () -> Unit, width: Dp = 560.dp, content: @Composable ColumnScope.() -> Unit) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Column(
-            Modifier.widthIn(max = width).fillMaxWidth(0.9f).clip(RoundedCornerShape(26.dp))
-                .background(C.Overlay)
-                .border(1.dp, C.Line, RoundedCornerShape(26.dp))
-                .heightIn(max = 640.dp)
-                .padding(28.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+        val armed = remember { booleanArrayOf(false) }
+        Box(
+            Modifier.fillMaxSize().background(Color.Black.copy(alpha = if (C.IsLight) 0.35f else 0.6f))
+                .onPreviewKeyEvent { e ->
+                    val ok = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter
+                    if (!ok || armed[0]) return@onPreviewKeyEvent false
+                    // a fresh press arms the card; leftovers of the press that opened it are dropped
+                    if (e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount == 0) { armed[0] = true; false } else true
+                },
+            contentAlignment = Alignment.Center,
         ) {
-            T(title, 22.sp, C.Text, FontWeight.Bold, maxLines = 2)
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
+            Column(
+                Modifier.widthIn(max = width).fillMaxWidth(0.9f).clip(RoundedCornerShape(26.dp))
+                    .background(C.Overlay)
+                    .border(1.dp, C.Line, RoundedCornerShape(26.dp))
+                    .heightIn(max = 640.dp)
+                    .padding(28.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                T(title, 22.sp, C.Text, FontWeight.Bold, maxLines = 2)
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
+            }
         }
     }
 }
@@ -301,7 +330,7 @@ fun Field(
     OutlinedTextField(
         value = value,
         onValueChange = onChange,
-        label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        label = { Text(tr(label), maxLines = 1, overflow = TextOverflow.Ellipsis) },
         singleLine = true,
         modifier = modifier,
         textStyle = TextStyle(fontFamily = Inter, fontSize = 16.sp, color = C.Text),

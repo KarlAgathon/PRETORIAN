@@ -20,6 +20,9 @@ object Look {
     var mostWatched by mutableStateOf(true)
     var overlay by mutableIntStateOf(0)        // menus and info bar: 0 glass, 1 black
     var preview by mutableStateOf(true)        // live preview of the focused channel
+    var menuOpacity by mutableIntStateOf(94)   // how solid menus/popups are, in %
+    var rowSize by mutableIntStateOf(1)        // channel and group rows: 0 small, 1 medium, 2 large
+    var lang by mutableStateOf("bs")           // app language
 
     val ACCENTS = listOf(
         "Pretorian crvena" to Color(0xFFE5141B), "Plava" to Color(0xFF2563EB), "Zelena" to Color(0xFF16A34A),
@@ -42,13 +45,17 @@ object Look {
         mostWatched = p.getBoolean("look_mostwatched", true)
         overlay = p.getInt("look_overlay", 0)
         preview = p.getBoolean("look_preview", true)
+        menuOpacity = p.getInt("look_menuopacity", 94)
+        rowSize = p.getInt("look_rowsize", 1)
+        lang = p.getString("app_lang", "bs") ?: "bs"
     }
 
     fun save(c: Context) {
         sp(c).edit().putString("look_theme", theme).putInt("look_accent", accent).putInt("look_shade", shade)
             .putInt("look_opacity", opacity).putInt("look_tile", tileSize).putInt("look_poster", posterSize)
             .putInt("look_tilestyle", tileStyle).putBoolean("look_mostwatched", mostWatched)
-            .putInt("look_overlay", overlay).putBoolean("look_preview", preview).apply()
+            .putInt("look_overlay", overlay).putBoolean("look_preview", preview)
+            .putInt("look_menuopacity", menuOpacity).putInt("look_rowsize", rowSize).putString("app_lang", lang).apply()
     }
 }
 
@@ -106,8 +113,8 @@ object C {
     val Amber get() = if (IsLight) Color(0xFFB45309) else Color(0xFFFBBF24)
     val Danger = Color(0xFFEF4444)
     /** background of menus and popups: see-through glass or solid black */
-    val Overlay get() = if (Look.overlay == 1) (if (IsLight) Color.White else Color.Black)
-                        else (if (IsLight) Color(0xE6FFFFFF) else Color(0xCC141922))
+    val Overlay get() = if (Look.overlay == 1) (if (IsLight) Color.White else Color(0xFF07090D))
+                        else (if (IsLight) Color.White else Color(0xFF151A23)).copy(alpha = Look.menuOpacity.coerceIn(60, 100) / 100f)
     /** player info bar background */
     val OverlayBar get() = if (Look.overlay == 1) Color(0xF2000000) else Color(0x99000000)
 }

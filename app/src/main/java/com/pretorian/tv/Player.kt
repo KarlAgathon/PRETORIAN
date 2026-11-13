@@ -74,13 +74,59 @@ fun buildPlayer(ctx: Context): ExoPlayer {
     val player = ExoPlayer.Builder(ctx, renderers)
         .setMediaSourceFactory(DefaultMediaSourceFactory(ctx).setDataSourceFactory(DefaultDataSource.Factory(ctx, http)))
         .build()
-    val langs = Prefs.subLangs.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toTypedArray()
     val audio = Prefs.audioLangs.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toTypedArray()
-    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-        .setPreferredTextLanguages(*langs)
-        .setPreferredAudioLanguages(*audio)
-        .build()
+    val b = player.trackSelectionParameters.buildUpon().setPreferredAudioLanguages(*audio)
+    if (Prefs.autoSubs) {
+        val langs = Prefs.subLangs.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toTypedArray()
+        b.setPreferredTextLanguages(*langs)
+    } else {
+        // subtitles stay off until you pick one (the audio choice never switches them on)
+        b.setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, true)
+    }
+    player.trackSelectionParameters = b.build()
     return player
+}
+
+/** ISO 639-1 code ("bs") from what the stream says ("bos", "bs", "bs-BA", "scc"…). */
+fun iso2(raw: String?): String? {
+    val c = raw?.trim()?.lowercase()?.substringBefore('-')?.substringBefore('_') ?: return null
+    if (c.isEmpty() || c == "und") return null
+    if (c.length == 2) return c
+    when (c) { "scc", "srp" -> return "sr"; "scr", "hrv" -> return "hr"; "bos" -> return "bs"; "ger", "deu" -> return "de"; "fre", "fra" -> return "fr" }
+    return java.util.Locale.getISOLanguages().firstOrNull { l -> try { java.util.Locale(l).isO3Language == c } catch (e: Exception) { false } } ?: c
+}
+
+/** Audio and subtitle tracks of a stream, read before playing (opens the stream for a moment). */
+@OptIn(UnstableApi::class)
+suspend fun probeTracks(ctx: Context, url: String): Pair<List<androidx.media3.common.Format>, List<androidx.media3.common.Format>>? {
+    val player = buildPlayer(ctx)
+    return try {
+        kotlinx.coroutines.withTimeoutOrNull(20_000) {
+            kotlinx.coroutines.suspendCancellableCoroutine { cont ->
+                val l = object : Player.Listener {
+                    override fun onTracksChanged(tracks: Tracks) {
+                        if (tracks.groups.isEmpty() || !cont.isActive) return
+                        fun of(type: Int) = tracks.groups.filter { it.type == type }.flatMap { g -> (0 until g.length).map { g.getTrackFormat(it) } }
+                        cont.resumeWith(Result.success(of(MC.TRACK_TYPE_AUDIO) to of(MC.TRACK_TYPE_TEXT)))
+                    }
+                    override fun onPlayerError(error: PlaybackException) { if (cont.isActive) cont.resumeWith(Result.success(null)) }
+                }
+                player.addListener(l)
+                player.volume = 0f
+                player.setMediaItem(MediaItem.fromUri(url)); player.prepare()
+            }
+        }
+    } finally { player.release() }
+}
+
+fun trackLabel(f: androidx.media3.common.Format, audio: Boolean): String {
+    val lang = iso2(f.language)?.let { Langs.label(it) } ?: tr("Nepoznat jezik")
+    val extra = buildList {
+        f.label?.takeIf { it.isNotBlank() }?.let { add(it) }
+        if (audio && f.channelCount > 0) add(when (f.channelCount) { 1 -> "Mono"; 2 -> "Stereo"; 6 -> "5.1"; 8 -> "7.1"; else -> "${f.channelCount} ch" })
+        f.sampleMimeType?.substringAfter('/')?.uppercase()?.let { add(it) }
+    }.joinToString(" · ")
+    return if (extra.isBlank()) lang else "$lang · $extra"
 }
 
 private fun qualityLabel(h: Int) = when {
@@ -96,14 +142,7 @@ private fun tracksOf(player: ExoPlayer, type: Int): List<TrackItem> {
         if (g.type != type) continue
         for (i in 0 until g.length) {
             if (!g.isTrackSupported(i)) continue
-            val f = g.getTrackFormat(i)
-            val lang = f.language?.let { Subs.langName(it.take(2).lowercase()) } ?: "Nepoznat jezik"
-            val extra = buildList {
-                f.label?.let { add(it) }
-                if (type == MC.TRACK_TYPE_AUDIO && f.channelCount > 0) add(when (f.channelCount) { 1 -> "Mono"; 2 -> "Stereo"; 6 -> "5.1"; 8 -> "7.1"; else -> "${f.channelCount} kan." })
-                f.sampleMimeType?.substringAfter('/')?.uppercase()?.let { add(it) }
-            }.joinToString(" · ")
-            out.add(TrackItem(if (extra.isBlank()) lang else "$lang · $extra", g, i, g.isTrackSelected(i)))
+            out.add(TrackItem(trackLabel(g.getTrackFormat(i), type == MC.TRACK_TYPE_AUDIO), g, i, g.isTrackSelected(i)))
         }
     }
     return out
@@ -129,9 +168,54 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     var subFile by remember { mutableStateOf(s.items.getOrNull(index)?.subFile) }
     var resize by remember { mutableIntStateOf(0) }
     val player = remember { buildPlayer(ctx) }
+    val applied = remember { booleanArrayOf(false) }
+    val step = Prefs.seekStep * 1000L
     val focus = remember { FocusRequester() }
     val p = remember { Store.active(ctx) }
     val item = s.items[index]
+
+
+    /** audio / built-in subtitle picked on the movie page, applied when the stream's tracks are known */
+    fun applyChoices(item: PlayItem) {
+        fun find(type: Int, lang: String?, label: String?): Pair<Tracks.Group, Int>? {
+            for (g in player.currentTracks.groups) {
+                if (g.type != type) continue
+                for (i in 0 until g.length) {
+                    val f = g.getTrackFormat(i)
+                    if ((lang == null || iso2(f.language) == lang) && (label == null || f.label == label)) return g to i
+                }
+            }
+            return null
+        }
+        val b = player.trackSelectionParameters.buildUpon()
+        if (item.audioLang != null || item.audioLabel != null) find(MC.TRACK_TYPE_AUDIO, item.audioLang, item.audioLabel)?.let { (g, i) ->
+            b.setOverrideForType(TrackSelectionOverride(g.mediaTrackGroup, i))
+        }
+        if (subFile != null) { /* a subtitle file is loaded: keep it */ }
+        else if (item.subOff) b.setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, true)
+        else if (item.subLang != null || item.subLabel != null) find(MC.TRACK_TYPE_TEXT, item.subLang, item.subLabel)?.let { (g, i) ->
+            b.setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false).setOverrideForType(TrackSelectionOverride(g.mediaTrackGroup, i))
+        }
+        player.trackSelectionParameters = b.build()
+    }
+
+    fun loadMedia(item: PlayItem, file: String?, at: Long) {
+        val b = MediaItem.Builder().setUri(item.url)
+        if (file != null) b.setSubtitleConfigurations(listOf(
+            MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(File(file)))
+                .setMimeType(MimeTypes.APPLICATION_SUBRIP)
+                .setLanguage(File(file).nameWithoutExtension.substringAfterLast('_'))
+                .setSelectionFlags(MC.SELECTION_FLAG_DEFAULT).build()))
+        val tb = player.trackSelectionParameters.buildUpon()
+        if (item.audioLang != null) tb.setPreferredAudioLanguages(item.audioLang)
+        if (file != null) tb.setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false)
+        else if (item.subOff || (!Prefs.autoSubs && item.subLang == null && item.subLabel == null)) tb.setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, true)
+        player.trackSelectionParameters = tb.build()
+        applied[0] = false
+        player.setMediaItem(b.build(), at)
+        player.prepare()
+        player.playWhenReady = true
+    }
 
     DisposableEffect(Unit) {
         val l = object : Player.Listener {
@@ -146,24 +230,11 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             override fun onTracksChanged(tracks: Tracks) {
                 player.videoFormat?.let { videoH = it.height; fps = it.frameRate }
                 player.audioFormat?.let { channels = it.channelCount }
+                if (!applied[0] && tracks.groups.isNotEmpty()) { applied[0] = true; applyChoices(s.items[index]) }
             }
         }
         player.addListener(l)
         onDispose { player.removeListener(l); player.release() }
-    }
-
-    fun loadMedia(item: PlayItem, file: String?, at: Long) {
-        val b = MediaItem.Builder().setUri(item.url)
-        if (file != null) b.setSubtitleConfigurations(listOf(
-            MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(File(file)))
-                .setMimeType(MimeTypes.APPLICATION_SUBRIP)
-                .setLanguage(File(file).nameWithoutExtension.substringAfterLast('_'))
-                .setSelectionFlags(MC.SELECTION_FLAG_DEFAULT).build()))
-        if (item.audioLang != null) player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-            .setPreferredAudioLanguages(item.audioLang).build()
-        player.setMediaItem(b.build(), at)
-        player.prepare()
-        player.playWhenReady = true
     }
 
     LaunchedEffect(index) {
@@ -190,8 +261,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                     Key.Menu, Key.Info -> { dialog = "menu"; true }
                     Key.DirectionUp, Key.ChannelUp -> if (s.live) { index = (index - 1 + n) % n; true } else { showInfo = true; true }
                     Key.DirectionDown, Key.ChannelDown -> if (s.live) { index = (index + 1) % n; true } else { dialog = "menu"; true }
-                    Key.DirectionLeft, Key.MediaRewind -> if (!s.live) { player.seekTo((player.currentPosition - 10_000).coerceAtLeast(0)); showInfo = true; true } else false
-                    Key.DirectionRight, Key.MediaFastForward -> if (!s.live) { player.seekTo(player.currentPosition + 10_000); showInfo = true; true } else false
+                    Key.DirectionLeft, Key.MediaRewind -> if (!s.live) { player.seekTo((player.currentPosition - step).coerceAtLeast(0)); showInfo = true; true } else false
+                    Key.DirectionRight, Key.MediaFastForward -> if (!s.live) { player.seekTo(player.currentPosition + step); showInfo = true; true } else false
                     Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.MediaPlayPause -> {
                         if (s.live) { if (showInfo && e.key != Key.MediaPlayPause) dialog = "menu" else showInfo = true }
                         else { if (player.isPlaying) player.pause() else player.play(); showInfo = true }
@@ -259,7 +330,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                         }
                     }
                     T(if (s.live) "▲ ▼ kanal · OK još jednom = opcije (favorit, audio, titl, kvalitet)"
-                      else "OK pauza · ◀ ▶ 10 s · ▼ ili Meni = audio, titlovi, format slike", 13.sp, Color(0xFFB6BCC6))
+                      else "OK pauza · ◀ ▶ ${Prefs.seekStep} s · ▼ = audio, titlovi, format slike", 13.sp, Color(0xFFB6BCC6))
                 }
             }
         }
@@ -290,7 +361,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         "audio" -> {
             val tracks = tracksOf(player, MC.TRACK_TYPE_AUDIO)
             Popup("Audio", onDismiss = { dialog = null }) {
-                if (tracks.isEmpty()) T("Ovaj video ima samo jednu stazu zvuka.", 14.sp, C.Muted)
+                if (tracks.size <= 1) T("Film ima samo jednu audio stazu", 14.sp, C.Muted)
                 tracks.forEach { t ->
                     OptionRow(t.label, R.drawable.lc_volume, selected = t.selected) {
                         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()

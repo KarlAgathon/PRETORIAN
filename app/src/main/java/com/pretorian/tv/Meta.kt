@@ -87,10 +87,10 @@ object Tmdb {
 
     suspend fun find(rawTitle: String, tv: Boolean): Meta? = withContext(Dispatchers.IO) {
         if (!enabled()) return@withContext null
-        val ck = "${if (tv) "tv" else "mv"}|$rawTitle|${Prefs.metaLang}"
+        val ck = "${if (tv) "tv" else "mv"}|$rawTitle|${metaLanguage()}"
         if (cache.containsKey(ck)) return@withContext cache[ck]
         val (title, year) = cleanTitle(rawTitle)
-        val lang = Prefs.metaLang
+        val lang = metaLanguage()
         val kind = if (tv) "tv" else "movie"
         var q = "query=${Net.enc(title)}&language=$lang"
         if (year != null) q += if (tv) "&first_air_date_year=$year" else "&year=$year"
