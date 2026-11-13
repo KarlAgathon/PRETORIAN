@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.unit.dp
 
 /** Appearance settings. Compose state, so the whole app restyles the moment a value changes. */
 object Look {
@@ -16,13 +17,21 @@ object Look {
     var opacity by mutableIntStateOf(80)       // panel opacity in %, steps of 5
     var tileSize by mutableIntStateOf(1)       // 0 small, 1 medium, 2 large
     var posterSize by mutableIntStateOf(1)     // 0 small, 1 medium, 2 large
-    var tileStyle by mutableIntStateOf(0)      // 0 solid, 1 glass, 2 outline
+    var tileStyle by mutableIntStateOf(3)      // 0 solid, 1 glass, 2 outline, 3 modern
     var mostWatched by mutableStateOf(true)
     var overlay by mutableIntStateOf(0)        // menus and info bar: 0 glass, 1 black
     var preview by mutableStateOf(true)        // live preview of the focused channel
     var menuOpacity by mutableIntStateOf(94)   // how solid menus/popups are, in %
     var rowSize by mutableIntStateOf(1)        // channel and group rows: 0 small, 1 medium, 2 large
     var lang by mutableStateOf("bs")           // app language
+    var iconSet by mutableStateOf("lc")        // lc lucide, tb tabler, fl fluent, ms material, ph phosphor, or a downloaded set "dl_<id>"
+    var iconStyle by mutableIntStateOf(1)      // variant of the set (thin/normal/bold, outline/filled)
+    var corner by mutableIntStateOf(0)         // 0 rounded, 1 slightly rounded, 2 sharp
+    var groupFrame by mutableStateOf(true)     // thin accent frame around TV groups
+    var resBadge by mutableIntStateOf(1)       // resolution in the player corner: 0 off, 1 on start, 2 always
+    var layout by mutableIntStateOf(1)         // 0 classic, 1 New Wave (full-width grids, chips, hint bar), 2 New Age (top menu, poster rows)
+    val wave get() = layout >= 1
+    val age get() = layout == 2
 
     val ACCENTS = listOf(
         "Pretorian crvena" to Color(0xFFE5141B), "Plava" to Color(0xFF2563EB), "Zelena" to Color(0xFF16A34A),
@@ -48,6 +57,14 @@ object Look {
         menuOpacity = p.getInt("look_menuopacity", 94)
         rowSize = p.getInt("look_rowsize", 1)
         lang = p.getString("app_lang", "bs") ?: "bs"
+        iconSet = p.getString("look_iconset", "lc") ?: "lc"
+        iconStyle = p.getInt("look_iconstyle", 1)
+        corner = p.getInt("look_corner", 0)
+        groupFrame = p.getBoolean("look_groupframe", true)
+        resBadge = p.getInt("look_resbadge", 1)
+        layout = p.getInt("look_layout", 1)
+        // 0.3: the new modern home tiles become the default once
+        if (p.getInt("look_v", 0) < 3) { tileStyle = 3; p.edit().putInt("look_v", 3).putInt("look_tilestyle", 3).apply() }
     }
 
     fun save(c: Context) {
@@ -55,7 +72,9 @@ object Look {
             .putInt("look_opacity", opacity).putInt("look_tile", tileSize).putInt("look_poster", posterSize)
             .putInt("look_tilestyle", tileStyle).putBoolean("look_mostwatched", mostWatched)
             .putInt("look_overlay", overlay).putBoolean("look_preview", preview)
-            .putInt("look_menuopacity", menuOpacity).putInt("look_rowsize", rowSize).putString("app_lang", lang).apply()
+            .putInt("look_menuopacity", menuOpacity).putInt("look_rowsize", rowSize).putString("app_lang", lang)
+            .putString("look_iconset", iconSet).putInt("look_iconstyle", iconStyle).putInt("look_corner", corner)
+            .putBoolean("look_groupframe", groupFrame).putInt("look_resbadge", resBadge).putInt("look_layout", layout).apply()
     }
 }
 
@@ -118,3 +137,15 @@ object C {
     /** player info bar background */
     val OverlayBar get() = if (Look.overlay == 1) Color(0xF2000000) else Color(0x99000000)
 }
+
+/** Corner shape from Settings › Appearance › Corners. */
+fun Rnd(d: androidx.compose.ui.unit.Dp): androidx.compose.ui.graphics.Shape =
+    androidx.compose.foundation.shape.RoundedCornerShape(when (Look.corner) { 2 -> d * 0f; 1 -> d * 0.4f; else -> d })
+
+/** Pill shape (chips), following the corner setting. */
+val Pill: androidx.compose.ui.graphics.Shape
+    get() = when (Look.corner) {
+        2 -> androidx.compose.foundation.shape.RoundedCornerShape(0)
+        1 -> androidx.compose.foundation.shape.RoundedCornerShape(6.dp)
+        else -> androidx.compose.foundation.shape.RoundedCornerShape(50)
+    }

@@ -61,21 +61,200 @@ fun MoviesScreen(nav: Nav) = VodBrowser(nav, series = false)
 @Composable
 fun SeriesScreen(nav: Nav) = VodBrowser(nav, series = true)
 
-private data class Poster(val id: String, val name: String, val image: String?, val rating: String?, val open: () -> Unit)
+private data class Poster(val id: String, val name: String, val image: String?, val rating: String?, val url: String?, val isNew: Boolean,
+                          val open: () -> Unit, val play: (() -> Unit)? = null)
+
+private const val G_CONTINUE = "__continue__"
+private const val G_NEW = "__new__"
+
+/** Rows of the category column: playlist headers (when several are on), "Continue watching", "New", then the categories. */
+private sealed class VRow {
+    data class Header(val p: Playlist, val open: Boolean) : VRow()
+    data class Group(val cat: Category, val count: Int = 0) : VRow()
+    val id get() = when (this) { is Header -> "h:" + p.id; is Group -> "g:" + cat.id }
+}
 
 @Composable
 private fun VodBrowser(nav: Nav, series: Boolean) {
-    val ctx = LocalContext.current
-    val p = remember { Store.active(ctx) } ?: run { NoPlaylist(nav); return }
-    if (p.type != SourceType.XTREAM) {
-        Message(if (series) "Serije nisu dostupne" else "Filmovi nisu dostupni",
-            "Ova M3U playlista ima samo TV kanale. Filmovi i serije rade s Xtream Codes playlistom.")
-        return
+    if (Look.wave) { WaveBrowser(nav, series); return }
+    VodClassic(nav, series)
+}
+
+/** Posters of a category (or of "Continue watching" / "New"). */
+private suspend fun postersOf(ctx: Context, nav: Nav, p: Playlist, g: Category, series: Boolean): List<Poster> {
+    val kind = if (series) "series" else "vod"
+    return when (g.id) {
+        G_CONTINUE -> Watch.continueList(ctx).filter { (it.series != null) == series }.map { pr ->
+            val play = { nav.push(Screen.Player(listOf(PlayItem(pr.title, pr.url, pr.poster, null, null, pr.series, pr.season, pr.episode)), 0, live = false)) }
+            Poster(pr.url, pr.title, pr.poster, null, pr.url, false, play, play)
+        }
+        G_NEW -> NewContent.items(p.id, kind).map { o ->
+            if (series) { val si = SeriesItem(o.str("id"), o.str("n"), o.str("i").orNullIfBlank(), null, o.str("r").orNullIfBlank())
+                Poster(si.id, si.name, si.cover, si.rating, null, true, { nav.push(Screen.SeriesDetail(si)) }) }
+            else { val v = Vod(o.str("id"), o.str("n"), o.str("i").orNullIfBlank(), o.str("r").orNullIfBlank(), o.str("u"))
+                Poster(v.id, v.name, v.poster, v.rating, v.url, true, { nav.push(Screen.MovieDetail(v)) }) }
+        }
+        else -> if (series) Repo.series(p, g.id).map { s -> Poster(s.id, s.name, s.cover, s.rating, null, NewContent.isNew(p.id, kind, s.id)) { nav.push(Screen.SeriesDetail(s)) } }
+        else Repo.movies(p, g.id).map { v -> Poster(v.id, v.name, v.poster, v.rating, v.url, NewContent.isNew(p.id, kind, v.id)) { nav.push(Screen.MovieDetail(v)) } }
     }
+}
+
+/** New Wave / New Age: categories as chips on top, posters across the whole screen (New Age: a row per category). */
+@Composable
+private fun WaveBrowser(nav: Nav, series: Boolean) {
+    val ctx = LocalContext.current
+    var rev by remember { mutableIntStateOf(0) }
+    val p = remember(rev) { Store.active(ctx) } ?: run { NoPlaylist(nav); return }
+    val pls = remember(rev) { Store.actives(ctx) }
+    if (p.type != SourceType.XTREAM) { Message(if (series) "Serije nisu dostupne" else "Filmovi nisu dostupni", "Filmovi i serije rade s Xtream Codes playlistom."); return }
     val kind = if (series) "series" else "vod"
     val ovr = remember(p.id) { Ovr(ctx, p.id) }
+    val cats by load(p.id, series, rev, NewContent.rev, Watch.rev, keep = true) {
+        val out = ArrayList<Pair<Category, Int>>()
+        val cont = Watch.continueList(ctx).filter { (it.series != null) == series }
+        if (cont.isNotEmpty()) out.add(Category(G_CONTINUE, tr("Nastavi gledati")) to cont.size)
+        val nw = NewContent.items(p.id, kind)
+        if (nw.isNotEmpty()) out.add(Category(G_NEW, tr("Novo dodano")) to nw.size)
+        ovr.groups(kind, if (series) Repo.seriesGroups(p) else Repo.vodGroups(p)).forEach { out.add(it to NewContent.countCat(p.id, kind, it.id)) }
+        out
+    }
+    var group by remember { mutableStateOf<Category?>(null) }
+    var sort by remember { mutableIntStateOf(0) }
+    var groupMenu by remember { mutableStateOf<Category?>(null) }
+    val gate = remember { PinGate() }
+    val firstChip = remember { FocusRequester() }
+    Column(Modifier.fillMaxSize().padding(top = 14.dp)) {
+        Row(Modifier.padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            T(if (series) "Serije" else "Filmovi", 24.sp, C.Text, FontWeight.Bold)
+            group?.let { T("›  " + it.name, 18.sp, C.Soft, FontWeight.SemiBold, modifier = Modifier.weight(1f)) } ?: Spacer(Modifier.weight(1f))
+            if (pls.size > 1) pls.forEach { pl ->
+                val sel = pl.id == p.id
+                Focusable(onClick = { Store.open(ctx, pl.id); group = null; rev++ }, shape = Pill, normal = if (sel) C.CardFocus else C.Card, zoom = 1.04f, modifier = Modifier.height(34.dp)) { _ ->
+                    T(pl.name, 13.sp, C.Text, if (sel) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.align(Alignment.Center).padding(horizontal = 12.dp))
+                }
+            }
+            Focusable(onClick = { sort = (sort + 1) % 3 }, shape = Pill, normal = C.Card, zoom = 1.04f, modifier = Modifier.height(34.dp)) { _ ->
+                Row(Modifier.align(Alignment.Center).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Ico(R.drawable.lc_list, 14.dp, C.Soft)
+                    T(tr("Sortiraj") + ": " + tr(listOf("Kao kod providera", "A–Z", "Ocjena")[sort]), 13.sp, C.Text)
+                }
+            }
+        }
+        when (val s = cats) {
+            is Load.Loading -> Loading("Učitavam kategorije…")
+            is Load.Err -> Message("Greška", s.message)
+            is Load.Ok -> {
+                LazyRow(Modifier.padding(top = 10.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 24.dp)) {
+                    if (Look.age) item {
+                        val sel = group == null
+                        Focusable(onClick = { group = null }, focusRequester = firstChip, shape = Pill, normal = if (sel) C.Red else C.Card,
+                            focused = if (sel) C.Red else C.CardHi, zoom = 1.04f, modifier = Modifier.height(36.dp)) { _ ->
+                            T("Sve kategorije", 13.sp, if (sel) C.OnRed else C.Text, FontWeight.SemiBold, modifier = Modifier.align(Alignment.Center).padding(horizontal = 14.dp))
+                        }
+                    }
+                    itemsIndexed(s.value, key = { _, c -> c.first.id }) { i, (c, n) ->
+                        val sel = group?.id == c.id
+                        val locked = ovr.isLocked(kind, c.id)
+                        Focusable(onClick = { gate.run("$kind:${c.id}", locked) { group = c } },
+                            onMenu = if (Lock.simple || c.id == G_CONTINUE || c.id == G_NEW) null else ({ groupMenu = c }),
+                            focusRequester = if (!Look.age && i == 0) firstChip else null, shape = Pill,
+                            normal = if (sel) C.Red else C.Card, focused = if (sel) C.Red else C.CardHi, zoom = 1.04f, modifier = Modifier.height(36.dp)) { _ ->
+                            Row(Modifier.align(Alignment.Center).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                if (c.id == G_CONTINUE) Ico(R.drawable.lc_history, 14.dp, if (sel) C.OnRed else C.RedText)
+                                if (c.id == G_NEW) Ico(R.drawable.lc_sparkles, 14.dp, if (sel) C.OnRed else C.Amber)
+                                if (locked) Ico(R.drawable.lc_lock, 13.dp, if (sel) C.OnRed else C.Muted)
+                                T(c.name + if (n > 0) " · $n" else "", 13.sp, if (sel) C.OnRed else C.Text, FontWeight.SemiBold)
+                            }
+                        }
+                    }
+                }
+                LaunchedEffect(Unit) {
+                    if (!Look.age && group == null) group = s.value.firstOrNull { it.first.id != G_CONTINUE }?.first ?: s.value.firstOrNull()?.first
+                    firstChip.tryFocus()
+                }
+                val g = group
+                if (g == null && Look.age) AgeRows(nav, p, s.value.map { it.first }.take(14), series) { group = it }
+                else if (g != null) {
+                    val st by load(p.id, g.id, series, Watch.rev, NewContent.rev) { postersOf(ctx, nav, p, g, series) }
+                    when (val ps = st) {
+                        is Load.Loading -> Loading()
+                        is Load.Err -> Message("Nije se učitalo", ps.message)
+                        is Load.Ok -> {
+                            val sorted = when (sort) { 1 -> ps.value.sortedBy { cleanTitle(it.name).first.lowercase() }; 2 -> ps.value.sortedByDescending { it.rating?.toDoubleOrNull() ?: 0.0 }; else -> ps.value }
+                            if (sorted.isEmpty()) Message("Kategorija je prazna") else PosterGrid(g.name, sorted, g.id == G_NEW, kind, p.id, wide = true)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    groupMenu?.let { g ->
+        val list = (cats as? Load.Ok)?.value?.map { it.first }?.filter { it.id != G_CONTINUE && it.id != G_NEW } ?: emptyList()
+        GroupOptions(kind, g, ovr, list, onDismiss = { groupMenu = null }) { close -> rev++; if (close) groupMenu = null }
+    }
+    PinGateDialog(gate)
+}
+
+/** New Age: a row of posters for each category, "See all" opens the whole category. */
+@Composable
+private fun AgeRows(nav: Nav, p: Playlist, cats: List<Category>, series: Boolean, onAll: (Category) -> Unit) {
+    val ctx = LocalContext.current
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(start = 24.dp, bottom = 30.dp, top = 6.dp)) {
+        items(cats, key = { it.id }) { c ->
+            val st by load(p.id, c.id, series) { postersOf(ctx, nav, p, c, series).take(20) }
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.padding(end = 24.dp), verticalAlignment = Alignment.CenterVertically) {
+                    T(c.name, 18.sp, C.Text, FontWeight.Bold, modifier = Modifier.weight(1f))
+                    Focusable(onClick = { onAll(c) }, shape = Pill, normal = C.Card, zoom = 1.04f, modifier = Modifier.height(32.dp)) { _ ->
+                        T("Prikaži sve", 12.sp, C.RedText, FontWeight.SemiBold, modifier = Modifier.align(Alignment.Center).padding(horizontal = 12.dp))
+                    }
+                }
+                when (val s = st) {
+                    is Load.Ok -> LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(end = 24.dp)) {
+                        items(s.value, key = { it.id }) { pt ->
+                            Focusable(modifier = Modifier.width(132.dp), onClick = pt.open, normal = Color.Transparent, focused = C.Card, zoom = 1.06f) { f ->
+                                Column(Modifier.padding(4.dp)) {
+                                    Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(Rnd(12.dp)).background(C.Tile)) {
+                                        if (pt.image != null) AsyncImage(model = pt.image, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                                        else T(cleanTitle(pt.name).first, 12.sp, C.Muted, maxLines = 4, modifier = Modifier.align(Alignment.Center).padding(8.dp))
+                                        Row(Modifier.padding(6.dp)) {
+                                            if (pt.isNew) Badge(tr("NOVO"), Color(0xFFF59E0B), Color(0xFF0B0D12))
+                                            pt.rating?.toDoubleOrNull()?.takeIf { it > 0 }?.let { Badge("★ " + String.format("%.1f", it), Color(0xCC0B0D12), Color(0xFFF5C518)) }
+                                        }
+                                    }
+                                    T(pt.name, 12.sp, if (f) C.Text else C.Soft, maxLines = 2, modifier = Modifier.padding(top = 5.dp))
+                                }
+                            }
+                        }
+                    }
+                    is Load.Loading -> Box(Modifier.fillMaxWidth().height(60.dp)) { Loading("") }
+                    else -> T("Nije se učitalo", 12.sp, C.Muted)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun VodClassic(nav: Nav, series: Boolean) {
+    val ctx = LocalContext.current
     var rev by remember { mutableIntStateOf(0) }
-    val groupsState by load(p.id, series, rev) { ovr.groups(kind, if (series) Repo.seriesGroups(p) else Repo.vodGroups(p)) }
+    val p = remember(rev) { Store.active(ctx) } ?: run { NoPlaylist(nav); return }
+    val pls = remember(rev) { Store.actives(ctx) }
+    val kind = if (series) "series" else "vod"
+    val ovr = remember(p.id) { Ovr(ctx, p.id) }
+    val rowsState by load(p.id, series, rev, NewContent.rev, Watch.rev, keep = true) {
+        val out = ArrayList<VRow>()
+        if (pls.size > 1) out.add(VRow.Header(p, true))
+        val cont = Watch.continueList(ctx).filter { (it.series != null) == series && (it.pid.isBlank() || it.pid == p.id) }
+        if (cont.isNotEmpty()) out.add(VRow.Group(Category(G_CONTINUE, tr("Nastavi gledati")), cont.size))
+        val nw = NewContent.items(p.id, kind)
+        if (nw.isNotEmpty()) out.add(VRow.Group(Category(G_NEW, tr("Novo dodano")), nw.size))
+        if (p.type == SourceType.XTREAM) ovr.groups(kind, if (series) Repo.seriesGroups(p) else Repo.vodGroups(p))
+            .forEach { out.add(VRow.Group(it, NewContent.countCat(p.id, kind, it.id))) }
+        pls.drop(1).forEach { out.add(VRow.Header(it, false)) }
+        out
+    }
     var focusedGroup by remember { mutableStateOf<Category?>(null) }
     var group by remember { mutableStateOf<Category?>(null) }
     var groupMenu by remember { mutableStateOf<Category?>(null) }
@@ -91,36 +270,60 @@ private fun VodBrowser(nav: Nav, series: Boolean) {
     }
 
     Row(Modifier.fillMaxSize()) {
-        Column(Modifier.width(300.dp).fillMaxHeight().padding(start = 18.dp, end = 12.dp, top = 24.dp)) {
-            T(if (series) "Serije" else "Filmovi", 28.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 10.dp, bottom = 14.dp))
-            when (val s = groupsState) {
+        Column(Modifier.width(290.dp).fillMaxHeight().padding(start = 16.dp, end = 10.dp, top = 22.dp)) {
+            T(if (series) "Serije" else "Filmovi", 26.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 10.dp, bottom = 12.dp))
+            when (val s = rowsState) {
                 is Load.Loading -> Loading("Učitavam kategorije…")
                 is Load.Err -> Message("Greška", s.message)
                 is Load.Ok -> {
                     val all = s.value
-                    LazyColumn(state = gState, verticalArrangement = Arrangement.spacedBy(3.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
-                        itemsIndexed(all, key = { i, g -> "$i${g.id}" }) { i, g ->
-                            val selected = group?.id == g.id
-                            val locked = ovr.isLocked(kind, g.id)
-                            Focusable(
-                                modifier = Modifier.fillMaxWidth().height(44.dp).wrapKeys(i, all.size, gWrap),
-                                onClick = { gate.run("$kind:${g.id}", locked) { group = g } },
-                                onFocus = { focusedGroup = g },
-                                onMenu = if (Lock.simple) null else ({ groupMenu = g }),
-                                focusRequester = gWrap.requester(i, if (i == 0) firstGroup else null),
-                                normal = if (selected) C.CardFocus else Color.Transparent,
-                                zoom = 1.0f,
-                            ) { _ ->
-                                Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    T(g.name, 14.sp, if (selected) C.Text else C.Soft, if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                                        modifier = Modifier.weight(1f))
-                                    if (locked) Ico(R.drawable.lc_lock, 15.dp, C.Muted)
+                    LazyColumn(state = gState, verticalArrangement = Arrangement.spacedBy(4.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
+                        itemsIndexed(all, key = { _, r -> r.id }) { i, r ->
+                            val m = Modifier.fillMaxWidth().height(Rows.group).wrapKeys(i, all.size, gWrap)
+                            val fr = gWrap.requester(i, if (i == 0) firstGroup else null)
+                            when (r) {
+                                is VRow.Header -> Focusable(modifier = m.height(Rows.group + 6.dp), focusRequester = fr, normal = C.Card, zoom = 1f,
+                                    onClick = { if (!r.open) { Store.open(ctx, r.p.id); group = null; rev++ } }) { _ ->
+                                    Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Ico(if (r.open) R.drawable.lc_chevron_down else R.drawable.lc_chevron_right, 16.dp, C.RedText)
+                                        T(r.p.name, 15.sp, C.Text, FontWeight.Bold, modifier = Modifier.weight(1f))
+                                    }
+                                }
+                                is VRow.Group -> {
+                                    val g = r.cat
+                                    val selected = group?.id == g.id
+                                    val locked = ovr.isLocked(kind, g.id)
+                                    val special = g.id == G_CONTINUE || g.id == G_NEW
+                                    val shape = Rnd(12.dp)
+                                    Focusable(
+                                        modifier = m.then(if (Look.groupFrame) Modifier.border(if (selected) 1.5.dp else 1.dp,
+                                            C.Red.copy(alpha = if (selected) 0.9f else 0.28f), shape) else Modifier),
+                                        shape = shape,
+                                        onClick = { gate.run("$kind:${g.id}", locked) { group = g } },
+                                        onFocus = { focusedGroup = g },
+                                        onMenu = if (Lock.simple || special) null else ({ groupMenu = g }),
+                                        focusRequester = fr,
+                                        normal = if (selected) C.Red.copy(alpha = 0.28f) else Color.Transparent,
+                                        zoom = 1.0f,
+                                    ) { _ ->
+                                        Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            if (g.id == G_CONTINUE) Ico(R.drawable.lc_history, 15.dp, C.RedText)
+                                            if (g.id == G_NEW) Ico(R.drawable.lc_sparkles, 15.dp, C.Amber)
+                                            T(g.name, Rows.font, if (selected) C.Text else C.Soft, if (selected || special) FontWeight.SemiBold else FontWeight.Normal,
+                                                modifier = Modifier.weight(1f))
+                                            if (locked) Ico(R.drawable.lc_lock, 15.dp, C.Muted)
+                                            if (r.count > 0 && g.id != G_CONTINUE) Box(Modifier.clip(Pill).background(if (g.id == G_NEW) C.Amber else C.Danger).padding(horizontal = 7.dp, vertical = 1.dp)) {
+                                                T(if (g.id == G_NEW) "${r.count}" else trf("%s nova", r.count), 10.sp, Color.White, FontWeight.Bold)
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
-                    LaunchedEffect(Unit) { try { firstGroup.requestFocus() } catch (_: Exception) {} }
+                    LaunchedEffect(Unit) { firstGroup.tryFocus() }
                 }
             }
         }
@@ -130,30 +333,48 @@ private fun VodBrowser(nav: Nav, series: Boolean) {
             if (g == null) {
                 Message("Izaberi kategoriju", "Drži OK na kategoriji za opcije")
             } else {
-                val state by load(p.id, g.id, series) {
-                    if (series) Repo.series(p, g.id).map { s -> Poster(s.id, s.name, s.cover, s.rating) { nav.push(Screen.SeriesDetail(s)) } }
-                    else Repo.movies(p, g.id).map { v -> Poster(v.id, v.name, v.poster, v.rating) { nav.push(Screen.MovieDetail(v)) } }
+                val state by load(p.id, g.id, series, Watch.rev, NewContent.rev) {
+                    when (g.id) {
+                        G_CONTINUE -> Watch.continueList(ctx).filter { (it.series != null) == series }.map { pr ->
+                            val play = { nav.push(Screen.Player(listOf(PlayItem(pr.title, pr.url, pr.poster, null, null, pr.series, pr.season, pr.episode)), 0, live = false)) }
+                            Poster(pr.url, pr.title, pr.poster, null, pr.url, false, play, play)
+                        }
+                        G_NEW -> NewContent.items(p.id, kind).map { o ->
+                            if (series) { val si = SeriesItem(o.str("id"), o.str("n"), o.str("i").orNullIfBlank(), null, o.str("r").orNullIfBlank())
+                                Poster(si.id, si.name, si.cover, si.rating, null, true, { nav.push(Screen.SeriesDetail(si)) }) }
+                            else { val v = Vod(o.str("id"), o.str("n"), o.str("i").orNullIfBlank(), o.str("r").orNullIfBlank(), o.str("u"))
+                                Poster(v.id, v.name, v.poster, v.rating, v.url, true, { nav.push(Screen.MovieDetail(v)) }) }
+                        }
+                        else -> if (series) Repo.series(p, g.id).map { s -> Poster(s.id, s.name, s.cover, s.rating, null, NewContent.isNew(p.id, kind, s.id)) { nav.push(Screen.SeriesDetail(s)) } }
+                        else Repo.movies(p, g.id).map { v -> Poster(v.id, v.name, v.poster, v.rating, v.url, NewContent.isNew(p.id, kind, v.id)) { nav.push(Screen.MovieDetail(v)) } }
+                    }
                 }
                 when (val s = state) {
                     is Load.Loading -> Loading()
                     is Load.Err -> Message("Nije se učitalo", s.message)
-                    is Load.Ok -> if (s.value.isEmpty()) Message("Kategorija je prazna") else PosterGrid(g.name, s.value)
+                    is Load.Ok -> if (s.value.isEmpty()) Message("Kategorija je prazna") else PosterGrid(g.name, s.value, g.id == G_NEW, kind, p.id)
                 }
             }
         }
     }
     groupMenu?.let { g ->
-        GroupOptions(kind, g, ovr, (groupsState as? Load.Ok)?.value ?: emptyList(), onDismiss = { groupMenu = null }) { rev++; groupMenu = null }
+        val cats = (rowsState as? Load.Ok)?.value?.mapNotNull { (it as? VRow.Group)?.cat }?.filter { it.id != G_CONTINUE && it.id != G_NEW } ?: emptyList()
+        GroupOptions(kind, g, ovr, cats, onDismiss = { groupMenu = null }) { close -> rev++; if (close) groupMenu = null }
     }
     PinGateDialog(gate)
 }
 
 @Composable
-private fun PosterGrid(title: String, items: List<Poster>) {
+private fun PosterGrid(title: String, items: List<Poster>, newList: Boolean, kind: String, pid: String, wide: Boolean = false) {
+    val ctx = LocalContext.current
     val size = when (Look.posterSize) { 0 -> 120.dp; 2 -> 190.dp; else -> 150.dp }
     val state = rememberLazyGridState()
-    Column(Modifier.fillMaxSize().padding(start = 22.dp, end = 26.dp, top = 24.dp)) {
-        T("$title · ${items.size}", 20.sp, C.Text, FontWeight.SemiBold, modifier = Modifier.padding(bottom = 14.dp))
+    var menu by remember { mutableStateOf<Poster?>(null) }
+    Column(Modifier.fillMaxSize().padding(start = if (wide) 24.dp else 22.dp, end = if (wide) 24.dp else 26.dp, top = if (wide) 6.dp else 24.dp)) {
+        Row(Modifier.padding(bottom = if (wide) 8.dp else 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            T("$title · ${items.size}", 20.sp, C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            if (newList) Button("Označi sve kao viđeno", R.drawable.lc_check) { NewContent.clear(kind) }
+        }
         LazyVerticalGrid(
             state = state,
             columns = GridCells.Adaptive(size),
@@ -162,19 +383,25 @@ private fun PosterGrid(title: String, items: List<Poster>) {
             contentPadding = PaddingValues(bottom = 30.dp, top = 4.dp),
         ) {
             itemsIndexed(items) { _, it ->
-                Focusable(modifier = Modifier.fillMaxWidth(), onClick = it.open, normal = Color.Transparent, focused = C.Card, zoom = 1.05f) { f ->
+                val pr = it.url?.let { u -> Watch.get(ctx, u) }
+                Focusable(modifier = Modifier.fillMaxWidth(), onClick = it.open, onMenu = { menu = it }, normal = Color.Transparent, focused = C.Card, zoom = 1.05f) { f ->
                     Column(Modifier.padding(6.dp)) {
-                        Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(12.dp)).background(C.Tile)) {
+                        Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(Rnd(12.dp)).background(C.Tile)) {
                             if (it.image != null) {
                                 AsyncImage(model = it.image, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                             } else {
                                 T(cleanTitle(it.name).first, 13.sp, C.Muted, maxLines = 4, modifier = Modifier.align(Alignment.Center).padding(10.dp))
                             }
                             Row(Modifier.padding(7.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                if (it.isNew) Badge(tr("NOVO"), Color(0xFFF59E0B), Color(0xFF0B0D12))
                                 val r = it.rating?.toDoubleOrNull()
                                 if (r != null && r > 0) Badge(String.format("%.1f", r), Color(0xEEF5C518), Color(0xFF0B0D12))
                                 Spacer(Modifier.weight(1f))
                                 qualityOf(it.name)?.let { q -> Badge(q, Color(0xCC0B0D12), Color.White) }
+                            }
+                            if (pr != null) WatchMark(pr, Modifier.align(Alignment.BottomEnd).padding(7.dp))
+                            if (pr != null && pr.started) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(4.dp).background(Color(0x66000000))) {
+                                Box(Modifier.fillMaxWidth(pr.fraction).height(4.dp).background(C.Red))
                             }
                         }
                         T(it.name, 13.sp, if (f) C.Text else C.Soft, if (f) FontWeight.SemiBold else FontWeight.Normal,
@@ -184,19 +411,62 @@ private fun PosterGrid(title: String, items: List<Poster>) {
             }
         }
     }
+    menu?.let { m ->
+        Popup(m.name, onDismiss = { menu = null }) {
+            val u = m.url
+            if (u != null) {
+                val w = Watch.get(ctx, u)?.watched == true
+                OptionRow(if (w) "Označi kao negledano" else "Označi kao gledano", if (w) R.drawable.lc_circle_slash else R.drawable.lc_circle_check) {
+                    Watch.setWatched(ctx, u, m.name, m.image, !w); menu = null
+                }
+            }
+            if (m.isNew) OptionRow("Ukloni oznaku NOVO", R.drawable.lc_sparkles) { NewContent.seen(pid, kind, m.id); menu = null }
+            OptionRow("Otvori", R.drawable.lc_info) { menu = null; m.open() }
+        }
+    }
+}
+
+/** Green tick = watched, orange = started, red crossed circle = not watched. */
+@Composable
+fun WatchMark(pr: Progress?, modifier: Modifier = Modifier) {
+    val (icon, color) = when {
+        pr == null -> R.drawable.lc_circle_slash to Color(0xFFEF4444)
+        pr.watched -> R.drawable.lc_circle_check to Color(0xFF22C55E)
+        pr.started -> R.drawable.lc_history to Color(0xFFF59E0B)
+        else -> R.drawable.lc_circle_slash to Color(0xFFEF4444)
+    }
+    Box(modifier.size(24.dp).clip(CircleShape).background(Color(0xCC0B0D12)), contentAlignment = Alignment.Center) { Ico(icon, 16.dp, color) }
 }
 
 @Composable
 fun Badge(text: String, bg: Color, fg: Color) {
-    Box(Modifier.clip(RoundedCornerShape(6.dp)).background(bg).padding(horizontal = 6.dp, vertical = 2.dp)) { T(text, 11.sp, fg, FontWeight.Bold) }
+    Box(Modifier.clip(Rnd(6.dp)).background(bg).padding(horizontal = 6.dp, vertical = 2.dp)) { T(text, 11.sp, fg, FontWeight.Bold) }
 }
 
-fun openExternal(ctx: Context, url: String, title: String) {
-    try {
-        val i = Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse(url), "video/*").putExtra("title", title)
-        ctx.startActivity(Intent.createChooser(i, "Otvori u playeru"))
-    } catch (e: Exception) {
-        Toast.makeText(ctx, "Nema instaliranog eksternog playera", Toast.LENGTH_LONG).show()
+/** "Episode 3" instead of "NF - House Of Guinness 4K (2025) (GB) - S01E03 - Episode 3". */
+fun episodeTitle(raw: String, num: Int): String {
+    var t = raw
+    Regex("[Ss]\\d{1,2}\\s*[Ee]\\d{1,3}").find(t)?.let { t = t.substring(it.range.last + 1) }
+    t = t.trim(' ', '-', '|', ':', '.')
+    t = t.replace(Regex("\\b(4K|UHD|FHD|HD|SD|HEVC)\\b", RegexOption.IGNORE_CASE), "").trim(' ', '-')
+    if (t.isBlank() || Regex("^(Episode|Epizoda|Folge|Ep\\.?)\\s*\\d+$", RegexOption.IGNORE_CASE).matches(t)) return trf("Epizoda %s", num)
+    return t
+}
+
+/** Watches for an external player that closes right away (VLC crash) and offers the built-in player. */
+@Composable
+fun ExternalWatch(onFailed: () -> Unit) {
+    val owner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(owner) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME && ExtPlayer.launchedAt > 0) {
+                val gone = System.currentTimeMillis() - ExtPlayer.launchedAt
+                ExtPlayer.launchedAt = 0
+                if (gone < 8000) onFailed()
+            }
+        }
+        owner.lifecycle.addObserver(obs)
+        onDispose { owner.lifecycle.removeObserver(obs) }
     }
 }
 
@@ -275,13 +545,17 @@ fun MovieDetailScreen(v: Vod, nav: Nav) {
     val info by load(v.id) { Repo.movieInfo(p, v.id) }
     val meta by load(v.name, Prefs.tmdbKey) { Tmdb.find(v.name, tv = false) }
     var choice by remember { mutableStateOf(TrackChoice()) }
+    var ext by remember { mutableStateOf(false) }
+    var extFailed by remember { mutableStateOf(false) }
     val playFr = remember { FocusRequester() }
+    LaunchedEffect(v.id) { NewContent.seen(p.id, "vod", v.id) }
+    ExternalWatch { extFailed = true }
     val i = (info as? Load.Ok)?.value
     val m = (meta as? Load.Ok)?.value
     Box(Modifier.fillMaxSize()) {
         Backdrop(m?.backdrop ?: i?.backdrop)
         Row(Modifier.fillMaxSize().padding(horizontal = 44.dp, vertical = 32.dp), horizontalArrangement = Arrangement.spacedBy(34.dp)) {
-            Box(Modifier.width(220.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(18.dp)).background(C.Tile)) {
+            Box(Modifier.width(220.dp).aspectRatio(2f / 3f).clip(Rnd(18.dp)).background(C.Tile)) {
                 val poster = m?.poster ?: v.poster
                 if (poster != null) AsyncImage(model = poster, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             }
@@ -310,18 +584,34 @@ fun MovieDetailScreen(v: Vod, nav: Nav) {
                 Spacer(Modifier.height(4.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Button("Pokreni", R.drawable.lc_play, primary = true, focusRequester = playFr) {
-                        nav.push(Screen.Player(listOf(choice.apply(PlayItem(m?.title ?: v.name, v.url, v.poster, null, null, v.name))), 0, live = false))
+                        if (ExtPlayer.always) openExternalOrAsk(ctx, v.url, m?.title ?: v.name, Watch.get(ctx, v.url)?.pos ?: 0) { ext = true }
+                        else nav.push(Screen.Player(listOf(choice.apply(PlayItem(m?.title ?: v.name, v.url, v.poster, null, null, v.name))), 0, live = false))
                     }
                     TrackButtons(v.name, null, null, v.url, choice) { choice = it }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button("Eksterni player", R.drawable.lc_link) { openExternal(ctx, v.url, v.name) }
+                    Button("Eksterni player", R.drawable.lc_external_link) { openExternalOrAsk(ctx, v.url, m?.title ?: v.name, Watch.get(ctx, v.url)?.pos ?: 0) { ext = true } }
                     Button("Trailer", R.drawable.lc_play) { openTrailer(ctx, v.name, m?.trailerKey) }
+                    val w = Watch.get(ctx, v.url)?.watched == true
+                    androidx.compose.runtime.key(Watch.rev) {
+                        Button(if (w) "Gledano" else "Označi kao gledano", if (w) R.drawable.lc_circle_check else R.drawable.lc_circle_slash,
+                            outline = if (w) C.Green else null) { Watch.setWatched(ctx, v.url, m?.title ?: v.name, v.poster, !w) }
+                    }
                 }
             }
         }
     }
-    LaunchedEffect(Unit) { try { playFr.requestFocus() } catch (_: Exception) {} }
+    if (ext) ExternalPicker(v.url, m?.title ?: v.name, Watch.get(ctx, v.url)?.pos ?: 0, onDismiss = { ext = false })
+    if (extFailed) Popup("Eksterni player se zatvorio", onDismiss = { extFailed = false }) {
+        T("Izgleda da player nije mogao pustiti film.", 14.sp, C.Soft, maxLines = 2)
+        OptionRow("Pusti u PRETORIAN plejeru", R.drawable.lc_play, color = C.Green) {
+            extFailed = false
+            nav.push(Screen.Player(listOf(choice.apply(PlayItem(m?.title ?: v.name, v.url, v.poster, null, null, v.name))), 0, live = false))
+        }
+        OptionRow("Izaberi drugi player", R.drawable.lc_external_link) { extFailed = false; ExtPlayer.saved = ""; ext = true }
+        OptionRow("Zatvori", R.drawable.lc_x) { extFailed = false }
+    }
+    LaunchedEffect(Unit) { playFr.tryFocus() }
 }
 
 @Composable
@@ -333,18 +623,23 @@ fun SeriesDetailScreen(s: SeriesItem, nav: Nav) {
     val m = (meta as? Load.Ok)?.value
     var season by remember { mutableIntStateOf(-1) }
     var choice by remember { mutableStateOf(TrackChoice()) }
+    var menu by remember { mutableStateOf<Episode?>(null) }
+    var ext by remember { mutableStateOf<Episode?>(null) }
+    var followRev by remember { mutableIntStateOf(0) }
     val firstFr = remember { FocusRequester() }
+    LaunchedEffect(s.id) { NewContent.seen(p.id, "series", s.id) }
+    val showTitle = m?.title ?: cleanTitle(s.name).first
     Box(Modifier.fillMaxSize()) {
         Backdrop(m?.backdrop ?: s.cover)
         Row(Modifier.fillMaxSize().padding(horizontal = 44.dp, vertical = 28.dp), horizontalArrangement = Arrangement.spacedBy(30.dp)) {
-            Box(Modifier.width(180.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(16.dp)).background(C.Tile)) {
+            Box(Modifier.width(180.dp).aspectRatio(2f / 3f).clip(Rnd(16.dp)).background(C.Tile)) {
                 val poster = m?.poster ?: s.cover
                 if (poster != null) AsyncImage(model = poster, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 T("SERIJA", 12.sp, C.RedText, FontWeight.Bold)
-                T(m?.title ?: cleanTitle(s.name).first, 32.sp, C.Text, FontWeight.Bold)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                T(showTitle, 32.sp, C.Text, FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     m?.year?.let { Chip(it) }; m?.genres?.let { Chip(it.take(36)) }
                     m?.imdbRating?.let { Chip("IMDb $it", Color(0xFFF5C518), Color(0xFF0B0D12)) }
                     m?.tmdbRating?.let { Chip("TMDB ${(it * 10).toInt()}%", Color(0x2901B4E4), Color(0xFF67D4F5)) }
@@ -358,43 +653,82 @@ fun SeriesDetailScreen(s: SeriesItem, nav: Nav) {
                         if (all.isEmpty()) { Message("Nema epizoda"); return@Column }
                         val seasons = all.map { it.season }.distinct().sorted()
                         val cur = if (season in seasons) season else seasons.first()
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(seasons) { n ->
-                                Focusable(onClick = { season = n }, onFocus = { season = n },
-                                    normal = if (n == cur) C.CardHi else C.Card, shape = RoundedCornerShape(50), modifier = Modifier.height(40.dp)) { _ ->
-                                    T("Sezona $n", 14.sp, C.Text, FontWeight.Medium, modifier = Modifier.align(Alignment.Center).padding(horizontal = 18.dp))
+                        androidx.compose.runtime.key(Watch.rev) {
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                items(seasons) { n ->
+                                    val inS = all.filter { it.season == n }
+                                    val seen = inS.count { Watch.get(ctx, it.url)?.watched == true }
+                                    Focusable(onClick = { season = n }, onFocus = { season = n },
+                                        normal = if (n == cur) C.CardHi else C.Card, shape = Pill, modifier = Modifier.height(40.dp)) { _ ->
+                                        T(trf("Sezona %s", n) + " · $seen/${inS.size}", 14.sp, C.Text, FontWeight.Medium, modifier = Modifier.align(Alignment.Center).padding(horizontal = 18.dp))
+                                    }
                                 }
                             }
                         }
                         val list = all.filter { it.season == cur }
                         val play = list.map {
-                            (if (it == list.first()) choice else choice.copy(subFile = null)).apply(PlayItem("${m?.title ?: cleanTitle(s.name).first} · S${it.season}E${it.num}", it.url, s.cover, it.title,
-                                null, s.name, it.season, it.num))
+                            (if (it == list.first()) choice else choice.copy(subFile = null)).apply(PlayItem("$showTitle · S${it.season}E${it.num}", it.url, s.cover,
+                                episodeTitle(it.title, it.num), null, s.name, it.season, it.num))
                         }
                         // audio and subtitles for the whole season, read from its first episode
                         list.firstOrNull()?.let { e1 ->
-                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) { TrackButtons(s.name, e1.season, e1.num, e1.url, choice) { choice = it } }
-                        }
-                        val wrap = remember { Wrap() }
-                        val ls = rememberLazyListState()
-                        WrapEffect(wrap, ls)
-                        LazyColumn(state = ls, verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
-                            itemsIndexed(list) { idx, e ->
-                                Focusable(onClick = { nav.push(Screen.Player(play, idx, live = false)) },
-                                    focusRequester = wrap.requester(idx, if (idx == 0) firstFr else null),
-                                    normal = C.Card, zoom = 1.01f, modifier = Modifier.fillMaxWidth().height(64.dp).wrapKeys(idx, list.size, wrap)) { f ->
-                                    Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                                        T("${e.num}", 18.sp, C.Muted, FontWeight.SemiBold, modifier = Modifier.width(36.dp))
-                                        Column(Modifier.weight(1f)) {
-                                            T(e.title.ifBlank { "Epizoda ${e.num}" }, 15.sp, if (f) C.Text else C.Soft, FontWeight.Medium)
-                                            e.plot?.let { T(it, 12.sp, C.Muted) }
-                                        }
-                                        qualityOf(e.title)?.let { Badge(it, C.CardHi, C.Text) }
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                TrackButtons(s.name, e1.season, e1.num, e1.url, choice) { choice = it }
+                                androidx.compose.runtime.key(followRev) {
+                                    val on = Follow.isOn(s.id)
+                                    Button(if (on) "Pratiš" else "Prati", R.drawable.lc_bell, outline = if (on) C.Amber else null) {
+                                        val now = Follow.toggle(p.id, s, all.size); followRev++
+                                        Toast.makeText(ctx, tr(if (now) "Javiću kad izađe nova epizoda" else "Ne pratiš više ovu seriju"), Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             }
                         }
+                        val wrap = remember { Wrap() }
+                        val ls = rememberLazyListState()
+                        WrapEffect(wrap, ls)
+                        androidx.compose.runtime.key(Watch.rev) {
+                            LazyColumn(state = ls, verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
+                                itemsIndexed(list) { idx, e ->
+                                    val pr = Watch.get(ctx, e.url)
+                                    Focusable(onClick = {
+                                        if (ExtPlayer.always) openExternalOrAsk(ctx, e.url, play[idx].title, pr?.pos ?: 0) { ext = e }
+                                        else nav.push(Screen.Player(play, idx, live = false))
+                                    }, onMenu = { menu = e },
+                                        focusRequester = wrap.requester(idx, if (idx == 0) firstFr else null),
+                                        normal = C.Card, zoom = 1.01f, modifier = Modifier.fillMaxWidth().height(64.dp).wrapKeys(idx, list.size, wrap)) { f ->
+                                        Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                                            T("${e.num}", 18.sp, C.Muted, FontWeight.SemiBold, modifier = Modifier.width(36.dp))
+                                            Column(Modifier.weight(1f)) {
+                                                T(episodeTitle(e.title, e.num), 15.sp, if (f) C.Text else C.Soft, FontWeight.Medium)
+                                                if (pr != null && pr.started) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    Box(Modifier.width(120.dp).height(4.dp).clip(Rnd(2.dp)).background(C.CardHi)) {
+                                                        Box(Modifier.fillMaxWidth(pr.fraction).height(4.dp).background(C.Amber))
+                                                    }
+                                                    T(trf("%s od %s", fmtTime(pr.pos), fmtTime(pr.dur)), 11.sp, C.Muted)
+                                                } else e.plot?.let { T(it, 12.sp, C.Muted) }
+                                            }
+                                            qualityOf(e.title)?.let { Badge(it, C.CardHi, C.Text) }
+                                            WatchMark(pr)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        menu?.let { e ->
+                            val w = Watch.get(ctx, e.url)?.watched == true
+                            Popup(episodeTitle(e.title, e.num), onDismiss = { menu = null }) {
+                                OptionRow("Pusti", R.drawable.lc_play) { menu = null; nav.push(Screen.Player(play, list.indexOf(e).coerceAtLeast(0), live = false)) }
+                                OptionRow(if (w) "Označi kao negledano" else "Označi kao gledano", if (w) R.drawable.lc_circle_slash else R.drawable.lc_circle_check) {
+                                    Watch.setWatched(ctx, e.url, "$showTitle · S${e.season}E${e.num}", s.cover, !w); menu = null
+                                }
+                                OptionRow("Označi sezonu kao gledanu", R.drawable.lc_circle_check) {
+                                    list.forEach { x -> Watch.setWatched(ctx, x.url, "$showTitle · S${x.season}E${x.num}", s.cover, true) }; menu = null
+                                }
+                                OptionRow("Eksterni player", R.drawable.lc_external_link) { menu = null; ext = e }
+                            }
+                        }
+                        ext?.let { e -> ExternalPicker(e.url, "$showTitle · S${e.season}E${e.num}", Watch.get(ctx, e.url)?.pos ?: 0, onDismiss = { ext = null }) }
                     }
                 }
             }

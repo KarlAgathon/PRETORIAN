@@ -28,7 +28,7 @@ import androidx.compose.ui.unit.sp
 
 @Composable
 fun Flag(res: Int, w: Int = 36) {
-    Image(painterResource(res), contentDescription = null, modifier = Modifier.size(w.dp, (w * 2 / 3).dp).clip(RoundedCornerShape(4.dp)))
+    Image(painterResource(res), contentDescription = null, modifier = Modifier.size(w.dp, (w * 2 / 3).dp).clip(Rnd(4.dp)))
 }
 
 /** One language row: flag, own name, name in the app language. */
@@ -38,7 +38,7 @@ private fun LangRow(l: Lang?, title: String, sub: String?, badge: String?, selec
         normal = if (selected) C.CardFocus else C.Card, zoom = 1.01f) { _ ->
         Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            if (l != null) Flag(l.flag) else Box(Modifier.size(36.dp, 24.dp).clip(RoundedCornerShape(4.dp)).background(C.CardHi),
+            if (l != null) Flag(l.flag) else Box(Modifier.size(36.dp, 24.dp).clip(Rnd(4.dp)).background(C.CardHi),
                 contentAlignment = Alignment.Center) { Ico(R.drawable.lc_globe, 16.dp, C.Soft) }
             Column(Modifier.weight(1f)) {
                 T(title, 16.sp, C.Text, FontWeight.SemiBold)

@@ -1,6 +1,7 @@
 package com.pretorian.tv
 
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -47,7 +48,9 @@ private val SECTIONS = listOf(
     Section("language", R.drawable.lc_languages, "Jezik", "Meniji, dugmad i poruke"),
     Section("look", R.drawable.lc_palette, "Izgled", "Tema, boja, prozirnost, veličine"),
     Section("media", R.drawable.lc_captions, "Filmovi i titlovi", "TMDB, IMDb, titlovi, jezici"),
+    Section("reminders", R.drawable.lc_bell, "Podsjetnici", "Emisije, utakmice, obavještenja"),
     Section("parental", R.drawable.lc_shield_check, "Roditelji i jednostavni mod", "PIN, jednostavni mod"),
+    Section("backup", R.drawable.lc_archive, "Backup i vraćanje", "Spasi sve postavke u fajl"),
     Section("update", R.drawable.lc_download, "Ažuriranje", "Nova verzija aplikacije"),
     Section("about", R.drawable.lc_info, "O aplikaciji", "Verzija i licence"),
 )
@@ -64,7 +67,7 @@ fun SettingsScreen(nav: Nav) {
                 Focusable(modifier = Modifier.fillMaxWidth().height(58.dp), onClick = { section = s.id }, onFocus = { section = s.id },
                     focusRequester = if (i == 0) first else null, normal = if (sel) C.CardFocus else Color.Transparent, zoom = 1f) { _ ->
                     Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(if (sel) C.Red else C.Card), contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(34.dp).clip(Rnd(10.dp)).background(if (sel) C.Red else C.Card), contentAlignment = Alignment.Center) {
                             Ico(s.icon, 18.dp, if (sel) C.OnRed else C.Text)
                         }
                         Column(Modifier.weight(1f)) {
@@ -88,6 +91,8 @@ fun SettingsScreen(nav: Nav) {
                     "language" -> LanguagePage()
                     "media" -> MediaPage()
                     "parental" -> ParentalPage(nav)
+                    "reminders" -> RemindersPage(nav)
+                    "backup" -> BackupPage(nav)
                     "update" -> UpdatePage()
                     else -> AboutPage()
                 }
@@ -117,9 +122,12 @@ private fun PlaylistsPage(nav: Nav) {
     val scope = rememberCoroutineScope()
     var list by remember { mutableStateOf(Store.playlists(ctx)) }
     var busy by remember { mutableStateOf(false) }
+    var menu by remember { mutableStateOf<Playlist?>(null) }
     var del by remember { mutableStateOf<Playlist?>(null) }
     var epg by remember { mutableStateOf(false) }
-    Page("Playliste", "Aktivna je samo jedna. OK na drugoj je aktivira, Meni otvara opcije.") {
+    var multi by remember { mutableStateOf(Store.multi) }
+    fun refresh() { list = Store.playlists(ctx); nav.playlistsChanged() }
+    Page("Playliste", if (multi) "Uključi jednu ili više. Gornja uključena je otvorena, ostale su sklopljene." else "Aktivna je samo jedna. OK na drugoj je aktivira.") {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Button("Dodaj playlistu", R.drawable.lc_plus, primary = true) { nav.push(Screen.AddPlaylist) }
             Button(if (busy) "Ažuriram…" else "Ažuriraj sve", R.drawable.lc_refresh_cw) {
@@ -130,22 +138,30 @@ private fun PlaylistsPage(nav: Nav) {
                         try { if (pl.type == SourceType.XTREAM) pl.copy(exp = Repo.test(pl)) else { Repo.test(pl); pl } } catch (e: Exception) { pl }
                     }
                     Store.savePlaylists(ctx, updated); list = updated
-                    Repo.clear(); busy = false
-                    Toast.makeText(ctx, "Playliste su ažurirane", Toast.LENGTH_SHORT).show()
+                    Repo.clear()
+                    updated.filter { it.active }.forEach { pl -> try { NewContent.scan(ctx, pl, force = true) } catch (_: Exception) {} }
+                    busy = false
+                    Toast.makeText(ctx, tr("Playliste su ažurirane"), Toast.LENGTH_SHORT).show()
                 }
             }
+        }
+        Segmented(listOf("Samo jedna aktivna", "Više aktivnih"), if (multi) 1 else 0) {
+            multi = it == 1; Store.multi = multi
+            if (!multi) { val keep = list.firstOrNull { p -> p.active } ?: list.firstOrNull(); if (keep != null) Store.savePlaylists(ctx, list.map { p -> p.copy(active = p.id == keep.id) }) }
+            refresh()
         }
         list.forEach { pl ->
             val exp = expiryText(pl.exp)
             Focusable(
-                modifier = Modifier.fillMaxWidth().height(78.dp).then(if (pl.active) Modifier.border(2.dp, C.Red, RoundedCornerShape(14.dp)) else Modifier),
-                onClick = { Store.activate(ctx, pl.id); list = Store.playlists(ctx); nav.playlistsChanged() },
-                onMenu = { del = pl },
+                modifier = Modifier.fillMaxWidth().height(78.dp).then(if (pl.active) Modifier.border(2.dp, C.Red, Rnd(14.dp)) else Modifier),
+                onClick = { Store.activate(ctx, pl.id); refresh() },
+                onMenu = { menu = pl },
                 normal = if (pl.active) C.CardFocus else C.Card, zoom = 1.01f,
             ) { _ ->
                 Row(Modifier.fillMaxSize().padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Box(Modifier.size(22.dp).clip(CircleShape).background(if (pl.active) C.Red else C.CardHi), contentAlignment = Alignment.Center) {
-                        if (pl.active) Dot(C.OnRed, 8.dp)
+                    Box(Modifier.width(44.dp).height(24.dp).clip(Rnd(12.dp)).background(if (pl.active) C.Red else C.CardHi)) {
+                        Box(Modifier.align(if (pl.active) Alignment.CenterEnd else Alignment.CenterStart).padding(3.dp).size(18.dp)
+                            .clip(CircleShape).background(if (pl.active) C.OnRed else C.Muted))
                     }
                     Column(Modifier.weight(1f)) {
                         T(pl.name, 17.sp, C.Text, FontWeight.SemiBold)
@@ -156,25 +172,40 @@ private fun PlaylistsPage(nav: Nav) {
                         Chip(exp.first, when (level) { 2 -> C.Danger.copy(alpha = 0.2f); 1 -> C.Amber.copy(alpha = 0.2f); else -> C.Card },
                             when (level) { 2 -> C.Danger; 1 -> C.Amber; else -> C.Soft })
                     }
-                    if (pl.active) Chip("AKTIVNA", C.Red, C.OnRed)
+                    if (pl.active) Chip(tr(if (Store.active(ctx)?.id == pl.id) "OTVORENA" else "AKTIVNA"), C.Red, C.OnRed)
                 }
             }
         }
-        T("Drži OK na playlisti: obriši. Datum isteka osvježava \"Ažuriraj sve\".", 12.sp, C.Muted)
+        T("Drži OK na playlisti: pomjeri, otvori, obriši. Datum isteka osvježava \"Ažuriraj sve\".", 12.sp, C.Muted, maxLines = 2)
         Label("TV program (EPG)")
         OptionRow("Vlastiti EPG izvor (XMLTV link)", R.drawable.lc_clock, "Koristi se kad provider za kanal ne šalje program. Link do .xml ili .xml.gz",
-            value = if (Prefs.epgUrl.isBlank()) "Nije upisan" else Prefs.epgUrl.removePrefix("https://").removePrefix("http://").take(28)) { epg = true }
+            value = if (Prefs.epgUrl.isBlank()) tr("Nije upisan") else Prefs.epgUrl.removePrefix("https://").removePrefix("http://").take(28)) { epg = true }
+        Label("TV")
+        Segmented(listOf("Lista kanala", "TV vodič"), if (Prefs.str("tv_view", "list") == "guide") 1 else 0) {
+            Prefs.put("tv_view", if (it == 1) "guide" else "list"); list = Store.playlists(ctx)
+        }
     }
     if (epg) TextDialog("Vlastiti EPG izvor", "XMLTV link (http://…/epg.xml)", Prefs.epgUrl, onDismiss = { epg = false }) { v ->
         Prefs.epgUrl = v; epg = false; Repo.clear()
         Toast.makeText(ctx, tr("Spremljeno"), Toast.LENGTH_SHORT).show()
     }
+    menu?.let { pl ->
+        val i = list.indexOfFirst { it.id == pl.id }
+        Popup(pl.name, onDismiss = { menu = null }) {
+            if (i >= 0) T("${i + 1} / ${list.size}", 13.sp, C.Muted)
+            OptionRow(if (pl.active) "Isključi" else "Uključi", R.drawable.lc_check) { Store.activate(ctx, pl.id); refresh(); menu = null }
+            OptionRow("Otvori (gore u TV-u)", R.drawable.lc_chevron_down) { Store.open(ctx, pl.id); refresh(); menu = null }
+            OptionRow("Pomjeri gore", R.drawable.lc_arrow_up) { Store.movePlaylist(ctx, pl.id, -1); list = Store.playlists(ctx) }
+            OptionRow("Pomjeri dolje", R.drawable.lc_arrow_down) { Store.movePlaylist(ctx, pl.id, 1); list = Store.playlists(ctx) }
+            OptionRow("Obriši playlistu", R.drawable.lc_trash_2, color = C.Danger) { menu = null; del = pl }
+        }
+    }
     del?.let { pl ->
-        Popup(pl.name, onDismiss = { del = null }) {
-            OptionRow("Obriši playlistu", R.drawable.lc_trash_2, color = C.Danger) {
+        Popup(tr("Obrisati playlistu?") + " " + pl.name, onDismiss = { del = null }) {
+            OptionRow("Da, obriši", R.drawable.lc_trash_2, color = C.Danger) {
                 val rest = Store.playlists(ctx).filter { it.id != pl.id }
                 Store.savePlaylists(ctx, if (rest.none { it.active } && rest.isNotEmpty()) rest.mapIndexed { i, x -> x.copy(active = i == 0) } else rest)
-                list = Store.playlists(ctx); del = null; nav.playlistsChanged()
+                del = null; refresh()
             }
             OptionRow("Odustani", R.drawable.lc_x) { del = null }
         }
@@ -256,8 +287,35 @@ fun AddPlaylistScreen(nav: Nav) {
 private fun LookPage() {
     val ctx = LocalContext.current
     fun save() = Look.save(ctx)
+    val scope = rememberCoroutineScope()
+    var remote by remember { mutableStateOf<List<IconSets.Remote>?>(null) }
+    var dlBusy by remember { mutableStateOf<String?>(null) }
+    var rev by remember { mutableIntStateOf(0) }
     Page("Izgled", "Promjene se vide odmah.") {
-        Label("Tema")
+        Label("Raspored")
+        Segmented(listOf("Klasični", "New Wave", "New Age"), Look.layout) { Look.layout = it; save() }
+        T(when (Look.layout) {
+            0 -> "Klasični: meni lijevo, kategorije u koloni."
+            1 -> "New Wave: filmovi i serije preko cijelog ekrana, kategorije gore, pomoć za daljinski na dnu."
+            else -> "New Age: meni gore, redovi postera po kategorijama, velike kartice epizoda."
+        }, 12.sp, C.Muted, maxLines = 2)
+        Label("Oblik ivica")
+        Segmented(listOf("Zaobljene", "Blago zaobljene", "Oštre"), Look.corner) { Look.corner = it; save() }
+        Label("Set ikona")
+        androidx.compose.runtime.key(rev) {
+            IconSets.BUILTIN.forEach { set ->
+                IconSetRow(set.name, set.about, Look.iconSet == set.id, previewSet = set.id) { Look.iconSet = set.id; Look.iconStyle = if (set.styles.size > 1) 1.coerceAtMost(set.styles.lastIndex) else 0; save() }
+            }
+            IconSets.installed(ctx).forEach { (id, name) ->
+                IconSetRow(name, tr("Preuzeti set"), Look.iconSet == id, previewSet = id) { Look.iconSet = id; save() }
+            }
+        }
+        IconSets.BUILTIN.firstOrNull { it.id == Look.iconSet }?.let { set ->
+            if (set.styles.size > 1) Segmented(set.styles.map { it.label }, Look.iconStyle.coerceIn(0, set.styles.lastIndex)) { Look.iconStyle = it; save() }
+        }
+        OptionRow("Preuzmi još ikona", R.drawable.lc_download, sub = "Novi setovi s PRETORIAN GitHub stranice", value = dlBusy) {
+            scope.launch { remote = try { IconSets.remote() } catch (e: Exception) { Toast.makeText(ctx, tr("Lista setova se nije učitala"), Toast.LENGTH_LONG).show(); null } }
+        }
         Segmented(Look.THEMES.map { it.second }, Look.THEMES.indexOfFirst { it.first == Look.theme }.coerceAtLeast(0)) { Look.theme = Look.THEMES[it].first; save() }
         Label("Akcentna boja")
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -275,7 +333,7 @@ private fun LookPage() {
         Label("Prozirnost panela: ${Look.opacity} %")
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             Button("− 5 %", R.drawable.lc_minus) { Look.opacity = (Look.opacity - 5).coerceAtLeast(20); save() }
-            Box(Modifier.width(260.dp).height(10.dp).clip(RoundedCornerShape(5.dp)).background(C.CardHi)) {
+            Box(Modifier.width(260.dp).height(10.dp).clip(Rnd(5.dp)).background(C.CardHi)) {
                 Box(Modifier.fillMaxWidth(Look.opacity / 100f).height(10.dp).background(C.Red))
             }
             Button("+ 5 %", R.drawable.lc_plus) { Look.opacity = (Look.opacity + 5).coerceAtMost(100); save() }
@@ -283,7 +341,7 @@ private fun LookPage() {
         T("Najviše se vidi u temi Glass.", 12.sp, C.Muted)
         Label("Pločice na Početnoj")
         Segmented(listOf("Male", "Srednje", "Velike"), Look.tileSize) { Look.tileSize = it; save() }
-        Segmented(listOf("Puna boja", "Glass", "Obris"), Look.tileStyle) { Look.tileStyle = it; save() }
+        Segmented(listOf("Moderne", "Puna boja", "Glass", "Obris"), listOf(3, 0, 1, 2).indexOf(Look.tileStyle).coerceAtLeast(0)) { Look.tileStyle = listOf(3, 0, 1, 2)[it]; save() }
         Label("Posteri filmova i serija")
         Segmented(listOf("Mali", "Srednji", "Veliki"), Look.posterSize) { Look.posterSize = it; save() }
         Label("Meniji i info traka preko slike")
@@ -291,7 +349,7 @@ private fun LookPage() {
         Label(tr("Providnost menija") + ": ${100 - Look.menuOpacity} %")
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             Button("− 5 %", R.drawable.lc_minus) { Look.menuOpacity = (Look.menuOpacity + 5).coerceAtMost(100); save() }
-            Box(Modifier.width(260.dp).height(10.dp).clip(RoundedCornerShape(5.dp)).background(C.CardHi)) {
+            Box(Modifier.width(260.dp).height(10.dp).clip(Rnd(5.dp)).background(C.CardHi)) {
                 Box(Modifier.fillMaxWidth((100 - Look.menuOpacity) / 40f).height(10.dp).background(C.Red))
             }
             Button("+ 5 %", R.drawable.lc_plus) { Look.menuOpacity = (Look.menuOpacity - 5).coerceAtLeast(60); save() }
@@ -299,10 +357,28 @@ private fun LookPage() {
         T("0 % = puni meni, ništa se ne vidi kroz njega. Najviše 40 %.", 12.sp, C.Muted)
         Label("Veličina redova (kanali i grupe)")
         Segmented(listOf("Mala", "Srednja", "Velika"), Look.rowSize) { Look.rowSize = it; save() }
+        ToggleRow("Okvir oko grupa", Look.groupFrame, R.drawable.lc_square, "Tanki okvir u akcentnoj boji, otvorena grupa posvijetli") { Look.groupFrame = it; save() }
+        Label("Rezolucija u uglu plejera")
+        Segmented(listOf("Isključeno", "Pri pokretanju", "Uvijek"), Look.resBadge) { Look.resBadge = it; save() }
         Label("Kanali")
         ToggleRow("Pregled kanala uživo", Look.preview, R.drawable.lc_tv, "Kad staneš na kanal, desno se pušta mala slika i EPG") { Look.preview = it; save() }
         ToggleRow("Najgledaniji na vrhu grupe", Look.mostWatched, R.drawable.lc_arrow_up, "Kanali koje najčešće gledaš sami idu gore (kad nema ručnog redoslijeda)") {
             Look.mostWatched = it; save()
+        }
+    }
+    remote?.let { list ->
+        Popup("Preuzmi ikone", onDismiss = { remote = null }) {
+            if (list.isEmpty()) T("Trenutno nema novih setova.", 14.sp, C.Muted)
+            list.forEach { r ->
+                OptionRow(r.name, R.drawable.lc_download, sub = r.about, value = if (IconSets.installed(ctx).any { it.first == r.id }) tr("Preuzeto") else null) {
+                    dlBusy = tr("Preuzimam…"); remote = null
+                    scope.launch {
+                        try { IconSets.download(ctx, r); Look.iconSet = r.id; save(); Toast.makeText(ctx, trf("Set %s je spreman", r.name), Toast.LENGTH_SHORT).show() }
+                        catch (e: Exception) { Toast.makeText(ctx, tr("Preuzimanje nije uspjelo"), Toast.LENGTH_LONG).show() }
+                        dlBusy = null; rev++
+                    }
+                }
+            }
         }
     }
 }
@@ -315,7 +391,7 @@ private fun MediaPage() {
     var edit by remember { mutableStateOf<String?>(null) }
     var tmdbStatus by remember { mutableStateOf<String?>(null) }
     var rev by remember { mutableIntStateOf(0) }
-    fun masked(v: String) = if (v.isBlank()) "Nije upisan" else "••••" + v.takeLast(4)
+    fun masked(v: String) = if (v.isBlank()) tr("Nije upisan") else "••••" + v.takeLast(4)
     key(rev) {
         Page("Filmovi i titlovi", "Ključevi su besplatni i čuvaju se samo na ovom uređaju.") {
             Label("Podaci o filmovima")
@@ -341,12 +417,32 @@ private fun MediaPage() {
             Segmented(listOf("10 s", "20 s", "30 s"), listOf(10, 20, 30).indexOf(Prefs.seekStep).coerceAtLeast(0)) {
                 Prefs.seekStep = listOf(10, 20, 30)[it]; rev++
             }
+            Label("Eksterni player i fajlovi")
+            val ctx2 = LocalContext.current
+            val players = remember { ExtPlayer.installed(ctx2) }
+            OptionRow("Eksterni player", R.drawable.lc_external_link,
+                value = players.firstOrNull { it.pkg == ExtPlayer.saved }?.label ?: tr("Pitaj svaki put")) { edit = "ext" }
+            ToggleRow("Filmovi i serije uvijek u eksternom playeru", ExtPlayer.always, R.drawable.lc_play, "Pokreni otvara izabrani player umjesto ugrađenog") {
+                ExtPlayer.always = it; rev++
+            }
+            val fm = remember { FileAccess.pickers(ctx2) }
+            OptionRow("File manager", R.drawable.lc_folder_open, value = when (FileAccess.app) {
+                "" -> tr("Pitaj svaki put"); "builtin" -> tr("PRETORIAN (ugrađeni)"); else -> fm.firstOrNull { it.pkg == FileAccess.app }?.label ?: FileAccess.app }) { edit = "fm" }
         }
     }
     val e = edit
     val ctx = LocalContext.current
     when (e) {
         null -> {}
+        "ext" -> Popup("Eksterni player", onDismiss = { edit = null }) {
+            OptionRow("Pitaj svaki put", R.drawable.lc_list, selected = ExtPlayer.saved.isBlank()) { ExtPlayer.saved = ""; edit = null; rev++ }
+            ExtPlayer.installed(ctx).forEach { a -> OptionRow(a.label, R.drawable.lc_play, selected = ExtPlayer.saved == a.pkg) { ExtPlayer.saved = a.pkg; edit = null; rev++ } }
+        }
+        "fm" -> Popup("File manager", onDismiss = { edit = null }) {
+            OptionRow("Pitaj svaki put", R.drawable.lc_list, selected = FileAccess.app.isBlank()) { FileAccess.app = ""; edit = null; rev++ }
+            OptionRow("PRETORIAN (ugrađeni)", R.drawable.lc_folder_open, selected = FileAccess.app == "builtin") { FileAccess.app = "builtin"; edit = null; rev++ }
+            FileAccess.pickers(ctx).forEach { a -> OptionRow(a.label, R.drawable.lc_folder, selected = FileAccess.app == a.pkg) { FileAccess.app = a.pkg; edit = null; rev++ } }
+        }
         "metalang" -> LangPicker("Jezik opisa filmova", Prefs.metaLang, Langs.MEDIA, auto = true, onDismiss = { edit = null }) {
             Prefs.metaLang = it; edit = null; rev++; Toast.makeText(ctx, tr("Spremljeno"), Toast.LENGTH_SHORT).show()
         }
@@ -427,6 +523,101 @@ fun setAppLang(ctx: android.content.Context, code: String) {
     Toast.makeText(ctx, tr("Jezik promijenjen") + ": " + (l?.native ?: code), Toast.LENGTH_SHORT).show()
 }
 
+/* ---------------------------------------------------------------- reminders */
+
+@Composable
+private fun RemindersPage(nav: Nav) {
+    var rev by remember { mutableIntStateOf(0) }
+    key(rev, Reminders.rev) {
+        Page("Podsjetnici", "U TV vodiču ili Sports Centeru: OK na emisiji ili utakmici koja još nije počela › Podsjeti me.") {
+            Label("Podsjeti prije početka (minuta)")
+            Segmented(listOf("0", "1", "5", "10", "15"), listOf(0, 1, 5, 10, 15).indexOf(Reminders.before).coerceAtLeast(0)) { Reminders.before = listOf(0, 1, 5, 10, 15)[it]; rev++ }
+            Label("Koliko dugo poruka stoji (sekundi)")
+            Segmented(listOf("5", "10", "20", "30"), listOf(5, 10, 20, 30).indexOf(Reminders.popupSec).coerceAtLeast(0)) { Reminders.popupSec = listOf(5, 10, 20, 30)[it]; rev++ }
+            Label("Kad dođe vrijeme")
+            Segmented(listOf("Samo podsjeti", "Prebaci na kanal"), Reminders.action) { Reminders.action = it; rev++ }
+            ToggleRow("Probudi box iz mirovanja", Reminders.wake, R.drawable.lc_alarm_clock, "Ne radi na svim uređajima. Ako je box potpuno ugašen, podsjetnik ne može doći.") { Reminders.wake = it; rev++ }
+            Label("Tvoji podsjetnici")
+            val all = Reminders.all().filter { it.start > System.currentTimeMillis() - 3600_000L }.sortedBy { it.start }
+            if (all.isEmpty()) T("Nema podsjetnika.", 13.sp, C.Muted)
+            all.forEach { r ->
+                OptionRow(r.title, R.drawable.lc_bell, sub = java.text.SimpleDateFormat("EEE d. M. HH:mm", java.util.Locale(Look.lang)).format(java.util.Date(r.start)) + (r.channelName?.let { " · $it" } ?: ""),
+                    value = tr("Obriši")) { Reminders.remove(r.id); rev++ }
+            }
+        }
+    }
+}
+
+/* ---------------------------------------------------------------- backup */
+
+@Composable
+private fun BackupPage(nav: Nav) {
+    val ctx = LocalContext.current
+    var step by remember { mutableStateOf<String?>(null) }   // pass, dir, pick, preview, rpass
+    var password by remember { mutableStateOf<String?>(null) }
+    var text by remember { mutableStateOf<String?>(null) }
+    var rev by remember { mutableIntStateOf(0) }
+    val saveDoc = rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) try {
+            ctx.contentResolver.openOutputStream(uri)?.use { it.write(Backup.export(ctx, password).toByteArray()) }
+            Toast.makeText(ctx, tr("Backup je spremljen"), Toast.LENGTH_LONG).show()
+        } catch (e: Exception) { Toast.makeText(ctx, tr("Backup nije spremljen"), Toast.LENGTH_LONG).show() }
+        step = null
+    }
+    fun restoreNow(pass: String?) {
+        try { Backup.restore(ctx, text ?: return, pass); Toast.makeText(ctx, tr("Sve je vraćeno. PRETORIAN se ponovo pokreće."), Toast.LENGTH_LONG).show()
+            (ctx as? android.app.Activity)?.recreate()
+        } catch (e: Exception) { Toast.makeText(ctx, e.message ?: tr("Vraćanje nije uspjelo"), Toast.LENGTH_LONG).show() }
+        step = null
+    }
+    key(rev) {
+        Page("Backup i vraćanje", "Spašava playliste, grupe, favorite, izgled, ključeve, jezike, gledano i podsjetnike.") {
+            OptionRow("Napravi backup", R.drawable.lc_upload, sub = "Izaberi folder na boxu ili USB-u") { step = "pass" }
+            OptionRow("Vrati iz backupa", R.drawable.lc_download, sub = "Izaberi PRETORIAN backup fajl") { step = "pick" }
+            ToggleRow("Automatski backup svake sedmice", Prefs.bool("backup_auto", true), R.drawable.lc_history, "U memoriji boxa, čuvaju se zadnja 3") { Prefs.put("backup_auto", it); rev++ }
+            Backup.autoList(ctx).forEach { f ->
+                OptionRow(f.name, R.drawable.lc_archive, sub = tr("Automatski backup"), value = tr("Vrati")) { text = f.readText(); step = "preview" }
+            }
+            T("Backup sadrži lozinke playlista i API ključeve. Ne dijeli ga s drugima, ili ga zaštiti lozinkom.", 12.sp, C.Amber, maxLines = 2)
+        }
+    }
+    when (step) {
+        "pass" -> Popup("Zaštititi backup lozinkom?", onDismiss = { step = null }) {
+            OptionRow("Bez lozinke", R.drawable.lc_lock_open) { password = null; step = "dir" }
+            OptionRow("Sa lozinkom", R.drawable.lc_lock) { step = "setpass" }
+        }
+        "setpass" -> TextDialog("Lozinka za backup", "Lozinka", onDismiss = { step = null }) { v -> password = v.ifBlank { null }; step = "dir" }
+        "dir" -> Popup("Gdje spremiti backup?", onDismiss = { step = null }) {
+            OptionRow("PRETORIAN (ugrađeni)", R.drawable.lc_folder_open, sub = "USB, Download, memorija boxa") { step = "browse" }
+            OptionRow("Tvoj file manager", R.drawable.lc_folder) {
+                try { saveDoc.launch(Backup.fileName()) } catch (e: Exception) { Toast.makeText(ctx, tr("Taj file manager se ne može otvoriti, koristim ugrađeni"), Toast.LENGTH_LONG).show(); step = "browse" }
+            }
+        }
+        "browse" -> FileBrowser("Izaberi folder", emptySet(), pickDir = true, onDismiss = { step = null }) { dir ->
+            try { java.io.File(dir, Backup.fileName()).writeText(Backup.export(ctx, password)); Toast.makeText(ctx, trf("Spremljeno: %s", dir.path + "/" + Backup.fileName()), Toast.LENGTH_LONG).show() }
+            catch (e: Exception) { Toast.makeText(ctx, tr("U taj folder se ne može pisati. Izaberi drugi ili PRETORIAN folder."), Toast.LENGTH_LONG).show() }
+            step = null
+        }
+        "pick" -> FilePicker("Izaberi backup", setOf("json"), onDismiss = { step = null }) { bytes, _ ->
+            val t = String(bytes)
+            if (Backup.summary(t) == null) { Toast.makeText(ctx, tr("Fajl nije PRETORIAN backup"), Toast.LENGTH_LONG).show(); step = null }
+            else { text = t; step = "preview" }
+        }
+        "preview" -> {
+            val sm = text?.let { Backup.summary(it) }
+            if (sm == null) step = null
+            else Popup("Vratiti sve iz backupa?", onDismiss = { step = null }) {
+                T(trf("Datum: %s · playlista: %s · lista favorita: %s", sm.date, sm.playlists, sm.favLists), 14.sp, C.Soft, maxLines = 2)
+                T("Trenutne postavke će biti zamijenjene.", 13.sp, C.Amber)
+                OptionRow("Vrati sve", R.drawable.lc_rotate_ccw, color = C.Danger) { if (sm.encrypted) step = "rpass" else restoreNow(null) }
+                OptionRow("Odustani", R.drawable.lc_x) { step = null }
+            }
+        }
+        "rpass" -> TextDialog("Lozinka backupa", "Lozinka", onDismiss = { step = null }) { v -> restoreNow(v) }
+        else -> {}
+    }
+}
+
 /* ---------------------------------------------------------------- parental */
 
 @Composable
@@ -461,7 +652,7 @@ private fun UpdatePage() {
     val u = Updater.available
     Page("Ažuriranje", "Instalirana verzija: ${BuildInfo.VERSION}. Provjera ide sama pri pokretanju i svakih 6 sati.") {
         if (u != null) {
-            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.CardFocus).border(1.dp, C.Red, RoundedCornerShape(16.dp)).padding(18.dp),
+            Row(Modifier.fillMaxWidth().clip(Rnd(16.dp)).background(C.CardFocus).border(1.dp, C.Red, Rnd(16.dp)).padding(18.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 Ico(R.drawable.lc_download, 26.dp, C.RedText)
                 Column(Modifier.weight(1f)) {
@@ -490,5 +681,26 @@ private fun AboutPage() {
         OptionRow("Izvorni kod", R.drawable.lc_link, "github.com/KarlAgathon/PRETORIAN · MIT licenca") {}
         OptionRow("Ikone i font", R.drawable.lc_type, "Lucide (ISC) · Inter (OFL) · Media3 (Apache 2.0)") {}
         OptionRow("Podaci o filmovima", R.drawable.lc_film, "This product uses the TMDB API but is not endorsed or certified by TMDB.") {}
+    }
+}
+
+/** A row with a preview of five icons of a set. */
+@Composable
+private fun IconSetRow(name: String, about: String, selected: Boolean, previewSet: String, onClick: () -> Unit) {
+    val ctx = LocalContext.current
+    Focusable(modifier = Modifier.fillMaxWidth().height(62.dp), onClick = onClick, normal = if (selected) C.CardFocus else C.Card, zoom = 1.01f) { _ ->
+        Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Column(Modifier.weight(1f)) { T(name, 15.sp, C.Text, FontWeight.SemiBold); T(about, 12.sp, C.Muted) }
+            IconSets.PREVIEW.forEach { id ->
+                if (previewSet.startsWith("dl_")) {
+                    val bmp = remember(previewSet, id) { IconSets.downloaded(ctx, previewSet, id) }
+                    if (bmp != null) androidx.compose.material3.Icon(androidx.compose.ui.graphics.painter.BitmapPainter(bmp), null, Modifier.size(22.dp), tint = C.Text)
+                } else {
+                    val res = remember(previewSet, id) { IconSets.resolve(ctx, id, previewSet, 1) }
+                    androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(res), null, Modifier.size(22.dp), tint = C.Text)
+                }
+            }
+            if (selected) Ico(R.drawable.lc_check, 18.dp, C.Red)
+        }
     }
 }

@@ -43,12 +43,6 @@ fun SubtitlePicker(search: String, season: Int?, episode: Int?, embedded: List<S
     var busy by remember { mutableStateOf(false) }
     var probed by remember { mutableStateOf<List<StreamTrack>?>(null) }
 
-    val fileLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        if (uri != null) try {
-            val bytes = ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: throw Exception("prazno")
-            onPicked(Subs.fromBytes(ctx, bytes))
-        } catch (e: Exception) { Toast.makeText(ctx, tr("Fajl se ne može pročitati"), Toast.LENGTH_LONG).show() }
-    }
 
     fun runSearch() {
         mode = "results"; busy = true; error = null
@@ -64,6 +58,9 @@ fun SubtitlePicker(search: String, season: Int?, episode: Int?, embedded: List<S
             scope.launch {
                 try { onPicked(Subs.fromUrl(ctx, url)) } catch (e: Exception) { Toast.makeText(ctx, tr("Titl se nije skinuo") + ": ${e.message}", Toast.LENGTH_LONG).show() }
             }
+        }
+        "disk" -> FilePicker("Titl sa diska ili USB-a", setOf("srt", "sub", "ass", "ssa", "vtt", "zip"), onDismiss = { mode = "menu" }) { bytes, _ ->
+            try { onPicked(Subs.fromBytes(ctx, bytes)) } catch (e: Exception) { Toast.makeText(ctx, tr("Fajl se ne može pročitati"), Toast.LENGTH_LONG).show(); mode = "menu" }
         }
         "langs" -> LangOrderPicker("Jezici titla", Prefs.subLangs.split(',').filter { it.isNotBlank() }, onDismiss = { mode = "menu" }) {
             if (it.isNotEmpty()) Prefs.subLangs = it.joinToString(",")
@@ -109,9 +106,7 @@ fun SubtitlePicker(search: String, season: Int?, episode: Int?, embedded: List<S
                 if (prov.isEmpty()) Toast.makeText(ctx, tr("Postavke › Filmovi i titlovi › OpenSubtitles ili SubDL ključ"), Toast.LENGTH_LONG).show() else runSearch()
             }
             OptionRow("S linka (internet)", R.drawable.lc_link, sub = "Zalijepi link do .srt ili .zip") { mode = "url" }
-            OptionRow("Sa diska ili USB-a", R.drawable.lc_folder, sub = ".srt fajl") {
-                try { fileLauncher.launch("*/*") } catch (e: Exception) { Toast.makeText(ctx, tr("Na ovom uređaju nema upravitelja fajlova"), Toast.LENGTH_LONG).show() }
-            }
+            OptionRow("Sa diska ili USB-a", R.drawable.lc_folder, sub = ".srt, .ass, .sub, .zip") { mode = "disk" }
             OptionRow("Jezik titla", R.drawable.lc_languages, value = langList(Prefs.subLangs)) { mode = "langs" }
         }
     }

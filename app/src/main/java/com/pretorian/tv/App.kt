@@ -1,15 +1,18 @@
 package com.pretorian.tv
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -20,12 +23,14 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -39,13 +44,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -58,6 +69,7 @@ class MainActivity : ComponentActivity() {
         Prefs.init(this)
         Look.load(this)
         Lock.load()
+        Notes.load()
         setContent { PretorianApp() }
     }
 }
@@ -68,6 +80,8 @@ sealed class Screen {
     object Movies : Screen()
     object Series : Screen()
     object Sports : Screen()
+    object Search : Screen()
+    object Catchup : Screen()
     object Settings : Screen()
     object AddPlaylist : Screen()
     data class MovieDetail(val vod: Vod) : Screen()
@@ -82,7 +96,7 @@ class Nav(
     val playlistsChanged: () -> Unit,
 )
 
-object BuildInfo { const val VERSION = "0.2.1" }
+object BuildInfo { const val VERSION = "0.3" }
 
 @Composable
 fun PretorianApp() {
@@ -101,67 +115,121 @@ fun PretorianApp() {
     }
     BackHandler(enabled = stack.size > 1) { nav.back() }
 
-    // look for a new version at start and every 6 hours
-    LaunchedEffect(Unit) { while (true) { Updater.check(ctx); delay(6 * 3600_000L) } }
+    // new version at start and every 6 hours; "new" movies and series once in 12 hours; weekly backup
+    LaunchedEffect(Unit) {
+        Backup.auto(ctx)
+        while (true) {
+            Updater.check(ctx)?.let { Notes.add("update", trf("Nova verzija %s", it.name), "update:${it.name}") }
+            Store.actives(ctx).forEach { p -> try { NewContent.scan(ctx, p) } catch (_: Exception) {} }
+            try { Follow.check(ctx) } catch (_: Exception) {}
+            delay(6 * 3600_000L)
+        }
+    }
+    // reminders: checked every 15 seconds, wherever you are in the app
+    LaunchedEffect(Unit) {
+        while (true) {
+            if (Reminders.showing == null) Reminders.due().firstOrNull()?.let { r ->
+                Reminders.markFired(r.id)
+                Notes.add("reminder", r.title + (r.channelName?.let { " · $it" } ?: ""), "rem:${r.id}")
+                if (Reminders.action == 1 && r.channelUrl != null) playReminder(nav, r) else Reminders.showing = r
+            }
+            delay(15_000)
+        }
+    }
+    LaunchedEffect(Reminders.rev) { ReminderReceiver.schedule(ctx) }
 
     val scheme = if (C.IsLight) lightColorScheme(primary = C.Red, background = C.Bg, surface = C.Bg)
                  else darkColorScheme(primary = C.Red, background = C.Bg, surface = C.Bg)
     MaterialTheme(colorScheme = scheme) {
-      androidx.compose.runtime.CompositionLocalProvider(
-          androidx.compose.ui.platform.LocalLayoutDirection provides
-              if (Look.lang == "ar") androidx.compose.ui.unit.LayoutDirection.Rtl else androidx.compose.ui.unit.LayoutDirection.Ltr) {
-        val top = stack.last()
-        if (top is Screen.Player) {
-            PlayerScreen(top, nav)
-        } else if (Lock.simple) {
-            Box(Modifier.fillMaxSize().background(C.Bg)) {
-                key(version, top) {
-                    when (top) {
-                        Screen.Tv -> TvScreen(nav)
-                        Screen.Movies -> MoviesScreen(nav)
-                        Screen.Series -> SeriesScreen(nav)
-                        Screen.Sports -> SportsScreen(nav)
-                        is Screen.MovieDetail -> MovieDetailScreen(top.vod, nav)
-                        is Screen.SeriesDetail -> SeriesDetailScreen(top.item, nav)
-                        else -> SimpleHome(nav)
-                    }
-                }
-            }
-        } else {
-            Row(Modifier.fillMaxSize().background(C.Bg)) {
-                Rail(top, nav)
-                Box(Modifier.weight(1f).fillMaxHeight()) {
+        CompositionLocalProvider(LocalLayoutDirection provides if (Look.lang == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr) {
+            val top = stack.last()
+            if (top is Screen.Player) {
+                PlayerScreen(top, nav)
+            } else if (Lock.simple) {
+                Box(Modifier.fillMaxSize().background(C.Bg)) {
                     key(version, top) {
                         when (top) {
-                            Screen.Home -> HomeScreen(nav)
                             Screen.Tv -> TvScreen(nav)
                             Screen.Movies -> MoviesScreen(nav)
                             Screen.Series -> SeriesScreen(nav)
-                            Screen.Settings -> SettingsScreen(nav)
-                            Screen.AddPlaylist -> AddPlaylistScreen(nav)
+                            Screen.Sports -> SportsScreen(nav)
                             is Screen.MovieDetail -> MovieDetailScreen(top.vod, nav)
                             is Screen.SeriesDetail -> SeriesDetailScreen(top.item, nav)
-                            Screen.Sports -> SportsScreen(nav)
-                            is Screen.Player -> {}
+                            else -> SimpleHome(nav)
                         }
                     }
                 }
+            } else {
+                val content: @Composable () -> Unit = {
+                        key(version, top) {
+                            when (top) {
+                                Screen.Home -> HomeScreen(nav)
+                                Screen.Tv -> TvScreen(nav)
+                                Screen.Movies -> MoviesScreen(nav)
+                                Screen.Series -> SeriesScreen(nav)
+                                Screen.Settings -> SettingsScreen(nav)
+                                Screen.AddPlaylist -> AddPlaylistScreen(nav)
+                                is Screen.MovieDetail -> MovieDetailScreen(top.vod, nav)
+                                is Screen.SeriesDetail -> SeriesDetailScreen(top.item, nav)
+                                Screen.Sports -> SportsScreen(nav)
+                                Screen.Search -> SearchScreen(nav)
+                                Screen.Catchup -> CatchupScreen(nav)
+                                is Screen.Player -> {}
+                            }
+                        }
+                }
+                if (Look.age && !Chrome.driven) Column(Modifier.fillMaxSize().background(C.Bg)) {
+                    TopBar(top, nav)
+                    Box(Modifier.weight(1f).fillMaxWidth()) { content() }
+                    if (Look.wave) HintBar()
+                } else Row(Modifier.fillMaxSize().background(C.Bg)) {
+                    Rail(top, nav)
+                    Column(Modifier.weight(1f).fillMaxHeight()) {
+                        Box(Modifier.weight(1f).fillMaxWidth()) { content() }
+                        if (Look.wave && !Chrome.driven) HintBar()
+                    }
+                }
             }
+            ReminderPopup(nav)
         }
-      }
     }
 }
 
-private data class RailItem(val screen: Screen, val icon: Int, val label: String)
+fun playReminder(nav: Nav, r: Reminder) {
+    val url = r.channelUrl ?: return
+    Preview.stop()
+    val ch = Channel("", 0, r.channelName ?: r.title, r.logo, "", url, null, r.pid ?: "")
+    nav.push(Screen.Player(listOf(PlayItem(ch.name, url, r.logo, r.title, ch)), 0, live = true))
+}
+
+/** "Starts in 5 min: …" over any screen, with Switch and Close. */
+@Composable
+private fun ReminderPopup(nav: Nav) {
+    val r = Reminders.showing ?: return
+    LaunchedEffect(r.id) { delay(Reminders.popupSec * 1000L); if (Reminders.showing?.id == r.id) Reminders.showing = null }
+    val mins = ((r.start - System.currentTimeMillis()) / 60_000).coerceAtLeast(0)
+    Popup(if (mins > 0) trf("Za %s min počinje", mins) else tr("Počinje sada"), onDismiss = { Reminders.showing = null }) {
+        T(r.title, 20.sp, C.Text, FontWeight.Bold, maxLines = 2)
+        r.channelName?.let { T(it + " · " + SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(r.start)), 14.sp, C.Soft) }
+        if (r.channelUrl != null) OptionRow("Prebaci", R.drawable.lc_play, color = C.Green) { Reminders.showing = null; playReminder(nav, r) }
+        OptionRow("Zatvori", R.drawable.lc_x) { Reminders.showing = null }
+    }
+}
+
+private data class RailItem(val screen: Screen, val icon: Int, val label: String, val badge: Int = 0)
 
 @Composable
 fun Rail(current: Screen, nav: Nav) {
+    val mode = Chrome.rail
+    if (mode == 0) return
     val items = listOf(
-        RailItem(Screen.Home, R.drawable.lc_house, "Početna"),
-        RailItem(Screen.Tv, R.drawable.lc_tv, "TV"),
-        RailItem(Screen.Movies, R.drawable.lc_film, "Filmovi"),
-        RailItem(Screen.Series, R.drawable.lc_monitor, "Serije"),
+        RailItem(Screen.Home, R.drawable.lc_house, "Početna", Notes.unread("update").coerceAtMost(0)),
+        RailItem(Screen.Tv, R.drawable.lc_tv, "TV", Notes.unread("reminder")),
+        RailItem(Screen.Movies, R.drawable.lc_film, "Filmovi", NewContent.count("vod")),
+        RailItem(Screen.Series, R.drawable.lc_monitor, "Serije", NewContent.count("series")),
         RailItem(Screen.Sports, R.drawable.lc_trophy, "Sport"),
+        RailItem(Screen.Catchup, R.drawable.lc_history, "Catch-up"),
+        RailItem(Screen.Search, R.drawable.lc_search, "Pretraga"),
     )
     val section = when (current) {
         is Screen.MovieDetail -> Screen.Movies
@@ -169,38 +237,42 @@ fun Rail(current: Screen, nav: Nav) {
         Screen.AddPlaylist -> Screen.Settings
         else -> current
     }
+    val width = when (mode) { 1 -> 72.dp; 2 -> 210.dp; else -> 96.dp }
     Column(
-        Modifier.width(96.dp).fillMaxHeight().background(C.Rail).padding(vertical = 22.dp),
+        Modifier.width(width).fillMaxHeight().background(C.Rail).padding(vertical = 14.dp).animateContentSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Image(painterResource(R.drawable.logo_mark), contentDescription = "PRETORIAN", modifier = Modifier.size(52.dp))
-        Spacer(Modifier.height(16.dp))
-        items.forEach { RailButton(it.icon, it.label, section == it.screen) { nav.root(it.screen) } }
+        Image(painterResource(R.drawable.logo_mark), contentDescription = "PRETORIAN", modifier = Modifier.size(if (mode == 1) 38.dp else 42.dp))
+        Spacer(Modifier.height(6.dp))
+        items.forEach { RailButton(it.icon, it.label, section == it.screen, mode, it.badge) { nav.root(it.screen) } }
         Spacer(Modifier.weight(1f))
-        RailButton(R.drawable.lc_settings, "Postavke", section == Screen.Settings, badge = Updater.available != null) { nav.root(Screen.Settings) }
+        RailButton(R.drawable.lc_settings, "Postavke", section == Screen.Settings, mode, if (Updater.available != null) 1 else 0) { nav.root(Screen.Settings) }
     }
 }
 
 @Composable
-private fun RailButton(icon: Int, label: String, selected: Boolean, badge: Boolean = false, onClick: () -> Unit) {
+private fun RailButton(icon: Int, label: String, selected: Boolean, mode: Int, badge: Int, onClick: () -> Unit) {
     Box {
         Focusable(
-            modifier = Modifier.width(76.dp).height(64.dp),
+            modifier = if (mode == 2) Modifier.width(186.dp).height(46.dp) else Modifier.width(if (mode == 1) 56.dp else 76.dp).height(if (mode == 1) 46.dp else 52.dp),
             onClick = onClick,
-            shape = RoundedCornerShape(16.dp),
+            onFocus = { if (Chrome.driven) Chrome.rail = 2 },
+            shape = Rnd(16.dp),
             normal = if (selected) C.Red else Color.Transparent,
             focused = if (selected) C.Red else C.CardHi,
             zoom = 1.06f,
         ) { f ->
-            Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                val c = if (selected) C.OnRed else if (f) C.Text else C.Muted
-                Ico(icon, 22.dp, c)
-                T(label, 11.sp, c, if (selected) FontWeight.SemiBold else FontWeight.Normal)
+            val c = if (selected) C.OnRed else if (f) C.Text else C.Muted
+            if (mode == 2) Row(Modifier.align(Alignment.CenterStart).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                Ico(icon, 22.dp, c); T(label, 15.sp, c, if (selected) FontWeight.SemiBold else FontWeight.Medium)
+            } else Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Ico(icon, 20.dp, c)
+                if (mode == 3) T(label, 10.sp, c, if (selected) FontWeight.SemiBold else FontWeight.Normal)
             }
         }
-        if (badge) Box(Modifier.align(Alignment.TopEnd).offset(x = (-6).dp, y = 4.dp).size(20.dp).clip(CircleShape).background(C.Danger),
-            contentAlignment = Alignment.Center) { T("1", 11.sp, Color.White, FontWeight.Bold) }
+        if (badge > 0) Box(Modifier.align(Alignment.TopEnd).offset(x = (-4).dp, y = 2.dp)) { Bell(badge) }
     }
 }
 
@@ -215,26 +287,28 @@ fun Clock() {
 }
 
 @Composable
-fun Header(title: String, subtitle: String? = null) {
-    Row(Modifier.fillMaxWidth().padding(start = 36.dp, end = 36.dp, top = 26.dp, bottom = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+fun Header(title: String, subtitle: String? = null, extra: (@Composable () -> Unit)? = null) {
+    Row(Modifier.fillMaxWidth().padding(start = 36.dp, end = 36.dp, top = 26.dp, bottom = 14.dp), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(Modifier.weight(1f), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             T(title, 28.sp, C.Text, FontWeight.Bold)
             if (subtitle != null) T(subtitle, 14.sp, C.Muted, modifier = Modifier.padding(bottom = 4.dp))
         }
+        extra?.invoke()
         Clock()
     }
 }
 
 fun expiryText(exp: String): Pair<String, Int>? {
     if (exp.isBlank()) return null
-    if (exp == "0") return "Bez isteka" to 0
+    if (exp == "0") return tr("Bez isteka") to 0
     val sec = exp.toLongOrNull() ?: return null
     val days = (sec * 1000 - System.currentTimeMillis()) / 86_400_000L
     val date = SimpleDateFormat("d. M. yyyy", Locale.getDefault()).format(Date(sec * 1000))
     return when {
-        days < 0 -> "Istekla $date" to 2
-        days < 7 -> "Ističe $date (još $days d)" to 1
-        else -> "Ističe $date" to 0
+        days < 0 -> trf("Istekla %s", date) to 2
+        days < 7 -> trf("Ističe %s (još %s d)", date, days) to 1
+        else -> trf("Ističe %s", date) to 0
     }
 }
 
@@ -243,63 +317,152 @@ fun UpdateBanner(nav: Nav) {
     val u = Updater.available ?: return
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    Row(Modifier.fillMaxWidth().padding(horizontal = 36.dp).clip(RoundedCornerShape(16.dp)).background(C.CardFocus)
-        .border(1.dp, C.Red, RoundedCornerShape(16.dp)).padding(horizontal = 18.dp, vertical = 10.dp),
+    Row(Modifier.fillMaxWidth().padding(horizontal = 36.dp).clip(Rnd(16.dp)).background(C.CardFocus)
+        .border(1.dp, C.Red, Rnd(16.dp)).padding(horizontal = 18.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         Ico(R.drawable.lc_download, 22.dp, C.RedText)
-        T("Stigla je nova verzija ${u.name}", 15.sp, C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
+        T(trf("Stigla je nova verzija %s", u.name), 15.sp, C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
         val pr = Updater.progress
-        if (pr in 0..100) T("Preuzimam $pr %", 14.sp, C.Soft)
+        if (pr in 0..100) T(trf("Preuzimam %s %%", pr), 14.sp, C.Soft)
         else if (pr == 101) T("Instaliram…", 14.sp, C.Soft)
         else Button("Ažuriraj", R.drawable.lc_download, primary = true) { scope.launch { Updater.install(ctx, u) } }
     }
 }
 
+/** Notifications: reminders, new version, new movies and series. */
+@Composable
+fun NotesPopup(onDismiss: () -> Unit, nav: Nav) {
+    Popup("Obavještenja", onDismiss, width = 640.dp) {
+        if (Notes.list.isEmpty()) T("Nema obavještenja.", 14.sp, C.Muted)
+        Notes.list.take(30).forEach { n ->
+            val icon = when (n.kind) { "update" -> R.drawable.lc_download; "vod" -> R.drawable.lc_film; "series" -> R.drawable.lc_monitor; else -> R.drawable.lc_bell }
+            OptionRow(n.text, icon, sub = SimpleDateFormat("d. M. HH:mm", Locale.getDefault()).format(Date(n.time)), color = if (n.read) null else C.Amber) {
+                onDismiss()
+                when (n.kind) { "update" -> nav.root(Screen.Settings); "vod" -> nav.root(Screen.Movies); "series" -> nav.root(Screen.Series); else -> nav.root(Screen.Tv) }
+            }
+        }
+        if (Notes.list.isNotEmpty()) OptionRow("Obriši sva obavještenja", R.drawable.lc_trash_2) { Notes.clear(); onDismiss() }
+    }
+    LaunchedEffect(Unit) { delay(1500); Notes.readAll() }
+}
+
 @Composable
 fun HomeScreen(nav: Nav) {
     val ctx = LocalContext.current
-    val p = remember { Store.active(ctx) }
+    val pls = remember { Store.actives(ctx) }
     val first = remember { FocusRequester() }
+    var notes by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
-        val exp = p?.let { expiryText(it.exp) }
-        Header("Početna", p?.let { "${it.name} · ${if (it.type == SourceType.XTREAM) "Xtream Codes" else "M3U"}" + (exp?.let { e -> " · ${e.first}" } ?: "") })
-        UpdateBanner(nav)
-        if (p == null) { Message("Nema playliste", "Dodaj playlistu u Postavkama"); return@Column }
-        Box(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 36.dp, vertical = 20.dp), contentAlignment = Alignment.Center) {
-            Row(horizontalArrangement = Arrangement.spacedBy(28.dp), verticalAlignment = Alignment.CenterVertically) {
-                HomeTile("TV", R.drawable.lc_tv, first) { nav.root(Screen.Tv) }
-                HomeTile("Filmovi", R.drawable.lc_film) { nav.root(Screen.Movies) }
-                HomeTile("Serije", R.drawable.lc_monitor) { nav.root(Screen.Series) }
+        val line = pls.joinToString("  ·  ") { p -> p.name + (expiryText(p.exp)?.let { " (${it.first})" } ?: "") }
+        Header(tr("Početna"), line.ifBlank { null }) {
+            Box {
+                Focusable(modifier = Modifier.size(48.dp), onClick = { notes = true }, shape = CircleShape, normal = C.Card, zoom = 1.08f) { _ ->
+                    Box(Modifier.align(Alignment.Center)) { Ico(R.drawable.lc_bell, 22.dp, if (Notes.unread() > 0) C.Amber else C.Soft) }
+                }
+                Box(Modifier.align(Alignment.TopEnd)) { Bell(Notes.unread()) }
             }
         }
-        T("PRETORIAN ${BuildInfo.VERSION}", 12.sp, C.Muted, modifier = Modifier.padding(start = 36.dp, end = 36.dp, bottom = 20.dp))
+        UpdateBanner(nav)
+        if (pls.isEmpty()) { Message("Nema playliste", "Dodaj playlistu u Postavkama"); return@Column }
+        val cont = remember(Watch.rev) { Watch.continueList(ctx) }
+        Box(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 36.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
+            Row(horizontalArrangement = Arrangement.spacedBy(22.dp), verticalAlignment = Alignment.CenterVertically) {
+                val size = when (Look.tileSize) { 0 -> 140.dp; 2 -> 190.dp; else -> 165.dp }
+                HomeTile("TV", R.drawable.lc_tv, first, size, badge = Notes.unread("reminder")) { nav.root(Screen.Tv) }
+                HomeTile("Filmovi", R.drawable.lc_film, null, size, badge = NewContent.count("vod")) { nav.root(Screen.Movies) }
+                HomeTile("Serije", R.drawable.lc_monitor, null, size, badge = NewContent.count("series")) { nav.root(Screen.Series) }
+                HomeTile("Sport", R.drawable.lc_trophy, null, size) { nav.root(Screen.Sports) }
+            }
+        }
+        if (cont.isNotEmpty()) ContinueRow(cont, nav, Modifier.padding(start = 36.dp, bottom = 16.dp))
+        T("PRETORIAN ${BuildInfo.VERSION}", 12.sp, C.Muted, modifier = Modifier.padding(start = 36.dp, end = 36.dp, bottom = 14.dp))
     }
-    LaunchedEffect(Unit) { try { first.requestFocus() } catch (_: Exception) {} }
+    if (notes) NotesPopup({ notes = false }, nav)
+    LaunchedEffect(Unit) { first.tryFocus() }
 }
 
-/** Big menu tile; size and style come from Settings › Appearance. */
+/** "Continue watching": started movies and episodes, and the next episode of a series. */
 @Composable
-fun HomeTile(label: String, icon: Int, fr: FocusRequester? = null, sizeOverride: Dp? = null, onClick: () -> Unit) {
+fun ContinueRow(list: List<Progress>, nav: Nav, modifier: Modifier = Modifier) {
+    val ctx = LocalContext.current
+    var menu by remember { mutableStateOf<Progress?>(null) }
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Ico(R.drawable.lc_history, 18.dp, C.RedText); T("Nastavi gledati", 17.sp, C.Text, FontWeight.SemiBold)
+        }
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(end = 36.dp)) {
+            items(list, key = { it.url }) { pr ->
+                Focusable(modifier = Modifier.width(280.dp).height(86.dp), onClick = {
+                    nav.push(Screen.Player(listOf(PlayItem(pr.title, pr.url, pr.poster, null, null, pr.series, pr.season, pr.episode)), 0, live = false))
+                }, onMenu = { menu = pr }, normal = C.Card, shape = Rnd(14.dp), zoom = 1.04f) { _ ->
+                    Row(Modifier.fillMaxSize().padding(8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Box(Modifier.width(48.dp).fillMaxHeight().clip(Rnd(8.dp)).background(C.Tile)) {
+                            if (pr.poster != null) AsyncImage(model = pr.poster, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                        }
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            T(pr.title, 14.sp, C.Text, FontWeight.SemiBold, maxLines = 2)
+                            if (pr.next) T(trf("Sljedeća: S%sE%s", pr.season ?: 1, pr.episode ?: 1), 12.sp, C.Green)
+                            else {
+                                T(trf("Stao si na %s od %s", fmtTime(pr.pos), fmtTime(pr.dur)), 11.sp, C.Muted)
+                                Box(Modifier.fillMaxWidth().height(4.dp).clip(Rnd(2.dp)).background(C.CardHi)) {
+                                    Box(Modifier.fillMaxWidth(pr.fraction).height(4.dp).background(C.Red))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    menu?.let { pr ->
+        Popup(pr.title, onDismiss = { menu = null }) {
+            OptionRow("Ukloni iz Nastavi gledati", R.drawable.lc_x) { Watch.remove(ctx, pr.url); menu = null }
+            OptionRow("Označi kao gledano", R.drawable.lc_circle_check) { Watch.setWatched(ctx, pr.url, pr.title, pr.poster, true); menu = null }
+        }
+    }
+}
+
+fun fmtTime(ms: Long): String {
+    val s = ms / 1000
+    return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, (s % 3600) / 60, s % 60) else "%d:%02d".format(s / 60, s % 60)
+}
+
+/** Big menu tile; size and style come from Settings › Appearance. Style 3 is the modern one. */
+@Composable
+fun HomeTile(label: String, icon: Int, fr: FocusRequester? = null, sizeOverride: Dp? = null, badge: Int = 0, onClick: () -> Unit) {
     val size = sizeOverride ?: when (Look.tileSize) { 0 -> 180.dp; 2 -> 280.dp; else -> 230.dp }
     val style = Look.tileStyle
-    val shape = RoundedCornerShape(size * 0.13f)
-    Focusable(
-        modifier = Modifier.size(size * 1.12f, size).then(if (style != 0) Modifier.border(1.5.dp, C.Line, shape) else Modifier),
-        onClick = onClick,
-        focusRequester = fr,
-        shape = shape,
-        normal = when (style) { 1 -> C.Card; 2 -> Color.Transparent; else -> C.Tile },
-        focused = when (style) { 1 -> C.CardFocus; 2 -> C.CardFocus; else -> C.Red },
-        zoom = 1.06f,
-    ) { f ->
-        Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(size * 0.07f)) {
-            val onAccent = f && style == 0
-            Box(Modifier.size(size * 0.38f).clip(CircleShape).background(if (onAccent) C.OnRed.copy(alpha = 0.18f) else C.Red.copy(alpha = 0.16f)),
-                contentAlignment = Alignment.Center) {
-                Ico(icon, size * 0.2f, if (onAccent) C.OnRed else C.RedText)
+    val shape = Rnd(size * 0.13f)
+    Box {
+        Focusable(
+            modifier = Modifier.size(size * 1.12f, size).then(if (style == 1 || style == 2) Modifier.border(1.5.dp, C.Line, shape) else Modifier),
+            onClick = onClick,
+            focusRequester = fr,
+            shape = shape,
+            normal = when (style) { 1 -> C.Card; 2 -> Color.Transparent; 3 -> C.Card; else -> C.Tile },
+            focused = when (style) { 1, 2 -> C.CardFocus; 3 -> C.CardHi; else -> C.Red },
+            zoom = 1.06f,
+        ) { f ->
+            Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(size * 0.08f)) {
+                if (style == 3) {
+                    // modern: a soft gradient square with a white icon, like One UI / Windows 11
+                    Box(Modifier.size(size * 0.42f).clip(Rnd(size * 0.12f))
+                        .background(Brush.linearGradient(listOf(lerp(C.Red, Color.White, 0.18f), lerp(C.Red, Color.Black, 0.28f)))),
+                        contentAlignment = Alignment.Center) {
+                        Ico(icon, size * 0.21f, Color.White)
+                    }
+                    T(label, (size.value * 0.105f).sp, if (f) C.Text else C.Soft, FontWeight.SemiBold)
+                } else {
+                    val onAccent = f && style == 0
+                    Box(Modifier.size(size * 0.38f).clip(CircleShape).background(if (onAccent) C.OnRed.copy(alpha = 0.18f) else C.Red.copy(alpha = 0.16f)),
+                        contentAlignment = Alignment.Center) {
+                        Ico(icon, size * 0.2f, if (onAccent) C.OnRed else C.RedText)
+                    }
+                    T(label, (size.value * 0.12f).sp, if (onAccent) C.OnRed else C.Text, FontWeight.Bold)
+                }
             }
-            T(label, (size.value * 0.12f).sp, if (onAccent) C.OnRed else C.Text, FontWeight.Bold)
         }
+        if (badge > 0) Box(Modifier.align(Alignment.TopEnd).padding(8.dp)) { Bell(badge) }
     }
 }
 
@@ -317,9 +480,9 @@ fun SimpleHome(nav: Nav) {
         }
         Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
             Row(horizontalArrangement = Arrangement.spacedBy(36.dp)) {
-                HomeTile("TV", R.drawable.lc_tv, first, 260.dp) { nav.push(Screen.Tv) }
-                HomeTile("Filmovi", R.drawable.lc_film, null, 260.dp) { nav.push(Screen.Movies) }
-                HomeTile("Serije", R.drawable.lc_monitor, null, 260.dp) { nav.push(Screen.Series) }
+                HomeTile("TV", R.drawable.lc_tv, first, 230.dp) { nav.push(Screen.Tv) }
+                HomeTile("Filmovi", R.drawable.lc_film, null, 230.dp) { nav.push(Screen.Movies) }
+                HomeTile("Serije", R.drawable.lc_monitor, null, 230.dp) { nav.push(Screen.Series) }
             }
         }
         Button("Napredni mod", R.drawable.lc_lock) { warn = true }
@@ -335,5 +498,81 @@ fun SimpleHome(nav: Nav) {
         if (err == null) { pin = false; Lock.switchSimple(false); nav.root(Screen.Home) }
         err
     }
-    LaunchedEffect(Unit) { try { first.requestFocus() } catch (_: Exception) {} }
+    LaunchedEffect(Unit) { first.tryFocus() }
+}
+
+/** Series you follow: a note when a new episode appears. */
+object Follow {
+    private fun all(): org.json.JSONObject = try { org.json.JSONObject(Prefs.str("follow", "{}")) } catch (e: Exception) { org.json.JSONObject() }
+    fun isOn(id: String) = all().has(id)
+    fun toggle(pid: String, s: SeriesItem, count: Int): Boolean {
+        val o = all()
+        val on = if (o.has(s.id)) { o.remove(s.id); false } else { o.put(s.id, org.json.JSONObject().put("pid", pid).put("name", s.name).put("n", count)); true }
+        Prefs.put("follow", o.toString()); return on
+    }
+    suspend fun check(ctx: android.content.Context) {
+        if (System.currentTimeMillis() - Prefs.long("follow_at") < 12 * 3600_000L) return
+        val o = all()
+        o.keys().asSequence().toList().forEach { id ->
+            val e = o.getJSONObject(id)
+            val p = Store.byId(ctx, e.str("pid")) ?: return@forEach
+            val n = try { Repo.episodes(p, id).size } catch (x: Exception) { return@forEach }
+            if (n > e.optInt("n")) {
+                Notes.add("series", trf("Nova epizoda: %s", cleanTitle(e.str("name")).first), "ep:$id:$n")
+                e.put("n", n)
+            }
+        }
+        Prefs.put("follow", o.toString()); Prefs.put("follow_at", System.currentTimeMillis())
+    }
+}
+
+/** New Age: the menu as a bar on top. */
+@Composable
+private fun TopBar(current: Screen, nav: Nav) {
+    val items = listOf(
+        RailItem(Screen.Home, R.drawable.lc_house, "Početna"),
+        RailItem(Screen.Tv, R.drawable.lc_tv, "TV", Notes.unread("reminder")),
+        RailItem(Screen.Movies, R.drawable.lc_film, "Filmovi", NewContent.count("vod")),
+        RailItem(Screen.Series, R.drawable.lc_monitor, "Serije", NewContent.count("series")),
+        RailItem(Screen.Sports, R.drawable.lc_trophy, "Sport"),
+        RailItem(Screen.Catchup, R.drawable.lc_history, "Catch-up"),
+        RailItem(Screen.Search, R.drawable.lc_search, "Pretraga"),
+        RailItem(Screen.Settings, R.drawable.lc_settings, "Postavke", if (Updater.available != null) 1 else 0),
+    )
+    val section = when (current) { is Screen.MovieDetail -> Screen.Movies; is Screen.SeriesDetail -> Screen.Series; Screen.AddPlaylist -> Screen.Settings; else -> current }
+    Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp).clip(Rnd(22.dp)).background(C.Rail).border(1.dp, C.Line, Rnd(22.dp))
+        .padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Image(painterResource(R.drawable.logo_mark), contentDescription = "PRETORIAN", modifier = Modifier.size(34.dp))
+        T("PRETORIAN", 15.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 6.dp, end = 10.dp))
+        items.forEach { it ->
+            val sel = section == it.screen
+            Box {
+                Focusable(modifier = Modifier.height(40.dp), onClick = { nav.root(it.screen) }, shape = Rnd(14.dp),
+                    normal = if (sel) C.Red.copy(alpha = 0.22f) else androidx.compose.ui.graphics.Color.Transparent, focused = C.CardHi, zoom = 1.04f) { f ->
+                    Row(Modifier.align(Alignment.Center).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        Ico(it.icon, 17.dp, if (sel) C.RedText else if (f) C.Text else C.Soft)
+                        T(it.label, 13.sp, if (sel || f) C.Text else C.Soft, if (sel) FontWeight.SemiBold else FontWeight.Medium)
+                    }
+                }
+                if (it.badge > 0) Box(Modifier.align(Alignment.TopEnd)) { Bell(it.badge) }
+            }
+        }
+        Spacer(Modifier.weight(1f))
+        Clock()
+    }
+}
+
+/** Remote help at the bottom (New Wave / New Age). */
+@Composable
+fun HintBar() {
+    Row(Modifier.fillMaxWidth().background(C.Rail).padding(horizontal = 24.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+        listOf("◀ ▲ ▼ ▶" to "Kretanje", "OK" to "Izaberi", tr("Drži OK") to "Opcije", tr("Nazad") to "Natrag").forEach { (k, v) ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(Modifier.clip(Rnd(6.dp)).background(C.CardHi).padding(horizontal = 7.dp, vertical = 2.dp)) { T(k, 11.sp, C.Text, FontWeight.Bold) }
+                T(v, 11.sp, C.Muted)
+            }
+        }
+    }
 }

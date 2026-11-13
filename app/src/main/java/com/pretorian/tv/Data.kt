@@ -47,7 +47,7 @@ data class Playlist(
 }
 
 data class Category(val id: String, val name: String)
-data class Channel(val id: String, val num: Int, val name: String, val logo: String?, val group: String, val url: String, val epg: String? = null)
+data class Channel(val id: String, val num: Int, val name: String, val logo: String?, val group: String, val url: String, val epg: String? = null, val pid: String = "", val archive: Int = 0)
 data class Vod(val id: String, val name: String, val poster: String?, val rating: String?, val url: String)
 data class SeriesItem(val id: String, val name: String, val cover: String?, val plot: String?, val rating: String?)
 data class Episode(val id: String, val season: Int, val num: Int, val title: String, val url: String, val plot: String?)
@@ -55,7 +55,7 @@ data class VodInfo(
     val plot: String?, val genre: String?, val year: String?, val duration: String?,
     val cast: String?, val director: String?, val backdrop: String?, val rating: String?,
 )
-data class EpgItem(val title: String, val desc: String?, val start: Long, val end: Long) {
+data class EpgItem(val title: String, val desc: String?, val start: Long, val end: Long, val server: String? = null, val archived: Boolean = false) {
     fun times(): String {
         val f = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
         return "${f.format(java.util.Date(start))}–${f.format(java.util.Date(end))}"
@@ -95,9 +95,34 @@ object Store {
         prefs(c).edit().putString("playlists", a.toString()).apply()
     }
 
-    fun active(c: Context): Playlist? = playlists(c).firstOrNull { it.active } ?: playlists(c).firstOrNull()
+    /** turned-on playlists, the opened one first */
+    fun actives(c: Context): List<Playlist> {
+        val on = playlists(c).filter { it.active }.ifEmpty { playlists(c).take(1) }
+        val open = Prefs.str("pl_open")
+        return on.sortedBy { if (it.id == open) 0 else 1 }
+    }
 
-    fun activate(c: Context, id: String) = savePlaylists(c, playlists(c).map { it.copy(active = it.id == id) })
+    /** the opened playlist (the one whose groups are unfolded) */
+    fun active(c: Context): Playlist? = actives(c).firstOrNull()
+
+    fun byId(c: Context, id: String?): Playlist? = playlists(c).firstOrNull { it.id == id } ?: active(c)
+
+    /** several playlists may be on at once (Settings › Playlists) */
+    var multi: Boolean get() = Prefs.bool("pl_multi", false); set(v) = Prefs.put("pl_multi", v)
+
+    fun open(c: Context, id: String) { Prefs.put("pl_open", id) }
+
+    fun activate(c: Context, id: String) {
+        if (multi) savePlaylists(c, playlists(c).map { if (it.id == id) it.copy(active = !it.active) else it })
+        else savePlaylists(c, playlists(c).map { it.copy(active = it.id == id) })
+        open(c, id)
+    }
+
+    fun movePlaylist(c: Context, id: String, d: Int) {
+        val l = playlists(c).toMutableList(); val i = l.indexOfFirst { it.id == id }; val j = i + d
+        if (i < 0 || j !in l.indices) return
+        l.add(j, l.removeAt(i)); savePlaylists(c, l)
+    }
 
     fun favorites(c: Context, playlistId: String): List<Channel> = try {
         val a = JSONArray(prefs(c).getString("fav_$playlistId", "[]") ?: "[]")
@@ -211,7 +236,7 @@ class Xtream(private val p: Playlist) {
             val o = a.getJSONObject(i)
             val id = o.str("stream_id")
             Channel(id, o.optInt("num", i + 1), o.str("name"), o.str("stream_icon").orNullIfBlank(), categoryId,
-                "$base/live/${p.user}/${p.pass}/$id.ts", o.str("epg_channel_id").orNullIfBlank())
+                "$base/live/${p.user}/${p.pass}/$id.ts", o.str("epg_channel_id").orNullIfBlank(), p.id)
         }
     }
 
@@ -222,8 +247,45 @@ class Xtream(private val p: Playlist) {
             val o = a.getJSONObject(i)
             val id = o.str("stream_id")
             Channel(id, o.optInt("num", i + 1), o.str("name"), o.str("stream_icon").orNullIfBlank(), o.str("category_id"),
-                "$base/live/${p.user}/${p.pass}/$id.ts", o.str("epg_channel_id").orNullIfBlank())
+                "$base/live/${p.user}/${p.pass}/$id.ts", o.str("epg_channel_id").orNullIfBlank(), p.id,
+                if (o.optInt("tv_archive", 0) == 1) o.optInt("tv_archive_duration", 1).coerceAtLeast(1) else 0)
         }
+    }
+
+    /** short list of every movie or series: id, category, name, image, rating, url (for the "new" badges) */
+    fun catalog(kind: String): List<JSONObject> {
+        val a = array(api(if (kind == "vod") "get_vod_streams" else "get_series"))
+        return (0 until a.length()).map { i ->
+            val o = a.getJSONObject(i)
+            if (kind == "vod") {
+                val id = o.str("stream_id"); val ext = o.str("container_extension").ifBlank { "mp4" }
+                JSONObject().put("id", id).put("c", o.str("category_id")).put("n", o.str("name")).put("i", o.str("stream_icon"))
+                    .put("r", o.str("rating")).put("u", "$base/movie/${p.user}/${p.pass}/$id.$ext")
+            } else JSONObject().put("id", o.str("series_id")).put("c", o.str("category_id")).put("n", o.str("name")).put("i", o.str("cover"))
+                .put("r", o.str("rating"))
+        }
+    }
+
+    /** past programmes of a channel with archive (catch-up) */
+    fun archive(streamId: String): List<EpgItem> {
+        val o = try { JSONObject(api("get_simple_data_table", "&stream_id=${Net.enc(streamId)}")) } catch (e: Exception) { return emptyList() }
+        val a = o.optJSONArray("epg_listings") ?: return emptyList()
+        fun b64(s: String) = try { String(android.util.Base64.decode(s, android.util.Base64.DEFAULT)).trim() } catch (e: Exception) { s }
+        return (0 until a.length()).mapNotNull {
+            val e = a.getJSONObject(it)
+            val start = e.str("start_timestamp").toLongOrNull()?.times(1000) ?: return@mapNotNull null
+            val end = e.str("stop_timestamp").toLongOrNull()?.times(1000) ?: start
+            // the server's own clock text is what the archive link wants
+            EpgItem(b64(e.str("title")), b64(e.str("description")).orNullIfBlank(), start, end, e.str("start"), e.optInt("has_archive", 1) == 1)
+        }
+    }
+
+    /** link to a past programme: /timeshift/user/pass/minutes/YYYY-MM-DD:HH-MM/stream.ts */
+    fun timeshiftUrl(streamId: String, e: EpgItem): String {
+        val t = e.server?.takeIf { it.length >= 16 }?.let { it.substring(0, 10) + ":" + it.substring(11, 13) + "-" + it.substring(14, 16) }
+            ?: java.text.SimpleDateFormat("yyyy-MM-dd:HH-mm", java.util.Locale.US).format(java.util.Date(e.start))
+        val minutes = ((e.end - e.start) / 60_000).coerceAtLeast(1)
+        return "$base/timeshift/${p.user}/${p.pass}/$minutes/$t/$streamId.ts"
     }
 
     /** full TV guide of the account, XMLTV */
@@ -333,7 +395,7 @@ object Repo {
     }
 
     private fun m3uChannels(p: Playlist): List<Channel> {
-        if (m3uFor != p.id) { m3u = M3u.parse(Net.get(p.url.trim())); m3uFor = p.id }
+        if (m3uFor != p.id) { m3u = M3u.parse(Net.get(p.url.trim())).map { it.copy(pid = p.id) }; m3uFor = p.id }
         return m3u
     }
 
@@ -346,6 +408,15 @@ object Repo {
         if (p.type == SourceType.XTREAM) Xtream(p).channels(groupId)
         else m3uChannels(p).filter { it.group == groupId }
     }
+
+    /** every live channel of the playlist ("All channels", sports search) */
+    suspend fun allChannels(p: Playlist): List<Channel> = cached("all_${p.id}") {
+        if (p.type == SourceType.XTREAM) Xtream(p).allChannels() else m3uChannels(p)
+    }
+
+    /** every movie / series of the playlist (search) */
+    suspend fun catalog(p: Playlist, kind: String): List<JSONObject> =
+        if (p.type == SourceType.XTREAM) cached("cat_${kind}_${p.id}") { Xtream(p).catalog(kind) } else emptyList()
 
     suspend fun vodGroups(p: Playlist): List<Category> =
         if (p.type == SourceType.XTREAM) cached("vg_${p.id}") { Xtream(p).vodCategories() } else emptyList()

@@ -1,0 +1,20 @@
+[
+ {
+  "id": "iconoir",
+  "name": "Iconoir",
+  "about": "Elegantne tanke linije · MIT",
+  "url": "https://raw.githubusercontent.com/KarlAgathon/PRETORIAN/main/iconsets/iconoir.zip"
+ },
+ {
+  "id": "remix",
+  "name": "Remix (obris)",
+  "about": "Moderne, zaobljene · Apache 2.0",
+  "url": "https://raw.githubusercontent.com/KarlAgathon/PRETORIAN/main/iconsets/remix.zip"
+ },
+ {
+  "id": "remixfill",
+  "name": "Remix (popunjene)",
+  "about": "Pune, iOS stil · Apache 2.0",
+  "url": "https://raw.githubusercontent.com/KarlAgathon/PRETORIAN/main/iconsets/remixfill.zip"
+ }
+]

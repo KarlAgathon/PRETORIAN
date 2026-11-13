@@ -9,6 +9,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import java.util.Locale
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -148,32 +156,65 @@ private fun tracksOf(player: ExoPlayer, type: Int): List<TrackItem> {
     return out
 }
 
+private fun httpCode(e: PlaybackException): Int? {
+    var c: Throwable? = e.cause
+    while (c != null) {
+        if (c is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException) return c.responseCode
+        c = c.cause
+    }
+    return null
+}
+
+/** A clear message for a stream that does not play, in the app language. */
+private fun errorText(e: PlaybackException, live: Boolean): String {
+    val code = httpCode(e)
+    return when {
+        code == 401 || code == 403 -> tr("Server odbija pristup: nalog istekao ili blokiran") + " (HTTP $code)"
+        code == 429 || code == 458 || code == 509 || code == 456 -> tr("Previše konekcija: ugasi gledanje na drugom uređaju") + " (HTTP $code)"
+        code == 404 -> tr("Kanal više ne postoji kod providera") + " (HTTP 404)"
+        code != null && code >= 500 -> tr("Server trenutno ne radi") + " (HTTP $code)"
+        code != null -> tr("Server je odbio zahtjev") + " (HTTP $code)"
+        e.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED || e.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ->
+            tr("Nema veze sa serverom")
+        else -> tr(if (live) "Kanal trenutno ne radi" else "Video se ne može pustiti") + " (${e.errorCodeName.removePrefix("ERROR_CODE_")})"
+    }
+}
+
 @OptIn(UnstableApi::class)
 @Composable
 fun PlayerScreen(s: Screen.Player, nav: Nav) {
     val ctx = LocalContext.current
-    val n = s.items.size
-    var index by remember { mutableIntStateOf(s.index.coerceIn(0, n - 1)) }
+    var items by remember { mutableStateOf(s.items) }
+    val n = items.size
+    var index by remember { mutableIntStateOf(s.index.coerceIn(0, (s.items.size - 1).coerceAtLeast(0))) }
     var showInfo by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
+    var retried by remember { mutableStateOf(false) }
+    var retryToken by remember { mutableIntStateOf(0) }
     var buffering by remember { mutableStateOf(true) }
     var playing by remember { mutableStateOf(true) }
     var position by remember { mutableLongStateOf(0L) }
     var duration by remember { mutableLongStateOf(0L) }
     var videoH by remember { mutableIntStateOf(0) }
+    var videoW by remember { mutableIntStateOf(0) }
     var fps by remember { mutableStateOf(0f) }
+    var bitrate by remember { mutableLongStateOf(0L) }
+    var resUntil by remember { mutableLongStateOf(0L) }
     var channels by remember { mutableIntStateOf(0) }
     var nowNext by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
-    var dialog by remember { mutableStateOf<String?>(null) }   // menu, audio, subs, info
+    var dialog by remember { mutableStateOf<String?>(null) }   // menu, audio, subs, info, fav, ext
+    var side by remember { mutableStateOf<String?>(null) }     // channels, groups, epg (live only)
+    var sideGroup by remember { mutableStateOf<GroupRef?>(null) }
+    var resume by remember { mutableStateOf<Progress?>(null) }
+    var bar by remember { mutableStateOf(false) }   // button bar at the bottom
     var subFile by remember { mutableStateOf(s.items.getOrNull(index)?.subFile) }
     var resize by remember { mutableIntStateOf(0) }
-    val player = remember { buildPlayer(ctx) }
+    val player = remember { Preview.stop(); buildPlayer(ctx) }
     val applied = remember { booleanArrayOf(false) }
     val step = Prefs.seekStep * 1000L
     val focus = remember { FocusRequester() }
-    val p = remember { Store.active(ctx) }
-    val item = s.items[index]
-
+    val item = items.getOrElse(index) { items.first() }
+    val p = item.channel?.let { Store.byId(ctx, it.pid) } ?: Store.active(ctx)
 
     /** audio / built-in subtitle picked on the movie page, applied when the stream's tracks are known */
     fun applyChoices(item: PlayItem) {
@@ -199,7 +240,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         player.trackSelectionParameters = b.build()
     }
 
-    fun loadMedia(item: PlayItem, file: String?, at: Long) {
+    fun loadMedia(item: PlayItem, file: String?, at: Long, play: Boolean = true) {
         val b = MediaItem.Builder().setUri(item.url)
         if (file != null) b.setSubtitleConfigurations(listOf(
             MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(File(file)))
@@ -214,57 +255,101 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         applied[0] = false
         player.setMediaItem(b.build(), at)
         player.prepare()
-        player.playWhenReady = true
+        player.playWhenReady = play
+    }
+
+    /** remembers where you are in a movie or episode (continue watching, watched marks) */
+    fun saveProgress(done: Boolean = false) {
+        if (s.live) return
+        val it = items.getOrNull(index) ?: return
+        val dur = player.duration.takeIf { d -> d > 0 } ?: return
+        val pos = if (done) dur else player.currentPosition
+        Watch.save(ctx, Progress(it.url, it.title, it.logo, pos, dur, System.currentTimeMillis(), it.search.takeIf { _ -> it.season != null },
+            it.season, it.episode, next = false, done = done || pos >= dur * 0.9, pid = p?.id ?: ""))
+        // finished an episode: the next one shows up in "Continue watching"
+        if ((done || pos >= dur * 0.9) && it.season != null) items.getOrNull(index + 1)?.let { nx ->
+            if (Watch.get(ctx, nx.url)?.watched != true)
+                Watch.save(ctx, Progress(nx.url, nx.title, nx.logo, 0, 0, System.currentTimeMillis() + 1, nx.search, nx.season, nx.episode, next = true, pid = p?.id ?: ""))
+        }
     }
 
     DisposableEffect(Unit) {
         val l = object : Player.Listener {
             override fun onPlayerError(e: PlaybackException) {
-                error = if (s.live) "Kanal trenutno ne radi (${e.errorCodeName})" else "Video se ne može pustiti (${e.errorCodeName})"
+                if (!retried) { retried = true; retryToken++ } else error = errorText(e, s.live)
             }
             override fun onPlaybackStateChanged(state: Int) {
                 buffering = state == Player.STATE_BUFFERING
-                if (state == Player.STATE_ENDED && !s.live && index < n - 1) index++
+                if (state == Player.STATE_READY) { error = null }
+                if (state == Player.STATE_ENDED && !s.live) { saveProgress(done = true); if (index < n - 1) index++ }
             }
             override fun onIsPlayingChanged(isPlaying: Boolean) { playing = isPlaying }
             override fun onTracksChanged(tracks: Tracks) {
-                player.videoFormat?.let { videoH = it.height; fps = it.frameRate }
+                player.videoFormat?.let {
+                    if (it.height != videoH) resUntil = System.currentTimeMillis() + 6000
+                    videoH = it.height; videoW = it.width; fps = it.frameRate
+                }
                 player.audioFormat?.let { channels = it.channelCount }
-                if (!applied[0] && tracks.groups.isNotEmpty()) { applied[0] = true; applyChoices(s.items[index]) }
+                if (!applied[0] && tracks.groups.isNotEmpty()) { applied[0] = true; applyChoices(items[index]) }
             }
         }
-        player.addListener(l)
-        onDispose { player.removeListener(l); player.release() }
+        val a = object : androidx.media3.exoplayer.analytics.AnalyticsListener {
+            override fun onBandwidthEstimate(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime, totalLoadTimeMs: Int, totalBytesLoaded: Long, bitrateEstimate: Long) {
+                bitrate = bitrateEstimate
+            }
+        }
+        player.addListener(l); player.addAnalyticsListener(a)
+        onDispose { saveProgress(); player.removeListener(l); player.removeAnalyticsListener(a); player.release() }
     }
 
-    LaunchedEffect(index) {
+    LaunchedEffect(index, items) {
         if (s.live) TvMemory.channel = index
-        error = null; showInfo = true; videoH = 0
-        val cur = s.items[index]
+        error = null; retried = false; showInfo = true; videoH = 0
+        val cur = items[index]
         subFile = cur.subFile
-        loadMedia(cur, subFile, 0L)
+        val saved = if (!s.live) Watch.get(ctx, cur.url) else null
+        if (saved != null && saved.started && cur.subFile == null) { resume = saved; loadMedia(cur, subFile, saved.pos, play = false) }
+        else loadMedia(cur, subFile, 0L)
         nowNext = emptyList()
         val ch = cur.channel
         if (s.live && ch != null && p != null) nowNext = Repo.nowNext(p, ch)
     }
-    LaunchedEffect(showInfo, index, playing) { if (showInfo && (s.live || playing)) { delay(5000); showInfo = false } }
+    LaunchedEffect(retryToken) {
+        if (retryToken == 0) return@LaunchedEffect
+        delay(2000)
+        loadMedia(items[index], subFile, if (s.live) 0L else player.currentPosition)
+    }
+    LaunchedEffect(showInfo, index, playing, bar) { if (showInfo && !bar && (s.live || playing)) { delay(5000); showInfo = false } }
     LaunchedEffect(Unit) { while (true) { position = player.currentPosition; duration = player.duration.coerceAtLeast(0); delay(500) } }
+    LaunchedEffect(index) { if (!s.live) while (true) { delay(15_000); if (player.isPlaying) saveProgress() } }
 
-    BackHandler(enabled = dialog != null) { dialog = null }
+    BackHandler(enabled = dialog != null || side != null || resume != null || bar) {
+        when {
+            resume != null -> { resume = null; player.seekTo(0); player.play() }
+            dialog != null -> dialog = null
+            bar -> { bar = false; showInfo = false }
+            side == "groups" -> side = "channels"
+            else -> { side = null; sideGroup = null }
+        }
+    }
 
     Box(
         Modifier.fillMaxSize().background(Color.Black)
             .focusRequester(focus)
             .onPreviewKeyEvent { e ->
-                if (dialog != null || e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                if (dialog != null || side != null || resume != null || bar || e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                if (error != null && (e.key == Key.DirectionCenter || e.key == Key.Enter)) { error = null; retried = false; retryToken++; return@onPreviewKeyEvent true }
                 when (e.key) {
                     Key.Menu, Key.Info -> { dialog = "menu"; true }
                     Key.DirectionUp, Key.ChannelUp -> if (s.live) { index = (index - 1 + n) % n; true } else { showInfo = true; true }
-                    Key.DirectionDown, Key.ChannelDown -> if (s.live) { index = (index + 1) % n; true } else { dialog = "menu"; true }
-                    Key.DirectionLeft, Key.MediaRewind -> if (!s.live) { player.seekTo((player.currentPosition - step).coerceAtLeast(0)); showInfo = true; true } else false
-                    Key.DirectionRight, Key.MediaFastForward -> if (!s.live) { player.seekTo(player.currentPosition + step); showInfo = true; true } else false
+                    Key.DirectionDown, Key.ChannelDown -> if (s.live && e.key == Key.ChannelDown) { index = (index + 1) % n; true }
+                        else if (s.live && !showInfo) { index = (index + 1) % n; true } else { bar = true; showInfo = true; true }
+                    Key.DirectionLeft, Key.MediaRewind -> if (!s.live) { player.seekTo((player.currentPosition - step).coerceAtLeast(0)); showInfo = true; true }
+                        else { side = "channels"; showInfo = false; true }
+                    Key.DirectionRight, Key.MediaFastForward -> if (!s.live) { player.seekTo(player.currentPosition + step); showInfo = true; true }
+                        else { side = "epg"; showInfo = false; true }
                     Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.MediaPlayPause -> {
-                        if (s.live) { if (showInfo && e.key != Key.MediaPlayPause) dialog = "menu" else showInfo = true }
+                        if (s.live) { if (showInfo && e.key != Key.MediaPlayPause) bar = true else showInfo = true }
                         else { if (player.isPlaying) player.pause() else player.play(); showInfo = true }
                         true
                     }
@@ -273,32 +358,43 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             }
             .focusable(),
     ) {
-        AndroidView(
-            factory = { c ->
-                PlayerView(c).apply {
-                    this.player = player
-                    useController = false
-                    keepScreenOn = true
-                    isFocusable = false
-                    descendantFocusability = android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
-                    setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
-                }
-            },
-            update = { v -> v.resizeMode = when (resize) { 1 -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM; 2 -> AspectRatioFrameLayout.RESIZE_MODE_FILL; else -> AspectRatioFrameLayout.RESIZE_MODE_FIT } },
-            modifier = Modifier.fillMaxSize(),
-        )
+        // the picture: full screen, or small at the top left while the guide is open
+        val small = side == "epg"
+        Box(if (small) Modifier.padding(start = 28.dp, top = 28.dp).fillMaxWidth(0.56f).aspectRatio(16f / 9f).clip(Rnd(16.dp)) else Modifier.fillMaxSize()) {
+            AndroidView(
+                factory = { c ->
+                    PlayerView(c).apply {
+                        this.player = player
+                        useController = false
+                        keepScreenOn = true
+                        isFocusable = false
+                        descendantFocusability = android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
+                        setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
+                    }
+                },
+                update = { v -> v.resizeMode = when (resize) { 1 -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM; 2 -> AspectRatioFrameLayout.RESIZE_MODE_FILL; else -> AspectRatioFrameLayout.RESIZE_MODE_FIT } },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
 
         if (buffering && error == null) Box(Modifier.align(Alignment.Center)) { Loading("") }
 
+        // resolution in the top right corner
+        val showRes = videoH > 0 && side == null && (Look.resBadge == 2 || (Look.resBadge == 1 && System.currentTimeMillis() < resUntil))
+        LaunchedEffect(resUntil) { if (resUntil > 0) { delay(resUntil - System.currentTimeMillis() + 100); resUntil = resUntil } }
+        if (showRes) Box(Modifier.align(Alignment.TopEnd).padding(24.dp).clip(Rnd(10.dp)).background(Color(0x99000000)).padding(horizontal = 12.dp, vertical = 6.dp)) {
+            T("${qualityLabel(videoH)} · ${videoW}×$videoH" + (if (fps > 0) " · ${fps.toInt()} FPS" else ""), 14.sp, Color.White, FontWeight.SemiBold)
+        }
+
         error?.let { msg ->
-            Column(Modifier.align(Alignment.Center).clip(RoundedCornerShape(20.dp)).background(Color(0xE6151A23)).padding(28.dp),
+            Column(Modifier.align(Alignment.Center).clip(Rnd(20.dp)).background(Color(0xE6151A23)).padding(28.dp),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                T(msg, 18.sp, Color.White, FontWeight.SemiBold, maxLines = 2)
-                T(if (s.live) "▲ ▼ drugi kanal · Nazad za izlaz" else "Meni › Eksterni player · Nazad za izlaz", 14.sp, Color(0xFFB6BCC6))
+                T(msg, 18.sp, Color.White, FontWeight.SemiBold, maxLines = 3)
+                T(if (s.live) "OK pokušaj ponovo · ▲ ▼ drugi kanal · Nazad za izlaz" else "OK pokušaj ponovo · Meni › Eksterni player · Nazad za izlaz", 14.sp, Color(0xFFB6BCC6), maxLines = 2)
             }
         }
 
-        if (showInfo) {
+        if (showInfo && side == null) {
             Box(Modifier.align(Alignment.BottomStart).fillMaxWidth()
                 .background(if (Look.overlay == 1) Brush.verticalGradient(listOf(C.OverlayBar, C.OverlayBar)) else Brush.verticalGradient(listOf(Color.Transparent, Color(0xE6000000))))
                 .padding(start = 48.dp, end = 48.dp, top = 70.dp, bottom = 34.dp)) {
@@ -309,55 +405,94 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                             if (s.live) T("${item.subtitle ?: ""}  ·  ${index + 1}/$n", 14.sp, Color(0xFFB6BCC6))
                             T(item.title, 26.sp, Color.White, FontWeight.Bold)
                             if (!s.live && item.subtitle != null) T(item.subtitle, 15.sp, Color(0xFFD5DBE1))
-                            nowNext.getOrNull(0)?.let { T("Sada: ${it.first}  ${it.second}", 15.sp, Color.White) }
-                            nowNext.getOrNull(1)?.let { T("Zatim: ${it.first}  ${it.second}", 13.sp, Color(0xFFB6BCC6)) }
+                            nowNext.getOrNull(0)?.let { T(tr("Sada") + ": ${it.first}  ${it.second}", 15.sp, Color.White) }
+                            nowNext.getOrNull(1)?.let { T(tr("Zatim") + ": ${it.first}  ${it.second}", 13.sp, Color(0xFFB6BCC6)) }
                         }
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             if (videoH > 0) Badge(qualityLabel(videoH), Color(0x33FFFFFF), Color.White)
                             if (fps > 0) Badge("${fps.toInt()} FPS", Color(0x33FFFFFF), Color.White)
                             if (channels > 0) Badge(if (channels >= 6) "5.1" else "Stereo", Color(0x33FFFFFF), Color.White)
-                            if (subFile != null) Badge("TITL", Color(0x6622C55E), Color.White)
+                            if (subFile != null) Badge(tr("TITL"), Color(0x6622C55E), Color.White)
                             if (s.live) { Dot(Color(0xFFFF3B41)); T("UŽIVO", 13.sp, Color(0xFFFF8A8E), FontWeight.Bold) }
                         }
                     }
                     if (!s.live && duration > 0) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             T(fmt(position), 13.sp, Color.White)
-                            Box(Modifier.weight(1f).height(5.dp).clip(RoundedCornerShape(3.dp)).background(Color(0x40FFFFFF))) {
+                            Box(Modifier.weight(1f).height(5.dp).clip(Rnd(3.dp)).background(Color(0x40FFFFFF))) {
                                 Box(Modifier.fillMaxWidth((position.toFloat() / duration).coerceIn(0f, 1f)).height(5.dp).background(C.Red))
                             }
                             T(fmt(duration), 13.sp, Color(0xFFB6BCC6))
                         }
                     }
-                    T(if (s.live) "▲ ▼ kanal · OK još jednom = opcije (favorit, audio, titl, kvalitet)"
-                      else "OK pauza · ◀ ▶ ${Prefs.seekStep} s · ▼ = audio, titlovi, format slike", 13.sp, Color(0xFFB6BCC6))
+                    val v = player.videoFormat; val a = player.audioFormat
+                    if (v != null) T(listOfNotNull("${v.width}×${v.height}", v.sampleMimeType?.substringAfter('/')?.uppercase(), if (v.frameRate > 0) "${v.frameRate.toInt()} fps" else null,
+                        a?.let { (it.sampleMimeType?.substringAfter('/')?.uppercase() ?: "") + " " + if (it.channelCount >= 6) "5.1" else "Stereo" }).joinToString(" · "), 12.sp, Color(0xFF9AA4B2))
+                    if (bar) PlayerBar(s.live, playing, item.channel != null,
+                        onPause = { if (player.isPlaying) player.pause() else player.play() },
+                        onAction = { a2 -> bar = false; when (a2) { "epg" -> side = "epg"; "channels" -> side = "channels"; else -> dialog = a2 } })
+                    else T(if (s.live) "▲ ▼ kanal · ◀ lista kanala · ▶ TV vodič · OK još jednom = dugmad"
+                      else trf("OK pauza · ◀ ▶ %s s · ▼ = dugmad (audio, titlovi, format slike)", Prefs.seekStep), 13.sp, Color(0xFFB6BCC6))
                 }
             }
         }
-        if (!playing && !s.live && error == null && !buffering) {
-            Box(Modifier.align(Alignment.Center).size(84.dp).clip(RoundedCornerShape(42.dp)).background(Color(0x99000000)), contentAlignment = Alignment.Center) {
+        if (!playing && !s.live && error == null && !buffering && resume == null) {
+            Box(Modifier.align(Alignment.Center).size(84.dp).clip(Rnd(42.dp)).background(Color(0x99000000)), contentAlignment = Alignment.Center) {
                 Ico(R.drawable.lc_pause, 36.dp, Color.White)
             }
+        }
+
+        // ------------------------------------------------------------ live: channel list / groups on the left
+        if (side == "channels" || side == "groups") SideLists(side!!, sideGroup, items, index, p,
+            onGroups = { side = "groups" }, onClose = { side = null; sideGroup = null },
+            onGroup = { g -> sideGroup = g; side = "channels" },
+            onChannel = { list, i ->
+                if (sideGroup != null) { items = list.map { c -> PlayItem(c.name, c.url, c.logo, "${c.num}", c) }; TvMemory.group = sideGroup }
+                index = i; side = null; sideGroup = null
+            })
+        // ------------------------------------------------------------ live: guide on the right, picture small
+        if (side == "epg") {
+            val ch = item.channel
+            Column(Modifier.align(Alignment.TopEnd).fillMaxWidth(0.4f).fillMaxHeight().background(C.Overlay).padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    ChannelLogo(item.logo, item.title)
+                    T(item.title, 17.sp, C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                }
+                T("◀ ili Nazad = slika preko cijelog ekrana · OK na emisiji = podsjeti me", 11.sp, C.Muted, maxLines = 2)
+                val fr = remember { FocusRequester() }
+                Box(Modifier.weight(1f).focusRequester(fr).onPreviewKeyEvent { e ->
+                    if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { side = null; true } else false
+                }) { if (ch != null) EpgList(ch, 24) else T("Nema EPG podataka za ovaj kanal.", 14.sp, C.Soft) }
+                LaunchedEffect(Unit) { delay(150); fr.tryFocus() }
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- continue from where you stopped
+    resume?.let { r ->
+        Popup(item.title, onDismiss = { resume = null; player.play() }) {
+            OptionRow(trf("Nastavi od %s", fmt(r.pos)), R.drawable.lc_play, sub = trf("od %s", fmt(r.dur))) { resume = null; player.seekTo(r.pos); player.play() }
+            OptionRow("Od početka", R.drawable.lc_rotate_ccw) { resume = null; player.seekTo(0); player.play() }
         }
     }
 
     when (dialog) {
         "menu" -> Popup(item.title, onDismiss = { dialog = null }) {
             val ch = item.channel
-            if (s.live && ch != null && p != null) {
-                val fav = Store.isFavorite(ctx, p.id, ch)
-                OptionRow(if (fav) "Ukloni iz favorita" else "Dodaj u favorite", R.drawable.lc_star, color = if (fav) null else C.Amber) {
-                    Store.toggleFavorite(ctx, p.id, ch)
-                    Toast.makeText(ctx, if (fav) "Uklonjeno iz favorita" else "Dodano u favorite", Toast.LENGTH_SHORT).show()
-                    dialog = null
-                }
+            if (s.live && ch != null) {
+                OptionRow(if (Favs.inAny(ctx, ch)) "Liste favorita…" else "Dodaj u favorite", R.drawable.lc_star, color = C.Amber) { dialog = "fav" }
+                OptionRow("TV vodič", R.drawable.lc_calendar_clock) { dialog = null; side = "epg" }
+                OptionRow("Lista kanala", R.drawable.lc_list) { dialog = null; side = "channels" }
             }
             OptionRow("Audio", R.drawable.lc_volume, value = tracksOf(player, MC.TRACK_TYPE_AUDIO).firstOrNull { it.selected }?.label ?: "—") { dialog = "audio" }
-            OptionRow("Titlovi", R.drawable.lc_captions, value = if (subFile != null) "Učitan" else tracksOf(player, MC.TRACK_TYPE_TEXT).firstOrNull { it.selected }?.label ?: "Isključeni") { dialog = "subs" }
-            OptionRow("Format slike", R.drawable.lc_monitor, value = listOf("Prilagodi", "Zumiraj", "Rastegni")[resize]) { resize = (resize + 1) % 3 }
+            OptionRow("Titlovi", R.drawable.lc_captions, value = if (subFile != null) tr("Učitan") else tracksOf(player, MC.TRACK_TYPE_TEXT).firstOrNull { it.selected }?.label ?: tr("Isključeni")) { dialog = "subs" }
+            OptionRow("Format slike", R.drawable.lc_monitor, value = tr(listOf("Prilagodi", "Zumiraj", "Rastegni")[resize])) { resize = (resize + 1) % 3 }
             OptionRow("Kvalitet i informacije", R.drawable.lc_info, value = if (videoH > 0) qualityLabel(videoH) else null) { dialog = "info" }
-            if (!s.live) OptionRow("Eksterni player", R.drawable.lc_link) { player.pause(); openExternal(ctx, item.url, item.title); dialog = null }
+            if (!s.live) OptionRow("Eksterni player", R.drawable.lc_external_link) { player.pause(); saveProgress(); dialog = "ext" }
         }
+        "fav" -> item.channel?.let { FavPicker(it) { dialog = null } }
+        "ext" -> ExternalPicker(item.url, item.title, player.currentPosition, onDismiss = { dialog = null })
         "audio" -> {
             val tracks = tracksOf(player, MC.TRACK_TYPE_AUDIO)
             Popup("Audio", onDismiss = { dialog = null }) {
@@ -389,7 +524,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                     subFile = f.path
                     player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false).build()
                     loadMedia(item, f.path, player.currentPosition)
-                    Toast.makeText(ctx, "Titl učitan", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(ctx, tr("Titl učitan"), Toast.LENGTH_SHORT).show()
                 }
                 dialog = null
             }
@@ -399,11 +534,105 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             OptionRow("Slika", R.drawable.lc_monitor, value = if (v != null) "${qualityLabel(v.height)} · ${v.width}×${v.height}" + (if (v.frameRate > 0) " · ${v.frameRate.toInt()} FPS" else "") else "—") {}
             OptionRow("Video kodek", R.drawable.lc_file_video, value = v?.sampleMimeType?.substringAfter('/')?.uppercase() ?: "—") {}
             OptionRow("Zvuk", R.drawable.lc_volume, value = if (a != null) "${a.sampleMimeType?.substringAfter('/')?.uppercase() ?: ""} · ${if (a.channelCount >= 6) "5.1" else if (a.channelCount == 1) "Mono" else "Stereo"}" else "—") {}
-            OptionRow("Bitrate", R.drawable.lc_gauge2, value = v?.bitrate?.takeIf { it > 0 }?.let { "${it / 1000} kbps" } ?: "—") {}
+            val br = v?.bitrate?.takeIf { it > 0 }?.toLong() ?: bitrate.takeIf { it > 0 }
+            OptionRow("Bitrate", R.drawable.lc_gauge2, value = br?.let { String.format(Locale.US, "%.1f Mbps", it / 1_000_000.0) } ?: "—") {}
         }
     }
 
-    LaunchedEffect(dialog) { if (dialog == null) try { focus.requestFocus() } catch (_: Exception) {} }
+    LaunchedEffect(dialog, side, resume, bar) { if (dialog == null && side == null && resume == null && !bar) focus.tryFocus() }
+}
+
+/** Buttons at the bottom of the player. */
+@Composable
+private fun PlayerBar(live: Boolean, playing: Boolean, hasChannel: Boolean, onPause: () -> Unit, onAction: (String) -> Unit) {
+    val first = remember { FocusRequester() }
+    val list = buildList {
+        add(Triple("pause", if (playing) "Pauza" else "Pusti", if (playing) R.drawable.lc_pause else R.drawable.lc_play))
+        if (live && hasChannel) add(Triple("fav", "Favorit", R.drawable.lc_star))
+        add(Triple("subs", "Titlovi", R.drawable.lc_captions))
+        add(Triple("audio", "Audio", R.drawable.lc_volume))
+        add(Triple("info", "Kvalitet", R.drawable.lc_gauge2))
+        if (live) { add(Triple("epg", "Vodič", R.drawable.lc_calendar_clock)); add(Triple("channels", "Grupa", R.drawable.lc_list)) }
+        add(Triple("menu", "Više", R.drawable.lc_layout_grid))
+        if (!live) add(Triple("ext", "Eksterni", R.drawable.lc_external_link))
+    }
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        itemsIndexed(list) { i, (id, label, icon) ->
+            Focusable(onClick = { if (id == "pause") onPause() else onAction(id) }, focusRequester = if (i == 0) first else null,
+                normal = Color(0x33FFFFFF), focused = C.Red, shape = Rnd(12.dp), zoom = 1.05f, modifier = Modifier.height(44.dp)) { f ->
+                Row(Modifier.align(Alignment.Center).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Ico(icon, 18.dp, if (f) C.OnRed else Color.White)
+                    T(label, 14.sp, if (f) C.OnRed else Color.White, FontWeight.SemiBold)
+                }
+            }
+        }
+    }
+    LaunchedEffect(Unit) { delay(80); first.tryFocus() }
+}
+
+/** Live: the channels of the group (Left again: the groups) over the picture. */
+@Composable
+private fun SideLists(mode: String, sideGroup: GroupRef?, items: List<PlayItem>, index: Int, p: Playlist?,
+                      onGroups: () -> Unit, onClose: () -> Unit, onGroup: (GroupRef) -> Unit, onChannel: (List<Channel>, Int) -> Unit) {
+    val ctx = LocalContext.current
+    val fr = remember { FocusRequester() }
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxHeight().width(380.dp).background(C.Overlay).padding(horizontal = 16.dp, vertical = 20.dp)
+            .onPreviewKeyEvent { e ->
+                if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                when (e.key) {
+                    Key.DirectionLeft -> { if (mode == "channels") onGroups(); true }
+                    Key.DirectionRight -> { onClose(); true }
+                    else -> false
+                }
+            }, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (mode == "groups") {
+                T("Grupe", 20.sp, C.Text, FontWeight.Bold)
+                val rows by load(Favs.rev) { groupRows(ctx).mapNotNull { (it as? GRow.Group)?.ref } }
+                when (val s = rows) {
+                    is Load.Ok -> LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        itemsIndexed(s.value, key = { _, g -> g.key }) { i, g ->
+                            val sel = (sideGroup ?: TvMemory.group)?.key == g.key
+                            Focusable(modifier = Modifier.fillMaxWidth().height(Rows.group), onClick = { onGroup(g) },
+                                focusRequester = if (sel || (i == 0 && (sideGroup ?: TvMemory.group) == null)) fr else null,
+                                normal = if (sel) C.CardFocus else Color.Transparent, zoom = 1f) { _ ->
+                                T(g.cat.name, 15.sp, C.Text, if (sel) FontWeight.Bold else FontWeight.Normal,
+                                    modifier = Modifier.align(Alignment.CenterStart).padding(horizontal = 12.dp))
+                            }
+                        }
+                    }
+                    else -> Loading("Učitavam grupe…")
+                }
+            } else {
+                T(sideGroup?.cat?.name ?: TvMemory.group?.cat?.name ?: tr("Kanali"), 20.sp, C.Text, FontWeight.Bold)
+                T("◀ grupe · ▶ zatvori", 12.sp, C.Muted)
+                val list by load(sideGroup?.key) { sideGroup?.let { channelsOf(ctx, it) } ?: items.mapNotNull { it.channel } }
+                val state = rememberLazyListState()
+                when (val s = list) {
+                    is Load.Ok -> {
+                        val cur = if (sideGroup == null) index else -1
+                        LazyColumn(state = state, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            itemsIndexed(s.value, key = { i, c -> "$i${c.url}" }) { i, c ->
+                                Focusable(modifier = Modifier.fillMaxWidth().height(Rows.channel), onClick = { onChannel(s.value, i) },
+                                    focusRequester = if (i == cur.coerceAtLeast(0)) fr else null,
+                                    normal = if (i == cur) C.CardFocus else C.Card, zoom = 1.01f) { f ->
+                                    Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        T("${c.num}", 12.sp, C.Muted, modifier = Modifier.width(30.dp))
+                                        ChannelLogo(c.logo, c.name)
+                                        T(c.name, 14.sp, if (f) C.Text else C.Soft, if (f || i == cur) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
+                                    }
+                                }
+                            }
+                        }
+                        LaunchedEffect(Unit) { if (cur > 3) state.scrollToItem(cur - 3); delay(80); fr.tryFocus() }
+                    }
+                    else -> Loading("Učitavam kanale…")
+                }
+            }
+        }
+    }
+    LaunchedEffect(mode) { delay(120); fr.tryFocus() }
 }
 
 private fun fmt(ms: Long): String {

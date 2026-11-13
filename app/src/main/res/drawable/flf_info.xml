@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fluent UI "info" (MIT) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <group android:translateX="0" android:translateY="0">
+        <path android:pathData="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20m0 8.5a.75.75 0 0 0-.75.75v5a.75.75 0 0 0 1.5 0v-5a.75.75 0 0 0-.75-.75M12 9a1 1 0 1 0 0-2 1 1 0 0 0 0 2" android:fillColor="#FFFFFFFF" />
+    </group>
+</vector>

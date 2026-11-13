@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fluent UI "hard_drive" (MIT) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <group android:translateX="0" android:translateY="0">
+        <path android:pathData="M7.44 4c-.86 0-1.65.5-2.02 1.27l-2.7 5.55q.71-.31 1.53-.32h15.5q.82 0 1.52.32l-2.69-5.55A2.3 2.3 0 0 0 16.56 4zm12.31 8c1.24 0 2.25 1 2.25 2.25v2.5c0 1.24-1 2.25-2.25 2.25H4.25C3.01 19 2 18 2 16.75v-2.5C2 13.01 3 12 4.25 12zm-1.25 4.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2" android:fillColor="#FFFFFFFF" />
+    </group>
+</vector>

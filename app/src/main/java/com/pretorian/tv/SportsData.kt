@@ -8,6 +8,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.text.Normalizer
@@ -38,6 +39,8 @@ data class SportEvent(
     val venue: String?,
     val halftime: String? = null,
     val channels: List<Channel> = emptyList(),
+    /** channels that usually show this league (by name), when the guide does not say */
+    val maybe: List<Channel> = emptyList(),
     /** found only in your TV guide (no live score) */
     val fromGuide: Boolean = false,
 ) {
@@ -196,34 +199,103 @@ object Sports {
 
     /* ---------------------------------------------------------------- your TV guide */
 
-    private val SPORT_WORDS = listOf("SPORT", "ARENA", "SK ", "SPORTKLUB", "DAZN", "EUROSPORT", "BEIN", "ESPN", "ELEVEN", "TNT", "SUPERSPORT",
-        "SKY", "MAX ", "NOVA S", "MOVISTAR", "CANAL+", "FIGHT", "GOLF", "NBA", "FOOTBALL", "FUDBAL", "LIGA", "BUNDESLIGA", "PREMIER", "SERIE A", "MATCH")
-
-    private fun isSportChannel(name: String, group: String): Boolean {
-        val n = " ${name.uppercase()} "; val g = group.uppercase()
-        return SPORT_WORDS.any { n.contains(it) } || g.contains("SPORT") || g.contains("ARENA")
-    }
-
     data class Prog(val channel: String, val start: Long, val end: Long, val title: String, val category: String?, val desc: String? = null)
+    data class Guide(val progs: List<Prog>, val byEpg: Map<String, List<Channel>>, val all: List<Channel>, val stats: String)
 
     private var guideFor: String? = null
     private var guideAt = 0L
-    private var guideProgs: List<Prog> = emptyList()
-    private var guideChannels: Map<String, List<Channel>> = emptyMap()
+    private var guideData: Guide? = null
+    private val vsWords = Regex("\\s(-|–|vs\\.?|v)\\s|formula|grand prix|\\bf1\\b|uživo|uzivo|live", RegexOption.IGNORE_CASE)
 
-    /** Programmes of sport channels in your playlist (XMLTV of the provider), cached for 3 hours. */
-    suspend fun guide(p: Playlist): Pair<List<Prog>, Map<String, List<Channel>>> = withContext(Dispatchers.IO) {
-        if (guideFor == p.id && System.currentTimeMillis() - guideAt < 3 * 3600_000L) return@withContext guideProgs to guideChannels
-        if (p.type != SourceType.XTREAM) return@withContext emptyList<Prog>() to emptyMap()
-        val x = Xtream(p)
-        val cats = try { x.liveCategories().associate { it.id to it.name } } catch (e: Exception) { emptyMap() }
-        val all = x.allChannels()
-        val sport = all.filter { !it.epg.isNullOrBlank() && isSportChannel(it.name, cats[it.group] ?: "") }
-        val byEpg = sport.groupBy { it.epg!!.lowercase() }
-        val from = dayStart(-1); val to = dayStart(8)
-        val progs = Xmltv.read(x.xmltvUrl(), byEpg.keys, from, to)
-        guideFor = p.id; guideAt = System.currentTimeMillis(); guideProgs = progs; guideChannels = byEpg
-        progs to byEpg
+    /**
+     * Your channels (all of them, of every turned-on playlist) and the matches in their TV guide.
+     * Cached for 3 hours in memory and on the box, so the provider is asked rarely.
+     */
+    suspend fun guide(ctx: android.content.Context, pls: List<Playlist>): Guide = withContext(Dispatchers.IO) {
+        val key = pls.joinToString(",") { it.id }
+        val cur = guideData
+        if (guideFor == key && cur != null && System.currentTimeMillis() - guideAt < 3 * 3600_000L) return@withContext cur
+        val all = pls.flatMap { p -> try { Repo.allChannels(p) } catch (e: Exception) { emptyList() } }
+        val byEpg = all.filter { !it.epg.isNullOrBlank() }.groupBy { it.epg!!.lowercase() }
+        val cache = File(ctx.cacheDir, "sports_guide_${key.hashCode()}.json")
+        var progs: List<Prog> = emptyList()
+        if (cache.exists() && System.currentTimeMillis() - cache.lastModified() < 3 * 3600_000L) progs = try { readProgs(cache) } catch (e: Exception) { emptyList() }
+        if (progs.isEmpty()) {
+            val from = dayStart(-1); val to = dayStart(5)
+            progs = pls.filter { it.type == SourceType.XTREAM }.flatMap { p ->
+                Xmltv.read(Xtream(p).xmltvUrl(), byEpg.keys, from, to) { t -> vsWords.containsMatchIn(t) }
+            }
+            if (Prefs.epgUrl.isNotBlank()) progs = progs + Xmltv.read(Prefs.epgUrl, byEpg.keys, from, to) { t -> vsWords.containsMatchIn(t) }
+            try { writeProgs(cache, progs) } catch (_: Exception) {}
+        }
+        val g = Guide(progs, byEpg, all, trf("Pretraženo %s kanala · program za %s · %s emisija", all.size, byEpg.size, progs.size))
+        guideFor = key; guideAt = System.currentTimeMillis(); guideData = g
+        g
+    }
+
+    private fun writeProgs(f: File, l: List<Prog>) {
+        val a = JSONArray()
+        l.forEach { a.put(JSONObject().put("c", it.channel).put("s", it.start).put("e", it.end).put("t", it.title).put("k", it.category ?: "")) }
+        f.writeText(a.toString())
+    }
+    private fun readProgs(f: File): List<Prog> {
+        val a = JSONArray(f.readText())
+        return (0 until a.length()).map { val o = a.getJSONObject(it); Prog(o.str("c"), o.optLong("s"), o.optLong("e"), o.str("t"), o.str("k").ifBlank { null }) }
+    }
+
+    /** who usually broadcasts a league: words searched in your channel names (shown as "possible broadcast") */
+    private val RIGHTS = mapOf(
+        "UCL" to listOf("ARENA SPORT", "ARENA PREMIUM", "DAZN", "PRIME", "SKY SPORT", "CANAL", "SPORT KLUB", "SPORTKLUB", "MAX SPORT", "NOVA SPORT"),
+        "UEL" to listOf("ARENA SPORT", "RTL+", "RTL NITRO", "NITRO", "SPORT KLUB", "SPORTKLUB", "MAX SPORT", "NOVA SPORT"),
+        "UECL" to listOf("ARENA SPORT", "RTL+", "NITRO", "SPORT KLUB", "SPORTKLUB"),
+        "PL" to listOf("ARENA SPORT", "ARENA PREMIUM", "SKY SPORT", "SKY SPORTS", "MAX SPORT", "NOVA SPORT", "CANAL"),
+        "BL" to listOf("SKY SPORT BUNDESLIGA", "SKY BUNDESLIGA", "SKY SPORT", "DAZN", "SPORT KLUB", "SPORTKLUB", "ARENA SPORT", "SAT.1", "SAT1"),
+        "LL" to listOf("ARENA SPORT", "DAZN", "SPORT KLUB", "SPORTKLUB", "MAX SPORT"),
+        "SA" to listOf("ARENA SPORT", "DAZN", "SPORT KLUB", "SPORTKLUB", "MAX SPORT"),
+        "L1" to listOf("ARENA SPORT", "DAZN", "SPORT KLUB", "SPORTKLUB"),
+        "ERE" to listOf("ARENA SPORT", "SPORT KLUB", "SPORTKLUB", "DAZN"),
+        "POR" to listOf("ARENA SPORT", "SPORT KLUB", "SPORTKLUB"),
+        "TSL" to listOf("ARENA SPORT", "SPORT KLUB", "SPORTKLUB", "BEIN"),
+        "AUT" to listOf("SKY SPORT AUSTRIA", "SKY SPORT", "ORF SPORT", "SPORT KLUB"),
+        "UNL" to listOf("ARENA SPORT", "RTS", "BHT", "HRT", "RTL", "ZDF", "ARD", "DAZN"),
+        "WCQ" to listOf("ARENA SPORT", "RTS", "BHT", "HRT", "RTL", "ZDF", "ARD", "DAZN"),
+        "FRI" to listOf("ARENA SPORT", "SPORT KLUB", "SPORTKLUB"),
+        "NBA" to listOf("SPORT KLUB", "SPORTKLUB", "ARENA SPORT", "DAZN", "MAX SPORT"),
+        "F1" to listOf("ARENA SPORT", "SKY SPORT F1", "SKY SPORT", "SERVUS", "ORF", "SPORT KLUB"),
+        "ATP" to listOf("SPORT KLUB", "SPORTKLUB", "ARENA SPORT", "SKY SPORT", "EUROSPORT"),
+        "WTA" to listOf("SPORT KLUB", "SPORTKLUB", "ARENA SPORT", "SKY SPORT", "EUROSPORT"),
+    )
+
+    private fun maybeFor(ev: SportEvent, all: List<Channel>): List<Channel> {
+        val words = RIGHTS[ev.leagueAbbr] ?: return emptyList()
+        return all.filter { c -> val n = " " + c.name.uppercase() + " "; words.any { n.contains(it) } }
+            .distinctBy { it.url }
+            .sortedWith(compareBy({ words.indexOfFirst { w -> (" " + it.name.uppercase() + " ").contains(w) } }, { qualityRank(it.name) }, { it.name }))
+            .take(12)
+    }
+    private fun qualityRank(n: String) = when (qualityOf(n)) { "4K" -> 0; "FHD" -> 1; "HD" -> 2; else -> 3 }
+
+    /** order of importance for the big card on top */
+    private val PRIORITY = listOf("UCL", "PL", "BL", "LL", "SA", "UEL", "L1", "UNL", "WCQ", "F1", "NBA", "UECL", "ERE", "POR", "TSL", "AUT", "ATP", "WTA", "TV", "FRI")
+    fun priority(ev: SportEvent): Int = PRIORITY.indexOf(ev.leagueAbbr).let { if (it < 0) 50 else it } - (if (ev.channels.isNotEmpty()) 100 else 0)
+
+    /** match details (goals, cards) from the feed, for finished and live matches */
+    suspend fun details(ev: SportEvent): List<String> = withContext(Dispatchers.IO) {
+        val lg = LEAGUES.firstOrNull { ev.id.startsWith(it.path + "/") } ?: return@withContext emptyList()
+        val id = ev.id.substringAfterLast('/')
+        val o = try { JSONObject(http("https://site.api.espn.com/apis/site/v2/sports/${lg.path}/summary?event=$id")) } catch (e: Exception) { return@withContext emptyList() }
+        val out = ArrayList<String>()
+        val ke = o.optJSONArray("keyEvents") ?: o.optJSONArray("scoringPlays") ?: JSONArray()
+        for (i in 0 until ke.length()) {
+            val e = ke.optJSONObject(i) ?: continue
+            val type = e.optJSONObject("type")?.str("text") ?: ""
+            if (type.isNotBlank() && !Regex("goal|card|penalty|own|substitution", RegexOption.IGNORE_CASE).containsMatchIn(type)) continue
+            if (type.contains("substitution", true)) continue
+            val clock = e.optJSONObject("clock")?.str("displayValue") ?: ""
+            val text = e.str("text").ifBlank { e.str("shortText") }
+            if (text.isNotBlank()) out.add(listOf(clock, text).filter { it.isNotBlank() }.joinToString("  "))
+        }
+        out.take(30)
     }
 
     /* ---------------------------------------------------------------- matching */
@@ -255,7 +327,8 @@ object Sports {
     private val REPLAY = Regex("(\\(r\\)|\\(snimak\\)|snimka|snimak|reprise|highlights|sažetak|sazetak|najava|magazin|studio|emisija)", RegexOption.IGNORE_CASE)
 
     /** Adds your channels to each match and returns extra matches found only in your guide. */
-    fun combine(events: List<SportEvent>, progs: List<Prog>, chans: Map<String, List<Channel>>, offset: Int): List<SportEvent> {
+    fun combine(events: List<SportEvent>, g: Guide, offset: Int): List<SportEvent> {
+        val progs = g.progs; val chans = g.byEpg
         val from = dayStart(offset); val to = dayStart(offset + 1)
         val day = progs.filter { it.start < to + 2 * 3600_000L && it.end > from && !REPLAY.containsMatchIn(it.title) }
         val used = HashSet<Prog>()
@@ -299,7 +372,7 @@ object Sports {
                     channels = list.flatMap { chans[it.first.channel] ?: emptyList() }.distinctBy { it.url }, fromGuide = true,
                 )
             }
-        return (withCh + extra).sortedBy { it.start }
+        return (withCh.map { it.copy(maybe = if (it.channels.isEmpty()) maybeFor(it, g.all) else emptyList()) } + extra).sortedBy { it.start }
     }
 
     private fun guessSport(t: String): String = when {
@@ -326,7 +399,7 @@ object Xmltv {
     }
 
     /** Streams the guide and keeps only programmes of [channels] (lower-case ids) between [from] and [to]. */
-    fun read(url: String, channels: Set<String>?, from: Long, to: Long): List<Sports.Prog> {
+    fun read(url: String, channels: Set<String>?, from: Long, to: Long, keepTitle: ((String) -> Boolean)? = null): List<Sports.Prog> {
         if (channels != null && channels.isEmpty()) return emptyList()
         val c = URL(url).openConnection() as HttpURLConnection
         c.connectTimeout = 20000; c.readTimeout = 120000
@@ -362,7 +435,7 @@ object Xmltv {
                     }
                     org.xmlpull.v1.XmlPullParser.END_TAG -> {
                         if (xp.name == "programme") {
-                            if (keep && !title.isNullOrBlank()) out.add(Sports.Prog(ch!!, start, end, title!!, cat, desc))
+                            if (keep && !title.isNullOrBlank() && (keepTitle == null || keepTitle(title!!))) out.add(Sports.Prog(ch!!, start, end, title!!, cat, desc))
                             keep = false
                         }
                         tag = null

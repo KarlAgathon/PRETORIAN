@@ -107,7 +107,7 @@ fun Focusable(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
-    shape: Shape = RoundedCornerShape(14.dp),
+    shape: Shape = Rnd(14.dp),
     normal: Color = Color.Transparent,
     focused: Color? = null,
     zoom: Float = 1.03f,
@@ -151,15 +151,29 @@ fun Focusable(
     )
 }
 
+/** An icon from the chosen icon set (Settings › Appearance › Icon set); [id] is the Lucide drawable. */
 @Composable
 fun Ico(id: Int, size: Dp = 22.dp, tint: Color = C.Text) {
-    Icon(painterResource(id), contentDescription = null, modifier = Modifier.size(size), tint = tint)
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val set = Look.iconSet; val style = Look.iconStyle
+    if (set.startsWith("dl_")) {
+        val bmp = remember(set, id) { IconSets.downloaded(ctx, set, id) }
+        if (bmp != null) {
+            Icon(androidx.compose.ui.graphics.painter.BitmapPainter(bmp), contentDescription = null, modifier = Modifier.size(size), tint = tint)
+            return
+        }
+    }
+    val res = remember(set, style, id) { IconSets.resolve(ctx, id, set, style) }
+    Icon(painterResource(res), contentDescription = null, modifier = Modifier.size(size), tint = tint)
 }
+
+/** [template] in the app language with its %s filled in: trf("Sezona %s", 2). */
+fun trf(template: String, vararg args: Any?): String = try { String.format(tr(template), *args) } catch (e: Exception) { template }
 
 @Composable
 fun Chip(text: String, bg: Color = C.Card, fg: Color = C.Text, border: Color? = null) {
-    var m = Modifier.clip(RoundedCornerShape(50)).background(bg)
-    if (border != null) m = m.border(1.5.dp, border, RoundedCornerShape(50))
+    var m = Modifier.clip(Pill).background(bg)
+    if (border != null) m = m.border(1.5.dp, border, Pill)
     Box(m.padding(horizontal = 11.dp, vertical = 5.dp)) { T(text, 13.sp, fg, FontWeight.Medium) }
 }
 
@@ -167,7 +181,7 @@ fun Chip(text: String, bg: Color = C.Card, fg: Color = C.Text, border: Color? = 
 fun Button(text: String, icon: Int? = null, primary: Boolean = false, modifier: Modifier = Modifier,
            focusRequester: FocusRequester? = null, outline: Color? = null, onClick: () -> Unit) {
     Focusable(
-        modifier = modifier.height(48.dp).then(if (outline != null) Modifier.border(2.dp, outline, RoundedCornerShape(14.dp)) else Modifier),
+        modifier = modifier.height(48.dp).then(if (outline != null) Modifier.border(2.dp, outline, Rnd(14.dp)) else Modifier),
         onClick = onClick,
         focusRequester = focusRequester,
         normal = if (primary) C.Red else C.Card,
@@ -249,9 +263,9 @@ fun Popup(title: String, onDismiss: () -> Unit, width: Dp = 560.dp, content: @Co
             contentAlignment = Alignment.Center,
         ) {
             Column(
-                Modifier.widthIn(max = width).fillMaxWidth(0.9f).clip(RoundedCornerShape(26.dp))
+                Modifier.widthIn(max = width).fillMaxWidth(0.9f).clip(Rnd(26.dp))
                     .background(C.Overlay)
-                    .border(1.dp, C.Line, RoundedCornerShape(26.dp))
+                    .border(1.dp, C.Line, Rnd(26.dp))
                     .heightIn(max = 640.dp)
                     .padding(28.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -276,7 +290,7 @@ fun OptionRow(label: String, icon: Int? = null, sub: String? = null, value: Stri
     ) { _ ->
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            if (icon != null) Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(C.Card), contentAlignment = Alignment.Center) {
+            if (icon != null) Box(Modifier.size(34.dp).clip(Rnd(10.dp)).background(C.Card), contentAlignment = Alignment.Center) {
                 Ico(icon, 18.dp, color ?: C.Text)
             }
             Column(Modifier.weight(1f)) {
@@ -294,12 +308,12 @@ fun ToggleRow(label: String, checked: Boolean, icon: Int? = null, sub: String? =
     Focusable(modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp), onClick = { onChange(!checked) }, normal = C.Card, zoom = 1.01f) { _ ->
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            if (icon != null) Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(C.Card), contentAlignment = Alignment.Center) { Ico(icon, 18.dp) }
+            if (icon != null) Box(Modifier.size(34.dp).clip(Rnd(10.dp)).background(C.Card), contentAlignment = Alignment.Center) { Ico(icon, 18.dp) }
             Column(Modifier.weight(1f)) {
                 T(label, 15.sp, C.Text, FontWeight.Medium)
                 if (sub != null) T(sub, 12.sp, C.Muted, maxLines = 2)
             }
-            Box(Modifier.width(44.dp).height(24.dp).clip(RoundedCornerShape(12.dp)).background(if (checked) C.Red else C.CardHi)) {
+            Box(Modifier.width(44.dp).height(24.dp).clip(Rnd(12.dp)).background(if (checked) C.Red else C.CardHi)) {
                 Box(Modifier.align(if (checked) Alignment.CenterEnd else Alignment.CenterStart).padding(3.dp).size(18.dp)
                     .clip(CircleShape).background(if (checked) C.OnRed else C.Muted))
             }
@@ -310,10 +324,10 @@ fun ToggleRow(label: String, checked: Boolean, icon: Int? = null, sub: String? =
 /** Row of choices, the chosen one filled. */
 @Composable
 fun Segmented(options: List<String>, selected: Int, onSelect: (Int) -> Unit) {
-    Row(Modifier.clip(RoundedCornerShape(14.dp)).background(C.Card).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    Row(Modifier.clip(Rnd(14.dp)).background(C.Card).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         options.forEachIndexed { i, label ->
             Focusable(onClick = { onSelect(i) }, normal = if (i == selected) C.Red else Color.Transparent,
-                focused = if (i == selected) C.Red else C.CardHi, shape = RoundedCornerShape(11.dp), zoom = 1f,
+                focused = if (i == selected) C.Red else C.CardHi, shape = Rnd(11.dp), zoom = 1f,
                 modifier = Modifier.height(40.dp)) { _ ->
                 T(label, 14.sp, if (i == selected) C.OnRed else C.Soft, FontWeight.SemiBold,
                     modifier = Modifier.align(Alignment.Center).padding(horizontal = 16.dp))
@@ -338,7 +352,7 @@ fun Field(
         keyboardOptions = KeyboardOptions(keyboardType = if (password) KeyboardType.Password else type,
             imeAction = if (onDone != null) ImeAction.Done else ImeAction.Next, autoCorrectEnabled = false),
         keyboardActions = KeyboardActions(onDone = { onDone?.invoke() }),
-        shape = RoundedCornerShape(12.dp),
+        shape = Rnd(12.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = C.Red, unfocusedBorderColor = C.Line,
             focusedLabelColor = C.RedText, unfocusedLabelColor = C.Muted, cursorColor = C.Red,
@@ -391,8 +405,8 @@ fun PinDialog(title: String, text: String? = null, onDismiss: () -> Unit, onPin:
             if (d != null) { press(d); true } else false
         }, horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)) {
             repeat(4) { i ->
-                Box(Modifier.size(54.dp, 62.dp).clip(RoundedCornerShape(14.dp)).background(C.Card)
-                    .border(2.dp, if (i == pin.length) C.Red else C.Line, RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(54.dp, 62.dp).clip(Rnd(14.dp)).background(C.Card)
+                    .border(2.dp, if (i == pin.length) C.Red else C.Line, Rnd(14.dp)), contentAlignment = Alignment.Center) {
                     if (i < pin.length) T("●", 24.sp, C.Text)
                 }
             }
