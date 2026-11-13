@@ -330,7 +330,7 @@ private fun LookPage() {
         T(Look.ACCENTS[Look.accent].first, 12.sp, C.Muted)
         Label("Nijansa boje")
         Segmented(listOf("Tamnija", "Malo tamnija", "Normalna", "Malo svjetlija", "Svjetlija"), Look.shade + 2) { Look.shade = it - 2; save() }
-        Label("Prozirnost panela: ${Look.opacity} %")
+        Label(trf("Prozirnost panela: %s %%", Look.opacity))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             Button("− 5 %", R.drawable.lc_minus) { Look.opacity = (Look.opacity - 5).coerceAtLeast(20); save() }
             Box(Modifier.width(260.dp).height(10.dp).clip(Rnd(5.dp)).background(C.CardHi)) {
@@ -650,17 +650,17 @@ private fun UpdatePage() {
     val scope = rememberCoroutineScope()
     var checking by remember { mutableStateOf(false) }
     val u = Updater.available
-    Page("Ažuriranje", "Instalirana verzija: ${BuildInfo.VERSION}. Provjera ide sama pri pokretanju i svakih 6 sati.") {
+    Page("Ažuriranje", trf("Instalirana verzija: %s. Provjera ide sama pri pokretanju i svakih 6 sati.", BuildInfo.VERSION)) {
         if (u != null) {
             Row(Modifier.fillMaxWidth().clip(Rnd(16.dp)).background(C.CardFocus).border(1.dp, C.Red, Rnd(16.dp)).padding(18.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 Ico(R.drawable.lc_download, 26.dp, C.RedText)
                 Column(Modifier.weight(1f)) {
-                    T("Nova verzija ${u.name}", 17.sp, C.Text, FontWeight.SemiBold)
+                    T(trf("Nova verzija %s", u.name), 17.sp, C.Text, FontWeight.SemiBold)
                     T(if (u.notes.isNotBlank()) u.notes else "Jedan klik: preuzima se i odmah instalira", 13.sp, C.Muted, maxLines = 3)
                 }
                 val pr = Updater.progress
-                if (pr in 0..100) T("Preuzimam $pr %", 15.sp, C.Text)
+                if (pr in 0..100) T(trf("Preuzimam %s %%", pr), 15.sp, C.Text)
                 else if (pr == 101) T("Instaliram…", 15.sp, C.Text)
                 else Button("Ažuriraj sada", R.drawable.lc_download, primary = true) { scope.launch { Updater.install(ctx, u) } }
             }

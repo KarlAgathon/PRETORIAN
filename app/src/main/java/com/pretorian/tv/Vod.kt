@@ -577,8 +577,8 @@ fun MovieDetailScreen(v: Vod, nav: Nav) {
                 if (meta is Load.Loading && plot == null) T("Učitavam opis…", 14.sp, C.Muted)
                 plot?.let { T(it + if (m?.overviewLang == "en" && metaLanguage() != "en") "  (EN)" else "", 15.sp, C.Soft, maxLines = 5) }
                 if (m != null) PeopleRow(m.people) else {
-                    i?.cast?.let { T("Glumci: $it", 13.sp, C.Muted, maxLines = 2) }
-                    i?.director?.let { T("Režija: $it", 13.sp, C.Muted) }
+                    i?.cast?.let { T(trf("Glumci: %s", it), 13.sp, C.Muted, maxLines = 2) }
+                    i?.director?.let { T(trf("Režija: %s", it), 13.sp, C.Muted) }
                 }
                 if (!Tmdb.enabled()) T("Za postere, opis na tvom jeziku i glumce upiši TMDB ključ: Postavke › Filmovi i titlovi", 12.sp, C.Muted, maxLines = 2)
                 Spacer(Modifier.height(4.dp))

@@ -1,0 +1,119 @@
+# Texts that stay the same in every language (names, codes, units)
+PRETORIAN
+TV
+TMDB
+IMDb
+OMDb
+Xtream Codes
+Xtream
+M3U
+HLS (.m3u8)
+MPEG-TS (.ts)
+EPG ID
+Server
+FHD
+UHD
+4K
+HD
+SD
+FPS
+Stereo
+Mono
+5.1
+OK
+Bitrate
+Glass
+Audio
+Lucide
+Fluent (Windows 11)
+Material (Android)
+Phosphor
+Tabler
+OpenSubtitles
+SubDL
+Catch-up
+Sports Center
+Trailer
+VLC
+Film
+− 5 %
++ 5 %
+10 s
+20 s
+30 s
+A–Z
+adb shell appops set ${ctx.packageName} MANAGE_EXTERNAL_STORAGE allow
+${(f.length() / 1024).coerceAtLeast(1)} KB
+Bearer $key
+ · ${fps.toInt()} FPS
+${item.subtitle ?: 
+${v.frameRate.toInt()} fps
+ · ${v.frameRate.toInt()} FPS
+${a.sampleMimeType?.substringAfter('/')?.uppercase() ?: 
+} · ${if (a.channelCount >= 6) 
+Xtream Codes · ${pl.server}
+M3U · ${pl.url}
+${ev.home?.score} : ${ev.away?.score ?: 
+${ev.home.score} : ${ev.away?.score ?: 
+ · S$it
+E$it
+TMDB ${(it * 10).toInt()}%
+★ ${String.format(
+HH:mm
+update
+reminder
+vod
+series
+EEE, d. MMM
+d. M. HH:mm
+EEE, d. MMM, HH:mm
+EEE d. M. HH:mm
+name
+USB
+else if (a.channelCount == 1)
+else
+%.1f Mbps
+https://
+http://
+tv_view
+list
+guide
+Stalker portal
+live
+FT
+inter
+munchen
+bayern
+zvezda
+psg
+wolves
+menu
+srt
+sub
+ass
+ssa
+vtt
+zip
+.srt, .ass, .sub, .zip
+json
+.m3u8
+.ts
+move
+zoom
+%.1f
+, it)}
+en
+(EN)
+auto
+builtin
+backup_auto
+New Wave
+New Age
+omdbapi.com › API Key › FREE
+subdl.com › Panel › API
+opensubtitles.com › Profil › API consumers
+Lucide (ISC) · Inter (OFL) · Media3 (Apache 2.0)
+This product uses the TMDB API but is not endorsed or certified by TMDB.
+github.com/KarlAgathon/PRETORIAN · MIT licenca
+XMLTV link (http://…/epg.xml)
+%s d

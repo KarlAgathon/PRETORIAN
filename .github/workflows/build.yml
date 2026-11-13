@@ -26,6 +26,8 @@ jobs:
         run: |
           if [ -z "$KS" ]; then echo "::error::Secret LEAD_KEYSTORE_B64 is missing"; exit 1; fi
           echo "$KS" | base64 -d > app/release.keystore
+      - name: Translation check
+        run: python3 tools/check_i18n.py
       - run: gradle assembleRelease --no-daemon
         env:
           LEAD_KEY_PASSWORD: ${{ secrets.LEAD_KEY_PASSWORD }}
