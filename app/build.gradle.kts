@@ -13,8 +13,8 @@ android {
         minSdk = 24
         targetSdk = 34
         // raise both numbers for every new version (needed for updates)
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = 2
+        versionName = "0.1.1"
     }
 
     // Private signing key (same as LEAD Launcher): written by GitHub Actions from the secrets
