@@ -46,7 +46,7 @@ import java.util.TimeZone
  * Needs a Google OAuth client of the type "TVs and Limited Input devices" (built in from GitHub secrets, or typed in Settings).
  */
 object Drive {
-    private const val SCOPE = "https://www.googleapis.com/auth/drive.appdata email"
+    private const val SCOPE = "openid email https://www.googleapis.com/auth/drive.appdata"
     private const val FILE = "pretorian_sync.json"
 
     var loginOpen by mutableStateOf(false)

@@ -166,7 +166,9 @@ fun PretorianApp() {
     MaterialTheme(colorScheme = scheme) {
         CompositionLocalProvider(LocalLayoutDirection provides if (Look.lang == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr) {
             val top = stack.last()
-            if (top is Screen.Player) {
+            if (Profiles.picker) {
+                ProfilePicker()
+            } else if (top is Screen.Player) {
                 PlayerScreen(top, nav)
             } else if (Lock.simple) {
                 Box(Modifier.fillMaxSize().background(C.Bg)) {
@@ -216,7 +218,6 @@ fun PretorianApp() {
             ReminderPopup(nav)
             if (Profiles.panel) ProfilePanel(nav)
             DriveDialogs()
-            if (Profiles.picker) ProfilePicker()
         }
     }
 }

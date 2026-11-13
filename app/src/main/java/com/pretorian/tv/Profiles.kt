@@ -99,7 +99,14 @@ object Profiles {
 
     fun add(c: Context, name: String, avatar: String, color: Int): Profile {
         val p = Profile("p" + System.currentTimeMillis().toString(36), name.ifBlank { tr("Profil") }, avatar, color)
-        save(c, list(c) + p); return p
+        save(c, list(c) + p)
+        // a new profile starts with the look and language of the one who made it
+        try {
+            val mine = snapshot(c).getJSONObject("prefs"); val start = JSONObject()
+            mine.keys().forEach { k -> if (k.startsWith("look_") || k == "app_lang" || k == "meta_lang") start.put(k, mine.get(k)) }
+            File(dir(c), p.id + ".json").writeText(JSONObject().put("prefs", start).put("files", JSONObject()).toString())
+        } catch (_: Exception) {}
+        return p
     }
     fun update(c: Context, p: Profile) = save(c, list(c).map { if (it.id == p.id) p else it })
     fun delete(c: Context, p: Profile) {
@@ -247,7 +254,7 @@ fun ProfilePicker() {
             T("Drži OK na profilu za uređivanje", 13.sp, C.Muted)
         }
     }
-    LaunchedEffect(Unit) { first.tryFocus() }
+    LaunchedEffect(Unit) { kotlinx.coroutines.delay(200); first.tryFocus() }
     pinFor?.let { p ->
         PinDialog(p.name, tr("Unesi PIN profila"), onDismiss = { pinFor = null }) { pin ->
             if (Profiles.hash(p.id, pin) == p.pinHash) { pinFor = null; Profiles.switchTo(ctx, p); null } else tr("Pogrešan PIN")
