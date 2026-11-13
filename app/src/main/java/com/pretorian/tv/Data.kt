@@ -24,11 +24,13 @@ data class Playlist(
     val live: Boolean = true,
     val vod: Boolean = true,
     val series: Boolean = true,
+    /** subscription end as unix seconds, "" = unknown, "0" = never */
+    val exp: String = "",
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id); put("name", name); put("type", type.name)
         put("server", server); put("user", user); put("pass", pass); put("url", url)
-        put("active", active); put("live", live); put("vod", vod); put("series", series)
+        put("active", active); put("live", live); put("vod", vod); put("series", series); put("exp", exp)
     }
 
     companion object {
@@ -39,12 +41,13 @@ data class Playlist(
             server = o.str("server"), user = o.str("user"), pass = o.str("pass"), url = o.str("url"),
             active = o.optBoolean("active", false),
             live = o.optBoolean("live", true), vod = o.optBoolean("vod", true), series = o.optBoolean("series", true),
+            exp = o.str("exp"),
         )
     }
 }
 
 data class Category(val id: String, val name: String)
-data class Channel(val id: String, val num: Int, val name: String, val logo: String?, val group: String, val url: String)
+data class Channel(val id: String, val num: Int, val name: String, val logo: String?, val group: String, val url: String, val epg: String? = null)
 data class Vod(val id: String, val name: String, val poster: String?, val rating: String?, val url: String)
 data class SeriesItem(val id: String, val name: String, val cover: String?, val plot: String?, val rating: String?)
 data class Episode(val id: String, val season: Int, val num: Int, val title: String, val url: String, val plot: String?)
@@ -52,7 +55,13 @@ data class VodInfo(
     val plot: String?, val genre: String?, val year: String?, val duration: String?,
     val cast: String?, val director: String?, val backdrop: String?, val rating: String?,
 )
-data class PlayItem(val title: String, val url: String, val logo: String? = null, val subtitle: String? = null, val channel: Channel? = null)
+data class PlayItem(
+    val title: String, val url: String, val logo: String? = null, val subtitle: String? = null, val channel: Channel? = null,
+    /** title used to search subtitles, plus season/episode for series */
+    val search: String? = null, val season: Int? = null, val episode: Int? = null,
+    /** subtitle file chosen before playing, and preferred audio language */
+    val subFile: String? = null, val audioLang: String? = null,
+)
 
 fun JSONObject.str(k: String): String = if (!has(k) || isNull(k)) "" else optString(k, "")
 fun String.orNullIfBlank(): String? = if (isBlank()) null else this
@@ -81,18 +90,30 @@ object Store {
         val a = JSONArray(prefs(c).getString("fav_$playlistId", "[]") ?: "[]")
         (0 until a.length()).map {
             val o = a.getJSONObject(it)
-            Channel(o.str("id"), it + 1, o.str("name"), o.str("logo").orNullIfBlank(), FAV_GROUP, o.str("url"))
+            Channel(o.str("id"), it + 1, o.str("name"), o.str("logo").orNullIfBlank(), FAV_GROUP, o.str("url"), o.str("epg").orNullIfBlank())
         }
     } catch (e: Exception) { emptyList() }
 
     fun isFavorite(c: Context, playlistId: String, ch: Channel) = favorites(c, playlistId).any { it.url == ch.url }
 
+    private fun saveFavorites(c: Context, playlistId: String, list: List<Channel>) {
+        val a = JSONArray()
+        list.forEach { a.put(JSONObject().put("id", it.id).put("name", it.name).put("logo", it.logo ?: "").put("url", it.url).put("epg", it.epg ?: "")) }
+        prefs(c).edit().putString("fav_$playlistId", a.toString()).apply()
+    }
+
     fun toggleFavorite(c: Context, playlistId: String, ch: Channel) {
         val now = favorites(c, playlistId).toMutableList()
         if (now.removeAll { it.url == ch.url }.not()) now.add(ch)
-        val a = JSONArray()
-        now.forEach { a.put(JSONObject().put("id", it.id).put("name", it.name).put("logo", it.logo ?: "").put("url", it.url)) }
-        prefs(c).edit().putString("fav_$playlistId", a.toString()).apply()
+        saveFavorites(c, playlistId, now)
+    }
+
+    fun moveFavorite(c: Context, playlistId: String, ch: Channel, delta: Int) {
+        val now = favorites(c, playlistId).toMutableList()
+        val i = now.indexOfFirst { it.url == ch.url }; val j = i + delta
+        if (i < 0 || j !in now.indices) return
+        val x = now.removeAt(i); now.add(j, x)
+        saveFavorites(c, playlistId, now)
     }
 }
 
@@ -141,7 +162,20 @@ class Xtream(private val p: Playlist) {
         if (ui.optInt("auth", 0) != 1) throw IOException("Pogrešno korisničko ime ili lozinka")
         val status = ui.str("status")
         if (status.isNotBlank() && !status.equals("Active", true)) throw IOException("Nalog nije aktivan: $status")
-        return ui.str("exp_date")
+        val exp = ui.str("exp_date")
+        return if (exp.isBlank() || exp == "null") "0" else exp
+    }
+
+    /** now/next programme of a live stream (Xtream short EPG, titles are base64) */
+    fun shortEpg(streamId: String): List<Pair<String, String>> {
+        val o = try { JSONObject(api("get_short_epg", "&stream_id=${Net.enc(streamId)}&limit=2")) } catch (e: Exception) { return emptyList() }
+        val a = o.optJSONArray("epg_listings") ?: return emptyList()
+        fun b64(s: String) = try { String(android.util.Base64.decode(s, android.util.Base64.DEFAULT)) } catch (e: Exception) { s }
+        return (0 until a.length()).map {
+            val e = a.getJSONObject(it)
+            val start = e.str("start").drop(11).take(5); val end = e.str("end").drop(11).take(5)
+            b64(e.str("title")) to "$start–$end"
+        }
     }
 
     private fun cats(action: String): List<Category> {
@@ -159,7 +193,7 @@ class Xtream(private val p: Playlist) {
             val o = a.getJSONObject(i)
             val id = o.str("stream_id")
             Channel(id, o.optInt("num", i + 1), o.str("name"), o.str("stream_icon").orNullIfBlank(), categoryId,
-                "$base/live/${p.user}/${p.pass}/$id.ts")
+                "$base/live/${p.user}/${p.pass}/$id.ts", o.str("epg_channel_id").orNullIfBlank())
         }
     }
 
@@ -230,6 +264,7 @@ object M3u {
         val out = ArrayList<Channel>()
         var name = ""
         var logo: String? = null
+        var epgId: String? = null
         var group = "Ostalo"
         var pending = false
         text.lineSequence().forEach { raw ->
@@ -239,10 +274,11 @@ object M3u {
                 val comma = line.indexOf(',', lastQuote)
                 name = if (comma >= 0) line.substring(comma + 1).trim() else line
                 logo = attr(line, "tvg-logo")
+                epgId = attr(line, "tvg-id")
                 group = attr(line, "group-title") ?: "Ostalo"
                 pending = true
             } else if (line.isNotEmpty() && !line.startsWith("#") && pending) {
-                out.add(Channel(out.size.toString(), out.size + 1, name, logo, group, line))
+                out.add(Channel(out.size.toString(), out.size + 1, name, logo, group, line, epgId))
                 pending = false
             }
         }
@@ -293,8 +329,37 @@ object Repo {
 
     suspend fun episodes(p: Playlist, id: String): List<Episode> = cached("ep_${p.id}_$id") { Xtream(p).episodes(id) }
 
+    suspend fun nowNext(p: Playlist, ch: Channel): List<Pair<String, String>> = withContext(Dispatchers.IO) {
+        if (p.type != SourceType.XTREAM || ch.id.isBlank()) emptyList() else try { Xtream(p).shortEpg(ch.id) } catch (e: Exception) { emptyList() }
+    }
+
     suspend fun test(p: Playlist): String = withContext(Dispatchers.IO) {
         if (p.type == SourceType.XTREAM) Xtream(p).login()
         else { val n = M3u.parse(Net.get(p.url.trim())).size; "$n kanala" }
     }
+}
+
+/** Quality written in a title ("4K", "FHD", "UHD", "HD", "SD"), or null. */
+fun qualityOf(name: String): String? {
+    val n = name.uppercase()
+    return when {
+        Regex("\\b(4K|UHD|2160P?)\\b").containsMatchIn(n) -> "4K"
+        Regex("\\b(FHD|1080P?)\\b").containsMatchIn(n) -> "FHD"
+        Regex("\\b(HD|720P?|HEVC)\\b").containsMatchIn(n) -> "HD"
+        Regex("\\bSD\\b").containsMatchIn(n) -> "SD"
+        else -> null
+    }
+}
+
+/** Title without provider prefixes, quality words and year, for metadata/subtitle search. Returns title to year. */
+fun cleanTitle(raw: String): Pair<String, String?> {
+    var t = raw
+    val year = Regex("[(\\[](19|20)\\d{2}[)\\]]").find(t)?.value?.trim('(', ')', '[', ']')
+        ?: Regex("\\b(19|20)\\d{2}\\b\\s*$").find(t)?.value?.trim()
+    t = t.replace(Regex("^\\s*[|\\[(]?[A-Z0-9]{2,6}[|\\])]\\s*"), "")            // |EN| , [EXYU]
+    t = t.replace(Regex("^\\s*(4K-)?[A-Z]{2,4}\\s*[-:|]\\s*"), "")                   // EN - , 4K-EN -
+    t = t.replace(Regex("[(\\[](19|20)\\d{2}[)\\]]"), "")
+    t = t.replace(Regex("\\b(4K|UHD|FHD|HD|SD|HEVC|H265|1080P|720P|2160P|MULTI[- ]?SUB|SUB|DUB)\\b", RegexOption.IGNORE_CASE), "")
+    t = t.replace(Regex("\\s+"), " ").trim(' ', '-', '|', ':', '.')
+    return t to year
 }
