@@ -81,12 +81,15 @@ object Sports {
         League("tennis", "tennis/wta", "WTA", "WTA"),
     )
 
-    val SPORTS = listOf("all" to "Sve", "football" to "Fudbal", "basketball" to "Košarka", "volleyball" to "Odbojka",
-        "f1" to "Formula 1", "tennis" to "Tenis", "handball" to "Rukomet")
+    /** the sports in the filter row, in this order; others that have matches that day follow */
+    val SPORTS = listOf("football" to "Fudbal", "basketball" to "Košarka", "volleyball" to "Odbojka",
+        "f1" to "Formula 1", "tennis" to "Tenis", "handball" to "Rukomet", "motogp" to "MotoGP")
+    val MORE_SPORTS = listOf("hockey" to "Hokej", "waterpolo" to "Vaterpolo", "other" to "Ostalo")
 
     fun sportColor(s: String) = when (s) {
         "football" -> Color(0xFF22C55E); "basketball" -> Color(0xFFF97316); "volleyball" -> Color(0xFFEAB308)
-        "f1" -> Color(0xFFEF4444); "tennis" -> Color(0xFFA3E635); "handball" -> Color(0xFF38BDF8); else -> Color(0xFF94A3B8)
+        "f1" -> Color(0xFFEF4444); "tennis" -> Color(0xFFA3E635); "handball" -> Color(0xFF38BDF8)
+        "motogp" -> Color(0xFFF43F5E); "hockey" -> Color(0xFF60A5FA); "waterpolo" -> Color(0xFF22D3EE); else -> Color(0xFF94A3B8)
     }
 
     /* ---------------------------------------------------------------- time */
@@ -203,6 +206,19 @@ object Sports {
                 }
             }.awaitAll().flatten()
         }.filter { it.start in from until to }.distinctBy { it.id }.sortedBy { it.start }
+    }
+
+    /**
+     * matches that have not started yet, the next [days] days: football first, then what is closest to you
+     * (your country's leagues, the region, the big European ones), then by time
+     */
+    suspend fun upcoming(days: Int = 7): List<SportEvent> = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        val range = espnDate(dayStart(0) - 86_400_000L) + "-" + espnDate(dayStart(days))
+        val list = coroutineScope {
+            LEAGUES.map { lg -> async { try { espn(lg, range) } catch (e: Exception) { emptyList() } } }.awaitAll().flatten()
+        }.filter { it.state == "pre" && it.start > now - 60_000 && it.start < dayStart(days) }.distinctBy { it.id }
+        list.sortedWith(compareBy({ if (it.sport == "football") 0 else 1 }, { priority(it) }, { it.start }))
     }
 
     /* ---------------------------------------------------------------- your TV guide */
@@ -459,6 +475,9 @@ object Sports {
         listOf("rukomet", "handball", "ehf", "rk ").any { t.contains(it) } -> "handball"  // i18n-ignore
         listOf("odbojk", "volley", "ok ").any { t.contains(it) } -> "volleyball"
         listOf("tenis", "tennis", "atp", "wta").any { t.contains(it) } -> "tennis"  // i18n-ignore
+        listOf("motogp", "moto gp", "moto2", "moto3", "superbike").any { t.contains(it) } -> "motogp"  // i18n-ignore
+        listOf("hokej", "hockey", "nhl", "khl").any { t.contains(it) } -> "hockey"  // i18n-ignore
+        listOf("vaterpolo", "waterpolo", "water polo").any { t.contains(it) } -> "waterpolo"  // i18n-ignore
         listOf("formula", "grand prix", "f1").any { t.contains(it) } -> "f1"
         listOf("fudbal", "nogomet", "football", "fussball", "liga", "league", "cup", "kup", "fk ", "nk ", "fc ").any { t.contains(it) } -> "football"  // i18n-ignore
         else -> "other"

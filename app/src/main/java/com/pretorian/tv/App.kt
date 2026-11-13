@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.animation.animateContentSize
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -128,7 +129,7 @@ class Nav(
     val playlistsChanged: () -> Unit,
 )
 
-object BuildInfo { const val VERSION = "0.5.2" }
+object BuildInfo { const val VERSION = "0.5.3" }
 
 @Composable
 fun PretorianApp() {
@@ -287,27 +288,43 @@ fun Rail(current: Screen, nav: Nav) {
         Screen.AddPlaylist -> Screen.Settings
         else -> current
     }
-    val width = when (mode) { 1 -> 72.dp; 2 -> 210.dp; else -> 96.dp }
+    // one look everywhere: icon with the name under it
+    val width = 96.dp
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    // standing on a menu item opens its section after a moment, the focus stays in the menu
+    var hover by remember { mutableStateOf<Screen?>(null) }
+    LaunchedEffect(hover) {
+        val h = hover ?: return@LaunchedEffect
+        delay(500)
+        if (Chrome.inRail && hover == h && section != h) nav.root(h)
+    }
     Column(
-        Modifier.width(width).fillMaxHeight().background(C.Rail).padding(vertical = 14.dp).animateContentSize(),
+        Modifier.width(width).fillMaxHeight().background(C.Rail).padding(vertical = 14.dp)
+            .onFocusChanged { Chrome.inRail = it.hasFocus; if (!it.hasFocus) hover = null },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         ProfileButton(if (mode == 1) 36.dp else 42.dp)
         Spacer(Modifier.height(6.dp))
-        items.forEach { RailButton(it.icon, it.label, section == it.screen, mode, it.badge) { nav.root(it.screen) } }
+        fun go(s: Screen) {
+            Chrome.inRail = false
+            if (section == s) focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Right) else nav.root(s)
+        }
+        items.forEach { RailButton(it.icon, it.label, section == it.screen, 3, it.badge,
+            onFocus = { hover = if (it.screen == Screen.Search) null else it.screen }) { go(it.screen) } }
         Spacer(Modifier.weight(1f))
-        RailButton(R.drawable.lc_settings, "Postavke", section == Screen.Settings, mode, if (Updater.available != null) 1 else 0) { nav.root(Screen.Settings) }
+        RailButton(R.drawable.lc_settings, "Postavke", section == Screen.Settings, 3, if (Updater.available != null) 1 else 0,
+            onFocus = { hover = null }) { go(Screen.Settings) }
     }
 }
 
 @Composable
-private fun RailButton(icon: Int, label: String, selected: Boolean, mode: Int, badge: Int, onClick: () -> Unit) {
+private fun RailButton(icon: Int, label: String, selected: Boolean, mode: Int, badge: Int, onFocus: () -> Unit = {}, onClick: () -> Unit) {
     Box {
         Focusable(
             modifier = if (mode == 2) Modifier.width(186.dp).height(46.dp) else Modifier.width(if (mode == 1) 56.dp else 76.dp).height(if (mode == 1) 46.dp else 52.dp),
             onClick = onClick,
-            onFocus = { if (Chrome.driven) Chrome.rail = 2 },
+            onFocus = { if (Chrome.driven) Chrome.rail = 3; onFocus() },
             shape = Rnd(16.dp),
             normal = if (selected) C.Red else Color.Transparent,
             focused = if (selected) C.Red else C.CardHi,
@@ -402,30 +419,21 @@ fun HomeScreen(nav: Nav) {
     val pls = remember { Store.actives(ctx) }
     val first = remember { FocusRequester() }
     var notes by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxSize()) {
-        val line = pls.joinToString("  ·  ") { p -> p.name + (expiryText(p.exp)?.let { " (${it.first})" } ?: "") }
-        Header(tr("Početna"), line.ifBlank { null }) {
-            Box {
-                Focusable(modifier = Modifier.size(48.dp), onClick = { notes = true }, shape = CircleShape, normal = C.Card, zoom = 1.08f) { _ ->
-                    Box(Modifier.align(Alignment.Center)) { Ico(R.drawable.lc_bell, 22.dp, if (Notes.unread() > 0) C.Amber else C.Soft) }
-                }
-                Box(Modifier.align(Alignment.TopEnd)) { Bell(Notes.unread()) }
+    Box(Modifier.fillMaxSize()) {
+        HomeBackdrop()
+        Column(Modifier.fillMaxSize().padding(top = 22.dp, bottom = 16.dp)) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 36.dp), verticalAlignment = Alignment.CenterVertically) {
+                HomeLogo()
+                Spacer(Modifier.weight(1f))
+                HomeTopPill(nav) { notes = true }
             }
+            UpdateBanner(nav)
+            if (pls.isEmpty()) { Message("Nema playliste", "Dodaj playlistu u Postavkama"); return@Column }
+            val cont = remember(Watch.rev) { Watch.continueList(ctx) }
+            NeonRow(homeTiles(nav, push = false), first, Modifier.weight(1f))
+            if (cont.isNotEmpty()) ContinueRow(cont, nav, Modifier.padding(start = 36.dp, bottom = 12.dp))
+            HomeStatusBar(Modifier.padding(horizontal = 36.dp))
         }
-        UpdateBanner(nav)
-        if (pls.isEmpty()) { Message("Nema playliste", "Dodaj playlistu u Postavkama"); return@Column }
-        val cont = remember(Watch.rev) { Watch.continueList(ctx) }
-        Box(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 36.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
-            Row(horizontalArrangement = Arrangement.spacedBy(22.dp), verticalAlignment = Alignment.CenterVertically) {
-                val size = when (Look.tileSize) { 0 -> 140.dp; 2 -> 190.dp; else -> 165.dp }
-                HomeTile("TV", R.drawable.lc_tv, first, size, badge = Notes.unread("reminder")) { nav.root(Screen.Tv) }
-                HomeTile("Filmovi", R.drawable.lc_film, null, size, badge = NewContent.count("vod")) { nav.root(Screen.Movies) }
-                HomeTile("Serije", R.drawable.lc_monitor, null, size, badge = NewContent.count("series")) { nav.root(Screen.Series) }
-                HomeTile("Sport", R.drawable.lc_trophy, null, size) { nav.root(Screen.Sports) }
-            }
-        }
-        if (cont.isNotEmpty()) ContinueRow(cont, nav, Modifier.padding(start = 36.dp, bottom = 16.dp))
-        T("PRETORIAN ${BuildInfo.VERSION}", 12.sp, C.Muted, modifier = Modifier.padding(start = 36.dp, end = 36.dp, bottom = 14.dp))
     }
     if (notes) NotesPopup({ notes = false }, nav)
     LaunchedEffect(Unit) { first.tryFocus() }
@@ -579,20 +587,16 @@ fun SimpleHome(nav: Nav) {
     val first = remember { FocusRequester() }
     var warn by remember { mutableStateOf(false) }
     var pin by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxSize().padding(horizontal = 56.dp, vertical = 36.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            ProfileButton(56.dp)
-            T("PRETORIAN", 28.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 14.dp).weight(1f))
-            Clock()
+    Box(Modifier.fillMaxSize()) {
+    HomeBackdrop()
+    Column(Modifier.fillMaxSize().padding(top = 26.dp, bottom = 18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 40.dp), verticalAlignment = Alignment.CenterVertically) {
+            HomeLogo()
+            Spacer(Modifier.weight(1f))
+            ProfileButton(46.dp)
         }
-        Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-            Row(horizontalArrangement = Arrangement.spacedBy(36.dp)) {
-                BigTile("TV", "Kanali uživo", R.drawable.ic_fill_tv, Color(0xFF2563EB), Color(0xFF06B6D4), first) { nav.push(Screen.Tv) }
-                BigTile("Filmovi", "Filmovi na zahtjev", R.drawable.ic_fill_movie, Color(0xFFDB2777), Color(0xFFF97316), null) { nav.push(Screen.Movies) }
-                BigTile("Serije", "Sve serije", R.drawable.ic_fill_series, Color(0xFF7C3AED), Color(0xFF4F46E5), null) { nav.push(Screen.Series) }
-            }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+        NeonRow(homeTiles(nav, push = true), first, Modifier.weight(1f), maxTile = 280.dp)
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 12.dp)) {
             Button("Napredni mod", R.drawable.lc_lock) { warn = true }
             Updater.available?.let { u ->
                 val pr = Updater.progress
@@ -600,7 +604,9 @@ fun SimpleHome(nav: Nav) {
                 Button(label, R.drawable.lc_download, primary = true) { if (pr < 0) scope.launch { Updater.install(ctx, u) } }
             }
         }
-        Updater.status?.let { T(it, 13.sp, C.Danger, maxLines = 2, modifier = Modifier.padding(top = 8.dp)) }
+        Updater.status?.let { T(it, 13.sp, C.Danger, maxLines = 2, modifier = Modifier.padding(bottom = 8.dp)) }
+        HomeStatusBar(Modifier.padding(horizontal = 40.dp))
+    }
     }
     if (warn) Popup("Aktivirati napredni mod?", onDismiss = { warn = false }) {
         T("Pažnja: aktivirate napredni mod i dodatne opcije. Nastavite s pažnjom, jer možete izazvati nepoželjne posljedice i pokvariti podešavanja programa.",

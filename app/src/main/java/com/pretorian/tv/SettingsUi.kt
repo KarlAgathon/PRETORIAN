@@ -29,6 +29,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -88,7 +89,11 @@ fun SettingsScreen(nav: Nav) {
             }
         }
         Box(Modifier.width(1.dp).fillMaxHeight().background(C.Line))
-        Box(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 30.dp, vertical = 24.dp)) {
+        // Back inside a page goes one step back: to this section in the list on the left, not out of Settings
+        var inPage by remember { mutableStateOf(false) }
+        val scope = rememberCoroutineScope()
+        BackHandler(enabled = inPage) { inPage = false; scope.launch { first.tryFocus() } }
+        Box(Modifier.weight(1f).fillMaxHeight().onFocusChanged { inPage = it.hasFocus }.padding(horizontal = 30.dp, vertical = 24.dp)) {
             key(section) {
                 when (section) {
                     "playlists" -> PlaylistsPage(nav)

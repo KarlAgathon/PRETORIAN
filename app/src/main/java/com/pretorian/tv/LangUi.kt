@@ -71,7 +71,9 @@ fun LangPicker(title: String, current: String, langs: List<Lang> = Langs.APP, au
 fun LangOrderPicker(title: String, current: List<String>, langs: List<Lang> = Langs.MEDIA, onDismiss: () -> Unit, onSave: (List<String>) -> Unit) {
     val chosen = remember { mutableStateListOf<String>().also { it.addAll(current) } }
     val first = remember { FocusRequester() }
-    Popup(title, onDismiss, width = 600.dp) {
+    // leaving with Back keeps what you clicked (it used to be lost unless you pressed "Done")
+    val leave = { if (chosen.isNotEmpty() && chosen.toList() != current) onSave(chosen.toList()) else onDismiss() }
+    Popup(title, leave, width = 600.dp) {
         T("Klikni jezike redom: prvi je najvažniji.", 13.sp, C.Muted, maxLines = 2)
         Button("Gotovo", R.drawable.lc_check, primary = true, focusRequester = first) { onSave(chosen.toList()) }
         langs.forEach { l ->

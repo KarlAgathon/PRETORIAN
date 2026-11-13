@@ -72,7 +72,7 @@ fun TvGuide(nav: Nav, onList: () -> Unit) {
     var focusedGroup by remember { mutableStateOf<GroupRef?>(null) }
 
     DisposableEffect(Unit) {
-        Chrome.driven = true; Chrome.rail = 0
+        Chrome.driven = true; Chrome.rail = if (Chrome.inRail) 3 else 0
         onDispose { Chrome.driven = false; Chrome.rail = 3 }
     }
     val groupsOpen = Chrome.rail >= 1
@@ -92,18 +92,18 @@ fun TvGuide(nav: Nav, onList: () -> Unit) {
         val locked = f.pid?.let { Ovr(ctx, it).isLocked("live", f.cat.id) } ?: false
         if (!locked && st.group?.key != f.key) { TvMemory.channel = -1; st.group = f; TvMemory.group = f }
     }
-    fun showGroups() { Chrome.rail = 1; st.focusKey = "g:" + (st.group?.key ?: ""); st.refocus++ }
+    fun showGroups() { Chrome.rail = 3; st.focusKey = "g:" + (st.group?.key ?: ""); st.refocus++ }
     BackHandler(enabled = Chrome.rail == 0 && st.groupMenu == null) { showGroups() }
 
     Row(Modifier.fillMaxSize()) {
         if (groupsOpen) {
             GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, 250.dp, "TV", null,
-                onFocusGroup = { focusedGroup = it; Chrome.rail = 1 },
+                onFocusGroup = { focusedGroup = it; Chrome.rail = 3 },
                 onOpen = { openGroup(ctx, st, it); st.enter++ },
                 onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
                 onHeader = { p -> Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
                 onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it },
-                onFocusRow = { st.focusKey = it; Chrome.rail = 1 },
+                onFocusRow = { st.focusKey = it; Chrome.rail = 3 },
                 extra = {
                     Focusable(modifier = Modifier.padding(start = 4.dp, bottom = 8.dp).height(36.dp), onClick = onList, normal = C.Card, shape = Pill, zoom = 1.03f) { _ ->
                         Row(Modifier.align(Alignment.Center).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically,

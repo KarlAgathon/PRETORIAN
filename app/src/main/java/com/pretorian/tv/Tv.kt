@@ -27,6 +27,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -83,6 +85,8 @@ object Chrome {
     var rail by mutableIntStateOf(3)
     /** true while a screen drives the rail (TV guide) */
     var driven by mutableStateOf(false)
+    /** true while the left menu has focus: screens then do not take the focus away (you browse the menu) */
+    @Volatile var inRail = false
 }
 
 /** Runs [action] right away, or after the PIN when [locked] and not yet unlocked this session. */
@@ -393,11 +397,20 @@ fun GroupOptions(kind: String, g: Category, ovr: Ovr, current: List<Category>, o
     if (rename) { TextDialog("Preimenuj grupu", "Novi naziv", g.name, onDismiss = { rename = false }) { n -> if (n.isNotBlank()) ovr.renameGroup(kind, g.id, n); rename = false; onChanged(true) }; return }
     if (setup) { PinSetupDialog(onDismiss = { setup = false }) { ovr.toggleLocked(kind, g.id); setup = false; onChanged(true) }; return }
     val pos = current.indexOfFirst { it.id == g.id }
+    var carry by remember { mutableStateOf(false) }
+    fun placeAt(to: Int) {
+        if (pos < 0) return
+        val ids = current.map { it.id }.toMutableList(); ids.removeAt(pos); ids.add(to.coerceIn(0, ids.size), g.id); ovr.setGroupOrder(kind, ids)
+    }
+    if (carry) { MoveDialog(g.name, current.map { it.name }, pos, onDone = { to -> placeAt(to); carry = false; onChanged(true) }, onCancel = { carry = false }); return }
+    val pick = onPick ?: if (pos >= 0) ({ carry = true }) else null
+    val top = onTop ?: if (pos >= 0) ({ placeAt(0); onChanged(true) }) else null
+    val bottom = onBottom ?: if (pos >= 0) ({ placeAt(current.lastIndex); onChanged(true) }) else null
     Popup(g.name, onDismiss) {
         if (pos >= 0) T("${pos + 1} / ${current.size}", 13.sp, C.Muted)
-        onPick?.let { OptionRow("Uzmi i pomjeri", R.drawable.lc_hand_grab, sub = "▲ ▼ pa OK (drži za brže)", color = C.Amber) { it() } }
-        onTop?.let { OptionRow("Na sam vrh", R.drawable.lc_chevrons_up) { it() } }
-        onBottom?.let { OptionRow("Na sam kraj", R.drawable.lc_chevrons_down) { it() } }
+        pick?.let { OptionRow("Uzmi i pomjeri", R.drawable.lc_hand_grab, sub = "▲ ▼ pa OK (drži za brže)", color = C.Amber) { it() } }
+        top?.let { OptionRow("Na sam vrh", R.drawable.lc_chevrons_up) { it() } }
+        bottom?.let { OptionRow("Na sam kraj", R.drawable.lc_chevrons_down) { it() } }
         onPosition?.let { OptionRow("Na poziciju…", R.drawable.lc_hash) { it() } }
         OptionRow("Pomjeri gore", R.drawable.lc_arrow_up) {
             if (pos <= 0) Toast.makeText(ctx, tr("Grupa je već prva"), Toast.LENGTH_SHORT).show()
@@ -415,6 +428,47 @@ fun GroupOptions(kind: String, g: Category, ovr: Ovr, current: List<Category>, o
         }
         if (custom) OptionRow("Obriši grupu", R.drawable.lc_trash_2, color = C.Danger) { ovr.deleteGroup(g.id); onChanged(true) }
     }
+}
+
+/**
+ * Carry one item (channel or group) to its place: ▲ ▼ move it (hold to go fast), OK puts it down, Back cancels.
+ * Shows the neighbours around it so you see where it lands.
+ */
+@Composable
+fun MoveDialog(name: String, names: List<String>, from: Int, onDone: (Int) -> Unit, onCancel: () -> Unit) {
+    var at by remember { mutableIntStateOf(from.coerceAtLeast(0)) }
+    val fr = remember { FocusRequester() }
+    val order = remember(at) { names.toMutableList().also { if (from in it.indices) { val x = it.removeAt(from); it.add(at.coerceIn(0, it.size), x) } } }
+    Popup(trf("Pomjeranje: %s", name), onCancel, width = 640.dp) {
+        T("▲ ▼ pomjeraš (drži za brže) · OK spusti · Nazad odustani", 13.sp, C.Muted, maxLines = 2)
+        Column(Modifier.fillMaxWidth().focusRequester(fr).focusable().onPreviewKeyEvent { e ->
+            if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+            when (e.key) {
+                Key.DirectionUp -> { at = (at - 1).coerceAtLeast(0); true }
+                Key.DirectionDown -> { at = (at + 1).coerceAtMost(names.lastIndex); true }
+                Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> { onDone(at); true }
+                else -> false
+            }
+        }, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            for (i in (at - 3)..(at + 3)) {
+                val n = order.getOrNull(i)
+                val me = i == at
+                Row(Modifier.fillMaxWidth().height(40.dp).clip(Rnd(10.dp)).background(if (me) C.Amber.copy(alpha = 0.25f) else if (n != null) C.Card else Color.Transparent)
+                    .then(if (me) Modifier.border(2.dp, C.Amber, Rnd(10.dp)) else Modifier).padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (n != null) {
+                        T("${i + 1}", 13.sp, C.Muted, modifier = Modifier.width(40.dp))
+                        if (me) Ico(R.drawable.lc_hand_grab, 16.dp, C.Amber)
+                        T(n, 15.sp, if (me) C.Text else C.Soft, if (me) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
+                    }
+                }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            T(trf("Pozicija %s od %s", at + 1, names.size), 14.sp, C.Amber, FontWeight.SemiBold)
+        }
+    }
+    LaunchedEffect(Unit) { fr.tryFocus() }
 }
 
 /** Options of a favourites list. */
@@ -566,7 +620,18 @@ fun ChannelOptions(g: GroupRef, ch: Channel, list: List<Channel>, groups: List<C
     val favId = if (g.pid == null) favListId(g.cat.id) else null
     val ovr = remember(ch.pid, g.pid) { Ovr(ctx, ch.pid.ifBlank { g.pid ?: "" }) }
     var mode by remember { mutableStateOf("menu") }
+    val pos = list.indexOfFirst { it.url == ch.url }
+    // whole new order of the group (or favourites list) with this channel at [to]
+    fun placeAt(to: Int) {
+        if (pos < 0) return
+        if (favId != null) { var cur = list.indexOfFirst { it.url == ch.url }; while (cur != to) { val d = if (to < cur) -1 else 1; Favs.move(favId, ch, d); cur += d } }
+        else { val urls = list.map { it.url }.toMutableList(); urls.removeAt(pos); urls.add(to.coerceIn(0, urls.size), ch.url); ovr.setChannelOrder(g.cat.id, urls) }
+    }
     when (mode) {
+        "carry" -> {
+            MoveDialog(ovr.chName(ch), list.map { it.name }, pos, onDone = { to -> placeAt(to); onChanged(true, true) }, onCancel = { mode = "menu" })
+            return
+        }
         "fav" -> { FavPicker(ch) { mode = "menu"; onChanged(false, false) }; return }
         "rename" -> { TextDialog("Preimenuj kanal", "Novi naziv", ch.name, onDismiss = { mode = "menu" }) { n ->
             if (n.isNotBlank()) { if (favId != null) Favs.rename(favId, ch, n) else ovr.renameChannel(ch, n) }; onChanged(true, true) }; return }
@@ -623,7 +688,10 @@ fun ChannelOptions(g: GroupRef, ch: Channel, list: List<Channel>, groups: List<C
             } else mode = "fav"
         }
         if (Lock.simple) return@Popup
-        if (g.cat.id != ALL_GROUP) {
+        if (g.cat.id != ALL_GROUP && pos >= 0) {
+            OptionRow("Uzmi i pomjeri", R.drawable.lc_hand_grab, sub = "▲ ▼ voziš kanal (drži za brže), OK spušta", color = C.Amber) { mode = "carry" }
+            OptionRow("Na sam vrh", R.drawable.lc_chevrons_up) { placeAt(0); onChanged(true, true) }
+            OptionRow("Na samo dno", R.drawable.lc_chevrons_down) { placeAt(list.lastIndex); onChanged(true, true) }
             OptionRow("Pomjeri gore", R.drawable.lc_arrow_up) {
                 if (favId != null) Favs.move(favId, ch, -1) else ovr.moveChannel(g.cat.id, list, ch, -1); onChanged(false, false)
             }

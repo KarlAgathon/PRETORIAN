@@ -86,7 +86,7 @@ fun SportsScreen(nav: Nav) {
     var updated by remember { mutableLongStateOf(0L) }
     var pick by remember { mutableStateOf<SportEvent?>(null) }
     var view by remember { mutableStateOf("all") }   // all, live, done
-    val events by load(day, tick, keep = true) { Sports.day(day).also { updated = System.currentTimeMillis() } }
+    val events by load(day, tick, keep = true) { (if (day == UPCOMING) emptyList() else Sports.day(day)).also { updated = System.currentTimeMillis() } }
     val guide by load(p?.id) { Sports.guide(ctx, Store.actives(ctx)) }
     val heroFr = remember { FocusRequester() }
     val dayFr = remember { FocusRequester() }
@@ -188,45 +188,26 @@ fun SportsScreen(nav: Nav) {
             }
             DayTabs(day, dayFr) { day = it; league = null }
         }
+        if (day == UPCOMING) UpcomingView { pick = it } else {
         // ---------------------------------------------------------------- picture on the left, the match on the right
         if (events is Load.Ok) SportTop(top)
         // every TV station that shows the match, worldwide; the ones you have are green and play on OK
         if (events is Load.Ok && top != null) BroadcastRow(top) { chs, i -> play(top, chs, i) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         // ---------------------------------------------------------------- filters (one scrolling row, nothing is hidden)
-        AlignStart { LazyRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(listOf("all" to "Sve", "live" to "Uživo sada", "done" to "Završeno")) { (id, label) ->
-                val sel = view == id
-                Focusable(onClick = { view = id }, shape = Pill, normal = if (sel) C.Red else C.Card, focused = if (sel) C.Red else C.CardHi,
-                    zoom = 1.04f, modifier = Modifier.height(38.dp)) { _ ->
-                    Row(Modifier.align(Alignment.Center).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                        if (id == "live") Dot(if (sel) C.OnRed else Color(0xFFFF4D55))
-                        if (id == "done") Ico(R.drawable.lc_check, 14.dp, if (sel) C.OnRed else C.Soft)
-                        T(label, 14.sp, if (sel) C.OnRed else C.Text, FontWeight.SemiBold)
-                    }
-                }
-            }
+        // one row: All · Live · My channels · then the sports (football first), then other sports that have matches
+        val extra = remember(all) { Sports.MORE_SPORTS.filter { (id, _) -> all?.any { it.sport == id } == true } }
+        AlignStart { LazyRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
             item {
-                Focusable(onClick = { mine = !mine }, shape = Pill, normal = if (mine) C.Green else C.Card,
-                    focused = if (mine) C.Green else C.CardHi, zoom = 1.04f, modifier = Modifier.height(38.dp)) { _ ->
-                    Row(Modifier.align(Alignment.Center).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                        Ico(if (mine) R.drawable.lc_check else R.drawable.lc_tv, 16.dp, if (mine) Color.White else C.Soft)
-                        T("Samo moji kanali", 14.sp, if (mine) Color.White else C.Text, FontWeight.SemiBold, maxLines = 1)
-                    }
-                }
+                val on = sport == "all" && view == "all" && !mine
+                FilterChip("Sve", on, if (on) C.Red else null, dot = Color(0xFFFF4D55)) { sport = "all"; view = "all"; mine = false; league = null }
             }
+            item { FilterChip("Uživo sada", view == "live", if (view == "live") C.Red else null, dot = Color(0xFFFF4D55)) { view = if (view == "live") "all" else "live" } }
+            item { FilterChip("Moji kanali", mine, if (mine) C.Green else null, icon = R.drawable.lc_tv) { mine = !mine } }
             item { Box(Modifier.width(1.dp).height(38.dp).background(C.Line)) }
-            items(Sports.SPORTS) { (id, label) ->
-                val sel = sport == id
-                Focusable(onClick = { sport = id; league = null }, shape = Pill, normal = if (sel) C.Text else C.Card,
-                    focused = if (sel) C.Text else C.CardHi, zoom = 1.04f, modifier = Modifier.height(38.dp)) { _ ->
-                    Row(Modifier.align(Alignment.Center).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                        Dot(if (id == "all") Color(0xFFFF4D55) else Sports.sportColor(id))
-                        T(label, 14.sp, if (sel) C.Bg else C.Text, FontWeight.Medium)
-                    }
+            items(Sports.SPORTS + extra) { (id, label) ->
+                FilterChip(label, sport == id, if (sport == id) Sports.sportColor(id) else null, dot = Sports.sportColor(id)) {
+                    sport = if (sport == id) "all" else id; league = null
                 }
             }
         } }
@@ -280,6 +261,7 @@ fun SportsScreen(nav: Nav) {
         }
     }
     }
+    }
 
     pick?.let { ev -> EventPopup(ev, onDismiss = { pick = null }) { chs, i -> pick = null; play(ev, chs, i) } }
     var focused by remember { mutableStateOf(false) }
@@ -291,15 +273,106 @@ fun SportsScreen(nav: Nav) {
     }
 }
 
+/** one chip of the filter row; [fill] is its colour when it is on */
+@Composable
+private fun FilterChip(label: String, on: Boolean, fill: Color?, dot: Color? = null, icon: Int? = null, onClick: () -> Unit) {
+    val fg = if (on) Color.White else C.Text
+    Focusable(onClick = onClick, shape = Pill, normal = fill ?: C.Card, focused = fill ?: C.CardHi, zoom = 1.05f, modifier = Modifier.height(38.dp)) { _ ->
+        Row(Modifier.align(Alignment.Center).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            if (icon != null) Ico(if (on) R.drawable.lc_check else icon, 15.dp, fg)
+            else if (dot != null) Dot(if (on) Color.White else dot)
+            T(label, 14.sp, fg, FontWeight.SemiBold, maxLines = 1)
+        }
+    }
+}
+
+/** the "Upcoming" tab next to the days */
+private const val UPCOMING = 100
+
 private fun dayName(offset: Int): String = when (offset) {
+    UPCOMING -> tr("Nadolazeće")
     -1 -> tr("Jučer"); 0 -> tr("Danas"); 1 -> tr("Sutra")
     else -> SimpleDateFormat("EEE d.", Locale(Look.lang)).format(Date(Sports.dayStart(offset)))
+}
+
+/**
+ * Upcoming matches of the next 7 days as cards: crests "A vs B", league, day and time, a live countdown.
+ * Football first, then what is closest to where you live. OK opens the match (my channels | who else shows it).
+ */
+@Composable
+private fun UpcomingView(onOpen: (SportEvent) -> Unit) {
+    var tick by remember { mutableIntStateOf(0) }
+    val data by load(tick) { Sports.upcoming(7) }
+    var q by remember { mutableStateOf("") }
+    var sport by remember { mutableStateOf("all") }
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) { while (true) { delay(1000); now = System.currentTimeMillis() } }
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Field("Traži utakmicu, tim ili ligu", q, { q = it }, Modifier.weight(1f))
+            Button("Osvježi", R.drawable.lc_refresh_cw) { tick++ }
+        }
+        val list = (data as? Load.Ok)?.value ?: emptyList()
+        val sportsHere = remember(list) { (Sports.SPORTS + Sports.MORE_SPORTS).filter { (id, _) -> list.any { it.sport == id } } }
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
+            item { FilterChip("Sve", sport == "all", if (sport == "all") C.Red else null, dot = Color(0xFFFF4D55)) { sport = "all" } }
+            items(sportsHere) { (id, label) -> FilterChip(label, sport == id, if (sport == id) Sports.sportColor(id) else null, dot = Sports.sportColor(id)) { sport = if (sport == id) "all" else id } }
+        }
+        val shown = remember(list, q, sport) {
+            val w = q.trim().lowercase()
+            list.filter { e -> (sport == "all" || e.sport == sport) &&
+                (w.isEmpty() || listOfNotNull(e.title, e.league, e.home?.name, e.away?.name).any { it.lowercase().contains(w) }) }
+        }
+        when (val d = data) {
+            is Load.Loading -> Box(Modifier.fillMaxSize()) { Loading("Učitavam utakmice…") }
+            is Load.Err -> Box(Modifier.fillMaxSize()) { Message("Greška", d.message) }
+            is Load.Ok -> {
+                T(trf("%s utakmica u narednih 7 dana", shown.size), 13.sp, C.Muted)
+                if (shown.isEmpty()) Box(Modifier.fillMaxSize()) { Message("Nema utakmica") }
+                else androidx.compose.foundation.lazy.grid.LazyVerticalGrid(androidx.compose.foundation.lazy.grid.GridCells.Fixed(3),
+                    Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp, top = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    items(shown.size, key = { shown[it].id }) { i -> UpcomingCard(shown[i], now) { onOpen(shown[i]) } }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun UpcomingCard(ev: SportEvent, now: Long, onClick: () -> Unit) {
+    val left = (ev.start - now).coerceAtLeast(0) / 1000
+    val countdown = if (left >= 86_400) trf("za %s d %s h", left / 86_400, (left % 86_400) / 3600)
+        else "%02d:%02d:%02d".format(left / 3600, (left % 3600) / 60, left % 60)
+    val dayOff = ((ev.start - Sports.dayStart(0)) / 86_400_000L).toInt()
+    Focusable(modifier = Modifier.fillMaxWidth().height(210.dp), onClick = onClick, shape = Rnd(20.dp), zoom = 1.03f) { _ ->
+        Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Dot(Sports.sportColor(ev.sport), 7.dp)
+                T(tr(ev.league), 12.sp, C.Soft, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
+                if (ev.channels.isNotEmpty()) Ico(R.drawable.lc_tv, 14.dp, C.Green)
+            }
+            if (ev.home != null && ev.away != null) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceEvenly) {
+                    Crest(ev.home, 52.dp); T("VS", 16.sp, C.Muted, FontWeight.Bold); Crest(ev.away, 52.dp)
+                }
+                T(ev.home.name + " – " + ev.away.name, 16.sp, C.Text, FontWeight.Bold, maxLines = 1)
+            } else T(ev.title, 16.sp, C.Text, FontWeight.Bold, maxLines = 3)
+            Spacer(Modifier.weight(1f))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Ico(R.drawable.lc_clock, 13.dp, C.Muted)
+                T(dayName(dayOff) + " · " + hhmm(ev.start), 12.sp, C.Soft, maxLines = 1, modifier = Modifier.weight(1f))
+                T(trf("Počinje za %s", countdown), 12.sp, C.Amber, FontWeight.Bold, maxLines = 1)
+            }
+        }
+    }
 }
 
 @Composable
 private fun DayTabs(day: Int, fr: FocusRequester, onDay: (Int) -> Unit) {
     Row(Modifier.clip(Rnd(14.dp)).background(C.Card).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-        (-1..3).forEach { d ->
+        (listOf(UPCOMING) + (-1..3)).forEach { d ->
             val sel = d == day
             Focusable(onClick = { onDay(d) }, focusRequester = if (d == 0) fr else null, normal = if (sel) C.Text else Color.Transparent,
                 focused = if (sel) C.Text else C.CardHi, shape = Rnd(11.dp), zoom = 1f, modifier = Modifier.height(38.dp)) { _ ->
@@ -423,30 +496,45 @@ private fun BroadcastRow(ev: SportEvent, onPlay: (List<Channel>, Int) -> Unit) {
         } catch (e: Exception) { err = e.message }
         busy = false
     }
+    // what PRETORIAN already found in your list comes first, then what the AI adds
+    val own = remember(ev.id, ev.channels, ev.ai) { (ev.channels + ev.ai).distinctBy { it.name.trim().lowercase() }.take(6) }
+    val l = list
+    val extra = l?.filter { (s, mine) -> mine.isEmpty() || own.none { o -> mine.any { it.url == o.url } } } ?: emptyList()
     Row(Modifier.fillMaxWidth().height(44.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Ico(R.drawable.lc_tv, 16.dp, AiColor)
         T("Prenose:", 13.sp, C.Soft, FontWeight.SemiBold)
-        val l = list
-        when {
-            !SportsAI.ready -> T("Dodaj AI ključ u Postavke › Sport i AI da vidiš sve TV prenose", 12.sp, C.Muted, maxLines = 1)
-            busy -> { androidx.compose.material3.CircularProgressIndicator(color = AiColor, strokeWidth = 2.dp, modifier = Modifier.size(14.dp)); T("AI traži TV prenose…", 12.sp, C.Muted) }
-            err != null -> T(err ?: "", 12.sp, C.Muted, maxLines = 1)
-            l != null && l.isEmpty() -> T("AI nije našao TV prenose za ovu utakmicu", 12.sp, C.Muted)
-            l != null -> LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)) {
-                items(l, key = { it.first.country + it.first.name }) { (s, mine) ->
-                    val label = (if (s.country.isNotBlank()) s.country + " · " else "") + s.name
-                    if (mine.isNotEmpty()) Focusable(modifier = Modifier.height(34.dp), onClick = { onPlay(mine, 0) }, shape = Pill,
-                        normal = C.Green.copy(alpha = 0.22f), zoom = 1.06f) { _ ->
-                        Row(Modifier.align(Alignment.Center).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Ico(R.drawable.lc_play, 12.dp, C.Green); T(label, 13.sp, C.Text, FontWeight.SemiBold, maxLines = 1)
-                        }
-                    } else Box(Modifier.height(34.dp).clip(Pill).background(C.Card).border(1.dp, C.Line, Pill).padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
-                        T(label, 13.sp, C.Soft, maxLines = 1)
+        LazyRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            itemsIndexed(own, key = { _, c -> "own" + c.url }) { i, c -> StationChip(c.name, true) { onPlay(own, i) } }
+            items(extra, key = { "ai" + it.first.country + it.first.name }) { (st, mine) ->
+                StationChip((if (st.country.isNotBlank()) st.country + " · " else "") + st.name, mine.isNotEmpty()) { if (mine.isNotEmpty()) onPlay(mine, 0) }
+            }
+            item {
+                when {
+                    !SportsAI.ready -> if (own.isEmpty()) T("Dodaj AI ključ u Postavke › Sport i AI da vidiš sve TV prenose", 12.sp, C.Muted, maxLines = 1)
+                    busy -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        androidx.compose.material3.CircularProgressIndicator(color = AiColor, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
+                        T("AI traži TV prenose…", 12.sp, C.Muted)
                     }
+                    err != null && own.isEmpty() -> T(err ?: "", 12.sp, C.Muted, maxLines = 1)
+                    l != null && l.isEmpty() && own.isEmpty() -> T("AI nije našao TV prenose za ovu utakmicu", 12.sp, C.Muted)
+                    else -> {}
                 }
             }
         }
+    }
+}
+
+/** a TV station: green with ▶ when it is in your list (plays on OK), grey when it is only information */
+@Composable
+private fun StationChip(label: String, mine: Boolean, onClick: () -> Unit) {
+    if (mine) Focusable(modifier = Modifier.height(34.dp), onClick = onClick, shape = Pill, normal = C.Green.copy(alpha = 0.22f), zoom = 1.06f) { _ ->
+        Row(Modifier.align(Alignment.Center).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Ico(R.drawable.lc_play, 12.dp, C.Green); T(label, 13.sp, C.Text, FontWeight.SemiBold, maxLines = 1)
+        }
+    } else Box(Modifier.height(34.dp).clip(Pill).background(C.Card).border(1.dp, C.Line, Pill).padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
+        T(label, 13.sp, C.Soft, maxLines = 1)
     }
 }
 
@@ -581,24 +669,38 @@ private fun TeamLine(t: Team, score: String?) {
     }
 }
 
-/** A match: channels that show it (green, sure), possible channels (amber), reminder, details. */
+/**
+ * A match, on half a screen each: left "My channels" (what you can watch, green sure, purple AI, amber maybe),
+ * right "Who else shows it" (TV stations worldwide that are not in your list, from the AI with a web search).
+ */
 @Composable
 private fun EventPopup(ev: SportEvent, onDismiss: () -> Unit, onPlay: (List<Channel>, Int) -> Unit) {
     val ctx = LocalContext.current
     val details by load(ev.id, ev.state) { if (ev.state != "pre" && !ev.fromGuide) Sports.details(ev) else emptyList() }
     var rev by remember { mutableIntStateOf(0) }
     val title = if (ev.home != null && ev.away != null) "${ev.home.name} – ${ev.away.name}" else ev.title
+    // the AI's list of stations, and which of them you have
+    var stations by remember { mutableStateOf<List<Pair<SportsAI.Station, List<Channel>>>?>(null) }
+    var aiErr by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(ev.id) {
+        if (!SportsAI.ready) return@LaunchedEffect
+        try {
+            val st = SportsAI.broadcasters(ev)
+            val all = try { Sports.guide(ctx, Store.actives(ctx)).all } catch (e: Exception) { emptyList() }
+            stations = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { st.map { it to SportsAI.matchStation(it, all) } }
+        } catch (e: Exception) { aiErr = e.message; stations = emptyList() }
+    }
+    val known = (ev.channels + ev.ai + ev.maybe).map { it.url }.toSet()
+    val aiMine = stations?.flatMap { it.second }?.filter { it.url !in known }?.distinctBy { it.url } ?: emptyList()
+    val others = stations?.filter { it.second.isEmpty() }?.map { it.first } ?: emptyList()
     androidx.compose.runtime.key(rev) {
-        Popup(title, onDismiss, width = 660.dp) {
+        Popup(title, onDismiss, width = 1100.dp) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 T(tr(ev.league) + " · " + dayName(((ev.start - Sports.dayStart(0)).let { if (it < 0) it - 86_399_999L else it } / 86_400_000L).toInt()) + " " + hhmm(ev.start), 13.sp, C.Muted, modifier = Modifier.weight(1f))
+                if (ev.state != "pre" && ev.home?.score != null) T("${ev.home.score} : ${ev.away?.score ?: "-"}", 24.sp, C.Text, FontWeight.Bold)
                 StateBadge(ev)
             }
-            if (ev.state != "pre" && ev.home?.score != null) T("${ev.home.score} : ${ev.away?.score ?: "-"}", 30.sp, C.Text, FontWeight.Bold)
-            (details as? Load.Ok)?.value?.takeIf { it.isNotEmpty() }?.let { list ->
-                T("Detalji", 13.sp, C.Muted, FontWeight.SemiBold)
-                list.forEach { T(it, 13.sp, C.Soft, maxLines = 2) }
-            }
+            (details as? Load.Ok)?.value?.takeIf { it.isNotEmpty() }?.let { list -> T(list.joinToString(" · "), 12.sp, C.Soft, maxLines = 2) }
             if (ev.state == "pre") {
                 val has = Reminders.has(title, ev.start)
                 OptionRow(if (has) "Ukloni podsjetnik" else "Podsjeti me", R.drawable.lc_bell, color = if (has) null else C.Amber) {
@@ -607,32 +709,49 @@ private fun EventPopup(ev: SportEvent, onDismiss: () -> Unit, onPlay: (List<Chan
                     Toast.makeText(ctx, tr(if (on) "Podsjetnik postavljen" else "Podsjetnik uklonjen"), Toast.LENGTH_SHORT).show(); rev++
                 }
             }
-            if (ev.channels.isNotEmpty()) T("PRENOSE · " + tr("u tvojoj listi"), 12.sp, C.Green, FontWeight.Bold)
-            ev.channels.forEachIndexed { i, ch -> ChannelChoice(ch, C.Green) { onPlay(ev.channels, i) } }
-            var askAi by remember { mutableStateOf<List<Channel>?>(null) }
-            var asking by remember { mutableStateOf(false) }
-            var aiErr by remember { mutableStateOf<String?>(null) }
-            val aiList = askAi ?: ev.ai
-            if (aiList.isNotEmpty()) T(SportsAI.prov.name + " · " + tr(if (SportsAI.lastSearch) "procjena s interneta" else "procjena (bez interneta)"), 12.sp, AiColor, FontWeight.Bold)
-            aiList.forEachIndexed { i, ch -> ChannelChoice(ch, AiColor) { onPlay(aiList, i) } }
-            if (ev.channels.isEmpty() && aiList.isEmpty() && ev.home != null) {
-                val scope = androidx.compose.runtime.rememberCoroutineScope()
-                if (SportsAI.ready) OptionRow(if (asking) "AI traži…" else "Pitaj AI ko prenosi", R.drawable.lc_sparkles, color = AiColor) {
-                    if (asking) return@OptionRow
-                    asking = true; aiErr = null
-                    scope.launchSafe {
-                        try {
-                            val all = Sports.guide(ctx, Store.actives(ctx)).all
-                            askAi = SportsAI.channelsFor(ev, all).also { if (it.isEmpty()) aiErr = tr("AI nije našao prenos na tvojim kanalima") }
-                        } catch (e: Exception) { aiErr = e.message }
-                        asking = false
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                // ------------------------------------------------ left: my channels
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Ico(R.drawable.lc_tv, 16.dp, C.Green); T("Moji kanali", 16.sp, C.Text, FontWeight.Bold)
                     }
-                } else T("AI pretraga: dodaj AI ključ u Postavke › Sport i AI", 12.sp, C.Muted, maxLines = 2)
-                aiErr?.let { T(it, 12.sp, C.Muted, maxLines = 2) }
+                    ev.channels.forEachIndexed { i, ch -> ChannelChoice(ch, C.Green) { onPlay(ev.channels, i) } }
+                    if (ev.ai.isNotEmpty()) T(SportsAI.prov.name + " · " + tr("procjena s interneta"), 12.sp, AiColor, FontWeight.Bold)
+                    ev.ai.forEachIndexed { i, ch -> ChannelChoice(ch, AiColor) { onPlay(ev.ai, i) } }
+                    if (aiMine.isNotEmpty()) T("AI: prenosi i ovaj tvoj kanal", 12.sp, AiColor, FontWeight.Bold)
+                    aiMine.forEachIndexed { i, ch -> ChannelChoice(ch, AiColor) { onPlay(aiMine, i) } }
+                    if (ev.maybe.isNotEmpty()) T("Mogući prenos (po ligi, nije sigurno)", 12.sp, C.Amber, FontWeight.Bold)
+                    ev.maybe.forEachIndexed { i, ch -> ChannelChoice(ch, C.Amber) { onPlay(ev.maybe, i) } }
+                    if (ev.channels.isEmpty() && ev.ai.isEmpty() && ev.maybe.isEmpty() && aiMine.isEmpty())
+                        T(if (stations == null && SportsAI.ready) "AI traži TV prenose…" else "Prenos nije pronađen u tvojoj listi", 13.sp, C.Muted, maxLines = 2)
+                }
+                Box(Modifier.width(1.dp).height(260.dp).background(C.Line))
+                // ------------------------------------------------ right: who else shows it
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Ico(R.drawable.lc_globe, 16.dp, AiColor); T("Ko još prenosi", 16.sp, C.Text, FontWeight.Bold)
+                    }
+                    T("TV stanice koje nisu na tvojoj listi", 12.sp, C.Muted, maxLines = 1)
+                    when {
+                        !SportsAI.ready -> T("Dodaj AI ključ u Postavke › Sport i AI da vidiš sve TV prenose", 13.sp, C.Muted, maxLines = 3)
+                        stations == null -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            androidx.compose.material3.CircularProgressIndicator(color = AiColor, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+                            T("AI traži TV prenose…", 13.sp, C.Muted)
+                        }
+                        aiErr != null -> T(aiErr ?: "", 13.sp, C.Muted, maxLines = 3)
+                        others.isEmpty() -> T("AI nije našao druge TV prenose", 13.sp, C.Muted, maxLines = 2)
+                        else -> others.forEach { st ->
+                            Row(Modifier.fillMaxWidth().clip(Rnd(12.dp)).background(C.Card).border(1.dp, C.Line, Rnd(12.dp)).padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Box(Modifier.width(40.dp).clip(Rnd(6.dp)).background(C.CardHi).padding(vertical = 3.dp), contentAlignment = Alignment.Center) {
+                                    T(st.country.ifBlank { "–" }, 12.sp, C.Text, FontWeight.Bold)
+                                }
+                                T(st.name, 15.sp, C.Text, FontWeight.Medium, maxLines = 1, modifier = Modifier.weight(1f))
+                            }
+                        }
+                    }
+                }
             }
-            if (ev.maybe.isNotEmpty()) T("Mogući prenos (po ligi, nije sigurno)", 12.sp, C.Amber, FontWeight.Bold)
-            ev.maybe.forEachIndexed { i, ch -> ChannelChoice(ch, C.Amber) { onPlay(ev.maybe, i) } }
-            if (ev.channels.isEmpty() && ev.maybe.isEmpty()) T("Prenos nije pronađen u tvojoj listi", 13.sp, C.Muted)
         }
     }
 }

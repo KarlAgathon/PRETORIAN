@@ -215,6 +215,7 @@ fun <V> load(vararg keys: Any?, keep: Boolean = false, block: suspend () -> V): 
 
 /** Focus a requester whose item may still be composing: tries a few times. */
 suspend fun FocusRequester.tryFocus(attempts: Int = 12): Boolean {
+    if (Chrome.inRail) return false          // the left menu keeps the focus while you move through it
     repeat(attempts) {
         try { requestFocus(); return true } catch (_: Exception) {}
         kotlinx.coroutines.delay(40)
@@ -474,7 +475,7 @@ fun WrapEffect(w: Wrap, state: androidx.compose.foundation.lazy.LazyListState) {
         if (t < 0) return@LaunchedEffect
         state.scrollToItem(t)
         kotlinx.coroutines.delay(80)
-        try { w.fr.requestFocus() } catch (_: Exception) {}
+        if (!Chrome.inRail) try { w.fr.requestFocus() } catch (_: Exception) {}
         w.target = -1
     }
 }
@@ -486,7 +487,7 @@ fun WrapEffectGrid(w: Wrap, state: androidx.compose.foundation.lazy.grid.LazyGri
         if (t < 0) return@LaunchedEffect
         state.scrollToItem(t)
         kotlinx.coroutines.delay(80)
-        try { w.fr.requestFocus() } catch (_: Exception) {}
+        if (!Chrome.inRail) try { w.fr.requestFocus() } catch (_: Exception) {}
         w.target = -1
     }
 }
