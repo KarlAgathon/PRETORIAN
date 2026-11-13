@@ -13,8 +13,12 @@ android {
         minSdk = 24
         targetSdk = 34
         // raise both numbers for every new version (needed for updates)
-        versionCode = 7
-        versionName = "0.3.2"
+        versionCode = 8
+        versionName = "0.4"
+        // Google sign-in for Drive sync ("TVs and Limited Input devices" client), from the GitHub secrets
+        // GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET. Empty: the app asks for them in Settings.
+        buildConfigField("String", "GOOGLE_CLIENT_ID", "\"" + (System.getenv("GOOGLE_CLIENT_ID") ?: "") + "\"")
+        buildConfigField("String", "GOOGLE_CLIENT_SECRET", "\"" + (System.getenv("GOOGLE_CLIENT_SECRET") ?: "") + "\"")
     }
 
     // Private signing key (same as LEAD Launcher): written by GitHub Actions from the secrets
@@ -43,7 +47,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
     lint { abortOnError = false; checkReleaseBuilds = false }
 }
 

@@ -24,10 +24,13 @@ object Backup {
     data class Summary(val date: String, val playlists: Int, val favLists: Int, val encrypted: Boolean)
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences("pretorian", Context.MODE_PRIVATE)
+    /** stay on this device: sign-in, chosen external player and file manager */
+    private val DEVICE_ONLY = setOf("ext_player", "file_app", "profile_skip_ask")
 
     private fun payload(ctx: Context): JSONObject {
         val p = JSONObject()
         prefs(ctx).all.forEach { (k, v) ->
+            if (k.startsWith("gd_") || k.startsWith("sync_") || k in DEVICE_ONLY) return@forEach
             val o = JSONObject()
             when (v) {
                 is String -> o.put("t", "s").put("v", v)
@@ -41,7 +44,7 @@ object Backup {
         }
         val files = JSONObject()
         listOf("progress.json").forEach { n -> File(ctx.filesDir, n).takeIf { it.exists() }?.let { files.put(n, it.readText()) } }
-        return JSONObject().put("prefs", p).put("files", files)
+        return JSONObject().put("prefs", p).put("files", files).put("profiles", Profiles.allSnapshots(ctx))
     }
 
     private fun key(password: String, salt: ByteArray): SecretKeySpec {
@@ -87,8 +90,11 @@ object Backup {
             } catch (e: Exception) { throw IllegalArgumentException(tr("Pogrešna lozinka")) }
         } else o.getJSONObject("data")
         val p = data.getJSONObject("prefs")
+        val keepHere = prefs(ctx).all.filterKeys { it.startsWith("gd_") || it.startsWith("sync_") || it in DEVICE_ONLY }
         val ed = prefs(ctx).edit().clear()
+        keepHere.forEach { (k, v) -> when (v) { is String -> ed.putString(k, v); is Boolean -> ed.putBoolean(k, v); is Int -> ed.putInt(k, v); is Long -> ed.putLong(k, v); is Float -> ed.putFloat(k, v) } }
         p.keys().forEach { k ->
+            if (k.startsWith("gd_") || k.startsWith("sync_")) return@forEach
             val v = p.getJSONObject(k)
             when (v.str("t")) {
                 "s" -> ed.putString(k, v.str("v")); "b" -> ed.putBoolean(k, v.optBoolean("v"))
@@ -97,6 +103,7 @@ object Backup {
         }
         ed.commit()
         data.optJSONObject("files")?.let { f -> f.keys().forEach { n -> if (n.matches(Regex("[a-z_]+\\.json"))) File(ctx.filesDir, n).writeText(f.str(n)) } }
+        data.optJSONObject("profiles")?.let { Profiles.restoreSnapshots(ctx, it) }
     }
 
     fun fileName() = "PRETORIAN-backup-" + SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()) + ".json"

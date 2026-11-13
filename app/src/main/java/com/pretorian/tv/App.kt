@@ -68,10 +68,20 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         Prefs.init(this)
         Repo.diskDir = cacheDir
+        Profiles.onStart(this)
+        SportsAI.dir = cacheDir
         Look.load(this)
         Lock.load()
         Notes.load()
         setContent { PretorianApp() }
+    }
+
+    // leaving the app: send changes to Google Drive
+    override fun onStop() {
+        super.onStop()
+        val app = applicationContext
+        @Suppress("OPT_IN_USAGE")
+        kotlinx.coroutines.GlobalScope.launch { try { Drive.autoSync(app) } catch (_: Exception) {} }
     }
 }
 
@@ -97,7 +107,7 @@ class Nav(
     val playlistsChanged: () -> Unit,
 )
 
-object BuildInfo { const val VERSION = "0.3.2" }
+object BuildInfo { const val VERSION = "0.4" }
 
 @Composable
 fun PretorianApp() {
@@ -131,6 +141,12 @@ fun PretorianApp() {
         delay(8_000)
         try { Sports.guide(ctx, Store.actives(ctx)) } catch (_: Exception) {}
         try { SearchIndex.get(ctx) } catch (_: Exception) {}
+    }
+    // Google Drive: newer settings from another device at start, your changes sent every 10 minutes
+    LaunchedEffect(Unit) {
+        delay(4_000)
+        Drive.checkRemote(ctx)
+        while (true) { delay(10 * 60_000L); Drive.autoSync(ctx) }
     }
     // reminders: checked every 15 seconds, wherever you are in the app
     LaunchedEffect(Unit) {
@@ -198,6 +214,9 @@ fun PretorianApp() {
                 }
             }
             ReminderPopup(nav)
+            if (Profiles.panel) ProfilePanel(nav)
+            DriveDialogs()
+            if (Profiles.picker) ProfilePicker()
         }
     }
 }
@@ -250,7 +269,7 @@ fun Rail(current: Screen, nav: Nav) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Image(painterResource(R.drawable.logo_mark), contentDescription = "PRETORIAN", modifier = Modifier.size(if (mode == 1) 38.dp else 42.dp))
+        ProfileButton(if (mode == 1) 36.dp else 42.dp)
         Spacer(Modifier.height(6.dp))
         items.forEach { RailButton(it.icon, it.label, section == it.screen, mode, it.badge) { nav.root(it.screen) } }
         Spacer(Modifier.weight(1f))
@@ -481,7 +500,7 @@ fun SimpleHome(nav: Nav) {
     var pin by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().padding(horizontal = 56.dp, vertical = 36.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Image(painterResource(R.drawable.logo_mark), contentDescription = null, modifier = Modifier.size(60.dp))
+            ProfileButton(56.dp)
             T("PRETORIAN", 28.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 14.dp).weight(1f))
             Clock()
         }
@@ -549,7 +568,7 @@ private fun TopBar(current: Screen, nav: Nav) {
     val section = when (current) { is Screen.MovieDetail -> Screen.Movies; is Screen.SeriesDetail -> Screen.Series; Screen.AddPlaylist -> Screen.Settings; else -> current }
     Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp).clip(Rnd(22.dp)).background(C.Rail).border(1.dp, C.Line, Rnd(22.dp))
         .padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Image(painterResource(R.drawable.logo_mark), contentDescription = "PRETORIAN", modifier = Modifier.size(34.dp))
+        ProfileButton(32.dp)
         T("PRETORIAN", 15.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 6.dp, end = 10.dp))
         items.forEach { it ->
             val sel = section == it.screen

@@ -31,6 +31,8 @@ jobs:
       - run: gradle assembleRelease --no-daemon
         env:
           LEAD_KEY_PASSWORD: ${{ secrets.LEAD_KEY_PASSWORD }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
       - name: Remove signing key
         if: always()
         run: rm -f app/release.keystore

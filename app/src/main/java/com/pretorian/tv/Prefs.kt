@@ -22,6 +22,7 @@ object Prefs {
     fun put(k: String, v: Boolean) = sp.edit().putBoolean(k, v).apply()
     fun long(k: String, d: Long = 0) = sp.getLong(k, d)
     fun put(k: String, v: Long) = sp.edit().putLong(k, v).apply()
+    fun remove(vararg k: String) = sp.edit().apply { k.forEach { remove(it) } }.apply()
 
     var tmdbKey: String get() = str("tmdb_key"); set(v) = put("tmdb_key", v.trim())
     var omdbKey: String get() = str("omdb_key"); set(v) = put("omdb_key", v.trim())
@@ -175,6 +176,10 @@ class Ovr(private val ctx: Context, private val pid: String) {
         urls.removeAt(i); urls.add(j, ch.url)
         setList("chOrder_$groupId", urls)
     }
+
+    /** whole new order at once (after carrying a group or channel to its place) */
+    fun setGroupOrder(kind: String, ids: List<String>) = setList("gOrder_$kind", ids)
+    fun setChannelOrder(groupId: String, urls: List<String>) = setList("chOrder_$groupId", urls)
 
     fun unhideAllChannels() { o.put("chHidden", JSONArray()); save() }
 

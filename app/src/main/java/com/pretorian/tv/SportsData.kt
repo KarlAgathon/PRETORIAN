@@ -43,6 +43,8 @@ data class SportEvent(
     val maybe: List<Channel> = emptyList(),
     /** found only in your TV guide (no live score) */
     val fromGuide: Boolean = false,
+    /** channels the AI (Gemini, with web search) says show it in your country */
+    val ai: List<Channel> = emptyList(),
 ) {
     val live get() = state == "in"
 }
@@ -67,6 +69,11 @@ object Sports {
         League("football", "soccer/uefa.nations", "UEFA Liga nacija", "UNL"),
         League("football", "soccer/fifa.worldq.uefa", "Kvalifikacije SP (Evropa)", "WCQ"),
         League("football", "soccer/fifa.friendly", "Prijateljske utakmice", "FRI"),
+        League("football", "soccer/fifa.world", "Svjetsko prvenstvo", "WC"),
+        League("football", "soccer/uefa.euro", "Evropsko prvenstvo", "EURO"),
+        League("football", "soccer/ger.2", "2. Bundesliga", "BL2"),
+        League("football", "soccer/ger.dfb_pokal", "DFB Pokal", "DFB"),
+        League("football", "soccer/usa.1", "MLS", "MLS"),
         League("basketball", "basketball/nba", "NBA", "NBA"),
         League("f1", "racing/f1", "Formula 1", "F1"),
         League("tennis", "tennis/atp", "ATP", "ATP"),
@@ -276,8 +283,26 @@ object Sports {
     private fun qualityRank(n: String) = when (qualityOf(n)) { "4K" -> 0; "FHD" -> 1; "HD" -> 2; else -> 3 }
 
     /** order of importance for the big card on top */
-    private val PRIORITY = listOf("UCL", "PL", "BL", "LL", "SA", "UEL", "L1", "UNL", "WCQ", "F1", "NBA", "UECL", "ERE", "POR", "TSL", "AUT", "ATP", "WTA", "TV", "FRI")
-    fun priority(ev: SportEvent): Int = PRIORITY.indexOf(ev.leagueAbbr).let { if (it < 0) 50 else it } - (if (ev.channels.isNotEmpty()) 100 else 0)
+    /** your country: chosen in Settings › Sport, else the box's country */
+    val country: String get() = Prefs.str("sport_country").ifBlank { Locale.getDefault().country.uppercase().ifBlank { "DE" } }
+
+    /** what matters most where you live; the biggest tournaments are always on top */
+    private fun priorityList(): List<String> {
+        val top = listOf("WC", "EURO", "UCL")
+        val rest = when (country) {
+            "DE", "AT", "CH" -> listOf("BL", "DFB", "UEL", "PL", "LL", "SA", "UNL", "WCQ", "BL2", "AUT", "F1", "UECL", "L1", "NBA", "ATP", "WTA")
+            "GB", "UK", "IE" -> listOf("PL", "UEL", "LL", "SA", "BL", "UNL", "WCQ", "F1", "UECL", "L1", "NBA", "ATP", "WTA")
+            "US", "CA" -> listOf("NBA", "MLS", "PL", "F1", "LL", "BL", "SA", "ATP", "WTA", "UEL")
+            "ES" -> listOf("LL", "UEL", "PL", "SA", "BL", "F1", "NBA", "ATP", "WTA")
+            "IT" -> listOf("SA", "UEL", "PL", "LL", "BL", "F1", "NBA", "ATP", "WTA")
+            "FR" -> listOf("L1", "UEL", "PL", "LL", "SA", "BL", "F1", "NBA", "ATP", "WTA")
+            "TR" -> listOf("TSL", "UEL", "PL", "LL", "SA", "BL", "NBA", "ATP", "WTA")
+            else -> listOf("PL", "BL", "LL", "SA", "UEL", "UNL", "WCQ", "F1", "NBA", "UECL", "L1", "ATP", "WTA", "AUT")   // Balkan and the rest of Europe
+        }
+        return top + rest + listOf("ERE", "POR", "TSL", "MLS", "BL2", "TV", "FRI")
+    }
+    fun priority(ev: SportEvent): Int = priorityList().indexOf(ev.leagueAbbr).let { if (it < 0) 50 else it } -
+        (if (ev.channels.isNotEmpty()) 100 else if (ev.ai.isNotEmpty()) 60 else 0)
 
     /** match details (goals, cards) from the feed, for finished and live matches */
     suspend fun details(ev: SportEvent): List<String> = withContext(Dispatchers.IO) {

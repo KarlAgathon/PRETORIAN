@@ -52,6 +52,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+val AiColor = Color(0xFFA78BFA)
+
 private fun hhmm(ms: Long) = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(ms))
 
 @Composable
@@ -78,22 +80,45 @@ fun SportsScreen(nav: Nav) {
     // matching matches to your guide is heavy: it runs in the background, the screen keeps the old result meanwhile
     val evs = (events as? Load.Ok)?.value
     var matching by remember { mutableStateOf(true) }
-    val combined by produceState(Sports.lastCombined[day], evs, g, day) {
+    var tookMs by remember { mutableStateOf(-1L) }
+    // channels are matched once per day and guide; live score refreshes only update the scores (no new search)
+    val evKey = evs?.joinToString(",") { it.id }?.hashCode()
+    val matched by produceState(Sports.lastCombined[day], evKey, g, day) {
         Sports.lastCombined[day]?.let { value = it }
-        if (evs == null) { if (value == null) matching = true; return@produceState }
-        if (value == null) value = evs
-        if (g == null) { matching = true; return@produceState }
+        val list = evs
+        if (list == null || g == null) { matching = list == null || g == null && guide !is Load.Err; if (value == null) value = list; return@produceState }
+        if (value == null) value = list
         matching = true
-        val r = try { withContext(Dispatchers.Default) { Sports.combine(evs, g, day) } } catch (e: Exception) { evs }
+        val t0 = System.currentTimeMillis()
+        val r = try { withContext(Dispatchers.Default) { Sports.combine(list, g, day) } } catch (e: Exception) { list }
+        tookMs = System.currentTimeMillis() - t0
         Sports.lastCombined[day] = r
         value = r
         matching = false
+    }
+    // AI (Gemini): for the most important matches without a channel, asks which of your channels show them
+    val aiMap by produceState(emptyMap<String, List<Channel>>(), matched, g) {
+        val m = matched; val gg = g
+        if (!SportsAI.ready || m == null || gg == null) return@produceState
+        val want = m.filter { it.channels.isEmpty() && !it.fromGuide && it.home != null && it.state != "post" }
+            .sortedBy { Sports.priority(it) }.take(6)
+        val out = HashMap<String, List<Channel>>()
+        for (e in want) {
+            val r = try { SportsAI.channelsFor(e, gg.all) } catch (ex: Exception) { break }
+            if (r.isNotEmpty()) { out[e.id] = r; value = HashMap(out) }
+        }
+    }
+    val combined: List<SportEvent>? = remember(matched, evs, aiMap) {
+        val m = matched ?: return@remember evs
+        val fresh = evs?.associateBy { it.id } ?: return@remember m
+        m.map { e -> (fresh[e.id]?.let { f -> e.copy(state = f.state, clock = f.clock, home = f.home?.let { h -> e.home?.copy(score = h.score) ?: h },
+            away = f.away?.let { a -> e.away?.copy(score = a.score) ?: a }) } ?: e).let { x -> aiMap[x.id]?.let { x.copy(ai = it) } ?: x } }
     }
     val guideFailed = guide is Load.Err
     val all: List<SportEvent>? = combined
     val shown = remember(all, sport, league, mine, view) {
         all?.filter { e ->
-            (sport == "all" || e.sport == sport) && (league == null || e.league == league) && (!mine || e.channels.isNotEmpty() || e.maybe.isNotEmpty()) &&
+            (sport == "all" || e.sport == sport) && (league == null || e.league == league) && (!mine || e.channels.isNotEmpty() || e.maybe.isNotEmpty() || e.ai.isNotEmpty()) &&
                 (view == "all" || (view == "live" && e.live) || (view == "done" && e.state == "post"))
         } ?: emptyList()
     }
@@ -101,13 +126,16 @@ fun SportsScreen(nav: Nav) {
     // the big card is always a real match from the results, never something found only in a TV guide
     val hero = remember(shown, view) {
         val real = shown.filter { !it.fromGuide }
-        if (view == "done") null else (real.filter { it.live }.minByOrNull { Sports.priority(it) }
+        fun watchable(e: SportEvent) = e.channels.isNotEmpty()
+        if (view == "done") null else (real.filter { it.live && watchable(it) }.minByOrNull { Sports.priority(it) }
+            ?: real.filter { it.state == "pre" && watchable(it) }.minWithOrNull(compareBy({ it.start }, { Sports.priority(it) }))
+            ?: real.filter { it.live }.minByOrNull { Sports.priority(it) }
             ?: real.filter { it.state == "pre" }.minWithOrNull(compareBy({ Sports.priority(it) }, { it.start })))
     }
     val hiddenByMine = remember(all, sport, league, view, mine) {
         if (!mine) 0 else (all ?: emptyList()).count { e ->
             (sport == "all" || e.sport == sport) && (league == null || e.league == league) &&
-                (view == "all" || (view == "live" && e.live) || (view == "done" && e.state == "post")) && e.channels.isEmpty() && e.maybe.isEmpty()
+                (view == "all" || (view == "live" && e.live) || (view == "done" && e.state == "post")) && e.channels.isEmpty() && e.maybe.isEmpty() && e.ai.isEmpty()
         }
     }
     val sections = remember(shown, hero) {
@@ -223,7 +251,7 @@ fun SportsScreen(nav: Nav) {
                     }
                 }
                 T("Rezultati: ESPN. Prenosi: TV program tvoje playliste.", 11.sp, C.Muted)
-                g?.let { T(it.stats, 11.sp, C.Muted) }
+                g?.let { T(it.stats + (if (tookMs >= 0) " · " + trf("traženje: %s s", "%.1f".format(tookMs / 1000.0)) else ""), 11.sp, C.Muted) }
             }
         }
     }
@@ -317,8 +345,17 @@ private fun HeroCard(ev: SportEvent, fr: FocusRequester, onClick: () -> Unit) {
             Box(Modifier.width(1.dp).fillMaxHeight().background(C.Line))
             Column(Modifier.width(240.dp).fillMaxHeight().padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 T("PRENOSE", 11.sp, C.Muted, FontWeight.Bold)
-                if (ev.channels.isEmpty() && ev.maybe.isEmpty()) T("Prenos nije pronađen u tvojoj listi", 13.sp, C.Muted, maxLines = 3)
-                if (ev.channels.isEmpty()) ev.maybe.take(3).forEach { ch ->
+                if (ev.channels.isEmpty() && ev.maybe.isEmpty() && ev.ai.isEmpty()) T("Prenos nije pronađen u tvojoj listi", 13.sp, C.Muted, maxLines = 3)
+                if (ev.channels.isEmpty()) ev.ai.take(3).forEach { ch ->
+                    Row(Modifier.fillMaxWidth().clip(Rnd(10.dp)).background(AiColor.copy(alpha = 0.12f))
+                        .border(1.dp, AiColor.copy(alpha = 0.6f), Rnd(10.dp)).padding(horizontal = 8.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ChannelLogo(ch.logo, ch.name)
+                        T(ch.name, 13.sp, C.Text, FontWeight.Medium, maxLines = 1, modifier = Modifier.weight(1f))
+                        T("AI", 11.sp, AiColor, FontWeight.Bold)
+                    }
+                }
+                if (ev.channels.isEmpty() && ev.ai.isEmpty()) ev.maybe.take(3).forEach { ch ->
                     Row(Modifier.fillMaxWidth().clip(Rnd(10.dp)).background(C.Amber.copy(alpha = 0.10f))
                         .border(1.dp, C.Amber.copy(alpha = 0.5f), Rnd(10.dp)).padding(horizontal = 8.dp, vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -387,6 +424,10 @@ private fun EventCard(ev: SportEvent, onClick: () -> Unit) {
                     Ico(R.drawable.lc_tv, 14.dp, C.Green)
                     T(ev.channels.first().name, 12.sp, C.Green, FontWeight.Medium, modifier = Modifier.weight(1f, fill = false))
                     T("· " + tr("u tvojoj listi") + if (ev.channels.size > 1) " +${ev.channels.size - 1}" else "", 12.sp, C.Green)
+                } else if (ev.ai.isNotEmpty()) {
+                    Ico(R.drawable.lc_sparkles, 14.dp, AiColor)
+                    T("AI: " + ev.ai.first().name, 12.sp, AiColor, modifier = Modifier.weight(1f, fill = false))
+                    if (ev.ai.size > 1) T("+${ev.ai.size - 1}", 12.sp, AiColor)
                 } else if (ev.maybe.isNotEmpty()) {
                     Ico(R.drawable.lc_tv, 14.dp, C.Amber)
                     T(trf("Mogući prenos: %s", ev.maybe.first().name), 12.sp, C.Amber, modifier = Modifier.weight(1f, fill = false))
@@ -434,6 +475,27 @@ private fun EventPopup(ev: SportEvent, onDismiss: () -> Unit, onPlay: (List<Chan
             }
             if (ev.channels.isNotEmpty()) T("PRENOSE · " + tr("u tvojoj listi"), 12.sp, C.Green, FontWeight.Bold)
             ev.channels.forEachIndexed { i, ch -> ChannelChoice(ch, C.Green) { onPlay(ev.channels, i) } }
+            var askAi by remember { mutableStateOf<List<Channel>?>(null) }
+            var asking by remember { mutableStateOf(false) }
+            var aiErr by remember { mutableStateOf<String?>(null) }
+            val aiList = askAi ?: ev.ai
+            if (aiList.isNotEmpty()) T("AI (Gemini) · procjena s interneta", 12.sp, AiColor, FontWeight.Bold)
+            aiList.forEachIndexed { i, ch -> ChannelChoice(ch, AiColor) { onPlay(aiList, i) } }
+            if (ev.channels.isEmpty() && aiList.isEmpty() && ev.home != null) {
+                val scope = androidx.compose.runtime.rememberCoroutineScope()
+                if (SportsAI.ready) OptionRow(if (asking) "AI traži…" else "Pitaj AI ko prenosi", R.drawable.lc_sparkles, color = AiColor) {
+                    if (asking) return@OptionRow
+                    asking = true; aiErr = null
+                    scope.launchSafe {
+                        try {
+                            val all = Sports.guide(ctx, Store.actives(ctx)).all
+                            askAi = SportsAI.channelsFor(ev, all).also { if (it.isEmpty()) aiErr = tr("AI nije našao prenos na tvojim kanalima") }
+                        } catch (e: Exception) { aiErr = e.message }
+                        asking = false
+                    }
+                } else T("AI pretraga: dodaj besplatni Gemini ključ u Postavke › Sport i AI", 12.sp, C.Muted, maxLines = 2)
+                aiErr?.let { T(it, 12.sp, C.Muted, maxLines = 2) }
+            }
             if (ev.maybe.isNotEmpty()) T("Mogući prenos (po ligi, nije sigurno)", 12.sp, C.Amber, FontWeight.Bold)
             ev.maybe.forEachIndexed { i, ch -> ChannelChoice(ch, C.Amber) { onPlay(ev.maybe, i) } }
             if (ev.channels.isEmpty() && ev.maybe.isEmpty()) T("Prenos nije pronađen u tvojoj listi", 13.sp, C.Muted)

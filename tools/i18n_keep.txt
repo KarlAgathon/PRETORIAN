@@ -122,3 +122,30 @@ ch
 prog
 vod
 series
+
+AI
+AI: 
+Client ID
+Client secret
+Google Drive
+gd_last_up
+limit
+refresh_token
+sport_country
+urn:ietf:params:oauth:grant-type:device_code
+gemini_key
+gemini-flash-latest
+gemini-2.5-flash
+gemini-2.0-flash
+x-goog-api-key
+Gemini
+profile_skip_ask
+profile_cur
+profile_ask
+profile
+GET
+disk
+https://oauth2.googleapis.com/device/code
+https://oauth2.googleapis.com/token
+https://www.googleapis.com/auth/drive.appdata email
+https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart

@@ -369,7 +369,9 @@ private fun TvList(nav: Nav, onGuide: () -> Unit) {
 /** Rename, move, hide, lock or delete a group. Used by TV, movies, series and the group manager.
  *  [onChanged] gets true when the menu should close; moving keeps it open so you can move again. */
 @Composable
-fun GroupOptions(kind: String, g: Category, ovr: Ovr, current: List<Category>, onDismiss: () -> Unit, onChanged: (Boolean) -> Unit) {
+fun GroupOptions(kind: String, g: Category, ovr: Ovr, current: List<Category>, onDismiss: () -> Unit,
+                 onPick: (() -> Unit)? = null, onTop: (() -> Unit)? = null, onBottom: (() -> Unit)? = null, onPosition: (() -> Unit)? = null,
+                 onChanged: (Boolean) -> Unit) {
     val ctx = LocalContext.current
     var rename by remember { mutableStateOf(false) }
     var setup by remember { mutableStateOf(false) }
@@ -379,6 +381,10 @@ fun GroupOptions(kind: String, g: Category, ovr: Ovr, current: List<Category>, o
     val pos = current.indexOfFirst { it.id == g.id }
     Popup(g.name, onDismiss) {
         if (pos >= 0) T("${pos + 1} / ${current.size}", 13.sp, C.Muted)
+        onPick?.let { OptionRow("Uzmi i pomjeri", R.drawable.lc_hand_grab, sub = "▲ ▼ pa OK (drži za brže)", color = C.Amber) { it() } }
+        onTop?.let { OptionRow("Na sam vrh", R.drawable.lc_chevrons_up) { it() } }
+        onBottom?.let { OptionRow("Na sam kraj", R.drawable.lc_chevrons_down) { it() } }
+        onPosition?.let { OptionRow("Na poziciju…", R.drawable.lc_hash) { it() } }
         OptionRow("Pomjeri gore", R.drawable.lc_arrow_up) {
             if (pos <= 0) Toast.makeText(ctx, tr("Grupa je već prva"), Toast.LENGTH_SHORT).show()
             else { ovr.moveGroup(kind, current, g.id, -1); onChanged(false) }
@@ -655,44 +661,107 @@ fun GroupManager(nav: Nav) {
     val ovr = remember(p.id) { Ovr(ctx, p.id) }
     var tab by remember { mutableIntStateOf(0) }
     var rev by remember { mutableIntStateOf(0) }
-    val kind = listOf("live", "vod", "series")[tab]
+    var chGroup by remember { mutableStateOf<Category?>(null) }      // Channels tab: the group whose channels you edit
+    val kind = listOf("live", "vod", "series", "live")[tab]
     val st by load(p.id, kind, rev, keep = true) {
         val raw = when (kind) { "live" -> Repo.liveGroups(p); "vod" -> Repo.vodGroups(p); else -> Repo.seriesGroups(p) }
         ovr.groups(kind, raw, all = true)
     }
+    val chSt by load(p.id, chGroup?.id, rev, keep = true) {
+        val g = chGroup ?: return@load emptyList<Channel>()
+        if (g.id.startsWith("my_")) ovr.channels(g.id, emptyList(), all = true) else ovr.channels(g.id, Repo.channels(p, g.id), all = true)
+    }
     var menu by remember { mutableStateOf<Category?>(null) }
+    var chMenu by remember { mutableStateOf<Channel?>(null) }
     var lastId by remember { mutableStateOf<String?>(null) }
     var refocus by remember { mutableIntStateOf(0) }
     val rowFr = remember { FocusRequester() }
     val listState = rememberLazyListState()
     var newGroup by remember { mutableStateOf(false) }
     var reset by remember { mutableStateOf(false) }
+    var posFor by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
-    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        T(tr("Grupe i kanali") + " · ${p.name}", 22.sp, C.Text, FontWeight.Bold)
-        T("OK na grupi otvara opcije: redoslijed, naziv, sakrivanje, PIN. Kanale uređuješ u TV-u: drži OK na kanalu.", 13.sp, C.Muted, maxLines = 2)
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Segmented(listOf("TV", "Filmovi", "Serije"), tab) { tab = it }
-            if (tab == 0) Button("Nova grupa", R.drawable.lc_plus) { newGroup = true }
-            if (tab == 0) Button("Vrati sakrivene kanale", R.drawable.lc_eye) { ovr.unhideAllChannels(); rev++; nav.playlistsChanged() }
-            Button("Vrati sve izmjene", R.drawable.lc_rotate_ccw) { reset = true }
+
+    // carrying: the picked row moves with ▲ ▼ (hold = faster), OK puts it down, Back puts it back
+    var carry by remember { mutableStateOf<String?>(null) }
+    val carryList = remember { androidx.compose.runtime.mutableStateListOf<String>() }
+    var carryStart by remember { mutableStateOf<List<String>>(emptyList()) }
+    val chanMode = tab == 3 && chGroup != null
+    val groups = (st as? Load.Ok)?.value ?: emptyList()
+    val chans = (chSt as? Load.Ok)?.value ?: emptyList()
+    val ids: List<String> = if (chanMode) chans.map { it.url } else groups.map { it.id }
+    val shownIds: List<String> = if (carry != null) carryList.toList() else ids
+    fun save(order: List<String>) {
+        if (chanMode) ovr.setChannelOrder(chGroup!!.id, order) else ovr.setGroupOrder(kind, order)
+        rev++; nav.playlistsChanged()
+    }
+    fun pick(id: String) { carryList.clear(); carryList.addAll(ids); carryStart = ids; carry = id; lastId = id }
+    fun moveTo(id: String, to: Int) {
+        val l = ids.toMutableList(); val i = l.indexOf(id); if (i < 0) return
+        l.removeAt(i); l.add(to.coerceIn(0, l.size), id); save(l); lastId = id
+        scope.launch { delay(150); listState.scrollToItem((to - 3).coerceIn(0, (l.size - 1).coerceAtLeast(0))); refocus++ }
+    }
+    BackHandler(enabled = carry != null) { carry = null }
+    BackHandler(enabled = carry == null && tab == 3 && chGroup != null) { chGroup = null }
+
+    Column(Modifier.fillMaxSize().onPreviewKeyEvent { e ->
+        val id = carry ?: return@onPreviewKeyEvent false
+        if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent e.key in listOf(Key.DirectionUp, Key.DirectionDown, Key.DirectionCenter, Key.Enter)
+        val rep = e.nativeKeyEvent.repeatCount
+        val step = when { rep > 30 -> 10; rep > 10 -> 3; else -> 1 }
+        when (e.key) {
+            Key.DirectionUp, Key.DirectionDown -> {
+                val i = carryList.indexOf(id); val j = (i + if (e.key == Key.DirectionUp) -step else step).coerceIn(0, carryList.lastIndex)
+                if (i >= 0 && j != i) { carryList.removeAt(i); carryList.add(j, id); scope.launch { listState.scrollToItem((j - 3).coerceAtLeast(0)) } }
+                true
+            }
+            Key.DirectionCenter, Key.Enter -> { save(carryList.toList()); carry = null; refocus++; true }
+            else -> true
         }
-        when (val s = st) {
-            is Load.Loading -> Loading()
-            is Load.Err -> Message("Greška", s.message)
-            is Load.Ok -> LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(5.dp), contentPadding = PaddingValues(bottom = 30.dp)) {
-                itemsIndexed(s.value, key = { _, g -> g.id }) { i, g ->
-                    val hidden = ovr.isHidden(kind, g.id); val locked = ovr.isLocked(kind, g.id)
-                    Focusable(modifier = Modifier.fillMaxWidth().height(Rows.channel - 4.dp), onClick = { menu = g; lastId = g.id }, onMenu = { menu = g; lastId = g.id },
-                        focusRequester = if (g.id == lastId) rowFr else null,
-                        normal = C.Card, zoom = 1.01f) { _ ->
+    }, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        T(tr("Grupe i kanali") + " · ${p.name}", 22.sp, C.Text, FontWeight.Bold, maxLines = 1)
+        T(if (carry != null) "▲ ▼ pomjeraj (drži za brže) · OK spusti ovdje · Nazad vrati gdje je bila"
+          else "OK na grupi ili kanalu: uzmi i pomjeri, na vrh, na kraj, naziv, sakrivanje, PIN.", 13.sp, if (carry != null) C.Amber else C.Muted, maxLines = 2)
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Segmented(listOf("TV", "Filmovi", "Serije", "Kanali"), tab) { tab = it; chGroup = null; carry = null }
+            if (tab == 0) Button("Nova grupa", R.drawable.lc_plus) { newGroup = true }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (tab == 0 || tab == 3) Button("Vrati sakrivene kanale", R.drawable.lc_eye) { ovr.unhideAllChannels(); rev++; nav.playlistsChanged() }
+            Button("Vrati sve izmjene", R.drawable.lc_rotate_ccw) { reset = true }
+            if (chanMode) T("›  " + chGroup!!.name, 15.sp, C.Soft, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
+        }
+        when {
+            st is Load.Loading || (chanMode && chSt is Load.Loading && chans.isEmpty()) -> Loading()
+            st is Load.Err -> Message("Greška", (st as Load.Err).message)
+            else -> LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(5.dp), contentPadding = PaddingValues(bottom = 30.dp)) {
+                itemsIndexed(shownIds, key = { _, k -> k }) { i, k ->
+                    val g = if (chanMode) null else groups.firstOrNull { it.id == k }
+                    val ch = if (chanMode) chans.firstOrNull { it.url == k } else null
+                    val name = g?.name ?: ch?.name ?: k
+                    val hidden = if (g != null) ovr.isHidden(kind, g.id) else ch?.let { ovr.isChHidden(it) } == true
+                    val locked = if (g != null) ovr.isLocked(kind, g.id) else ch?.let { ovr.isChLocked(it) } == true
+                    val carried = carry == k
+                    Focusable(modifier = Modifier.fillMaxWidth().height(Rows.channel - 4.dp)
+                        .then(if (carried) Modifier.border(2.dp, C.Amber, Rnd(14.dp)) else Modifier),
+                        onClick = {
+                            if (carry != null) return@Focusable
+                            lastId = k
+                            if (tab == 3 && !chanMode) { chGroup = g; lastId = null } else if (ch != null) chMenu = ch else menu = g
+                        },
+                        onMenu = { if (carry == null) { lastId = k; if (ch != null) chMenu = ch else if (g != null && tab != 3) menu = g } },
+                        focusRequester = if (k == lastId) rowFr else null,
+                        normal = if (carried) C.Amber.copy(alpha = 0.18f) else C.Card, zoom = if (carried) 1.03f else 1.01f) { _ ->
                         Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            T("${i + 1}", 12.sp, C.Muted, modifier = Modifier.width(30.dp))
-                            T(g.name, 15.sp, if (hidden) C.Muted else C.Text, FontWeight.Medium, modifier = Modifier.weight(1f))
-                            if (g.id.startsWith("my_")) Chip("MOJA", C.CardFocus, C.RedText)
+                            T("${i + 1}", 12.sp, C.Muted, modifier = Modifier.width(34.dp))
+                            if (carried) Ico(R.drawable.lc_hand_grab, 18.dp, C.Amber)
+                            if (ch != null) ChannelLogo(ch.logo, ch.name)
+                            T(name, 15.sp, if (hidden) C.Muted else C.Text, FontWeight.Medium, maxLines = 1, modifier = Modifier.weight(1f))
+                            if (g != null && g.id.startsWith("my_")) Chip("MOJA", C.CardFocus, C.RedText)
                             if (hidden) Ico(R.drawable.lc_eye_off, 16.dp, C.Muted)
                             if (locked) Ico(R.drawable.lc_lock, 16.dp, C.Muted)
+                            if (tab == 3 && !chanMode) Ico(R.drawable.lc_chevron_right, 16.dp, C.Muted)
                         }
                     }
                 }
@@ -700,20 +769,38 @@ fun GroupManager(nav: Nav) {
         }
     }
     menu?.let { g ->
-        // moving keeps the menu open; the list behind follows, so you see where the group is
-        GroupOptions(kind, g, ovr, (st as? Load.Ok)?.value ?: emptyList(), onDismiss = { menu = null; refocus++ }) { close ->
+        GroupOptions(kind, g, ovr, groups, onDismiss = { menu = null; refocus++ },
+            onPick = { menu = null; pick(g.id) }, onTop = { menu = null; moveTo(g.id, 0) }, onBottom = { menu = null; moveTo(g.id, groups.size) },
+            onPosition = { menu = null; posFor = g.id }) { close ->
             rev++
             if (close) { menu = null; refocus++ }
-            else {
-                val idx = (st as? Load.Ok)?.value?.indexOfFirst { it.id == g.id } ?: -1
-                if (idx >= 0) scope.launch { listState.animateScrollToItem((idx - 3).coerceAtLeast(0)) }
+        }
+    }
+    chMenu?.let { c ->
+        val gid = chGroup?.id ?: ""
+        val pos = chans.indexOfFirst { it.url == c.url }
+        Popup(c.name, { chMenu = null; refocus++ }) {
+            if (pos >= 0) T("${pos + 1} / ${chans.size}", 13.sp, C.Muted)
+            OptionRow("Uzmi i pomjeri", R.drawable.lc_hand_grab, sub = "▲ ▼ pa OK", color = C.Amber) { chMenu = null; pick(c.url) }
+            OptionRow("Na sam vrh", R.drawable.lc_chevrons_up) { chMenu = null; moveTo(c.url, 0) }
+            OptionRow("Na sam kraj", R.drawable.lc_chevrons_down) { chMenu = null; moveTo(c.url, chans.size) }
+            OptionRow("Na poziciju…", R.drawable.lc_hash) { chMenu = null; posFor = c.url }
+            OptionRow(if (ovr.isChHidden(c)) "Prikaži kanal" else "Sakrij kanal", R.drawable.lc_eye_off) { ovr.toggleChHidden(c); chMenu = null; rev++; nav.playlistsChanged() }
+            OptionRow(if (ovr.isChLocked(c)) "Otključaj (ukloni PIN)" else "Zaključaj PIN-om (4 broja)", R.drawable.lc_lock) {
+                if (Lock.hasPin()) { ovr.toggleChLocked(c); chMenu = null; rev++ } else Toast.makeText(ctx, tr("Prvo postavi PIN: Postavke › Roditelji"), Toast.LENGTH_LONG).show()
             }
+            if (gid.isNotEmpty()) T(" ", 4.sp, C.Muted)
+        }
+    }
+    posFor?.let { id ->
+        TextDialog("Na poziciju…", trf("Broj od 1 do %s", ids.size), onDismiss = { posFor = null }) { v ->
+            v.trim().toIntOrNull()?.let { moveTo(id, it - 1) }; posFor = null
         }
     }
     LaunchedEffect(refocus) {
         if (refocus == 0 || lastId == null) return@LaunchedEffect
         delay(120)
-        val idx = (st as? Load.Ok)?.value?.indexOfFirst { it.id == lastId } ?: -1
+        val idx = shownIds.indexOf(lastId)
         if (idx >= 0 && listState.layoutInfo.visibleItemsInfo.none { it.index == idx }) listState.scrollToItem((idx - 3).coerceAtLeast(0))
         rowFr.tryFocus()
     }

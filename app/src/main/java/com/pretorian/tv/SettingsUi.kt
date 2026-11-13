@@ -43,11 +43,13 @@ import kotlinx.coroutines.launch
 private data class Section(val id: String, val icon: Int, val title: String, val sub: String)
 
 private val SECTIONS = listOf(
+    Section("profile", R.drawable.lc_users, "Profili i Google Drive", "Ko gleda, prijava, sinhronizacija"),
     Section("playlists", R.drawable.lc_list, "Playliste", "Dodaj, aktiviraj, ažuriraj"),
     Section("groups", R.drawable.lc_layers, "Grupe i kanali", "Redoslijed, nazivi, sakrivanje, PIN"),
     Section("language", R.drawable.lc_languages, "Jezik", "Meniji, dugmad i poruke"),
     Section("look", R.drawable.lc_palette, "Izgled", "Tema, boja, prozirnost, veličine"),
     Section("media", R.drawable.lc_captions, "Filmovi i titlovi", "TMDB, IMDb, titlovi, jezici"),
+    Section("sport", R.drawable.lc_trophy, "Sport i AI", "Država, Gemini AI za prenose"),
     Section("reminders", R.drawable.lc_bell, "Podsjetnici", "Emisije, utakmice, obavještenja"),
     Section("parental", R.drawable.lc_shield_check, "Roditelji i jednostavni mod", "PIN, jednostavni mod"),
     Section("backup", R.drawable.lc_archive, "Backup i vraćanje", "Spasi sve postavke u fajl"),
@@ -57,7 +59,7 @@ private val SECTIONS = listOf(
 
 @Composable
 fun SettingsScreen(nav: Nav) {
-    var section by remember { mutableStateOf(if (Updater.available != null) "update" else "playlists") }
+    var section by remember { mutableStateOf(SettingsNav.section?.also { SettingsNav.section = null } ?: if (Updater.available != null) "update" else "playlists") }
     val first = remember { FocusRequester() }
     Row(Modifier.fillMaxSize()) {
         Column(Modifier.width(320.dp).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 12.dp, top = 20.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -86,6 +88,8 @@ fun SettingsScreen(nav: Nav) {
             key(section) {
                 when (section) {
                     "playlists" -> PlaylistsPage(nav)
+                    "profile" -> ProfilePage()
+                    "sport" -> SportPage()
                     "groups" -> GroupManager(nav)
                     "look" -> LookPage()
                     "language" -> LanguagePage()
@@ -165,8 +169,8 @@ private fun PlaylistsPage(nav: Nav) {
                             .clip(CircleShape).background(if (pl.active) C.OnRed else C.Muted))
                     }
                     Column(Modifier.weight(1f)) {
-                        T(pl.name, 17.sp, C.Text, FontWeight.SemiBold)
-                        T(if (pl.type == SourceType.XTREAM) "Xtream Codes · ${pl.server}" else "M3U · ${pl.url}", 12.sp, C.Muted)
+                        T(pl.name, 17.sp, C.Text, FontWeight.SemiBold, maxLines = 1)
+                        T(if (pl.type == SourceType.XTREAM) "Xtream Codes · ${pl.server}" else "M3U · ${pl.url}", 12.sp, C.Muted, maxLines = 1)
                     }
                     if (exp != null) {
                         val level = exp.second
@@ -181,10 +185,6 @@ private fun PlaylistsPage(nav: Nav) {
         Label("TV program (EPG)")
         OptionRow("Vlastiti EPG izvor (XMLTV link)", R.drawable.lc_clock, "Koristi se kad provider za kanal ne šalje program. Link do .xml ili .xml.gz",
             value = if (Prefs.epgUrl.isBlank()) tr("Nije upisan") else Prefs.epgUrl.removePrefix("https://").removePrefix("http://").take(28)) { epg = true }
-        Label("TV")
-        Segmented(listOf("Lista kanala", "TV vodič"), if (Prefs.str("tv_view", "list") == "guide") 1 else 0) {
-            Prefs.put("tv_view", if (it == 1) "guide" else "list"); list = Store.playlists(ctx)
-        }
     }
     if (epg) TextDialog("Vlastiti EPG izvor", "XMLTV link (http://…/epg.xml)", Prefs.epgUrl, onDismiss = { epg = false }) { v ->
         Prefs.epgUrl = v; epg = false; Repo.clear()
@@ -293,6 +293,13 @@ private fun LookPage() {
     var dlBusy by remember { mutableStateOf<String?>(null) }
     var rev by remember { mutableIntStateOf(0) }
     Page("Izgled", "Promjene se vide odmah.") {
+        Label("Kako se otvara TV")
+        var tvView by remember { mutableStateOf(Prefs.str("tv_view", "list")) }
+        Segmented(listOf("Lista kanala", "TV vodič (mreža)"), if (tvView == "guide") 1 else 0) {
+            tvView = if (it == 1) "guide" else "list"; Prefs.put("tv_view", tvView)
+        }
+        T(if (tvView == "guide") "TV vodič: kanali odozgo prema dolje, emisije vodoravno po vremenu (kao TiviMate)."
+          else "Lista kanala: grupe lijevo, kanali u sredini, mali pregled slike i program desno.", 12.sp, C.Muted, maxLines = 2)
         Label("Raspored")
         Segmented(listOf("Klasični", "New Wave", "New Age"), Look.layout) { Look.layout = it; save() }
         T(when (Look.layout) {
@@ -678,6 +685,74 @@ private fun UpdatePage() {
         }
         T("Prvi put Android može pitati da dozvoliš PRETORIAN-u instaliranje aplikacija. Dozvoli i ponovo klikni Ažuriraj.", 12.sp, C.Muted, maxLines = 2)
     }
+}
+
+private val COUNTRIES = listOf("" to "Automatski (po uređaju)", "DE" to "Njemačka", "AT" to "Austrija", "CH" to "Švicarska", "BA" to "Bosna i Hercegovina",
+    "RS" to "Srbija", "HR" to "Hrvatska", "ME" to "Crna Gora", "SI" to "Slovenija", "MK" to "Sjeverna Makedonija", "GB" to "Velika Britanija",
+    "IT" to "Italija", "ES" to "Španija", "FR" to "Francuska", "TR" to "Turska", "US" to "SAD")
+
+@Composable
+private fun SportPage() {
+    val scope = rememberCoroutineScope()
+    var pickCountry by remember { mutableStateOf(false) }
+    var keyDlg by remember { mutableStateOf(false) }
+    var status by remember { mutableStateOf<String?>(null) }
+    var rev by remember { mutableIntStateOf(0) }
+    key(rev) {
+        Page("Sport i AI", "Sports Center prvo prikazuje ono što je važno u tvojoj državi.") {
+            val cur = Prefs.str("sport_country")
+            OptionRow("Država", R.drawable.lc_map_pin, sub = "Koje lige su važnije (npr. Njemačka: Bundesliga)",
+                value = tr(COUNTRIES.firstOrNull { it.first == cur }?.second ?: cur) + if (cur.isBlank()) " · " + Sports.country else "") { pickCountry = true }
+            Label("AI pretraga prenosa (Gemini)")
+            T("Za utakmice koje nisu u TV programu, Gemini pretraži internet ko ih prenosi u tvojoj državi i izabere tvoje kanale. Označeno je ljubičasto i kao procjena.", 12.sp, C.Muted, maxLines = 3)
+            OptionRow("Gemini API ključ", R.drawable.lc_sparkles, sub = "Besplatno: aistudio.google.com › Get API key",
+                value = tr(if (SportsAI.ready) "Upisan" else "Nije upisan")) { keyDlg = true }
+            if (SportsAI.ready) OptionRow(status ?: tr("Provjeri ključ"), R.drawable.lc_refresh_cw) {
+                status = tr("Provjeravam…"); scope.launch { status = SportsAI.test()?.let { trf("Ne radi: %s", it) } ?: tr("Radi ✓") }
+            }
+        }
+    }
+    if (keyDlg) TextDialog("Gemini API ključ", "Ključ (AIza…)", SportsAI.key, onDismiss = { keyDlg = false }) { v -> SportsAI.key = v; keyDlg = false; rev++ }
+    if (pickCountry) Popup(tr("Država"), { pickCountry = false }) {
+        COUNTRIES.forEach { (code, name) ->
+            OptionRow(name, if (Prefs.str("sport_country") == code) R.drawable.lc_check else R.drawable.lc_map_pin) {
+                Prefs.put("sport_country", code); Sports.lastCombined.clear(); pickCountry = false; rev++
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfilePage() {
+    val ctx = LocalContext.current
+    val cur = remember(Profiles.rev) { Profiles.current(ctx) }
+    val all = remember(Profiles.rev) { Profiles.list(ctx) }
+    var setup by remember { mutableStateOf(false) }
+    Page("Profili i Google Drive", "Svaki profil ima svoje favorite, gledano, izgled, jezik i grupe. Playliste su zajedničke.") {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Avatar(cur, 56.dp)
+            Column(Modifier.weight(1f)) {
+                T(cur.name, 18.sp, C.Text, FontWeight.Bold, maxLines = 1)
+                T(trf("Profila: %s", all.size), 13.sp, C.Muted)
+            }
+        }
+        OptionRow("Profili", R.drawable.lc_users, sub = "Promijeni, dodaj, uredi, PIN") { Profiles.panel = true }
+        OptionRow("Ko gleda?", R.drawable.lc_user, sub = "Ekran za izbor profila") { Profiles.picker = true }
+        ToggleRow("Pitaj \"Ko gleda?\" pri pokretanju", Profiles.askAtStart, R.drawable.lc_users) { Profiles.askAtStart = it; Profiles.rev++ }
+        Label("Google Drive")
+        T(Drive.statusLine(), 13.sp, if (Drive.signedIn) C.Green else C.Muted, maxLines = 2)
+        if (!Drive.signedIn) OptionRow("Prijavi se Google nalogom", R.drawable.lc_log_in, sub = "Kod na TV-u, potvrda na telefonu", color = C.Green) { Drive.loginOpen = true }
+        else {
+            OptionRow("Sinhronizuj sada", R.drawable.lc_cloud_upload, sub = "Pošalji postavke i profile na Google Drive") {
+                kotlinx.coroutines.GlobalScope.launch { try { Drive.upload(ctx) } catch (_: Exception) {} ; Profiles.rev++ }
+            }
+            OptionRow("Vrati s Google Drivea", R.drawable.lc_cloud_download, sub = "Povuci sve na ovaj uređaj") { Drive.restoreAsk = true }
+            OptionRow("Odjavi se", R.drawable.lc_log_out) { Drive.logout(); Profiles.rev++ }
+        }
+        T("Promjene se same šalju svakih 10 minuta i kad izađeš iz aplikacije. Na novom uređaju se prijaviš istim nalogom i sve se samo preuzme.", 12.sp, C.Muted, maxLines = 3)
+        if (BuildConfig.GOOGLE_CLIENT_ID.isBlank()) OptionRow("Google OAuth klijent", R.drawable.lc_key_round, value = tr(if (Drive.configured) "Upisan" else "Nije upisan")) { setup = true }
+    }
+    if (setup) DriveSetup(onDismiss = { setup = false }, onSaved = { setup = false })
 }
 
 @Composable
