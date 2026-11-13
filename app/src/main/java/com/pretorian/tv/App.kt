@@ -70,6 +70,7 @@ class MainActivity : ComponentActivity() {
         Repo.diskDir = cacheDir
         Profiles.onStart(this)
         SportsAI.dir = cacheDir
+        AutoTranslate.dir = filesDir
         Look.load(this)
         Lock.load()
         Notes.load()

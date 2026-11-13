@@ -648,7 +648,9 @@ private fun LanguagePage() {
             }
         }
         T("Opisi filmova i serija", 14.sp, C.Muted, FontWeight.SemiBold)
-        OptionRow("Jezik opisa filmova", R.drawable.lc_globe, "Ako opisa nema na tom jeziku, prikazuje se engleski",
+        var autoTr by remember { mutableStateOf(AutoTranslate.on) }
+        ToggleRow("Automatski prevedi opise", autoTr, R.drawable.lc_globe, "Opis, žanr i opis epizode prevode se na jezik opisa") { autoTr = it; Prefs.put("auto_translate", it) }
+        OptionRow("Jezik opisa filmova", R.drawable.lc_globe, "Bez prijevoda prikazuje se opis kakav šalje provider",
             value = if (metaLang == "auto") tr("Kao jezik aplikacije") else Langs.label(metaLang)) { pickMeta = true }
     }
     if (pickMeta) LangPicker("Jezik opisa filmova", metaLang, Langs.MEDIA, auto = true, onDismiss = { pickMeta = false }) {

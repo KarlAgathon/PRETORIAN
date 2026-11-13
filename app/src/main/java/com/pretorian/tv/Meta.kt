@@ -332,3 +332,54 @@ object Subs {
         else -> code.uppercase()
     }
 }
+
+/**
+ * Translates movie and series texts (plot, genres) into the description language, without any key.
+ * The provider usually sends English; the result is kept in memory and on disk.
+ */
+object AutoTranslate {
+    private val mem = java.util.concurrent.ConcurrentHashMap<String, String>()
+    var dir: java.io.File? = null
+    private val file get() = dir?.let { java.io.File(it, "translations.json") }
+    @Volatile private var loaded = false
+
+    val on get() = Prefs.bool("auto_translate", true)
+
+    private fun load() {
+        if (loaded) return
+        loaded = true
+        try { file?.takeIf { it.exists() }?.let { val o = JSONObject(it.readText()); o.keys().forEach { k -> mem[k] = o.getString(k) } } } catch (_: Exception) {}
+    }
+    private fun save() {
+        try {
+            val keys = mem.keys.toList().takeLast(800)
+            val o = JSONObject(); keys.forEach { o.put(it, mem[it]) }
+            file?.writeText(o.toString())
+        } catch (_: Exception) {}
+    }
+
+    suspend fun text(s: String?, to: String = metaLanguage()): String? = withContext(Dispatchers.IO) {
+        if (s.isNullOrBlank() || !on) return@withContext s
+        load()
+        val tl = to.substringBefore('-').lowercase()
+        val key = tl + "|" + s.hashCode() + "|" + s.length
+        mem[key]?.let { return@withContext it }
+        try {
+            val url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=$tl&dt=t&q=" + Net.enc(s.take(4500))  // i18n-ignore
+            val a = org.json.JSONArray(Http.request(url))
+            val src = a.optString(2)
+            val out = if (src == tl) s else {
+                val parts = a.optJSONArray(0) ?: return@withContext s
+                (0 until parts.length()).joinToString("") { parts.optJSONArray(it)?.optString(0) ?: "" }.trim().ifBlank { s }
+            }
+            mem[key] = out; save(); out
+        } catch (e: Exception) { s }
+    }
+}
+
+/** shows [s] at once and swaps in the translation when it arrives */
+@androidx.compose.runtime.Composable
+fun translated(s: String?): String? {
+    val lang = metaLanguage()
+    return androidx.compose.runtime.produceState(s, s, lang) { value = AutoTranslate.text(s, lang) }.value
+}

@@ -581,7 +581,7 @@ fun MovieDetailScreen(v: Vod, nav: Nav) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     (m?.year ?: i?.year)?.let { Chip(it) }
                     (m?.runtime ?: i?.duration)?.let { Chip(it) }
-                    (m?.genres ?: i?.genre)?.let { Chip(it.take(36)) }
+                    translated(m?.genres ?: i?.genre)?.let { Chip(it.take(36)) }
                     qualityOf(v.name)?.let { Chip(it, C.Card, C.Text, C.Soft) }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -589,14 +589,13 @@ fun MovieDetailScreen(v: Vod, nav: Nav) {
                     m?.tmdbRating?.let { Chip("TMDB ${(it * 10).toInt()}%", Color(0x2901B4E4), Color(0xFF67D4F5)) }
                     if (m == null) (i?.rating ?: v.rating)?.toDoubleOrNull()?.takeIf { it > 0 }?.let { Chip("★ ${String.format("%.1f", it)}", C.Card, C.Amber) }
                 }
-                val plot = m?.overview ?: i?.plot
+                val plot = translated(m?.overview ?: i?.plot)
                 if (meta is Load.Loading && plot == null) T("Učitavam opis…", 14.sp, C.Muted)
-                plot?.let { T(it + if (m?.overviewLang == "en" && metaLanguage() != "en") "  (EN)" else "", 15.sp, C.Soft, maxLines = 5) }
+                plot?.let { T(it, 15.sp, C.Soft, maxLines = 5) }
                 if (m != null) PeopleRow(m.people) else {
                     i?.cast?.let { T(trf("Glumci: %s", it), 13.sp, C.Muted, maxLines = 2) }
                     i?.director?.let { T(trf("Režija: %s", it), 13.sp, C.Muted) }
                 }
-                if (!Tmdb.enabled()) T("Za postere, opis na tvom jeziku i glumce upiši TMDB ključ: Postavke › Filmovi i titlovi", 12.sp, C.Muted, maxLines = 2)
                 Spacer(Modifier.height(4.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Button("Pokreni", R.drawable.lc_play, primary = true, focusRequester = playFr) {
@@ -656,11 +655,11 @@ fun SeriesDetailScreen(s: SeriesItem, nav: Nav) {
                 T("SERIJA", 12.sp, C.RedText, FontWeight.Bold)
                 T(showTitle, 32.sp, C.Text, FontWeight.Bold)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    m?.year?.let { Chip(it) }; m?.genres?.let { Chip(it.take(36)) }
+                    m?.year?.let { Chip(it) }; translated(m?.genres)?.let { Chip(it.take(36)) }
                     m?.imdbRating?.let { Chip("IMDb $it", Color(0xFFF5C518), Color(0xFF0B0D12)) }
                     m?.tmdbRating?.let { Chip("TMDB ${(it * 10).toInt()}%", Color(0x2901B4E4), Color(0xFF67D4F5)) }
                 }
-                (m?.overview ?: s.plot)?.let { T(it, 14.sp, C.Soft, maxLines = 3) }
+                translated(m?.overview ?: s.plot)?.let { T(it, 14.sp, C.Soft, maxLines = 3) }
                 when (val st = eps) {
                     is Load.Loading -> Loading("Učitavam epizode…")
                     is Load.Err -> Message("Epizode se nisu učitale", st.message)
@@ -722,7 +721,7 @@ fun SeriesDetailScreen(s: SeriesItem, nav: Nav) {
                                                         Box(Modifier.fillMaxWidth(pr.fraction).height(4.dp).background(C.Amber))
                                                     }
                                                     T(trf("%s od %s", fmtTime(pr.pos), fmtTime(pr.dur)), 11.sp, C.Muted)
-                                                } else e.plot?.let { T(it, 12.sp, C.Muted) }
+                                                } else translated(e.plot)?.let { T(it, 12.sp, C.Muted) }
                                             }
                                             qualityOf(e.title)?.let { Badge(it, C.CardHi, C.Text) }
                                             WatchMark(pr)
