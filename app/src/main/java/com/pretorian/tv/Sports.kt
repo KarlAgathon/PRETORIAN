@@ -212,12 +212,12 @@ fun SportsScreen(nav: Nav) {
         // ---------------------------------------------------------------- picture on the left, the match on the right
     Column(Modifier.fillMaxSize().verticalScroll(sc).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         // the picture of the match and its broadcasts scroll with the list, so the lower rows can always be reached
-        if (events is Load.Ok) SportTop(top)
+        if (events is Load.Ok) Box(Modifier.onPreviewKeyEvent { e ->
+            if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionUp) { scope.launch { sc.animateScrollTo(0) }; try { dayFr.requestFocus() } catch (_: Exception) {}; true } else false
+        }) { SportTop(top, onFocus = { scope.launch { sc.animateScrollTo(0) } }, onPlay = { chs -> top?.let { play(it, chs, 0) } }) { top?.let { open(it) } } }
         // every TV station that shows the match, worldwide; the ones you have are green and play on OK
         // the first row: its whole card stays visible, and Up goes to the days
-        if (events is Load.Ok && top != null) Box(Modifier.onFocusChanged { if (it.hasFocus) scope.launch { sc.animateScrollTo(0) } }.onPreviewKeyEvent { e ->
-            if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionUp) { scope.launch { sc.animateScrollTo(0) }; try { dayFr.requestFocus() } catch (_: Exception) {}; true } else false
-        }) { BroadcastRow(top) { chs, i -> play(top, chs, i) } }
+        if (events is Load.Ok && top != null) Box(Modifier.onFocusChanged { if (it.hasFocus) scope.launch { sc.animateScrollTo(0) } }) { BroadcastRow(top) { chs, i -> play(top, chs, i) } }
         // ---------------------------------------------------------------- filters (one scrolling row, nothing is hidden)
         // one row: All · Live · My channels · then the sports (football first), then other sports that have matches
         val extra = remember(all) { Sports.MORE_SPORTS.filter { (id, _) -> all?.any { it.sport == id } == true } }
@@ -567,13 +567,16 @@ private fun StationChip(label: String, mine: Boolean, onClick: () -> Unit) {
 
 /** top of Sports: live picture of the match on the left, score and details on the right */
 @Composable
-private fun SportTop(ev: SportEvent?) {
-    val ch = ev?.let { it.channels.firstOrNull() ?: it.ai.firstOrNull() }
-    // the picture starts only when you stay on a match for a moment
+private fun SportTop(ev: SportEvent?, onFocus: () -> Unit = {}, onPlay: (List<Channel>) -> Unit = {}, onOpen: () -> Unit = {}) {
+    val chs = ev?.let { it.channels.ifEmpty { it.ai } } ?: emptyList()
+    val ch = chs.firstOrNull()
+    // the small picture starts only when you pick it: OK on it starts it, OK again goes full screen
     var pv by remember { mutableStateOf<Channel?>(null) }
-    LaunchedEffect(ch?.url, ev?.live) { pv = null; if (ch != null && ev.live && Look.previewMode != 0) { delay(600); pv = ch } }
+    LaunchedEffect(ch?.url) { pv = null }
     Row(Modifier.fillMaxWidth().height(200.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        Box(Modifier.fillMaxHeight().aspectRatio(16f / 9f)) {
+        Focusable(onClick = {
+            if (ch == null) onOpen() else if (pv == null && Prefs.bool("sport_preview", true)) pv = ch else onPlay(chs)
+        }, onFocus = onFocus, shape = Rnd(18.dp), normal = Color.Transparent, focused = Color.Transparent, zoom = 1.02f, modifier = Modifier.fillMaxHeight().aspectRatio(16f / 9f)) { f ->
             val c = pv
             if (c != null && Prefs.bool("sport_preview", true)) PreviewBox(c, Modifier.fillMaxSize())
             else Column(Modifier.fillMaxSize().clip(Rnd(18.dp)).background(Color.Black.copy(alpha = 0.55f)).border(1.dp, C.Line, Rnd(18.dp)),
@@ -586,10 +589,14 @@ private fun SportTop(ev: SportEvent?) {
                     ev.state == "post" -> trf("Završeno · %s", ch.name)
                     else -> ch.name
                 }, 13.sp, C.Soft, maxLines = 2, modifier = Modifier.padding(horizontal = 16.dp))
+                if (ch != null && f) T(if (Prefs.bool("sport_preview", true)) "OK = mala slika · OK još jednom = cijeli ekran" else "OK = cijeli ekran", 11.sp, C.Text, FontWeight.SemiBold)
             }
+            if (c != null && f) T("OK = cijeli ekran", 11.sp, Color.White, FontWeight.Bold, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp)
+                .clip(Pill).background(Color(0xB3000000)).padding(horizontal = 10.dp, vertical = 3.dp))
         }
-        Box(Modifier.weight(1f).fillMaxHeight().clip(Rnd(18.dp)).background(C.Card).border(1.dp, C.Line, Rnd(18.dp))) {
-            if (ev == null) { Message("Izaberi utakmicu"); return@Box }
+        Focusable(onClick = onOpen, onFocus = onFocus, shape = Rnd(18.dp), normal = C.Card, focused = C.CardHi, zoom = 1.01f,
+            modifier = Modifier.weight(1f).fillMaxHeight().border(1.dp, C.Line, Rnd(18.dp))) { _ ->
+            if (ev == null) { Message("Izaberi utakmicu"); return@Focusable }
             // big crest in the background, like a watermark
             ev.home?.let { h -> Box(Modifier.align(Alignment.CenterEnd).padding(end = 10.dp).alpha(0.10f)) { Crest(h, 180.dp) } }
             Column(Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

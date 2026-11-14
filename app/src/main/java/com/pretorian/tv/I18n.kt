@@ -481,8 +481,8 @@ Ne radi na svim uređajima. Ako je box potpuno ugašen, podsjetnik ne može doć
 Tvoji podsjetnici|Your reminders|Deine Erinnerungen|Tvoji podsjetnici|Твоји подсетници|Твоите напомняния|Mementourile tale|Hatırlatıcıların|I tuoi promemoria|تذكيراتك
 Nema podsjetnika.|No reminders.|Keine Erinnerungen.|Nema podsjetnika.|Нема подсетника.|Няма напомняния.|Niciun memento.|Hatırlatıcı yok.|Nessun promemoria.|لا توجد تذكيرات.
 Obriši|Delete|Löschen|Obriši|Обриши|Изтрий|Șterge|Sil|Elimina|حذف
-Backup je spremljen|Backup saved|Backup gespeichert|Sigurnosna kopija je spremljenaaaaaaaaaaaaaaaaaaaaaaaaaa|Бекап је сачуван|Копието е запазено|Backup salvat|Yedek kaydedildi|Backup salvato|تم حفظ النسخة
-Backup nije spremljen|Backup not saved|Backup nicht gespeichert|Sigurnosna kopija nije spremljenaaaaaaaaaaaaaaaaaaaaaaaaaa|Бекап није сачуван|Копието не е запазено|Backup nesalvat|Yedek kaydedilmedi|Backup non salvato|لم تُحفظ النسخة
+Backup je spremljen|Backup saved|Backup gespeichert|Sigurnosna kopija je spremljenaaaaaaaaaaaaaaaaaaaaaaaaaaa|Бекап је сачуван|Копието е запазено|Backup salvat|Yedek kaydedildi|Backup salvato|تم حفظ النسخة
+Backup nije spremljen|Backup not saved|Backup nicht gespeichert|Sigurnosna kopija nije spremljenaaaaaaaaaaaaaaaaaaaaaaaaaaa|Бекап није сачуван|Копието не е запазено|Backup nesalvat|Yedek kaydedilmedi|Backup non salvato|لم تُحفظ النسخة
 Sve je vraćeno. PRETORIAN se ponovo pokreće.|Everything restored. PRETORIAN restarts.|Alles wiederhergestellt. PRETORIAN startet neu.|Sve je vraćeno. PRETORIAN se ponovo pokreće.|Све је враћено. PRETORIAN се поново покреће.|Всичко е възстановено. PRETORIAN се рестартира.|Totul a fost restaurat. PRETORIAN repornește.|Her şey geri yüklendi. PRETORIAN yeniden başlıyor.|Tutto ripristinato. PRETORIAN si riavvia.|تمت الاستعادة. يُعاد تشغيل PRETORIAN.
 Vraćanje nije uspjelo|Restore failed|Wiederherstellung fehlgeschlagen|Vraćanje nije uspjelo|Враћање није успело|Възстановяването не успя|Restaurarea a eșuat|Geri yükleme başarısız|Ripristino non riuscito|فشلت الاستعادة
 Backup i vraćanje|Backup and restore|Sichern und wiederherstellen|Sigurnosna kopija i vraćanje|Бекап и враћање|Резервно копие|Backup și restaurare|Yedekle ve geri yükle|Backup e ripristino|النسخ والاستعادة
@@ -1303,6 +1303,8 @@ Opasno|Danger zone|Gefahrenbereich|Opasno|Опасно|Опасно|Zonă pericu
 biblioteke otvorenog koda|open source libraries|Open-Source-Bibliotheken|biblioteke otvorenog koda|библиотеке отвореног кода|библиотеки с отворен код|biblioteci open source|açık kaynak kütüphaneler|librerie open source|مكتبات مفتوحة المصدر
 brzina i ping|speed and ping|Geschwindigkeit und Ping|brzina i ping|брзина и пинг|скорост и пинг|viteză și ping|hız ve ping|velocità e ping|السرعة وزمن الاستجابة
 film ostaje u listi, samo nestaje odavde|it stays in the list, it only goes from here|bleibt in der Liste, verschwindet nur von hier|ostaje u popisu, samo nestaje odavde|остаје у листи, само нестаје одавде|остава в списъка, само изчезва оттук|rămâne în listă, dispare doar de aici|listede kalır, sadece buradan kalkar|resta nella lista, sparisce solo da qui|يبقى في القائمة، يختفي من هنا فقط
+OK = mala slika · OK još jednom = cijeli ekran|OK = small picture · OK again = full screen|OK = kleines Bild · nochmal OK = Vollbild|OK = mala slika · OK još jednom = cijeli zaslon|OK = мала слика · OK још једном = цео екран|OK = малка картина · OK отново = цял екран|OK = imagine mică · OK din nou = ecran complet|OK = küçük görüntü · tekrar OK = tam ekran|OK = immagine piccola · OK di nuovo = schermo intero|OK = صورة صغيرة · OK مرة أخرى = ملء الشاشة
+OK = cijeli ekran|OK = full screen|OK = Vollbild|OK = cijeli zaslon|OK = цео екран|OK = цял екран|OK = ecran complet|OK = tam ekran|OK = schermo intero|OK = ملء الشاشة
 Nepoznat jezik|Unknown language|Unbekannte Sprache|Nepoznat jezik|Непознат језик|Неизвестен език|Limbă necunoscută|Bilinmeyen dil|Lingua sconosciuta|لغة غير معروفة
 """.trimIndent()
 
