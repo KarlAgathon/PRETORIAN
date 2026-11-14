@@ -493,7 +493,7 @@ fun SimpleModePill(nav: Nav) {
     var open by remember { mutableStateOf(false) }
     val fr = remember { FocusRequester() }
     val btnFr = remember { FocusRequester() }
-    BackHandler(enabled = open) { open = false; btnFr.tryFocus() }
+    BackHandler(enabled = open) { open = false; try { btnFr.requestFocus() } catch (_: Exception) {} }
     Column(Modifier.width(260.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Focusable(onClick = { open = !open }, focusRequester = btnFr, shape = Pill, normal = C.CardHi, focused = C.Red, zoom = 1.03f,
             modifier = Modifier.fillMaxWidth().height(44.dp)) { f ->
@@ -509,7 +509,7 @@ fun SimpleModePill(nav: Nav) {
                 if (Prefs.bool("pin_simple_exit", true) && Lock.hasPin()) OnyxState.askPin = true else { Lock.switchSimple(false); nav.root(Screen.Home) }
             }, focusRequester = fr, shape = Pill, normal = C.Rail, focused = C.Red, zoom = 1.03f,
                 modifier = Modifier.fillMaxWidth().height(44.dp).border(1.dp, C.Line, Pill).onPreviewKeyEvent { e ->
-                    if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionUp) { open = false; btnFr.tryFocus(); true } else false
+                    if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionUp) { open = false; try { btnFr.requestFocus() } catch (_: Exception) {}; true } else false
                 }) { f ->
                 Row(Modifier.align(Alignment.Center).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Ico(R.drawable.lc_key_round, 16.dp, if (f) C.OnRed else C.Amber)
