@@ -43,14 +43,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
 /** bar background: dark glass on dark themes, white on the light one; never the see-through card colour */
 private val barBg: Color get() = if (C.IsLight) Color.White.copy(alpha = 0.92f) else Color(0xFF0B1020).copy(alpha = 0.86f)
 private val barText: Color get() = if (C.IsLight) Color(0xFF111827) else Color.White
 private val barSoft: Color get() = if (C.IsLight) Color(0xFF4B5563) else Color(0xFFCBD5E1)
 private val barLine: Color get() = if (C.IsLight) Color(0x22000000) else Color(0x33FFFFFF)
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /** one big tile of the home screen */
 data class NeonItem(val label: String, val icon: Int, val accent: Color, val play: Boolean, val badge: Int, val onClick: () -> Unit)
