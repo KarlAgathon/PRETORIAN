@@ -1,5 +1,7 @@
 package com.pretorian.tv
 
+import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import android.content.Context
@@ -140,27 +142,22 @@ fun OnyxTopBar(current: Screen, nav: Nav, simple: Boolean = false, firstFocus: F
     Row(Modifier.fillMaxWidth().height(56.dp).padding(start = 28.dp, end = 24.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("PRETORIAN", style = TextStyle(fontFamily = Inter, fontSize = 13.sp, color = C.Text, fontWeight = FontWeight.Light, letterSpacing = 4.sp), maxLines = 1)
-            if (simple) Box(Modifier.clip(Pill).border(1.dp, C.Line, Pill).padding(horizontal = 8.dp, vertical = 2.dp)) {
-                T("JEDNOSTAVNI MOD", 9.sp, C.Soft, FontWeight.Bold)
-            }
             Spacer(Modifier.width(6.dp))
-            items.forEachIndexed { i, it ->
-                NavPill(it, section == it.screen, if (i == 1 && firstFocus != null) firstFocus else if (section == it.screen) TopNav.fr else null, big = simple) { nav.root(it.screen) }
+            // the menu takes the free width and scrolls sideways if a big size does not fit; the clock and profile never get covered
+            Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(if (simple) 10.dp else 6.dp)) {
+                items.forEachIndexed { i, it ->
+                    NavPill(it, section == it.screen, if (i == 1 && firstFocus != null) firstFocus else if (section == it.screen) TopNav.fr else null, big = simple) { nav.root(it.screen) }
+                }
+                if (simple) SimpleModePill(nav)
+                else NavPill(NavItem(Screen.Settings, R.drawable.lc_settings, "Postavke",
+                    if (Updater.available != null) 1 else 0), section == Screen.Settings, if (section == Screen.Settings) TopNav.fr else null, big = false) {
+                    nav.root(Screen.Settings)
+                }
             }
-            NavPill(NavItem(Screen.Settings, if (simple) R.drawable.lc_lock else R.drawable.lc_settings, "Postavke",
-                if (Updater.available != null) 1 else 0), section == Screen.Settings, if (section == Screen.Settings) TopNav.fr else null, big = false) {
-                if (simple) OnyxState.askAdvanced = true else nav.root(Screen.Settings)
-            }
-            Spacer(Modifier.weight(1f))
-            val p = pls.firstOrNull()
-            if (p != null) {
-                val sec = p.exp.toLongOrNull()
-                val days = if (sec != null && sec > 0) (sec * 1000 - System.currentTimeMillis()) / 86_400_000L else null
-                T(p.name + (if (days != null) " · " + trf("%s dana", days.coerceAtLeast(0)) else ""), 11.sp, if (days != null && days <= 5) C.Danger else C.Muted,
-                    maxLines = 1, modifier = Modifier.widthIn(max = 150.dp))
-            }
+            Spacer(Modifier.width(8.dp))
             T(SimpleDateFormat("HH:mm", Locale.getDefault()).format(now), 13.sp, C.Text, FontWeight.SemiBold)  // i18n-ignore
-            if (!simple) ProfileButton(24.dp)
+            if (!simple) { Spacer(Modifier.width(4.dp)); ProfileButton(24.dp) }
             Box {
                 Focusable(onClick = { notes = true }, shape = CircleShape, normal = Color.Transparent, focused = C.CardHi, zoom = 1.08f,
                     modifier = Modifier.size(30.dp).border(1.dp, C.Line, CircleShape)) { _ ->
@@ -223,8 +220,12 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
         Column(Modifier.fillMaxSize()) {
             OnyxTopBar(Screen.Home, nav, simple)
             // everything sits higher and bigger: no empty half screen, nothing cut at the bottom of the TV
-            Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 28.dp, end = 28.dp, top = 18.dp, bottom = 36.dp)) {
-                Box(Modifier.padding(bottom = 8.dp)) { ExpiryChip() }
+            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            // the card height follows the free space, so hero, Continue watching and Recent channels all fit without scrolling
+            val cardH = (maxHeight - 372.dp).coerceIn(84.dp, 140.dp)
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 28.dp, end = 28.dp, top = 14.dp, bottom = 12.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                Column(Modifier.weight(1f)) {
                 if (hero != null) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         if (cont.isEmpty()) Box(Modifier.clip(Rnd(5.dp)).background(C.Text).padding(horizontal = 8.dp, vertical = 2.dp)) { T("NOVO", 10.sp, C.Bg, FontWeight.ExtraBold) }
@@ -250,13 +251,16 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                         }
                     }
                 } else T("Dodaj playlistu u Postavkama", 18.sp, C.Soft)
-                Spacer(Modifier.height(16.dp))
+                }
+                SubscriptionCard()
+                }
+                Spacer(Modifier.height(12.dp))
                 if (cont.isNotEmpty()) {
                     RowTitle("NASTAVI GLEDANJE")
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(18.dp), contentPadding = PaddingValues(end = 40.dp, top = 6.dp, bottom = 6.dp)) {
                         items(cont, key = { it.url }) { pr ->
                             WideCard(pr.series ?: pr.title, if (pr.season != null) "S${pr.season} E${pr.episode}" else fmtTime(pr.dur), pr.poster, pr.url,
-                                if (pr.next) null else pr.fraction, onMenu = { contMenu = pr }, onClick = playOf(pr))
+                                if (pr.next) null else pr.fraction, onMenu = { contMenu = pr }, height = cardH, onClick = playOf(pr))
                         }
                     }
                 } else if (newest.isNotEmpty()) {
@@ -267,9 +271,10 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                         }
                     }
                 }
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(6.dp))
                 // the channels you watched last, next to Continue watching
                 RecentStrip(nav)
+            }
             }
         }
     }
@@ -287,6 +292,26 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
     if (!simple) TipOnce("hold_ok", "Savjet", "Drži OK na bilo čemu za opcije: Moja lista, Favoriti, Sakrij.")
 }
 
+/** Active playlist, expiry date and days left, as a small glass card on Home. Red at 5 days or less. */
+@Composable
+fun SubscriptionCard() {
+    val ctx = LocalContext.current
+    val p = remember { Store.active(ctx) } ?: return
+    val sec = p.exp.toLongOrNull()?.takeIf { it > 0 }
+    val days = sec?.let { (it * 1000 - System.currentTimeMillis()) / 86_400_000L }
+    val warn = days != null && days <= 5
+    Column(Modifier.widthIn(min = 190.dp, max = 260.dp).clip(Rnd(16.dp)).background(if (warn) C.Danger.copy(alpha = 0.14f) else C.Rail)
+        .border(1.dp, if (warn) C.Danger.copy(alpha = 0.6f) else C.Line, Rnd(16.dp)).padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Kicker("Aktivna playlista", size = 10.sp)
+        T(p.name, 17.sp, C.Text, FontWeight.Bold, maxLines = 1)
+        if (sec != null) {
+            T(tr("Ističe") + ": " + SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date(sec * 1000)), 13.sp, C.Soft, maxLines = 1)  // i18n-ignore
+            T(if (days!! < 0) tr("Isteklo") else trf("Preostalo: %s dana", days), 14.sp, if (warn) C.Danger else C.Green, FontWeight.Bold, maxLines = 1)
+        } else T("bez datuma isteka", 13.sp, C.Soft, maxLines = 1)
+    }
+}
+
 @Composable
 private fun RowTitle(t: String) {
     Text(tr(t), style = TextStyle(fontFamily = Inter, fontSize = 11.sp, color = C.Muted, fontWeight = FontWeight.SemiBold, letterSpacing = 2.sp),
@@ -295,9 +320,9 @@ private fun RowTitle(t: String) {
 
 /** Landscape card with picture, title and a thin progress line. */
 @Composable
-fun WideCard(title: String, sub: String, image: String?, key: String, progress: Float?, onMenu: (() -> Unit)? = null, onClick: () -> Unit) {
-    Column(Modifier.width(250.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Focusable(onClick = onClick, onMenu = onMenu, shape = Rnd(12.dp), normal = C.Card, zoom = 1.05f, modifier = Modifier.fillMaxWidth().height(140.dp)) { f ->
+fun WideCard(title: String, sub: String, image: String?, key: String, progress: Float?, onMenu: (() -> Unit)? = null, height: Dp = 140.dp, onClick: () -> Unit) {
+    Column(Modifier.width(height * (250f / 140f)), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Focusable(onClick = onClick, onMenu = onMenu, shape = Rnd(12.dp), normal = C.Card, zoom = 1.05f, modifier = Modifier.fillMaxWidth().height(height)) { f ->
             // the whole poster is shown (never cut); the empty sides get a soft, blurred copy of the same picture
             OnyxImage(image, key, Modifier.fillMaxSize().clip(Rnd(12.dp)).blur(18.dp).alpha(0.55f), maxW = 160)
             OnyxImage(image, key, Modifier.fillMaxSize().clip(Rnd(12.dp)), maxW = 300, scale = ContentScale.Fit)
@@ -388,7 +413,38 @@ fun ChannelLogo(c: Channel, size: androidx.compose.ui.unit.Dp, onLight: Boolean 
 /** The menu pill of the screen you are on: Up from the top of a screen comes here. */
 object TopNav { val fr = FocusRequester() }
 
-object OnyxState { var askAdvanced by mutableStateOf(false) }
+object OnyxState { var askAdvanced by mutableStateOf(false); var askPin by mutableStateOf(false) }
+
+/** Simple mode: one pill instead of Settings; OK drops down "Napredni mod" (PIN if one is set). */
+@Composable
+private fun SimpleModePill(nav: Nav) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Focusable(onClick = { open = true }, shape = Pill, normal = C.CardHi, focused = C.Red, zoom = 1.04f, modifier = Modifier.height(38.dp)) { f ->
+            Row(Modifier.align(Alignment.Center).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Ico(R.drawable.lc_lock, 16.dp, if (f) C.OnRed else C.Text)
+                T("Jednostavni mod", 15.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold)
+                Ico(R.drawable.lc_chevron_down, 14.dp, if (f) C.OnRed else C.Soft)
+            }
+        }
+        if (open) androidx.compose.ui.window.Popup(alignment = Alignment.TopStart, offset = androidx.compose.ui.unit.IntOffset(0, 120),
+            onDismissRequest = { open = false }, properties = androidx.compose.ui.window.PopupProperties(focusable = true)) {
+            val fr = remember { FocusRequester() }
+            Column(Modifier.width(230.dp).clip(Rnd(14.dp)).background(C.Bg).border(1.dp, C.Line, Rnd(14.dp)).padding(6.dp)) {
+                Focusable(onClick = {
+                    open = false
+                    if (Prefs.bool("pin_simple_exit", true) && Lock.hasPin()) OnyxState.askPin = true else { Lock.switchSimple(false); nav.root(Screen.Settings) }
+                }, focusRequester = fr, shape = Rnd(10.dp), normal = Color.Transparent, focused = C.Red, zoom = 1f, modifier = Modifier.fillMaxWidth().height(46.dp)) { f ->
+                    Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Ico(R.drawable.lc_key_round, 16.dp, if (f) C.OnRed else C.Amber)
+                        T("Napredni mod", 15.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold)
+                    }
+                }
+            }
+            LaunchedEffect(Unit) { delay(60); fr.tryFocus() }
+        }
+    }
+}
 
 /** Simple mode: Settings are behind the PIN, with a warning first. */
 @Composable
@@ -403,6 +459,7 @@ fun AdvancedGate(nav: Nav) {
             if (Prefs.bool("pin_simple_exit", true) && Lock.hasPin()) pin = true else { Lock.switchSimple(false); nav.root(Screen.Settings) }
         }
     }
+    LaunchedEffect(OnyxState.askPin) { if (OnyxState.askPin) { OnyxState.askPin = false; pin = true } }
     if (pin) PinDialog("PIN za napredni mod", onDismiss = { pin = false }) { entered ->
         val err = Lock.check(entered)
         if (err == null) { pin = false; Lock.switchSimple(false); nav.root(Screen.Settings) }

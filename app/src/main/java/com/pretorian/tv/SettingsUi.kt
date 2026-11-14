@@ -309,16 +309,23 @@ private fun EpgSourcesBlock(pl: Playlist?) {
     var edit by remember { mutableStateOf<EpgSources.Src?>(null) }
     var menu by remember { mutableStateOf<EpgSources.Src?>(null) }
     var updating by remember { mutableStateOf(false) }
-    val list = remember(EpgSources.rev) { EpgSources.list().filter { it.pid == pl?.id } }
-    Label(if (pl == null) tr("EPG izvori (za sve playliste)") else tr("EPG samo za ovu playlistu"))
+    var pending by remember { mutableStateOf<Pair<String, String>?>(null) }
+    // everything that applies to this playlist: its own sources and the ones for every playlist
+    val list = remember(EpgSources.rev, pl?.id) { EpgSources.list().filter { it.pid == null || it.pid == pl?.id } }
+    if (pl == null) Label(tr("EPG izvori (za sve playliste)"))
     T("XMLTV link (.xml ili .xml.gz). Koristi se kad provider za kanal nema program.", 12.sp, C.Muted, maxLines = 2)
+    // the provider's own guide: always first, cannot be edited or deleted
+    if (pl != null && pl.type == SourceType.XTREAM) {
+        OptionRow(trf("%s · od providera", pl.name), R.drawable.lc_server, sub = tr("ugrađeni program providera · ne može se uređivati"),
+            value = tr("● Aktivan"), valueColor = C.Green) { }
+    }
     list.forEach { s ->
         val status = when {
             s.error != null -> trf("Greška: %s", s.error)
             s.channels >= 0 -> trf("%s kanala · ažurirano %s", s.channels, java.text.SimpleDateFormat("d. M. HH:mm", java.util.Locale.getDefault()).format(java.util.Date(s.at)))
             else -> tr("Još nije provjeren")
         }
-        OptionRow(s.name, if (s.on) R.drawable.lc_check else R.drawable.lc_x, sub = status, value = tr(if (s.on) "● Aktivan" else "○ Isključen"),
+        OptionRow(s.name, if (s.on) R.drawable.lc_check else R.drawable.lc_x, sub = tr(if (s.pid == null) "za sve playliste" else "samo za ovu playlistu") + " · " + status, value = tr(if (s.on) "● Aktivan" else "○ Isključen"),
             color = if (s.error != null) C.Danger else if (s.on) null else C.Muted, valueColor = if (s.on) C.Green else C.Muted) { menu = s }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -329,9 +336,16 @@ private fun EpgSourcesBlock(pl: Playlist?) {
             scope.launch { list.forEach { try { EpgSources.refresh(it) } catch (_: Exception) {} }; Repo.clear(); updating = false }
         }
     }
+    fun addSrc(n: String, v: String, pid: String?) { val s = EpgSources.add(v, pid, n); scope.launch { EpgSources.refresh(s); Repo.clear() } }
     if (add) NameLinkDialog("Dodaj EPG", onDismiss = { add = false }) { n, v ->
         add = false
-        if (v.isNotBlank()) { val s = EpgSources.add(v, pl?.id, n); scope.launch { EpgSources.refresh(s); Repo.clear() } }
+        if (v.isNotBlank()) { if (pl == null) addSrc(n, v, null) else pending = n to v }
+    }
+    pending?.let { (n, v) ->
+        Popup("Za koje playliste?", { pending = null }) {
+            OptionRow("Za sve playliste", R.drawable.lc_list) { pending = null; addSrc(n, v, null) }
+            OptionRow(trf("Samo za %s", pl?.name ?: ""), R.drawable.lc_check) { pending = null; addSrc(n, v, pl?.id) }
+        }
     }
     edit?.let { s ->
         NameLinkDialog("Uredi EPG", s.name, s.url, onDismiss = { edit = null }) { n, v ->
@@ -1333,7 +1347,7 @@ private fun PlaylistsV2(nav: Nav, openSub: (String) -> Unit) {
         if (act != null) {
             SetSection(trf("Za aktivnu playlistu · %s", act.name))
             SetRow("Grupe i kanali", "sakrij, pomjeri, PIN") { openSub("groups") }
-            SetRow("EPG izvori", "dodaj, uredi, osvježi, izbriši", "● " + trf("%s aktivna", EpgSources.list().count { it.on } + 1), valueColor = C.Green) { openSub("epg") }
+            SetRow("EPG izvori", "dodaj, uredi, osvježi, izbriši", "● " + trf("%s aktivna", EpgSources.list().count { it.on && (it.pid == null || it.pid == act.id) } + (if (act.type == SourceType.XTREAM) 1 else 0)), valueColor = C.Green) { openSub("epg") }
             SetRow(if (busy) "Osvježavam…" else "Osvježi sve", "kanali, filmovi, serije, EPG") {
                 if (busy) return@SetRow
                 busy = true
