@@ -891,7 +891,7 @@ private fun SportPage() {
             }
             val cur = Prefs.str("sport_country")
             OptionRow("Država", R.drawable.lc_map_pin, sub = "Koje lige su važnije (npr. Njemačka: Bundesliga)",
-                value = tr(COUNTRIES.firstOrNull { it.first == cur }?.second ?: cur) + if (cur.isBlank()) " · " + Sports.country else "") { pickCountry = true }
+                value = if (cur.isBlank()) tr("Automatski (po uređaju)") + " · " + Sports.country else cur.split(',').joinToString(", ") { c -> tr(COUNTRIES.firstOrNull { it.first == c }?.second ?: c) }) { pickCountry = true }
             Label("AI pretraga prenosa")
             T("Za utakmice koje nisu u TV programu, AI traži ko ih prenosi u tvojoj državi i bira tvoje kanale. Označeno je ljubičasto i kao procjena.", 12.sp, C.Muted, maxLines = 3)
             val pv = SportsAI.prov
@@ -915,8 +915,11 @@ private fun SportPage() {
     if (keyDlg) TextDialog(trf("%s ključ", SportsAI.prov.name), trf("Ključ (%s)", SportsAI.prov.keyHint), SportsAI.key, onDismiss = { keyDlg = false }) { v -> SportsAI.key = v; keyDlg = false; status = null; rev++ }
     if (pickCountry) Popup(tr("Država"), { pickCountry = false }) {
         COUNTRIES.forEach { (code, name) ->
-            OptionRow(name, if (Prefs.str("sport_country") == code) R.drawable.lc_check else R.drawable.lc_map_pin) {
-                Prefs.put("sport_country", code); Sports.lastCombined.clear(); pickCountry = false; rev++
+            val on = Prefs.str("sport_country").split(',').filter { it.isNotBlank() }.toMutableSet()
+            OptionRow(name, if (if (code.isBlank()) on.isEmpty() else code in on) R.drawable.lc_check else R.drawable.lc_map_pin) {
+                // several countries: OK ticks or unticks; "Automatski" clears them
+                if (code.isBlank()) on.clear() else if (code in on) on.remove(code) else on.add(code)
+                Prefs.put("sport_country", on.joinToString(",")); Sports.lastCombined.clear(); rev++
             }
         }
     }
@@ -1538,21 +1541,20 @@ private fun PlayerV2(openSub: (String) -> Unit) {
             }
             SetSection("Titlovi")
             SetSwitch("Uključi titlove sami", "ugrađeni, na tvom jeziku", Prefs.autoSubs) { Prefs.autoSubs = it }
-            val sub0 = Prefs.subLangs.split(',').firstOrNull() ?: "bs"
-            SetDrop("Jezik titla", null, listOf(tr("Default (od providera)")) + langs.map { Langs.label(it) },
-                if (!Prefs.autoSubs) 0 else langs.indexOf(sub0) + 1) { i ->
-                if (i == 0) Prefs.autoSubs = false
-                else { val l = langs[i - 1]; Prefs.autoSubs = true; Prefs.subLangs = (listOf(l) + Prefs.subLangs.split(',').filter { it.isNotBlank() && it != l }).joinToString(",") }
+            // several languages at once: the player takes the first one the film or channel has; none ticked = provider default
+            val subOn = if (!Prefs.autoSubs) emptyList() else Prefs.subLangs.split(',').filter { it.isNotBlank() && it in langs }
+            SetMulti("Jezik titla", "više odjednom · ništa = od providera", langs.map { Langs.label(it) }, subOn.map { langs.indexOf(it) }.toSet(), all = false) { s2 ->
+                val keep = subOn.filter { langs.indexOf(it) in s2 }; val added = s2.sorted().map { langs[it] }.filter { it !in keep }
+                if (s2.isEmpty()) Prefs.autoSubs = false else { Prefs.autoSubs = true; Prefs.subLangs = (keep + added).joinToString(",") }
                 rev++
             }
             SetDrop("Veličina titla", null, listOf("Mala", "Srednja", "Velika", "Vrlo velika"), Prefs.str("sub_size", "1").toIntOrNull() ?: 1, new = true) { Prefs.put("sub_size", it.toString()); rev++ }
             SetDrop("Izgled titla", null, listOf("Sjena", "Okvir", "Tamna pozadina"), Prefs.str("sub_style", "0").toIntOrNull() ?: 0, new = true) { Prefs.put("sub_style", it.toString()); rev++ }
             SetSection("Zvuk")
-            val a0 = Prefs.audioLangs.split(',').firstOrNull() ?: "en"
-            SetDrop("Jezik zvuka", null, listOf(tr("Default (od providera)")) + langs.map { Langs.label(it) },
-                if (Prefs.bool("audio_default")) 0 else langs.indexOf(a0) + 1) { i ->
-                if (i == 0) Prefs.put("audio_default", true)
-                else { val l = langs[i - 1]; Prefs.put("audio_default", false); Prefs.audioLangs = (listOf(l) + Prefs.audioLangs.split(',').filter { it.isNotBlank() && it != l }).joinToString(",") }
+            val audOn = if (Prefs.bool("audio_default")) emptyList() else Prefs.audioLangs.split(',').filter { it.isNotBlank() && it in langs }
+            SetMulti("Jezik zvuka", "više odjednom · ništa = od providera", langs.map { Langs.label(it) }, audOn.map { langs.indexOf(it) }.toSet(), all = false) { s2 ->
+                val keep = audOn.filter { langs.indexOf(it) in s2 }; val added = s2.sorted().map { langs[it] }.filter { it !in keep }
+                if (s2.isEmpty()) Prefs.put("audio_default", true) else { Prefs.put("audio_default", false); Prefs.audioLangs = (keep + added).joinToString(",") }
                 rev++
             }
             SetSection("Kontrole")
@@ -1640,9 +1642,12 @@ private fun SportV2() {
                 SetMulti("Kontinenti", "više odjednom · svjetska takmičenja uvijek", conts.map { it.second }, conts.indices.filter { conts[it].first in cOn }.toSet(), all = false) { s2 ->
                     Prefs.put("sport_cont", (if (s2.isEmpty()) setOf(0) else s2).sorted().joinToString(",") { conts[it].first }); changed()
                 }
-                val cur = Prefs.str("sport_country")
-                SetDrop("Moja država", "najbliže tebi ide prvo", COUNTRIES.map { it.second }, COUNTRIES.indexOfFirst { it.first == cur }.coerceAtLeast(0)) {
-                    Prefs.put("sport_country", COUNTRIES[it].first); changed()
+                // several countries at once; none ticked = automatic (by the device)
+                val picked = Prefs.str("sport_country").split(',').filter { it.isNotBlank() }.toSet()
+                val opts = COUNTRIES.drop(1)
+                SetMulti("Moja država", "više odjednom · ništa = automatski", opts.map { it.second }, opts.indices.filter { opts[it].first in picked }.toSet(), all = false,
+                    note = tr("Ništa označeno = automatski (po uređaju)")) { s2 ->
+                    Prefs.put("sport_country", s2.sorted().joinToString(",") { opts[it].first }); Sports.lastCombined.clear(); changed()
                 }
                 val teams = Prefs.str("sport_teams").split(',').map { it.trim() }.filter { it.isNotBlank() }
                 SetRow("Omiljeni timovi", "njihove utakmice uvijek na vrhu", if (teams.isEmpty()) tr("Nijedan") else trf("%s tima", teams.size)) { teamDlg = true }

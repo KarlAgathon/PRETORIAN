@@ -1,5 +1,7 @@
 package com.pretorian.tv
 
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.key
@@ -263,17 +265,86 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                             Box(Modifier.fillMaxWidth(f).fillMaxHeight().background(C.Text))
                         }
                     }
-                } else T("Dodaj playlistu u Postavkama", 18.sp, C.Soft)
+                } else if (p == null) T("Dodaj playlistu u Postavkama", 18.sp, C.Soft)
+                else {
+                    // nothing watched yet: a welcome with quick ways in instead of an empty screen
+                    Text(tr("DOBRO DOŠAO"), style = TextStyle(fontFamily = Inter, fontSize = 12.sp, color = C.Soft, fontWeight = FontWeight.SemiBold, letterSpacing = 3.sp))
+                    Text(tr("Šta gledamo danas?"), style = TextStyle(fontFamily = Inter, fontSize = 34.sp, color = C.Text, fontWeight = FontWeight.ExtraBold),
+                        modifier = Modifier.padding(top = 2.dp))
+                    Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        listOf(Triple(Screen.Tv, R.drawable.lc_tv, "TV uživo"), Triple(Screen.Movies, R.drawable.lc_film, "Filmovi"),
+                            Triple(Screen.Series, R.drawable.lc_monitor, "Serije"), Triple(Screen.Sports, R.drawable.lc_ball, "Sport")).forEachIndexed { i, (scr, ic, lb) ->
+                            if (simple && scr == Screen.Sports) return@forEachIndexed
+                            Focusable(onClick = { nav.root(scr) }, focusRequester = if (i == 0) first else null, shape = Pill, normal = if (i == 0) C.Text else C.CardHi,
+                                focused = C.Red, zoom = 1.06f, modifier = Modifier.height(42.dp)) { f ->
+                                Row(Modifier.align(Alignment.Center).padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    val col = if (f) C.OnRed else if (i == 0) C.Bg else C.Text
+                                    Ico(ic, 15.dp, col); T(lb, 14.sp, col, FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
                 }
                 SubscriptionCard()
                 }
                 Spacer(Modifier.height(12.dp))
                 if (cont.isNotEmpty()) {
                     RowTitle("NASTAVI GLEDANJE")
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(18.dp), contentPadding = PaddingValues(end = 40.dp, top = 6.dp, bottom = 6.dp)) {
-                        items(cont, key = { it.url }) { pr ->
+                    // round trip: ▶ on the last card goes to the first, ◀ on the first goes to the last
+                    val cState = androidx.compose.foundation.lazy.rememberLazyListState()
+                    val cScope = rememberCoroutineScope()
+                    val cFirst = remember { FocusRequester() }; val cLast = remember { FocusRequester() }
+                    LazyRow(state = cState, horizontalArrangement = Arrangement.spacedBy(18.dp), contentPadding = PaddingValues(end = 40.dp, top = 6.dp, bottom = 6.dp)) {
+                        androidx.compose.foundation.lazy.itemsIndexed(cont, key = { _, it -> it.url }) { i, pr ->
                             WideCard(pr.series ?: pr.title, if (pr.season != null) "S${pr.season} E${pr.episode}" else fmtTime(pr.dur), pr.poster, pr.url,
-                                if (pr.next) null else pr.fraction, onMenu = { contMenu = pr }, height = cardH, onClick = playOf(pr))
+                                if (pr.next) null else pr.fraction, onMenu = { contMenu = pr }, height = cardH,
+                                fr = if (i == 0) cFirst else if (i == cont.lastIndex) cLast else null,
+                                keys = Modifier.onPreviewKeyEvent { e ->
+                                    if (e.type != KeyEventType.KeyDown || cont.size < 2) false
+                                    else if (i == cont.lastIndex && e.key == Key.DirectionRight) { cScope.launch { cState.scrollToItem(0); delay(30); cFirst.tryFocus() }; true }
+                                    else if (i == 0 && e.key == Key.DirectionLeft) { cScope.launch { cState.scrollToItem(cont.lastIndex); delay(30); cLast.tryFocus() }; true }
+                                    else false
+                                }, onClick = playOf(pr))
+                        }
+                    }
+                } else if (p != null && Recent.list().isEmpty()) {
+                    // no history at all: the newest films, series and channels at the provider. Gone as soon as you watch something.
+                    val disc by load(p.id) {
+                        val mv = Repo.vodGroups(p).take(2).flatMap { g -> try { Repo.movies(p, g.id) } catch (e: Exception) { emptyList() } }
+                            .distinctBy { it.id }.sortedByDescending { it.added }.take(14)
+                        val se = Repo.seriesGroups(p).take(2).flatMap { g -> try { Repo.series(p, g.id) } catch (e: Exception) { emptyList() } }
+                            .distinctBy { it.id }.sortedByDescending { it.added }.take(14)
+                        val ch = try { Repo.allChannels(p).sortedByDescending { it.id.toLongOrNull() ?: 0L }.take(12) } catch (e: Exception) { emptyList() }
+                        Triple(mv, se, ch)
+                    }
+                    (disc as? Load.Ok)?.value?.let { (mv, se, ch) ->
+                        val pw = (cardH * 0.62f).coerceIn(70.dp, 92.dp)
+                        if (mv.isNotEmpty()) {
+                            RowTitle("NAJNOVIJI FILMOVI")
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(end = 40.dp, top = 4.dp, bottom = 8.dp)) {
+                                items(mv, key = { it.id }) { v -> PosterCard(cleanTitle(v.name).first, v.poster, v.id, null, Modifier.width(pw), rating = v.rating) { nav.push(Screen.MovieDetail(v)) } }
+                            }
+                        }
+                        if (se.isNotEmpty()) {
+                            RowTitle("NAJNOVIJE SERIJE")
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(end = 40.dp, top = 4.dp, bottom = 8.dp)) {
+                                items(se, key = { it.id }) { v -> PosterCard(cleanTitle(v.name).first, v.cover, v.id, null, Modifier.width(pw), rating = v.rating) { nav.push(Screen.SeriesDetail(v)) } }
+                            }
+                        }
+                        if (ch.isNotEmpty()) {
+                            RowTitle("NOVI KANALI")
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(end = 40.dp, top = 2.dp, bottom = 4.dp)) {
+                                items(ch, key = { it.url }) { c ->
+                                    Focusable(onClick = { playChannels(nav, listOf(c), 0) }, shape = Rnd(14.dp), normal = C.Rail, focused = C.Red, zoom = 1.04f,
+                                        modifier = Modifier.width(186.dp).height(50.dp).border(1.dp, C.Line, Rnd(14.dp))) { f ->
+                                        Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                            ChannelLogo(c, 32.dp, onLight = f)
+                                            T(c.name, 13.sp, if (f) C.OnRed else C.Text, FontWeight.Bold, modifier = Modifier.weight(1f))
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 } else if (newest.isNotEmpty()) {
@@ -350,9 +421,10 @@ private fun RowTitle(t: String) {
 
 /** Landscape card with picture, title and a thin progress line. */
 @Composable
-fun WideCard(title: String, sub: String, image: String?, key: String, progress: Float?, onMenu: (() -> Unit)? = null, height: Dp = 140.dp, onClick: () -> Unit) {
+fun WideCard(title: String, sub: String, image: String?, key: String, progress: Float?, onMenu: (() -> Unit)? = null, height: Dp = 140.dp,
+             fr: FocusRequester? = null, keys: Modifier = Modifier, onClick: () -> Unit) {
     Column(Modifier.width(height * (250f / 140f)), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Focusable(onClick = onClick, onMenu = onMenu, shape = Rnd(12.dp), normal = C.Card, zoom = 1.05f, modifier = Modifier.fillMaxWidth().height(height)) { f ->
+        Focusable(onClick = onClick, onMenu = onMenu, focusRequester = fr, shape = Rnd(12.dp), normal = C.Card, zoom = 1.05f, modifier = Modifier.fillMaxWidth().height(height).then(keys)) { f ->
             // the whole poster is shown (never cut); the empty sides get a soft, blurred copy of the same picture
             OnyxImage(image, key, Modifier.fillMaxSize().clip(Rnd(12.dp)).blur(18.dp).alpha(0.55f), maxW = 160)
             OnyxImage(image, key, Modifier.fillMaxSize().clip(Rnd(12.dp)), maxW = 300, scale = ContentScale.Fit)

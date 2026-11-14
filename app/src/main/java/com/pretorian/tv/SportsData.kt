@@ -345,12 +345,22 @@ object Sports {
 
     /** order of importance for the big card on top */
     /** your country: chosen in Settings › Sport, else the box's country */
-    val country: String get() = Prefs.str("sport_country").ifBlank { Locale.getDefault().country.uppercase().ifBlank { "DE" } }
+    /** one or more countries ("BA,DE"); empty = the box's country */
+    val countries: List<String> get() = Prefs.str("sport_country").split(',').map { it.trim().uppercase() }.filter { it.isNotBlank() }
+        .ifEmpty { listOf(Locale.getDefault().country.uppercase().ifBlank { "DE" }) }
+    val country: String get() = countries.first()
 
     /** what matters most where you live; the biggest tournaments are always on top */
     private fun priorityList(): List<String> {
         val top = listOf("WC", "EURO", "UCL")
-        val rest = when (country) {
+        // several countries: their lists are merged in turn, so each one's leagues come up near the top
+        val lists = countries.map { restFor(it) }
+        val rest = LinkedHashSet<String>()
+        (0 until (lists.maxOfOrNull { it.size } ?: 0)).forEach { i -> lists.forEach { l -> l.getOrNull(i)?.let { rest.add(it) } } }
+        return top + rest + listOf("ERE", "POR", "TSL", "MLS", "BL2", "TV", "FRI")
+    }
+    private fun restFor(country: String): List<String> {
+        return when (country) {
             "DE", "AT", "CH" -> listOf("BL", "DFB", "UEL", "PL", "LL", "SA", "UNL", "WCQ", "BL2", "AUT", "F1", "UECL", "L1", "NBA", "ATP", "WTA")
             "GB", "UK", "IE" -> listOf("PL", "UEL", "LL", "SA", "BL", "UNL", "WCQ", "F1", "UECL", "L1", "NBA", "ATP", "WTA")
             "US", "CA" -> listOf("NBA", "MLS", "PL", "F1", "LL", "BL", "SA", "ATP", "WTA", "UEL")
@@ -360,7 +370,6 @@ object Sports {
             "TR" -> listOf("TSL", "UEL", "PL", "LL", "SA", "BL", "NBA", "ATP", "WTA")
             else -> listOf("PL", "BL", "LL", "SA", "UEL", "UNL", "WCQ", "F1", "NBA", "UECL", "L1", "ATP", "WTA", "AUT")   // Balkan and the rest of Europe
         }
-        return top + rest + listOf("ERE", "POR", "TSL", "MLS", "BL2", "TV", "FRI")
     }
     fun priority(ev: SportEvent): Int = priorityList().indexOf(ev.leagueAbbr).let { if (it < 0) 50 else it } - (if (isFav(ev)) 300 else 0) -
         (if (ev.channels.isNotEmpty()) 100 else if (ev.ai.isNotEmpty()) 60 else 0)

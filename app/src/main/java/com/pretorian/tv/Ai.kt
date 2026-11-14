@@ -153,13 +153,13 @@ object SportsAI {
     /** your channels that show this match, according to Gemini with a web search */
     suspend fun channelsFor(ev: SportEvent, all: List<Channel>): List<Channel> = withContext(Dispatchers.IO) {
         if (!ready || ev.home == null || ev.away == null) return@withContext emptyList()
-        val id = "${ev.id}|${Sports.country}|$provider"
+        val id = "${ev.id}|${Sports.countries.joinToString("+")}|$provider"
         val names = mem[id] ?: readCache(id) ?: run {
             val cands = candidates(all)
             if (cands.isEmpty()) return@withContext emptyList()
             val date = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(ev.start))
             val prompt = """Football/sport match: ${ev.home.name} vs ${ev.away.name}, competition ${ev.league}, kick-off $date (local time).
-Viewer country: ${Sports.country}. Also consider the Balkans (Bosnia, Serbia, Croatia) and Germany/Austria, where the viewer's IPTV channels come from.
+Viewer countries: ${Sports.countries.joinToString(", ")}. Also consider the Balkans (Bosnia, Serbia, Croatia) and Germany/Austria, where the viewer's IPTV channels come from.
 If you can, search the web: which TV channels broadcast this exact match live? Otherwise use what you know about who holds the TV rights for this competition in these countries.
 Then choose ONLY from this list of the viewer's channels (exact names). Return ONLY a JSON array of the chosen names, best first, at most 6, or [] if none fit:
 ${JSONArray(cands)}"""
@@ -187,7 +187,7 @@ ${JSONArray(cands)}"""
             val date = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(ev.start))
             val prompt = """Sport event: $who, competition ${ev.league}, start $date.
 Search the web: which TV channels and streaming services broadcast this exact event live, in any country?
-Put first the viewer's country (${Sports.country}), then Bosnia and Herzegovina, Serbia, Croatia, Germany, Austria, Switzerland, then the rest.
+Put first the viewer's countries (${Sports.countries.joinToString(", ")}), then Bosnia and Herzegovina, Serbia, Croatia, Germany, Austria, Switzerland, then the rest.
 Return ONLY a JSON array, at most 20 items, like [{"c":"BA","n":"Arena Sport 1"},{"c":"DE","n":"DAZN"}] (c = 2-letter country code, n = channel name). Return [] if unknown."""
             val answer = ask(prompt, search = true)
             val arr = Regex("\\[[\\s\\S]*\\]").find(answer)?.value ?: "[]"

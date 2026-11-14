@@ -415,20 +415,27 @@ fun RecentStrip(nav: Nav) {
         val rState = androidx.compose.foundation.lazy.rememberLazyListState()
         val firstFr = remember { FocusRequester() }
         val clearFr = remember { FocusRequester() }
+        val lastFr = remember { FocusRequester() }
         fun toFirst() = scope.launch { rState.scrollToItem(0); delay(30); firstFr.tryFocus() }
         LazyRow(state = rState, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             itemsIndexed(list, key = { _, it -> it.ch.url }) { i, r ->
-                Focusable(focusRequester = if (i == 0) firstFr else null, onClick = {
+                Focusable(focusRequester = if (i == 0) firstFr else if (i == list.lastIndex) lastFr else null, onClick = {
                     scope.launch {
                         val g = GroupRef(r.pid, Category(r.catId, r.catName))
                         val chs = try { channelsOf(ctx, g) } catch (e: Exception) { emptyList() }
                         val i = chs.indexOfFirst { it.url == r.ch.url }
-                        if (i >= 0) { TvMemory.group = g; TvMemory.channel = i; TvMemory.restore = true; playChannels(nav, chs, i) }
-                        else playChannels(nav, listOf(r.ch), 0)
+                        // Back from full screen goes to TV, into the channel's own group, on that channel
+                        if (i >= 0) {
+                            TvMemory.group = g; TvMemory.channel = i; TvMemory.restore = true; TvMemory.preview = chs[i]
+                            nav.root(Screen.Tv); playChannels(nav, chs, i)
+                        } else playChannels(nav, listOf(r.ch), 0)
                     }
                 }, onMenu = { menu = r }, shape = Rnd(14.dp), normal = C.Rail, focused = C.Red, zoom = 1.04f,
                     modifier = Modifier.width(186.dp).height(50.dp).border(1.dp, C.Line, Rnd(14.dp)).onPreviewKeyEvent { e ->
-                        if (i == list.lastIndex && e.type == KeyEventType.KeyDown && e.key == Key.DirectionRight) { scope.launch { rState.scrollToItem(list.size); delay(30); clearFr.tryFocus() }; true } else false
+                        if (e.type != KeyEventType.KeyDown) false
+                        else if (i == list.lastIndex && e.key == Key.DirectionRight) { scope.launch { rState.scrollToItem(list.size); delay(30); clearFr.tryFocus() }; true }
+                        else if (i == 0 && e.key == Key.DirectionLeft) { scope.launch { rState.scrollToItem(list.lastIndex); delay(30); lastFr.tryFocus() }; true }   // ◀ on the first: to the last channel
+                        else false
                     }) { f ->
                     Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         ChannelLogo(r.ch, 32.dp, onLight = f)
