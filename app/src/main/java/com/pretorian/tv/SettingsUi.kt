@@ -1411,7 +1411,9 @@ private fun LookV2(openSub: (String) -> Unit) {
             SetSection("Tema")
             ThemeCards { rev++ }
             SetSection("Boja")
-            ColorDots { rev++ }
+            // these themes have their own colour (white or black focus): the dots would change nothing
+            if (Look.theme in setOf("bw", "vece", "staklo", "pijesak")) T("Ova tema ima svoju boju fokusa. Boje rade u temama Tamna, Svijetla, Glass i Winter Dew.", 11.sp, C.Muted, maxLines = 2)
+            else ColorDots { rev++ }
             val transp = (100 - Look.opacity).coerceIn(0, 50)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(Modifier.weight(1f)) { SetSlider("Prozirnost", "0 – 50 %, korak 5 %", transp, 0, 50, 5, "$transp %") { Look.opacity = 100 - it; save(); rev++ } }
