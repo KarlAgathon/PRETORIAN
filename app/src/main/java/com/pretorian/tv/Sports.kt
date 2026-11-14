@@ -1,5 +1,13 @@
 package com.pretorian.tv
 
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -74,18 +82,25 @@ private fun watchRank(e: SportEvent) = when { e.channels.isNotEmpty() -> 0; e.ai
 
 private fun hhmm(ms: Long) = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(ms))
 
+/** Where you were in Sports: after the full screen Back returns to the same match, day and filters. */
+object SportsMemory { var evId: String? = null; var day = 0; var sport = "all"; var mine = false; var view = "all"; var league: String? = null }
+
 @Composable
 fun SportsScreen(nav: Nav) {
     val ctx = LocalContext.current
     val p = remember { Store.active(ctx) }
-    var day by remember { mutableIntStateOf(0) }
-    var sport by remember { mutableStateOf("all") }
-    var league by remember { mutableStateOf<String?>(null) }
-    var mine by remember { mutableStateOf(false) }
+    var day by remember { mutableIntStateOf(SportsMemory.day) }
+    var sport by remember { mutableStateOf(SportsMemory.sport) }
+    var league by remember { mutableStateOf(SportsMemory.league) }
+    var mine by remember { mutableStateOf(SportsMemory.mine) }
     var tick by remember { mutableIntStateOf(0) }
     var updated by remember { mutableLongStateOf(0L) }
     var pick by remember { mutableStateOf<SportEvent?>(null) }
-    var view by remember { mutableStateOf("all") }   // all, live, done
+    var view by remember { mutableStateOf(SportsMemory.view) }   // all, live, done
+    val memFr = remember { FocusRequester() }
+    val memId = remember { SportsMemory.evId }
+    val sc = rememberScrollState()
+    val scope = rememberCoroutineScope()
     val events by load(day, tick, keep = true) { (if (day == UPCOMING) emptyList() else Sports.day(day)).also { updated = System.currentTimeMillis() } }
     val guide by load(p?.id) { Sports.guide(ctx, Store.actives(ctx)) }
     val heroFr = remember { FocusRequester() }
@@ -168,6 +183,7 @@ fun SportsScreen(nav: Nav) {
     val liveCount = remember(all) { all?.count { it.live } ?: 0 }
 
     fun play(ev: SportEvent, chs: List<Channel>, i: Int) {
+        SportsMemory.evId = ev.id; SportsMemory.day = day; SportsMemory.sport = sport; SportsMemory.mine = mine; SportsMemory.view = view; SportsMemory.league = league
         Preview.stop(); TvMemory.restore = false
         nav.push(Screen.Player(chs.map { PlayItem(it.name, it.url, it.logo, ev.title, it) }, i, live = true))
     }
@@ -187,19 +203,26 @@ fun SportsScreen(nav: Nav) {
                     if (updated > 0) T(" · " + trf("ažurirano %s", hhmm(updated)), 13.sp, C.Muted)
                 }
             }
-            DayTabs(day, dayFr) { day = it; league = null }
+            Box(Modifier.onPreviewKeyEvent { e ->
+                // Up from the days goes to the menu on top (TV, Filmovi…)
+                if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionUp) { try { TopNav.fr.requestFocus() } catch (_: Exception) {}; true } else false
+            }.onFocusChanged { if (it.hasFocus) scope.launch { sc.animateScrollTo(0) } }) { DayTabs(day, dayFr) { day = it; league = null; SportsMemory.evId = null } }
         }
         if (day == UPCOMING) UpcomingView { pick = it } else {
         // ---------------------------------------------------------------- picture on the left, the match on the right
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(sc).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         // the picture of the match and its broadcasts scroll with the list, so the lower rows can always be reached
         if (events is Load.Ok) SportTop(top)
         // every TV station that shows the match, worldwide; the ones you have are green and play on OK
-        if (events is Load.Ok && top != null) BroadcastRow(top) { chs, i -> play(top, chs, i) }
+        // the first row: its whole card stays visible, and Up goes to the days
+        if (events is Load.Ok && top != null) Box(Modifier.onFocusChanged { if (it.hasFocus) scope.launch { sc.animateScrollTo(0) } }.onPreviewKeyEvent { e ->
+            if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionUp) { scope.launch { sc.animateScrollTo(0) }; try { dayFr.requestFocus() } catch (_: Exception) {}; true } else false
+        }) { BroadcastRow(top) { chs, i -> play(top, chs, i) } }
         // ---------------------------------------------------------------- filters (one scrolling row, nothing is hidden)
         // one row: All · Live · My channels · then the sports (football first), then other sports that have matches
         val extra = remember(all) { Sports.MORE_SPORTS.filter { (id, _) -> all?.any { it.sport == id } == true } }
-        AlignStart { LazyRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
+        AlignStart { LazyRow(Modifier.fillMaxWidth().onFocusChanged { if (it.hasFocus && sc.value > 0 && top == null) scope.launch { sc.animateScrollTo(0) } },
+            horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
             item {
                 val on = sport == "all" && view == "all" && !mine
                 FilterChip("Sve", on, if (on) C.Red else null, dot = Color(0xFFFF4D55)) { sport = "all"; view = "all"; mine = false; league = null }
@@ -235,9 +258,9 @@ fun SportsScreen(nav: Nav) {
                     }
                 }
                 val firstSec = listOf(sections.first, sections.second, sections.third).indexOfFirst { it.isNotEmpty() }
-                Section("Uživo sada", sections.first, live = true, if (firstSec == 0) heroFr else null, { sel = it }) { open(it) }
-                Section("Kasnije", sections.second, false, if (firstSec == 1) heroFr else null, { sel = it }) { open(it) }
-                Section("Završeno", sections.third, false, if (firstSec == 2) heroFr else null, { sel = it }) { open(it) }
+                Section("Uživo sada", sections.first, live = true, if (firstSec == 0) heroFr else null, { sel = it }, memId, memFr) { open(it) }
+                Section("Kasnije", sections.second, false, if (firstSec == 1) heroFr else null, { sel = it }, memId, memFr) { open(it) }
+                Section("Završeno", sections.third, false, if (firstSec == 2) heroFr else null, { sel = it }, memId, memFr) { open(it) }
                 // ---------------------------------------------------------- leagues
                 if (leagues.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     T("Lige", 14.sp, C.Muted, FontWeight.SemiBold)
@@ -271,7 +294,9 @@ fun SportsScreen(nav: Nav) {
         if (focused || events !is Load.Ok) return@LaunchedEffect
         focused = true
         delay(100)
-        if (shown.isNotEmpty()) heroFr.tryFocus() else dayFr.tryFocus()
+        // back from the full screen: the match you had picked, else the first one
+        val back = memId != null && shown.any { it.id == memId }
+        if (back) { delay(250); memFr.tryFocus() } else if (shown.isNotEmpty()) heroFr.tryFocus() else dayFr.tryFocus()
     }
 }
 
@@ -612,16 +637,19 @@ private fun HeroTeam(t: Team) {
 
 @Composable
 private fun Section(title: String, list: List<SportEvent>, live: Boolean = false, fr: FocusRequester? = null,
-                    onFocus: (SportEvent) -> Unit = {}, onOpen: (SportEvent) -> Unit) {
+                    onFocus: (SportEvent) -> Unit = {}, memId: String? = null, memFr: FocusRequester? = null, onOpen: (SportEvent) -> Unit) {
     if (list.isEmpty()) return
+    val rowState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val memIdx = list.indexOfFirst { it.id == memId }
+    LaunchedEffect(memIdx) { if (memIdx > 0) rowState.scrollToItem(memIdx) }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (live) Dot(Color(0xFFFF4D55), 9.dp)
             T(title, 18.sp, C.Text, FontWeight.SemiBold)
             T("· ${list.size}", 15.sp, C.Muted)
         }
-        AlignStart { LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(end = 12.dp)) {
-            itemsIndexed(list, key = { _, e -> e.id }) { i, ev -> EventCard(ev, if (i == 0) fr else null, { onFocus(ev) }) { onOpen(ev) } }
+        AlignStart { LazyRow(state = rowState, horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(end = 12.dp)) {
+            itemsIndexed(list, key = { _, e -> e.id }) { i, ev -> EventCard(ev, if (ev.id == memId && memFr != null) memFr else if (i == 0) fr else null, { onFocus(ev) }) { onOpen(ev) } }
         } }
     }
 }

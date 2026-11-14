@@ -140,10 +140,10 @@ fun OnyxTopBar(current: Screen, nav: Nav, simple: Boolean = false, firstFocus: F
             }
             Spacer(Modifier.width(6.dp))
             items.forEachIndexed { i, it ->
-                NavPill(it, section == it.screen, if (i == 0) firstFocus else null, big = simple) { nav.root(it.screen) }
+                NavPill(it, section == it.screen, if (i == 0 && firstFocus != null) firstFocus else if (section == it.screen) TopNav.fr else null, big = simple) { nav.root(it.screen) }
             }
             NavPill(NavItem(Screen.Settings, if (simple) R.drawable.lc_lock else R.drawable.lc_settings, "Postavke",
-                if (Updater.available != null) 1 else 0), section == Screen.Settings, null, big = false) {
+                if (Updater.available != null) 1 else 0), section == Screen.Settings, if (section == Screen.Settings) TopNav.fr else null, big = false) {
                 if (simple) OnyxState.askAdvanced = true else nav.root(Screen.Settings)
             }
             Spacer(Modifier.weight(1f))
@@ -358,6 +358,9 @@ fun ChannelLogo(c: Channel, size: androidx.compose.ui.unit.Dp, onLight: Boolean 
         else T(c.name.filter { it.isLetterOrDigit() }.take(2).uppercase().ifBlank { "TV" }, (size.value * 0.32f).sp, if (onLight) Color(0xFF0A0A0A) else Color.White, FontWeight.ExtraBold)
     }
 }
+
+/** The menu pill of the screen you are on: Up from the top of a screen comes here. */
+object TopNav { val fr = FocusRequester() }
 
 object OnyxState { var askAdvanced by mutableStateOf(false) }
 

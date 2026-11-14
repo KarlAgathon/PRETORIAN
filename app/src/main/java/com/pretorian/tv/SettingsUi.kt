@@ -51,6 +51,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 private data class Section(val id: String, val icon: Int, val title: String, val sub: String)
 
@@ -1066,6 +1067,18 @@ fun SettingsScreen2(nav: Nav) {
 
 /* ---------------------------------------------------------------- building blocks */
 
+/** Keeps the focus on the row you worked on: after a choice, a switch or a closed list the page is drawn again
+ *  and the same row takes the focus back (it never jumps up to the menu). */
+object SetFocus { var last: String? = null; var pending = false; var tick by mutableIntStateOf(0) }
+
+@Composable
+fun setFocusFr(id: String, given: FocusRequester? = null): FocusRequester {
+    val fr = given ?: remember { FocusRequester() }
+    LaunchedEffect(Unit) { if (SetFocus.pending && SetFocus.last == id) { SetFocus.pending = false; fr.tryFocus() } }
+    LaunchedEffect(SetFocus.tick) { if (SetFocus.tick > 0 && SetFocus.last == id) { delay(60); fr.tryFocus() } }
+    return fr
+}
+
 @Composable
 fun SetPage(title: String, sub: String? = null, content: @Composable () -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1085,8 +1098,11 @@ fun SetSection(t: String) {
 @Composable
 fun SetRow(title: String, sub: String? = null, value: String? = null, arrow: String = "›", valueColor: Color? = null, new: Boolean = false,
            focusRequester: FocusRequester? = null, onClick: () -> Unit) {
-    Focusable(modifier = Modifier.fillMaxWidth().height(if (sub != null) 50.dp else 42.dp).border(1.dp, C.Line, Rnd(12.dp)), onClick = onClick,
-        focusRequester = focusRequester, shape = Rnd(12.dp), normal = C.Rail, focused = C.Red, zoom = 1.01f) { f ->
+    val id = "row:$title"
+    val fr = setFocusFr(id, focusRequester)
+    Focusable(modifier = Modifier.fillMaxWidth().height(if (sub != null) 50.dp else 42.dp).border(1.dp, C.Line, Rnd(12.dp)),
+        onClick = { SetFocus.last = id; SetFocus.pending = true; onClick() }, onFocus = { SetFocus.last = id },
+        focusRequester = fr, shape = Rnd(12.dp), normal = C.Rail, focused = C.Red, zoom = 1.01f) { f ->
         Row(Modifier.fillMaxSize().padding(start = 14.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1111,10 +1127,10 @@ fun SetDrop(title: String, sub: String? = null, options: List<String>, selected:
             valueColor: Color? = null, onSelect: (Int) -> Unit) {
     var open by remember { mutableStateOf(false) }
     SetRow(title, sub, tr(options.getOrElse(selected) { options.first() }), "▼", valueColor, new) { open = true }
-    if (open) Popup(title, { open = false }) {
+    if (open) Popup(title, { open = false; SetFocus.tick++ }) {
         if (note != null) T(note, 12.sp, C.Soft, maxLines = 4)
         options.forEachIndexed { i, o ->
-            OptionRow(o, if (i == selected) R.drawable.lc_check else null, color = if (i == selected) C.Green else null) { open = false; onSelect(i) }
+            OptionRow(o, if (i == selected) R.drawable.lc_check else null, color = if (i == selected) C.Green else null) { open = false; onSelect(i); SetFocus.tick++ }
         }
     }
 }
@@ -1138,11 +1154,11 @@ fun SetMulti(title: String, sub: String? = null, options: List<String>, on: Set<
         else -> trf("%s izabrano", on.size)
     }
     SetRow(title, sub, value, "▼", null, new) { open = true }
-    if (open) Popup(title, { open = false; onChange(cur) }, width = 620.dp) {
+    if (open) Popup(title, { open = false; onChange(cur); SetFocus.tick++ }, width = 620.dp) {
         if (note != null) T(note, 12.sp, C.Soft, maxLines = 3)
         if (all) LampRow("Sve", cur.size == options.size) { cur = if (cur.size == options.size) emptySet() else options.indices.toSet() }
         options.forEachIndexed { i, o -> LampRow(o, i in cur) { cur = if (i in cur) cur - i else cur + i } }
-        Button("Gotovo", R.drawable.lc_check, primary = true) { open = false; onChange(cur) }
+        Button("Gotovo", R.drawable.lc_check, primary = true) { open = false; onChange(cur); SetFocus.tick++ }
     }
 }
 
@@ -1158,7 +1174,10 @@ private fun LampRow(label: String, on: Boolean, onClick: () -> Unit) {
 /** Switch row: OK turns it on or off. */
 @Composable
 fun SetSwitch(title: String, sub: String? = null, on: Boolean, new: Boolean = false, onChange: (Boolean) -> Unit) {
-    Focusable(modifier = Modifier.fillMaxWidth().height(if (sub != null) 50.dp else 42.dp).border(1.dp, C.Line, Rnd(12.dp)), onClick = { onChange(!on) },
+    val id = "sw:$title"
+    val fr = setFocusFr(id)
+    Focusable(modifier = Modifier.fillMaxWidth().height(if (sub != null) 50.dp else 42.dp).border(1.dp, C.Line, Rnd(12.dp)),
+        onClick = { SetFocus.last = id; SetFocus.pending = true; onChange(!on) }, onFocus = { SetFocus.last = id }, focusRequester = fr,
         shape = Rnd(12.dp), normal = C.Rail, focused = C.Red, zoom = 1.01f) { f ->
         Row(Modifier.fillMaxSize().padding(start = 14.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f)) {
@@ -1178,14 +1197,16 @@ fun SetSwitch(title: String, sub: String? = null, on: Boolean, new: Boolean = fa
 /** Slider: ◀ ▶ on the remote change the value. */
 @Composable
 fun SetSlider(title: String, sub: String?, value: Int, min: Int, max: Int, step: Int, label: String, onChange: (Int) -> Unit) {
+    val id = "sl:$title"
+    val fr = setFocusFr(id)
     Focusable(modifier = Modifier.fillMaxWidth().height(62.dp).border(1.dp, C.Line, Rnd(12.dp)).onPreviewKeyEvent { e ->
         if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
         when (e.key) {
-            Key.DirectionLeft -> { onChange((value - step).coerceAtLeast(min)); true }
-            Key.DirectionRight -> { onChange((value + step).coerceAtMost(max)); true }
+            Key.DirectionLeft -> { SetFocus.last = id; SetFocus.pending = true; onChange((value - step).coerceAtLeast(min)); true }
+            Key.DirectionRight -> { SetFocus.last = id; SetFocus.pending = true; onChange((value + step).coerceAtMost(max)); true }
             else -> false
         }
-    }, onClick = {}, shape = Rnd(12.dp), normal = C.Rail, focused = C.CardHi, zoom = 1.01f) { f ->
+    }, onClick = {}, onFocus = { SetFocus.last = id }, focusRequester = fr, shape = Rnd(12.dp), normal = C.Rail, focused = C.CardHi, zoom = 1.01f) { f ->
         Column(Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 T(title, 13.sp, C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
@@ -1216,7 +1237,9 @@ fun ThemeCards(onPick: () -> Unit) {
             val sel = Look.theme == id
             val (bg, card) = THEME_SWATCH[id] ?: (Color.DarkGray to Color.Gray)
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Focusable(onClick = { Look.theme = id; Look.save(ctx); onPick() }, shape = Rnd(12.dp), normal = bg, focused = bg, zoom = 1.06f,
+                val fid = "theme:$id"
+                Focusable(onClick = { SetFocus.last = fid; SetFocus.pending = true; Look.theme = id; Look.save(ctx); onPick() }, onFocus = { SetFocus.last = fid },
+                    focusRequester = setFocusFr(fid), shape = Rnd(12.dp), normal = bg, focused = bg, zoom = 1.06f,
                     modifier = Modifier.width(112.dp).height(64.dp).border(2.dp, if (sel) Color(0xFF22C55E) else C.Line, Rnd(12.dp))) { _ ->
                     Column(Modifier.fillMaxSize().padding(8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                         Box(Modifier.width(36.dp).height(4.dp).clip(Pill).background(card.copy(alpha = 0.9f)))
@@ -1237,7 +1260,9 @@ fun ColorDots(onPick: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Look.ACCENTS.forEachIndexed { i, (_, col) ->
             val sel = Look.accent == i
-            Focusable(onClick = { Look.accent = i; Look.save(ctx); onPick() }, shape = CircleShape, normal = col, focused = col, zoom = 1.15f,
+            val fid = "accent:$i"
+            Focusable(onClick = { SetFocus.last = fid; SetFocus.pending = true; Look.accent = i; Look.save(ctx); onPick() }, onFocus = { SetFocus.last = fid },
+                focusRequester = setFocusFr(fid), shape = CircleShape, normal = col, focused = col, zoom = 1.15f,
                 modifier = Modifier.size(30.dp).border(2.dp, if (sel) Color.White else Color.Transparent, CircleShape)) { _ ->
                 if (sel) Box(Modifier.align(Alignment.Center)) { Ico(R.drawable.lc_check, 14.dp, Color.White) }
             }
@@ -1498,14 +1523,14 @@ private fun SportV2() {
             }
             val lgs = Sports.LEAGUES.filter { it.sport in en }
             val lOn = csv("sport_leagues", "")
-            SetMulti("Takmičenja", lgs.take(3).joinToString(", ") { it.name } + "…", lgs.map { it.name },
+            SetMulti("Takmičenja", lgs.take(3).joinToString(", ") { tr(it.name) } + "…", lgs.map { it.name },
                 if (lOn.isEmpty()) lgs.indices.toSet() else lgs.indices.filter { lgs[it].abbr in lOn }.toSet()) { s2 ->
                 Prefs.put("sport_leagues", if (s2.size == lgs.size) "" else s2.sorted().joinToString(",") { lgs[it].abbr }); Sports.lastCombined.clear(); rev++
             }
             var teamDlg by remember { mutableStateOf(false) }
             val teams = Prefs.str("sport_teams").split(',').map { it.trim() }.filter { it.isNotBlank() }
             SetRow("Omiljeni timovi", "njihove utakmice uvijek na vrhu", if (teams.isEmpty()) tr("Nijedan") else trf("%s tima", teams.size), new = true) { teamDlg = true }
-            if (teamDlg) TextDialog("Omiljeni timovi", "Imena, odvojena zarezom (npr. Željezničar, Bayern)", Prefs.str("sport_teams"), onDismiss = { teamDlg = false }) { v ->
+            if (teamDlg) TextDialog("Omiljeni timovi", "Imena, odvojena zarezom (npr. Željezničar, Bayern)", Prefs.str("sport_teams"), onDismiss = { teamDlg = false; SetFocus.tick++ }) { v ->
                 Prefs.put("sport_teams", v); teamDlg = false; Sports.lastCombined.clear(); rev++
             }
             SetSection("Prikaz")

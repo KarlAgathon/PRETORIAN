@@ -200,3 +200,51 @@ log
 pretorian_log_
 SAT.1
 SAT1
+id
+n
+i
+hold_ok
+PIN
+playlists
+groups
+language
+look
+media
+sport
+reminders
+parental
+backup
+about
+sub_size
+sub_style
+zap_updown
+resume_mode
+next_ep
+slow_net
+sport_preview
+sport_team_remind
+sport_refresh
+rem_sound
+rem_keep
+drive_every
+backup_daily
+upd_mode
+upd_note
+EEE, dd.MM.yy · HH:mm
+%.1f GB
+5 min
+15 min
+30 min
+1 min
+10 min
+1 h
+2 h
+3 h
+4 h
+Model
+ · Android 
+S${pr.season} E${pr.episode} · 
+S${pr.season} E${pr.episode}
+ S${next.season} · E${next.num}
+ · ${f.length() / 1024} KB
+$cacheMb MB

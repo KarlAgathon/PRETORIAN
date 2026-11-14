@@ -4,7 +4,7 @@ Texts go through T(), OptionRow(), Button(), Popup(), tr(), trf() and similar; a
 must use trf("... %s ...", value) so it can be translated."""
 import os, re, sys
 SRC = os.path.join(os.path.dirname(__file__), '..', 'app', 'src', 'main', 'java', 'com', 'pretorian', 'tv')
-CALLS = r'\b(T|OptionRow|Button|Popup|Message|Loading|Chip|ToggleRow|Label|Page|TextDialog|PinDialog|tr|trf|Field|HomeTile|RailItem|Segmented|LangPicker|LangOrderPicker|FileBrowser|FilePicker|Badge)\('
+CALLS = r'\b(T|OptionRow|Button|Popup|Message|Loading|Chip|ToggleRow|Label|Page|TextDialog|PinDialog|tr|trf|Field|HomeTile|RailItem|Segmented|LangPicker|LangOrderPicker|FileBrowser|FilePicker|Badge|SetRow|SetDrop|SetMulti|SetSwitch|SetSlider|SetSection|SetPage|Kicker|PillBtn|SheetRow|ToolBtn|WelcomeCard|PosterSheet|SearchHead|MetaChip|LampRow|RowTitle|NavItem|Section|Hero|WideCard|PosterCard|ExpiryChip|TipOnce|NavPill)\('
 LETTER = re.compile(r'[A-Za-zČĆŠĐŽčćšđž]')
 keep = set(l.strip() for l in open(os.path.join(os.path.dirname(__file__), 'i18n_keep.txt'), encoding='utf-8') if l.strip() and not l.startswith('#'))
 i18n = open(os.path.join(SRC, 'I18n.kt'), encoding='utf-8').read()
