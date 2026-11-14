@@ -124,6 +124,7 @@ fun OnyxTopBar(current: Screen, nav: Nav, simple: Boolean = false, firstFocus: F
     var notes by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { while (true) { now = Date(); delay(15_000) } }
     val items = buildList {
+        add(NavItem(Screen.Home, R.drawable.lc_house, "Početna"))
         val show = if (simple) Prefs.str("simple_items", "tv,vod,series").split(',') else listOf("tv", "vod", "series")
         if ("tv" in show) add(NavItem(Screen.Tv, R.drawable.lc_tv, "TV", Notes.unread("reminder")))
         if ("vod" in show) add(NavItem(Screen.Movies, R.drawable.lc_film, "Filmovi", NewContent.count("vod")))
@@ -140,7 +141,7 @@ fun OnyxTopBar(current: Screen, nav: Nav, simple: Boolean = false, firstFocus: F
             }
             Spacer(Modifier.width(6.dp))
             items.forEachIndexed { i, it ->
-                NavPill(it, section == it.screen, if (i == 0 && firstFocus != null) firstFocus else if (section == it.screen) TopNav.fr else null, big = simple) { nav.root(it.screen) }
+                NavPill(it, section == it.screen, if (i == 1 && firstFocus != null) firstFocus else if (section == it.screen) TopNav.fr else null, big = simple) { nav.root(it.screen) }
             }
             NavPill(NavItem(Screen.Settings, if (simple) R.drawable.lc_lock else R.drawable.lc_settings, "Postavke",
                 if (Updater.available != null) 1 else 0), section == Screen.Settings, if (section == Screen.Settings) TopNav.fr else null, big = false) {
@@ -193,6 +194,7 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
     val ctx = LocalContext.current
     val first = remember { FocusRequester() }
     val cont = remember(Watch.rev) { Watch.continueList(ctx) }
+    var contMenu by remember { mutableStateOf<Progress?>(null) }
     val p = remember { Store.active(ctx) }
     fun playOf(pr: Progress): () -> Unit = { nav.push(Screen.Player(listOf(PlayItem(pr.title, pr.url, pr.poster, null, null, pr.series, pr.season, pr.episode)), 0, live = false)) }
     val newest = remember(NewContent.rev) {
@@ -249,7 +251,7 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(end = 40.dp)) {
                         items(cont, key = { it.url }) { pr ->
                             WideCard(pr.series ?: pr.title, if (pr.season != null) "S${pr.season} E${pr.episode}" else fmtTime(pr.dur), pr.poster, pr.url,
-                                if (pr.next) null else pr.fraction, playOf(pr))
+                                if (pr.next) null else pr.fraction, onMenu = { contMenu = pr }, onClick = playOf(pr))
                         }
                     }
                 } else if (newest.isNotEmpty()) {
@@ -261,6 +263,16 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                     }
                 }
                 Spacer(Modifier.height(16.dp))
+            }
+        }
+    }
+    contMenu?.let { pr ->
+        PosterSheet(tr(if (pr.series != null) "Serija" else "Film"), cleanTitle(pr.series ?: pr.title).first, pr.poster, pr.url, { contMenu = null }) {
+            SheetRow("Nastavi", trf("ostalo %s min", ((pr.dur - pr.pos) / 60_000L).coerceAtLeast(1)), R.drawable.lc_play) { contMenu = null; playOf(pr)() }
+            SheetRow("Ukloni iz Nastavi gledati", "film ostaje u listi, samo nestaje odavde", R.drawable.lc_x) { Watch.remove(ctx, pr.url); contMenu = null }
+            SheetRow("Označi kao odgledano", null, R.drawable.lc_eye) { Watch.setWatched(ctx, pr.url, pr.title, pr.poster, true); contMenu = null }
+            if (pr.series == null && pr.url.contains("/movie/")) SheetRow("Detalji", "opis, glumci, trailer", R.drawable.lc_info) {
+                contMenu = null; nav.push(Screen.MovieDetail(Vod(pr.url.substringAfterLast('/').substringBefore('.'), pr.title, pr.poster, null, pr.url)))
             }
         }
     }
@@ -276,9 +288,9 @@ private fun RowTitle(t: String) {
 
 /** Landscape card with picture, title and a thin progress line. */
 @Composable
-fun WideCard(title: String, sub: String, image: String?, key: String, progress: Float?, onClick: () -> Unit) {
+fun WideCard(title: String, sub: String, image: String?, key: String, progress: Float?, onMenu: (() -> Unit)? = null, onClick: () -> Unit) {
     Column(Modifier.width(196.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        Focusable(onClick = onClick, shape = Rnd(12.dp), normal = C.Card, zoom = 1.05f, modifier = Modifier.fillMaxWidth().height(100.dp)) { f ->
+        Focusable(onClick = onClick, onMenu = onMenu, shape = Rnd(12.dp), normal = C.Card, zoom = 1.05f, modifier = Modifier.fillMaxWidth().height(100.dp)) { f ->
             OnyxImage(image, key, Modifier.fillMaxSize().clip(Rnd(12.dp)), maxW = 420)
             Box(Modifier.fillMaxSize().clip(Rnd(12.dp)).background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xD9000000)), startY = 90f)))
             if (f) Box(Modifier.fillMaxSize().border(2.dp, Color.White, Rnd(12.dp)))
