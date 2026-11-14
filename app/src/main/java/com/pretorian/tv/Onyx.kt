@@ -1,5 +1,7 @@
 package com.pretorian.tv
 
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
 import android.content.Context
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -75,7 +77,7 @@ fun fallbackFor(key: String): Int = FALLBACKS[(key.hashCode() and 0x7fffffff) % 
 
 /** Picture that falls back to a landscape when there is no image or it fails to load. */
 @Composable
-fun OnyxImage(url: String?, key: String, modifier: Modifier = Modifier, maxW: Int = 360) {
+fun OnyxImage(url: String?, key: String, modifier: Modifier = Modifier, maxW: Int = 360, scale: ContentScale = ContentScale.Crop) {
     val ctx = LocalContext.current
     val fb = painterResource(fallbackFor(key))
     if (url.isNullOrBlank()) Image(fb, null, modifier, contentScale = ContentScale.Crop)
@@ -85,7 +87,7 @@ fun OnyxImage(url: String?, key: String, modifier: Modifier = Modifier, maxW: In
         val req = remember(url, w) {
             coil.request.ImageRequest.Builder(ctx).data(url).size(w, w * 3 / 2).allowRgb565(Perf.lite).crossfade(!Perf.lite).build()
         }
-        AsyncImage(model = req, contentDescription = null, contentScale = ContentScale.Crop, modifier = modifier, error = fb, placeholder = fb)
+        AsyncImage(model = req, contentDescription = null, contentScale = scale, modifier = modifier, error = fb, placeholder = fb)
     }
 }
 
@@ -294,17 +296,18 @@ private fun RowTitle(t: String) {
 /** Landscape card with picture, title and a thin progress line. */
 @Composable
 fun WideCard(title: String, sub: String, image: String?, key: String, progress: Float?, onMenu: (() -> Unit)? = null, onClick: () -> Unit) {
-    Column(Modifier.width(250.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+    Column(Modifier.width(250.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Focusable(onClick = onClick, onMenu = onMenu, shape = Rnd(12.dp), normal = C.Card, zoom = 1.05f, modifier = Modifier.fillMaxWidth().height(140.dp)) { f ->
-            OnyxImage(image, key, Modifier.fillMaxSize().clip(Rnd(12.dp)), maxW = 420)
-            Box(Modifier.fillMaxSize().clip(Rnd(12.dp)).background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xD9000000)), startY = 150f)))
+            // the whole poster is shown (never cut); the empty sides get a soft, blurred copy of the same picture
+            OnyxImage(image, key, Modifier.fillMaxSize().clip(Rnd(12.dp)).blur(18.dp).alpha(0.55f), maxW = 160)
+            OnyxImage(image, key, Modifier.fillMaxSize().clip(Rnd(12.dp)), maxW = 300, scale = ContentScale.Fit)
             if (f) Box(Modifier.fillMaxSize().border(2.dp, Color.White, Rnd(12.dp)))
-            T(cleanTitle(title).first, 15.sp, Color.White, FontWeight.Bold, modifier = Modifier.align(Alignment.BottomStart).padding(start = 10.dp, end = 10.dp, bottom = 10.dp))
             if (progress != null) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Color(0x33FFFFFF))) {
                 Box(Modifier.fillMaxWidth(progress.coerceAtLeast(0.02f)).fillMaxHeight().background(Color.White))
             }
         }
-        T(sub, 11.sp, C.Muted)
+        T(cleanTitle(title).first, 14.sp, C.Text, FontWeight.Bold, maxLines = 1, modifier = Modifier.padding(start = 2.dp))
+        T(sub, 11.sp, C.Muted, maxLines = 1, modifier = Modifier.padding(start = 2.dp))
     }
 }
 

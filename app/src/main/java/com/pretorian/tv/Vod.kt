@@ -269,12 +269,11 @@ private fun VodClassic(nav: Nav, series: Boolean) {
         val out = ArrayList<VRow>()
         if (pls.size > 1) out.add(VRow.Header(p, true))
         val cont = Watch.continueList(ctx).filter { (it.series != null) == series && (it.pid.isBlank() || it.pid == p.id) }
-        if (Look.age) out.add(VRow.Title(tr("MOJE")))
         if (cont.isNotEmpty()) out.add(VRow.Group(Category(G_CONTINUE, tr("Nastavi gledati")), cont.size))
-        if (Look.age) out.add(VRow.Group(Category(G_MYLIST, tr("Moja lista")), MyList.items(kind).size))
+        val my = MyList.items(kind).size
+        if (Look.age && my > 0) out.add(VRow.Group(Category(G_MYLIST, tr("Moja lista")), my))   // shown only when something is on it
         val nw = NewContent.items(p.id, kind)
         if (nw.isNotEmpty()) out.add(VRow.Group(Category(G_NEW, tr("Novo dodano")), nw.size))
-        if (Look.age) out.add(VRow.Title(tr("KATEGORIJE PROVIDERA")))
         if (p.type == SourceType.XTREAM) ovr.groups(kind, if (series) Repo.seriesGroups(p) else Repo.vodGroups(p))
             .forEach { out.add(VRow.Group(it, NewContent.countCat(p.id, kind, it.id))) }
         pls.drop(1).forEach { out.add(VRow.Header(it, false)) }
@@ -295,7 +294,7 @@ private fun VodClassic(nav: Nav, series: Boolean) {
     }
 
     Row(Modifier.fillMaxSize()) {
-        Column(if (Look.age) Modifier.padding(start = 24.dp, top = 6.dp, bottom = 14.dp).width(290.dp).fillMaxHeight().clip(Rnd(18.dp)).background(C.Rail)
+        Column(if (Look.age) Modifier.padding(start = 14.dp, top = 6.dp, bottom = 14.dp).width(250.dp).fillMaxHeight().clip(Rnd(18.dp)).background(C.Rail)
                 .border(1.dp, C.Line, Rnd(18.dp)).padding(6.dp)
             else Modifier.width(290.dp).fillMaxHeight().padding(start = 16.dp, end = 10.dp, top = 22.dp)) {
             if (!Look.age) T(if (series) "Serije" else "Filmovi", 26.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 10.dp, bottom = 12.dp))
@@ -305,9 +304,9 @@ private fun VodClassic(nav: Nav, series: Boolean) {
                 is Load.Ok -> {
                     val all = s.value
                     val firstIdx = all.indexOfFirst { it !is VRow.Title }.coerceAtLeast(0)
-                    LazyColumn(state = gState, verticalArrangement = Arrangement.spacedBy(4.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
+                    LazyColumn(state = gState, verticalArrangement = Arrangement.spacedBy(if (Look.age) 2.dp else 4.dp), contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp)) {
                         itemsIndexed(all, key = { _, r -> r.id }) { i, r ->
-                            val m = Modifier.fillMaxWidth().then(if (Look.age) Modifier.heightIn(min = Rows.group + 4.dp) else Modifier.height(Rows.group)).wrapKeys(i, all.size, gWrap)
+                            val m = Modifier.fillMaxWidth().then(if (Look.age) Modifier.heightIn(min = 42.dp) else Modifier.height(Rows.group)).wrapKeys(i, all.size, gWrap)
                             val fr = gWrap.requester(i, if (i == firstIdx) firstGroup else null)
                             when (r) {
                                 is VRow.Title -> androidx.compose.material3.Text(r.text, style = androidx.compose.ui.text.TextStyle(fontFamily = Inter, fontSize = 11.sp,
@@ -343,8 +342,8 @@ private fun VodClassic(nav: Nav, series: Boolean) {
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                             if (g.id == G_CONTINUE) Ico(R.drawable.lc_history, 15.dp, C.RedText)
                                             if (g.id == G_NEW) Ico(R.drawable.lc_sparkles, 15.dp, C.Amber)
-                                            T(g.name, Rows.font, if (onW) C.OnRed else if (selected) C.Text else C.Soft, if (selected || special) FontWeight.SemiBold else FontWeight.Normal,
-                                                modifier = Modifier.weight(1f).padding(vertical = 4.dp), maxLines = if (Look.age) 2 else 1)
+                                            T(g.name, if (Look.age) 15.sp else Rows.font, if (onW) C.OnRed else if (selected) C.Text else C.Soft, if (selected || special) FontWeight.SemiBold else FontWeight.Normal,
+                                                modifier = Modifier.weight(1f).padding(vertical = 3.dp), maxLines = if (Look.age) 2 else 1)
                                             if (Look.age && r.count > 0 && g.id != G_NEW) T("${r.count}", 12.sp, if (onW) C.OnRed else C.Muted)
                                             if (locked) Ico(R.drawable.lc_lock, 15.dp, C.Muted)
                                             if (!Look.age && r.count > 0 && g.id != G_CONTINUE) Box(Modifier.clip(Pill).background(if (g.id == G_NEW) C.Amber else C.Danger).padding(horizontal = 7.dp, vertical = 1.dp)) {
@@ -472,20 +471,24 @@ private fun PosterGrid(title: String, items: List<Poster>, newList: Boolean, kin
 private fun OnyxPosters(title: String, items: List<Poster>, kind: String, pid: String) {
     val ctx = LocalContext.current
     var menu by remember { mutableStateOf<Poster?>(null) }
-    // poster width from the screen width: about 3–4 big posters in a row on any TV
-    val cfg = androidx.compose.ui.platform.LocalConfiguration.current
-    val minW = (cfg.screenWidthDp * 0.15f).coerceIn(130f, 220f).dp
+    // always 4 posters in a row, sized so 2 full rows (8 posters) fit on any screen
     Column(Modifier.fillMaxSize().padding(start = 18.dp, end = 24.dp, top = 6.dp)) {
         Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Kicker(title, C.Soft, size = 12.sp, modifier = Modifier.weight(1f))
             Kicker(trf("%s naslova", items.size), size = 11.sp)
         }
-        LazyVerticalGrid(columns = GridCells.Adaptive(minW), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(18.dp),
-            contentPadding = PaddingValues(top = 6.dp, bottom = 30.dp, start = 4.dp, end = 4.dp), modifier = Modifier.fillMaxSize()) {
-            items(items, key = { it.id }) { it ->
-                val pr = it.url?.let { u -> Watch.get(ctx, u) }
-                PosterCard(cleanTitle(it.name).first, it.image, it.id, pr?.takeIf { p -> p.started && !p.watched }?.fraction, Modifier.fillMaxWidth(),
-                    onMenu = { menu = it }, rating = it.rating, onClick = it.open)
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+            val gapH = 16.dp; val gapV = 14.dp; val padV = 8.dp
+            val byWidth = (maxWidth - 8.dp - gapH * 3) / 4
+            val byHeight = ((maxHeight - padV * 2 - gapV) / 2) * (2f / 3f)
+            val w = if (byWidth < byHeight) byWidth else byHeight
+            LazyVerticalGrid(columns = GridCells.FixedSize(w), horizontalArrangement = Arrangement.spacedBy(gapH), verticalArrangement = Arrangement.spacedBy(gapV),
+                contentPadding = PaddingValues(top = padV, bottom = padV, start = 4.dp, end = 4.dp), modifier = Modifier.fillMaxSize()) {
+                items(items, key = { it.id }) { it ->
+                    val pr = it.url?.let { u -> Watch.get(ctx, u) }
+                    PosterCard(cleanTitle(it.name).first, it.image, it.id, pr?.takeIf { p -> p.started && !p.watched }?.fraction, Modifier.width(w),
+                        onMenu = { menu = it }, rating = it.rating, onClick = it.open)
+                }
             }
         }
     }
