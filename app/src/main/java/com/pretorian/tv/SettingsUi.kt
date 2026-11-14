@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -1616,7 +1617,7 @@ private fun SportV2() {
                 }
                 androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     SportChip("Velika takmičenja", on == Sports.BIG.toSet()) { save(Sports.BIG.toSet()) }
-                    SportChip("Moja regija", on == (Sports.BIG + Sports.REGION).toSet()) { save((Sports.BIG + Sports.REGION).toSet()) }
+                    SportChip("Moja regija", on == (Sports.BIG + Sports.REGION_LEAGUES).toSet()) { save((Sports.BIG + Sports.REGION_LEAGUES).toSet()) }
                     SportChip("Sve", on.size == all.size) { save(all.toSet()) }
                     SportChip("Ništa", on.isEmpty()) { save(emptySet()) }
                 }

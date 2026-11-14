@@ -98,7 +98,7 @@ object Sports {
         "Košarka" to listOf("NBA"), "Formula 1" to listOf("F1"), "Tenis" to listOf("ATP", "WTA"),
     )
     val BIG = listOf("WC", "EURO", "UNL", "WCQ", "UCL", "UEL", "UECL", "PL", "LL", "BL", "SA", "L1", "NBA", "F1", "ATP", "WTA")
-    val REGION = listOf("BIH", "SRB", "HNL", "BL2", "AUT", "SUI")
+    val REGION_LEAGUES = listOf("BIH", "SRB", "HNL", "BL2", "AUT", "SUI")
     /** competitions you follow: chosen competitions (all when none chosen) on the chosen continents */
     fun activeLeagues(): List<League> {
         val raw = Prefs.str("sport_leagues", BIG.joinToString(","))
