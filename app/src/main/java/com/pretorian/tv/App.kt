@@ -143,7 +143,7 @@ class Nav(
     val playlistsChanged: () -> Unit,
 )
 
-object BuildInfo { const val VERSION = "0.8.3" }
+object BuildInfo { const val VERSION = "0.8.4" }
 
 @Composable
 fun PretorianApp() {
@@ -220,9 +220,9 @@ fun PretorianApp() {
                 Box(Modifier.fillMaxSize().background(C.BgBrush)) {
                     DuskBackground()
                     key(version, top) {
-                        if (top == Screen.Home || top == Screen.Settings) OnyxHome(nav, simple = true)
-                        else Column(Modifier.fillMaxSize()) {
-                            OnyxTopBar(top, nav, simple = true)
+                        // simple (parental) mode: three big tiles; TV, Movies and Series open without any top menu
+                        if (top == Screen.Home || top == Screen.Settings) OnyxSimpleHome(nav)
+                        else Column(Modifier.fillMaxSize().padding(top = 14.dp)) {
                             Box(Modifier.weight(1f).fillMaxWidth()) {
                                 when (top) {
                                     Screen.Tv -> TvScreen(nav)

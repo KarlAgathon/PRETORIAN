@@ -287,10 +287,9 @@ private fun VodClassic(nav: Nav, series: Boolean) {
     val gWrap = remember { Wrap() }
     val gState = rememberLazyListState()
     WrapEffect(gWrap, gState)
-    LaunchedEffect(focusedGroup) {
-        val g = focusedGroup ?: return@LaunchedEffect
-        delay(400)
-        gate.run("$kind:${g.id}", ovr.isLocked(kind, g.id)) { group = g }
+    // a category opens only with OK; moving over the list keeps the posters of the open one. At start the first one is open.
+    LaunchedEffect(rowsState) {
+        if (group == null) ((rowsState as? Load.Ok)?.value?.firstOrNull { it is VRow.Group && !ovr.isLocked(kind, it.cat.id) } as? VRow.Group)?.let { group = it.cat }
     }
 
     Row(Modifier.fillMaxSize()) {

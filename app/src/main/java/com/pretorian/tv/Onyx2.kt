@@ -135,12 +135,8 @@ fun OnyxTv(nav: Nav, onGuide: () -> Unit) {
     LaunchedEffect(Unit) { if (!coming) { TvMemory.restore = false; st.refocus++ } }
     fun backToGroups() { st.focusKey = "g:" + (st.group?.key ?: ""); inChannels = false; st.refocus++ }
     BackHandler(enabled = inChannels && st.groupMenu == null) { backToGroups() }
-    LaunchedEffect(focusedGroup) {
-        val f = focusedGroup ?: return@LaunchedEffect
-        delay(220)
-        val locked = f.pid?.let { Ovr(ctx, it).isLocked("live", f.cat.id) } ?: false
-        if (!locked && st.group?.key != f.key) { TvMemory.channel = -1; st.group = f; TvMemory.group = f }
-    }
+    // a group opens only with OK; moving over the list changes nothing on the right
+    var preview by remember { mutableStateOf(TvMemory.preview) }
     LaunchedEffect(st.refocus, rows is Load.Ok) {
         val list = (rows as? Load.Ok)?.value ?: return@LaunchedEffect
         if (st.refocus == 0) return@LaunchedEffect
@@ -210,10 +206,10 @@ fun OnyxTv(nav: Nav, onGuide: () -> Unit) {
                 if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { backToGroups(); true } else false
             }) {
                 if (g == null) Message("Izaberi grupu")
-                else key(g.key, st.rev) { OnyxChannels(g, nav, st, rows, enterTick) { focusedCh = it; inChannels = true } }
+                else key(g.key, st.rev) { OnyxChannels(g, nav, st, rows, enterTick, preview, { preview = it; TvMemory.preview = it }) { focusedCh = it; inChannels = true } }
             }
             // ---------------------------------------------------------- picture and programme
-            NowPanel(focusedCh, Modifier.width(272.dp).fillMaxHeight())
+            NowPanel(preview, Modifier.width(272.dp).fillMaxHeight())
         }
         RecentStrip(nav)
     }
@@ -234,7 +230,7 @@ private fun TvDialogsRows(st: TvState, rows: Load<List<TRow>>) {
 }
 
 @Composable
-private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRow>>, enterTick: Int, onFocusCh: (Channel) -> Unit) {
+private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRow>>, enterTick: Int, preview: Channel?, onPreview: (Channel) -> Unit, onFocusCh: (Channel) -> Unit) {
     val ctx = LocalContext.current
     var listRev by remember { mutableIntStateOf(0) }
     val isFav = g.pid == null
@@ -261,8 +257,10 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                         Focusable(modifier = Modifier.fillMaxWidth().height(50.dp).wrapKeys(i, list.size, cWrap), shape = Rnd(12.dp),
                             onClick = {
                                 st.gate.run("c:${ch.url}", locked) {
-                                    ovr.countWatch(ch); TvMemory.channel = i; TvMemory.group = g; TvMemory.restore = true
-                                    playChannels(nav, list, i)
+                                    // first OK: this channel plays in the small picture; OK again on the same channel: full screen
+                                    TvMemory.channel = i; TvMemory.group = g
+                                    if (preview?.url == ch.url) { ovr.countWatch(ch); TvMemory.restore = true; playChannels(nav, list, i) }
+                                    else onPreview(ch)
                                 }
                             },
                             onMenu = { menu = ch }, onFocus = { onFocusCh(ch) }, focusRequester = cWrap.requester(i),
@@ -276,6 +274,7 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                                     T(now?.title ?: " ", 11.sp, if (f) C.OnRed.copy(alpha = 0.65f) else C.Muted)
                                     if (now != null) ThinBar(now.progress(), if (f) C.OnRed else hueOf(ch.name), Modifier.fillMaxWidth())
                                 }
+                                if (preview?.url == ch.url) Ico(R.drawable.lc_play, 13.dp, if (f) C.OnRed else C.Green)
                                 if (locked) Ico(R.drawable.lc_lock, 13.dp, if (f) C.OnRed else C.Muted)
                                 if (!isFav && Favs.inAny(ctx, ch)) T("★", 13.sp, Color(0xFFFF5A64))
                             }
@@ -301,8 +300,7 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
 @Composable
 private fun NowPanel(ch: Channel?, modifier: Modifier) {
     val ctx = LocalContext.current
-    var c by remember { mutableStateOf<Channel?>(null) }
-    LaunchedEffect(ch?.url) { delay(180); c = ch }
+    val c = ch
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).glass(16.dp)) {
             val cc = c
@@ -320,7 +318,7 @@ private fun NowPanel(ch: Channel?, modifier: Modifier) {
                 }
             }
         }
-        val cc = c ?: run { T("Stani na kanal da vidiš šta je na programu", 12.sp, C.Muted, maxLines = 2); return@Column }
+        val cc = c ?: run { T("OK na kanalu: slika ovdje · još jednom OK: cijeli ekran", 12.sp, C.Muted, maxLines = 2); return@Column }
         val epg by load(cc.url) { Store.byId(ctx, cc.pid)?.let { Repo.epg(it, cc, 4) } ?: emptyList() }
         val list = (epg as? Load.Ok)?.value ?: emptyList()
         val nowT = System.currentTimeMillis()

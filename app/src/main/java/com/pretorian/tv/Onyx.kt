@@ -1,5 +1,6 @@
 package com.pretorian.tv
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.draw.alpha
@@ -171,14 +172,15 @@ fun OnyxTopBar(current: Screen, nav: Nav, simple: Boolean = false, firstFocus: F
 
 @Composable
 private fun NavPill(it: NavItem, selected: Boolean, fr: FocusRequester?, big: Boolean, onClick: () -> Unit) {
+    // advanced mode: icons only; the open screen and the focused one show their name next to the icon
     Box {
         Focusable(onClick = onClick, focusRequester = fr, shape = Pill, normal = if (selected) C.CardHi else Color.Transparent,
-            focused = C.Red, zoom = 1.04f, modifier = Modifier.height(if (big) 38.dp else 32.dp)) { f ->
-            Row(Modifier.align(Alignment.Center).padding(horizontal = if (big) 16.dp else 11.dp), verticalAlignment = Alignment.CenterVertically,
+            focused = C.Red, zoom = 1.04f, modifier = Modifier.height(if (big) 38.dp else 36.dp)) { f ->
+            Row(Modifier.align(Alignment.Center).padding(horizontal = if (big) 16.dp else 10.dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 val col = if (f) C.OnRed else if (selected) C.Text else C.Soft
-                Ico(it.icon, if (big) 17.dp else 14.dp, col)
-                T(it.label, if (big) 15.sp else 12.sp, col, FontWeight.SemiBold)
+                Ico(it.icon, if (big) 17.dp else 18.dp, col)
+                if (big || f || selected) T(it.label, if (big) 15.sp else 13.sp, col, FontWeight.SemiBold)
             }
         }
         if (it.badge > 0) Box(Modifier.align(Alignment.TopEnd)) { Bell(it.badge) }
@@ -415,9 +417,49 @@ object TopNav { val fr = FocusRequester() }
 
 object OnyxState { var askAdvanced by mutableStateOf(false); var askPin by mutableStateOf(false) }
 
+/** Remembers which big tile was opened last in simple mode. */
+object SimpleMemory { var last: Screen = Screen.Tv }
+
+/** Simple (parental) mode home: only TV, Movies and Series as three big tiles, and the mode switch below. */
+@Composable
+fun OnyxSimpleHome(nav: Nav) {
+    val show = Prefs.str("simple_items", "tv,vod,series").split(',')
+    val tiles = buildList {
+        if ("tv" in show) add(Triple(Screen.Tv, R.drawable.lc_tv, "TV"))
+        if ("vod" in show) add(Triple(Screen.Movies, R.drawable.lc_film, "Filmovi"))
+        if ("series" in show) add(Triple(Screen.Series, R.drawable.lc_monitor, "Serije"))
+    }
+    val frs = remember { tiles.associate { it.first to FocusRequester() } }
+    BackHandler(enabled = true) { }   // Back on the tiles does nothing: nobody leaves the app by accident
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("PRETORIAN", style = TextStyle(fontFamily = Inter, fontSize = 15.sp, color = C.Soft, fontWeight = FontWeight.Light, letterSpacing = 5.sp))
+            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                val gap = 28.dp
+                val w = ((maxWidth - gap * (tiles.size - 1)) / tiles.size.coerceAtLeast(1)).coerceAtMost(260.dp)
+                val h = (w * 1.05f).coerceAtMost(maxHeight - 20.dp)
+                Row(horizontalArrangement = Arrangement.spacedBy(gap), verticalAlignment = Alignment.CenterVertically) {
+                    tiles.forEach { (scr, icon, label) ->
+                        Focusable(onClick = { SimpleMemory.last = scr; nav.root(scr) }, focusRequester = frs[scr], shape = Rnd(26.dp),
+                            normal = C.Rail, focused = C.Red, zoom = 1.06f, modifier = Modifier.width(w).height(h).border(1.dp, C.Line, Rnd(26.dp))) { f ->
+                            Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                                Ico(icon, (h * 0.32f), if (f) C.OnRed else C.Text)
+                                T(label, 28.sp, if (f) C.OnRed else C.Text, FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+            SimpleModePill(nav)
+        }
+    }
+    LaunchedEffect(Unit) { delay(50); (frs[SimpleMemory.last] ?: frs.values.firstOrNull())?.tryFocus() }
+    AdvancedGate(nav)
+}
+
 /** Simple mode: one pill instead of Settings; OK drops down "Napredni mod" (PIN if one is set). */
 @Composable
-private fun SimpleModePill(nav: Nav) {
+fun SimpleModePill(nav: Nav) {
     var open by remember { mutableStateOf(false) }
     Box {
         Focusable(onClick = { open = true }, shape = Pill, normal = C.CardHi, focused = C.Red, zoom = 1.04f, modifier = Modifier.height(38.dp)) { f ->

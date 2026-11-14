@@ -66,6 +66,8 @@ object TvMemory {
     var channel = -1
     /** true while coming back from the player: focus goes back to the channel that was playing */
     var restore = false
+    /** the channel confirmed with OK: it plays in the small picture until another one is confirmed */
+    var preview: Channel? = null
 }
 
 /** The small live preview: stopped before the real player starts, so the account never has two connections. */
