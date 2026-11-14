@@ -313,39 +313,45 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                     // no history at all: the newest films, series and channels at the provider. Gone as soon as you watch something.
                     val disc by load(p.id) {
                         val mv = Repo.vodGroups(p).take(2).flatMap { g -> try { Repo.movies(p, g.id) } catch (e: Exception) { emptyList() } }
-                            .distinctBy { it.id }.sortedByDescending { it.added }.take(14)
+                            .distinctBy { it.id }.sortedByDescending { it.added }.take(40)
                         val se = Repo.seriesGroups(p).take(2).flatMap { g -> try { Repo.series(p, g.id) } catch (e: Exception) { emptyList() } }
-                            .distinctBy { it.id }.sortedByDescending { it.added }.take(14)
-                        val ch = try { Repo.allChannels(p).sortedByDescending { it.id.toLongOrNull() ?: 0L }.take(12) } catch (e: Exception) { emptyList() }
+                            .distinctBy { it.id }.sortedByDescending { it.added }.take(40)
+                        val ch = try { Repo.allChannels(p).sortedByDescending { it.id.toLongOrNull() ?: 0L }.take(30) } catch (e: Exception) { emptyList() }
                         Triple(mv, se, ch)
                     }
                     (disc as? Load.Ok)?.value?.let { (mv, se, ch) ->
-                        // about 5 posters across the screen; each row goes round (end ▶ first, first ◀ end)
-                        val pw = ((maxWidth - 56.dp - 14.dp * 4) / 5.4f).coerceIn(110.dp, 220.dp)
+                        // 5 posters across the screen; each row scrolls sideways and goes round
+                        val pw = ((maxWidth - 56.dp - 14.dp * 4) / 5).coerceIn(90.dp, 220.dp)
+                        val dScope = rememberCoroutineScope()
                         if (mv.isNotEmpty()) {
+                            val w = remember(mv.size) { RowWrap(mv.size) }
                             RowTitle("NAJNOVIJI FILMOVI")
-                            RoundRow(mv.size, 14.dp) { i, fr, keys ->
-                                val v = mv[i]
-                                PosterCard(cleanTitle(v.name).first, v.poster, v.id, null, Modifier.width(pw).then(keys), fr = fr, rating = v.rating) { nav.push(Screen.MovieDetail(v)) }
+                            LazyRow(state = w.state, horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(top = 6.dp, bottom = 12.dp)) {
+                                itemsIndexed(mv, key = { _, v -> v.id }) { i, v ->
+                                    PosterCard(cleanTitle(v.name).first, v.poster, v.id, null, Modifier.width(pw).then(w.keys(i, dScope)), fr = w.fr(i), rating = v.rating) { nav.push(Screen.MovieDetail(v)) }
+                                }
                             }
                         }
                         if (se.isNotEmpty()) {
+                            val w = remember(se.size) { RowWrap(se.size) }
                             RowTitle("NAJNOVIJE SERIJE")
-                            RoundRow(se.size, 14.dp) { i, fr, keys ->
-                                val v = se[i]
-                                PosterCard(cleanTitle(v.name).first, v.cover, v.id, null, Modifier.width(pw).then(keys), fr = fr, rating = v.rating) { nav.push(Screen.SeriesDetail(v)) }
+                            LazyRow(state = w.state, horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(top = 6.dp, bottom = 12.dp)) {
+                                itemsIndexed(se, key = { _, v -> v.id }) { i, v ->
+                                    PosterCard(cleanTitle(v.name).first, v.cover, v.id, null, Modifier.width(pw).then(w.keys(i, dScope)), fr = w.fr(i), rating = v.rating) { nav.push(Screen.SeriesDetail(v)) }
+                                }
                             }
                         }
                         if (ch.isNotEmpty()) {
+                            val w = remember(ch.size) { RowWrap(ch.size) }
                             RowTitle("NOVI KANALI")
-                            val sc = rememberCoroutineScope()
-                            RoundRow(ch.size, 10.dp) { i, fr, keys ->
-                                val c = ch[i]
-                                Focusable(onClick = { sc.launch { openInGroup(ctx, nav, c) } }, focusRequester = fr, shape = Rnd(14.dp), normal = C.Rail, focused = C.Red, zoom = 1.04f,
-                                    modifier = Modifier.width(200.dp).height(54.dp).border(1.dp, C.Line, Rnd(14.dp)).then(keys)) { f ->
-                                    Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                        ChannelLogo(c, 34.dp, onLight = f)
-                                        T(c.name, 13.sp, if (f) C.OnRed else C.Text, FontWeight.Bold, modifier = Modifier.weight(1f))
+                            LazyRow(state = w.state, horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(top = 4.dp, bottom = 8.dp)) {
+                                itemsIndexed(ch, key = { _, c -> c.url }) { i, c ->
+                                    Focusable(onClick = { dScope.launch { playInGroup(ctx, nav, c, p.id) } }, focusRequester = w.fr(i), shape = Rnd(14.dp), normal = C.Rail, focused = C.Red, zoom = 1.04f,
+                                        modifier = Modifier.width(220.dp).height(60.dp).border(1.dp, C.Line, Rnd(14.dp)).then(w.keys(i, dScope))) { f ->
+                                        Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                            ChannelLogo(c, 38.dp, onLight = f)
+                                            T(c.name, 14.sp, if (f) C.OnRed else C.Text, FontWeight.Bold, modifier = Modifier.weight(1f))
+                                        }
                                     }
                                 }
                             }
@@ -541,6 +547,19 @@ fun ChannelLogo(c: Channel, size: androidx.compose.ui.unit.Dp, onLight: Boolean 
 object TopNav { val fr = FocusRequester() }
 
 object OnyxState { var askAdvanced by mutableStateOf(false); var askPin by mutableStateOf(false) }
+
+/** Round trip for a row: ▶ on the last item goes to the first, ◀ on the first goes to the last. */
+class RowWrap(val n: Int) {
+    val state = androidx.compose.foundation.lazy.LazyListState()
+    val first = FocusRequester(); val last = FocusRequester()
+    fun fr(i: Int) = if (i == 0) first else if (i == n - 1) last else null
+    fun keys(i: Int, scope: kotlinx.coroutines.CoroutineScope) = Modifier.onPreviewKeyEvent { e ->
+        if (e.type != KeyEventType.KeyDown || n < 2) false
+        else if (i == n - 1 && e.key == Key.DirectionRight) { scope.launch { state.scrollToItem(0); delay(30); first.tryFocus() }; true }
+        else if (i == 0 && e.key == Key.DirectionLeft) { scope.launch { state.scrollToItem(n - 1); delay(30); last.tryFocus() }; true }
+        else false
+    }
+}
 
 /** Remembers which big tile was opened last in simple mode. */
 object SimpleMemory { var last: Screen = Screen.Tv }

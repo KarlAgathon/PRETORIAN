@@ -598,6 +598,19 @@ suspend fun openInGroup(ctx: android.content.Context, nav: Nav, ch: Channel) {
     nav.root(Screen.Tv); playChannels(nav, chs, i)
 }
 
+/** Plays a channel from Home so that Back lands in TV, inside the channel's own group, on that channel. */
+suspend fun playInGroup(ctx: android.content.Context, nav: Nav, ch: Channel, pid: String) {
+    val p = Store.byId(ctx, pid)
+    val cat = p?.let { try { Repo.liveGroups(it).firstOrNull { c -> c.id == ch.group } } catch (e: Exception) { null } }
+    if (p == null || cat == null) { playChannels(nav, listOf(ch), 0); return }
+    val g = GroupRef(p.id, cat)
+    val chs = try { channelsOf(ctx, g) } catch (e: Exception) { emptyList() }
+    val i = chs.indexOfFirst { it.url == ch.url }
+    if (i < 0) { playChannels(nav, listOf(ch), 0); return }
+    TvMemory.group = g; TvMemory.channel = i; TvMemory.restore = true; TvMemory.preview = chs[i]
+    nav.root(Screen.Tv); playChannels(nav, chs, i)
+}
+
 fun playChannels(nav: Nav, list: List<Channel>, index: Int) {
     Preview.stop()
     nav.push(Screen.Player(list.map { PlayItem(it.name, it.url, it.logo, "${it.num}", it) }, index, live = true))
