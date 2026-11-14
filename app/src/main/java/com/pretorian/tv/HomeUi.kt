@@ -42,6 +42,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+
+/** bar background: dark glass on dark themes, white on the light one; never the see-through card colour */
+private val barBg: Color get() = if (C.IsLight) Color.White.copy(alpha = 0.92f) else Color(0xFF0B1020).copy(alpha = 0.86f)
+private val barText: Color get() = if (C.IsLight) Color(0xFF111827) else Color.White
+private val barSoft: Color get() = if (C.IsLight) Color(0xFF4B5563) else Color(0xFFCBD5E1)
+private val barLine: Color get() = if (C.IsLight) Color(0x22000000) else Color(0x33FFFFFF)
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -140,7 +146,7 @@ fun NeonTile(it: NeonItem, w: Dp, h: Dp, fr: FocusRequester?) {
 /** Profiles · Add playlist · Settings (and the bell), in one rounded bar */
 @Composable
 fun HomeTopPill(nav: Nav, onBell: (() -> Unit)?) {
-    Row(Modifier.clip(Pill).background(C.Card.copy(alpha = 0.85f)).border(1.dp, C.Line, Pill).padding(horizontal = 8.dp, vertical = 6.dp),
+    Row(Modifier.clip(Pill).background(barBg).border(1.dp, barLine, Pill).padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         PillButton("Profili", R.drawable.lc_user) { Profiles.panel = true }
         PillButton("Dodaj", R.drawable.lc_plus) { nav.push(Screen.AddPlaylist) }
@@ -152,11 +158,11 @@ fun HomeTopPill(nav: Nav, onBell: (() -> Unit)?) {
 @Composable
 private fun PillButton(label: String?, icon: Int, badge: Int = 0, onClick: () -> Unit) {
     Box {
-        Focusable(onClick = onClick, shape = Pill, normal = Color.Transparent, focused = C.CardHi, zoom = 1.05f, modifier = Modifier.height(40.dp)) { _ ->
+        Focusable(onClick = onClick, shape = Pill, normal = Color.Transparent, focused = C.Red.copy(alpha = 0.35f), zoom = 1.05f, modifier = Modifier.height(40.dp)) { _ ->
             Row(Modifier.align(Alignment.Center).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Ico(icon, 18.dp, if (badge > 0 && label == null) C.Amber else C.Text)
-                if (label != null) T(label, 15.sp, C.Text, FontWeight.Medium, maxLines = 1)
+                Ico(icon, 18.dp, if (badge > 0 && label == null) C.Amber else barText)
+                if (label != null) T(label, 15.sp, barText, FontWeight.Medium, maxLines = 1)
             }
         }
         if (badge > 0) Box(Modifier.align(Alignment.TopEnd)) { Bell(badge) }
@@ -170,24 +176,25 @@ fun HomeStatusBar(modifier: Modifier = Modifier) {
     val pls = remember { Store.actives(ctx) }
     var now by remember { mutableStateOf(Date()) }
     LaunchedEffect(Unit) { while (true) { now = Date(); delay(15_000) } }
-    Row(modifier.fillMaxWidth().clip(Pill).background(C.Card.copy(alpha = 0.85f)).border(1.dp, C.Line, Pill).padding(horizontal = 24.dp, vertical = 12.dp),
+    Row(modifier.fillMaxWidth().clip(Pill).background(barBg).border(1.dp, barLine, Pill).padding(horizontal = 24.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Ico(R.drawable.lc_wifi, 18.dp, C.Green)
-            T(tr("Spojeno:") + " " + (pls.joinToString(", ") { it.name }.ifBlank { "—" }), 14.sp, C.Text, maxLines = 1)
+            T(tr("Spojeno:") + " " + (pls.joinToString(", ") { it.name }.ifBlank { "—" }), 14.sp, barText, maxLines = 1)
             Box(Modifier.size(8.dp).clip(CircleShape).background(if (pls.isNotEmpty()) C.Green else C.Muted))
         }
-        Box(Modifier.width(1.dp).height(22.dp).background(C.Line))
+        Box(Modifier.width(1.dp).height(22.dp).background(barLine))
         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Ico(R.drawable.lc_calendar, 18.dp, C.Soft)
+            Ico(R.drawable.lc_calendar, 18.dp, barSoft)
             val e = pls.firstNotNullOfOrNull { expiryText(it.exp) }
-            T(tr("Ističe:") + " " + (e?.first ?: "—"), 14.sp, if (e != null && e.second <= 7) C.Amber else C.Text, maxLines = 1)
+            // expiryText already says "Expires …"
+            T(e?.first ?: (tr("Ističe:") + " —"), 14.sp, if (e != null && e.second >= 1) C.Amber else barText, maxLines = 1)
         }
-        Box(Modifier.width(1.dp).height(22.dp).background(C.Line))
+        Box(Modifier.width(1.dp).height(22.dp).background(barLine))
         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-            Ico(R.drawable.lc_clock, 18.dp, C.Soft)
+            Ico(R.drawable.lc_clock, 18.dp, barSoft)
             val stamp = SimpleDateFormat("EEEE, d. MMMM yyyy · HH:mm", Locale(Look.lang)).format(now)  // i18n-ignore
-            T(stamp, 14.sp, C.Text, maxLines = 1)
+            T(stamp, 14.sp, barText, maxLines = 1)
         }
     }
 }
