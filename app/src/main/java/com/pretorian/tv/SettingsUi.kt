@@ -1373,28 +1373,50 @@ private fun LanguageV2() {
     key(rev, Look.lang) {
         SetPage("Jezik") {
             val cur = Langs.APP.firstOrNull { it.code == Look.lang } ?: Langs.APP[0]
-            SetSection("Aktivan jezik")
-            Row(Modifier.fillMaxWidth().clip(Rnd(14.dp)).background(C.CardHi).border(1.dp, C.Line, Rnd(14.dp)).padding(14.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Flag(cur.flag, 40); T(cur.native, 17.sp, C.Text, FontWeight.Bold)
-            }
-            SetSection("Dostupni jezici · OK aktivira")
-            Langs.APP.forEach { l ->
-                Focusable(modifier = Modifier.fillMaxWidth().height(44.dp), onClick = { setAppLang(ctx, l.code); rev++ }, shape = Rnd(12.dp),
-                    normal = C.Rail, focused = C.Red, zoom = 1.01f) { f ->
-                    Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Flag(l.flag, 28)
-                        T(l.native, 14.sp, if (f) C.OnRed else C.Text, FontWeight.Medium, modifier = Modifier.weight(1f))
-                        T(Langs.label(l.code), 11.sp, if (f) C.OnRed.copy(alpha = 0.6f) else C.Muted)
-                        if (l.code == Look.lang) Ico(R.drawable.lc_check, 16.dp, if (f) C.OnRed else C.Green)
-                    }
+            Row(Modifier.fillMaxWidth().clip(Rnd(16.dp)).background(Color(0x332563EB)).border(1.dp, Color(0x552563EB), Rnd(16.dp)).padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Flag(cur.flag, 52)
+                Column {
+                    Kicker("Aktivan jezik", Color(0xFF93C5FD))
+                    T(cur.native, 22.sp, C.Text, FontWeight.ExtraBold)
                 }
             }
-            SetSection("Opisi filmova i serija")
-            val metaOpts = listOf("auto") + Langs.MEDIA.map { it.code }
-            SetDrop("Jezik opisa filmova", null, listOf(tr("Kao aplikacija")) + Langs.MEDIA.map { it.native },
-                metaOpts.indexOf(Prefs.metaLang).coerceAtLeast(0)) { Prefs.metaLang = metaOpts[it]; rev++ }
-            SetDrop("Automatski prevedi opise", "na jezik opisa", ON_OFF, onOff(AutoTranslate.on)) { Prefs.put("auto_translate", it == 0); rev++ }
+            SetSection("Dostupni jezici · OK aktivira")
+            // the chosen language first, the others after it, two in a row
+            val list = listOf(cur) + Langs.APP.filter { it.code != cur.code }
+            list.chunked(2).forEach { pair ->
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    pair.forEach { l ->
+                        val on = l.code == Look.lang
+                        val id = "lang:" + l.code
+                        Focusable(modifier = Modifier.weight(1f).height(54.dp).border(if (on) 2.dp else 1.dp, if (on) Color(0xFF22C55E) else C.Line, Rnd(14.dp)),
+                            onClick = { SetFocus.last = id; SetFocus.pending = true; setAppLang(ctx, l.code); rev++ }, onFocus = { SetFocus.last = id },
+                            focusRequester = setFocusFr(id), shape = Rnd(14.dp), normal = if (on) Color(0x1F22C55E) else C.Rail, focused = C.Red, zoom = 1.02f) { f ->
+                            Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Flag(l.flag, 34)
+                                Column(Modifier.weight(1f)) {
+                                    T(l.native, 14.sp, if (f) C.OnRed else C.Text, FontWeight.Bold)
+                                    T(Langs.label(l.code).lowercase(), 10.sp, if (f) C.OnRed.copy(alpha = 0.6f) else C.Muted)
+                                }
+                                Box(Modifier.size(20.dp).clip(CircleShape).background(if (on) Color(0xFF22C55E) else Color.Transparent)
+                                    .border(1.5.dp, if (on) Color(0xFF22C55E) else if (f) C.OnRed.copy(alpha = 0.5f) else C.Muted, CircleShape), contentAlignment = Alignment.Center) {
+                                    if (on) Ico(R.drawable.lc_check, 12.dp, Color.White)
+                                }
+                            }
+                        }
+                    }
+                    if (pair.size == 1) Spacer(Modifier.weight(1f))
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                val metaOpts = listOf("auto") + Langs.MEDIA.map { it.code }
+                Box(Modifier.weight(1f)) {
+                    SetDrop("Opisi filmova i serija", null, listOf(tr("Kao aplikacija")) + Langs.MEDIA.map { it.native },
+                        metaOpts.indexOf(Prefs.metaLang).coerceAtLeast(0)) { Prefs.metaLang = metaOpts[it]; rev++ }
+                }
+                Box(Modifier.weight(1f)) { SetSwitch("Automatski prevedi opise", null, AutoTranslate.on) { Prefs.put("auto_translate", it); rev++ } }
+            }
         }
     }
 }
@@ -1501,62 +1523,123 @@ private fun PlayerV2(openSub: (String) -> Unit) {
 /* ---------------------------------------------------------------- Sport */
 
 @Composable
+private fun SportChip(label: String, on: Boolean, onClick: () -> Unit) {
+    val id = "sc:$label"
+    Focusable(onClick = { SetFocus.last = id; SetFocus.pending = true; onClick() }, onFocus = { SetFocus.last = id }, focusRequester = setFocusFr(id),
+        shape = Pill, normal = if (on) Color(0xFF16A34A) else Color.Transparent, focused = C.Red, zoom = 1.05f,
+        modifier = Modifier.height(34.dp).border(1.dp, if (on) Color(0xFF16A34A) else C.Line, Pill)) { f ->
+        T((if (on) "✓ " else "") + tr(label), 13.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, modifier = Modifier.align(Alignment.Center).padding(horizontal = 14.dp))
+    }
+}
+
+@Composable
+private fun CheckRow(label: String, on: Boolean, onClick: () -> Unit) {
+    val id = "cr:$label"
+    Focusable(onClick = { SetFocus.last = id; SetFocus.pending = true; onClick() }, onFocus = { SetFocus.last = id }, focusRequester = setFocusFr(id),
+        shape = Rnd(8.dp), normal = Color.Transparent, focused = C.CardHi, zoom = 1f, modifier = Modifier.fillMaxWidth().height(30.dp)) { _ ->
+        Row(Modifier.fillMaxSize().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Box(Modifier.size(18.dp).clip(Rnd(5.dp)).background(if (on) Color(0xFF16A34A) else Color.Transparent)
+                .border(1.5.dp, if (on) Color(0xFF16A34A) else C.Muted, Rnd(5.dp)), contentAlignment = Alignment.Center) { if (on) Ico(R.drawable.lc_check, 12.dp, Color.White) }
+            T(label, 13.sp, if (on) C.Text else C.Soft, maxLines = 1)
+        }
+    }
+}
+
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
 private fun SportV2() {
     val scope = rememberCoroutineScope()
     var rev by remember { mutableIntStateOf(0) }
     var keyDlg by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
-    val sports = Sports.SPORTS + Sports.MORE_SPORTS
+    var more by remember { mutableStateOf(false) }
+    var teamDlg by remember { mutableStateOf(false) }
+    val main = listOf("football" to "Fudbal", "basketball" to "Košarka", "tennis" to "Tenis", "volleyball" to "Odbojka")
+    val others = (Sports.SPORTS + Sports.MORE_SPORTS).filter { o -> main.none { it.first == o.first } }
+    fun changed() { Sports.lastCombined.clear(); rev++ }
     key(rev) {
-        SetPage("Sport", "Učitava se tek kad otvoriš Sport. Ništa u pozadini.") {
-            SetSection("Šta pratim")
+        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            // ---------------------------------------------------------- left: what you follow
+            Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                T("Sport", 20.sp, C.Text, FontWeight.Bold)
+                T("Učitava se tek kad otvoriš Sport. Ništa u pozadini.", 11.sp, C.Muted, maxLines = 2)
+                SetSection("Sportovi")
+                val en = csv("sport_enabled", "football").toMutableSet()
+                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    main.forEach { (id, label) -> SportChip(label, id in en) { if (id in en) en.remove(id) else en.add(id); Prefs.put("sport_enabled", en.joinToString(",")); changed() } }
+                    val n = others.count { it.first in en }
+                    SportChip(tr("Ostali sportovi") + if (n > 0) " · $n" else "", n > 0) { more = true }
+                }
+                val conts = Sports.CONTINENTS
+                val cOn = csv("sport_cont", "eu").map { if (it == "am") "na" else it }
+                SetMulti("Kontinenti", "više odjednom · svjetska takmičenja uvijek", conts.map { it.second }, conts.indices.filter { conts[it].first in cOn }.toSet(), all = false) { s2 ->
+                    Prefs.put("sport_cont", (if (s2.isEmpty()) setOf(0) else s2).sorted().joinToString(",") { conts[it].first }); changed()
+                }
+                val cur = Prefs.str("sport_country")
+                SetDrop("Moja država", "najbliže tebi ide prvo", COUNTRIES.map { it.second }, COUNTRIES.indexOfFirst { it.first == cur }.coerceAtLeast(0)) {
+                    Prefs.put("sport_country", COUNTRIES[it].first); changed()
+                }
+                val teams = Prefs.str("sport_teams").split(',').map { it.trim() }.filter { it.isNotBlank() }
+                SetRow("Omiljeni timovi", "njihove utakmice uvijek na vrhu", if (teams.isEmpty()) tr("Nijedan") else trf("%s tima", teams.size)) { teamDlg = true }
+                val pv = SportsAI.prov
+                SetRow("AI pretraga prenosa", pv.site, pv.name + " · " + tr(if (SportsAI.key.isNotBlank()) "ključ upisan" else "nema ključa"),
+                    valueColor = if (SportsAI.key.isNotBlank()) C.Green else null) { keyDlg = true }
+                SetSection("Prikaz")
+                SetDrop("Mala slika utakmice", null, listOf("Na OK", "Isključena"), if (Prefs.bool("sport_preview", true)) 0 else 1) { Prefs.put("sport_preview", it == 0); rev++ }
+                SetDrop("Podsjeti me prije utakmice", "za omiljene timove", listOf("Isključeno", "5 min", "15 min", "30 min"),
+                    listOf(0, 5, 15, 30).indexOf(Prefs.str("sport_team_remind", "0").toIntOrNull() ?: 0).coerceAtLeast(0)) {
+                    Prefs.put("sport_team_remind", listOf(0, 5, 15, 30)[it].toString()); rev++
+                }
+                SetDrop("Osvježavanje rezultata", null, listOf("Svake minute", "Svake 3 min", "Svakih 5 min"),
+                    listOf(1, 3, 5).indexOf(Prefs.str("sport_refresh", "1").toIntOrNull() ?: 1).coerceAtLeast(0)) { Prefs.put("sport_refresh", listOf(1, 3, 5)[it].toString()); rev++ }
+                SetSection("Ko prenosi · izvori")
+                val srcKeys = listOf("sport_src_rights", "sport_src_ai")
+                SetMulti("Izvori", "odakle se traži ko prenosi · tvoj TV vodič uvijek", listOf("Prava prenosa po ligi", "AI pretraga"),
+                    srcKeys.indices.filter { Prefs.bool(srcKeys[it], true) }.toSet(), all = false) { s2 -> srcKeys.forEachIndexed { i, k -> Prefs.put(k, i in s2) }; changed() }
+                SetDrop("AI", tr(if (pv.free) "besplatno" else "plaća se po upitu"), SportsAI.PROVIDERS.map { it.name },
+                    SportsAI.PROVIDERS.indexOfFirst { it.id == SportsAI.provider }.coerceAtLeast(0)) { SportsAI.provider = SportsAI.PROVIDERS[it].id; status = null; rev++ }
+                if (SportsAI.ready) SetRow(status ?: tr("Provjeri ključ"), null, arrow = "↻") {
+                    status = tr("Provjeravam…"); scope.launch { status = SportsAI.test()?.let { trf("Ne radi: %s", it) } ?: tr("Radi ✓") }
+                }
+            }
+            // ---------------------------------------------------------- right: competitions
             val en = csv("sport_enabled", "football")
-            SetMulti("Sportovi", "više odjednom", sports.map { it.second }, sports.indices.filter { sports[it].first in en }.toSet()) { s ->
-                Prefs.put("sport_enabled", s.sorted().joinToString(",") { sports[it].first }); rev++
-            }
-            val conts = Sports.CONTINENTS
-            val cOn = csv("sport_cont", "eu,am,world")
-            SetMulti("Kontinenti", "više odjednom", conts.map { it.second }, conts.indices.filter { conts[it].first in cOn }.toSet(), all = false) { s2 ->
-                Prefs.put("sport_cont", (if (s2.isEmpty()) setOf(0) else s2).sorted().joinToString(",") { conts[it].first }); Sports.lastCombined.clear(); rev++
-            }
-            val cur = Prefs.str("sport_country")
-            SetDrop("Moja država", "najbliže tebi ide prvo", COUNTRIES.map { it.second }, COUNTRIES.indexOfFirst { it.first == cur }.coerceAtLeast(0)) {
-                Prefs.put("sport_country", COUNTRIES[it].first); Sports.lastCombined.clear(); rev++
-            }
-            val lgs = Sports.LEAGUES.filter { it.sport in en }
-            val lOn = csv("sport_leagues", "")
-            SetMulti("Takmičenja", lgs.take(3).joinToString(", ") { tr(it.name) } + "…", lgs.map { it.name },
-                if (lOn.isEmpty()) lgs.indices.toSet() else lgs.indices.filter { lgs[it].abbr in lOn }.toSet()) { s2 ->
-                Prefs.put("sport_leagues", if (s2.size == lgs.size) "" else s2.sorted().joinToString(",") { lgs[it].abbr }); Sports.lastCombined.clear(); rev++
-            }
-            var teamDlg by remember { mutableStateOf(false) }
-            val teams = Prefs.str("sport_teams").split(',').map { it.trim() }.filter { it.isNotBlank() }
-            SetRow("Omiljeni timovi", "njihove utakmice uvijek na vrhu", if (teams.isEmpty()) tr("Nijedan") else trf("%s tima", teams.size), new = true) { teamDlg = true }
-            if (teamDlg) TextDialog("Omiljeni timovi", "Imena, odvojena zarezom (npr. Željezničar, Bayern)", Prefs.str("sport_teams"), onDismiss = { teamDlg = false; SetFocus.tick++ }) { v ->
-                Prefs.put("sport_teams", v); teamDlg = false; Sports.lastCombined.clear(); rev++
-            }
-            SetSection("Prikaz")
-            SetDrop("Mala slika utakmice", null, listOf("Automatski", "Isključena"), if (Prefs.bool("sport_preview", true)) 0 else 1) { Prefs.put("sport_preview", it == 0); rev++ }
-            SetDrop("Podsjeti me prije utakmice", "za omiljene timove", listOf("Isključeno", "5 min", "15 min", "30 min"),
-                listOf(0, 5, 15, 30).indexOf(Prefs.str("sport_team_remind", "0").toIntOrNull() ?: 0).coerceAtLeast(0), new = true) {
-                Prefs.put("sport_team_remind", listOf(0, 5, 15, 30)[it].toString()); rev++
-            }
-            SetDrop("Osvježavanje rezultata", null, listOf("Svake minute", "Svake 3 min", "Svakih 5 min"),
-                listOf(1, 3, 5).indexOf(Prefs.str("sport_refresh", "1").toIntOrNull() ?: 1).coerceAtLeast(0), new = true) { Prefs.put("sport_refresh", listOf(1, 3, 5)[it].toString()); rev++ }
-            SetSection("Ko prenosi · izvori")
-            val srcKeys = listOf("sport_src_rights", "sport_src_ai")
-            SetMulti("Izvori", "odakle se traži ko prenosi · tvoj TV vodič uvijek", listOf("Prava prenosa po ligi", "AI pretraga"),
-                srcKeys.indices.filter { Prefs.bool(srcKeys[it], true) }.toSet(), all = false, new = true) { s2 -> srcKeys.forEachIndexed { i, k -> Prefs.put(k, i in s2) }; Sports.lastCombined.clear(); rev++ }
-            val pv = SportsAI.prov
-            SetDrop("AI", tr(if (pv.free) "besplatno" else "plaća se po upitu"), SportsAI.PROVIDERS.map { it.name },
-                SportsAI.PROVIDERS.indexOfFirst { it.id == SportsAI.provider }.coerceAtLeast(0)) { SportsAI.provider = SportsAI.PROVIDERS[it].id; status = null; rev++ }
-            SetRow(trf("%s ključ", pv.name), pv.site, tr(if (SportsAI.ready) "Upisan ✓" else "Nije upisan"), valueColor = if (SportsAI.ready) C.Green else null) { keyDlg = true }
-            if (SportsAI.ready) SetRow(status ?: tr("Provjeri ključ"), null, arrow = "↻") {
-                status = tr("Provjeravam…"); scope.launch { status = SportsAI.test()?.let { trf("Ne radi: %s", it) } ?: tr("Radi ✓") }
+            val raw = Prefs.str("sport_leagues", Sports.BIG.joinToString(","))
+            val all = Sports.LEAGUES.map { it.abbr }
+            val on: Set<String> = when (raw) { "-" -> emptySet(); "" -> all.toSet(); else -> raw.split(',').filter { it.isNotBlank() }.toSet() }
+            fun save(x: Set<String>) { Prefs.put("sport_leagues", if (x.isEmpty()) "-" else if (x.size == all.size) "" else x.joinToString(",")); changed() }
+            val groups = Sports.LEAGUE_GROUPS.filter { (_, abbrs) -> abbrs.any { a -> Sports.LEAGUES.firstOrNull { it.abbr == a }?.sport in en } }
+            Column(Modifier.weight(1f).fillMaxHeight().glass(18.dp).verticalScroll(rememberScrollState()).padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    T(tr("Takmičenja") + (if (en.size == 1) " · " + tr(main.firstOrNull { it.first == en.first() }?.second ?: "") else ""), 16.sp, C.Text, FontWeight.Bold, modifier = Modifier.weight(1f))
+                    T(trf("%s od %s uključeno", on.size, all.size), 10.sp, C.Muted)
+                }
+                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    SportChip("Velika takmičenja", on == Sports.BIG.toSet()) { save(Sports.BIG.toSet()) }
+                    SportChip("Moja regija", on == (Sports.BIG + Sports.REGION).toSet()) { save((Sports.BIG + Sports.REGION).toSet()) }
+                    SportChip("Sve", on.size == all.size) { save(all.toSet()) }
+                    SportChip("Ništa", on.isEmpty()) { save(emptySet()) }
+                }
+                groups.forEach { (title, abbrs) ->
+                    Kicker(title, modifier = Modifier.padding(top = 6.dp))
+                    abbrs.forEach { a ->
+                        val lg = Sports.LEAGUES.firstOrNull { it.abbr == a } ?: return@forEach
+                        CheckRow(tr(lg.name), a in on) { save(if (a in on) on - a else on + a) }
+                    }
+                }
             }
         }
     }
-    if (keyDlg) TextDialog(trf("%s ključ", SportsAI.prov.name), trf("Ključ (%s)", SportsAI.prov.keyHint), SportsAI.key, onDismiss = { keyDlg = false }) { v -> SportsAI.key = v; keyDlg = false; status = null; rev++ }
+    if (more) Popup("Ostali sportovi", { more = false; SetFocus.tick++ }) {
+        val en = csv("sport_enabled", "football").toMutableSet()
+        others.forEach { (id, label) ->
+            CheckRow(tr(label), id in en) { if (id in en) en.remove(id) else en.add(id); Prefs.put("sport_enabled", en.joinToString(",")); Sports.lastCombined.clear(); more = false; rev++ }
+        }
+    }
+    if (teamDlg) TextDialog("Omiljeni timovi", "Imena, odvojena zarezom (npr. Željezničar, Bayern)", Prefs.str("sport_teams"), onDismiss = { teamDlg = false; SetFocus.tick++ }) { v ->
+        Prefs.put("sport_teams", v); teamDlg = false; Sports.lastCombined.clear(); rev++
+    }
+    if (keyDlg) TextDialog(trf("%s ključ", SportsAI.prov.name), trf("Ključ (%s)", SportsAI.prov.keyHint), SportsAI.key, onDismiss = { keyDlg = false; SetFocus.tick++ }) { v -> SportsAI.key = v; keyDlg = false; status = null; rev++ }
 }
 
 /* ---------------------------------------------------------------- Podsjetnici */

@@ -75,6 +75,10 @@ object Sports {
         League("football", "soccer/ger.2", "2. Bundesliga", "BL2"),
         League("football", "soccer/ger.dfb_pokal", "DFB Pokal", "DFB"),
         League("football", "soccer/usa.1", "MLS", "MLS"),
+        League("football", "soccer/bih.1", "Premijer liga BiH", "BIH"),
+        League("football", "soccer/srb.1", "SuperLiga Srbije", "SRB"),
+        League("football", "soccer/cro.1", "HNL", "HNL"),
+        League("football", "soccer/sui.1", "Švicarska Super liga", "SUI"),
         League("basketball", "basketball/nba", "NBA", "NBA"),
         League("f1", "racing/f1", "Formula 1", "F1"),
         League("tennis", "tennis/atp", "ATP", "ATP"),
@@ -82,13 +86,26 @@ object Sports {
     )
 
     /** where a competition is played (Settings › Sport › Continents) */
-    fun contOf(l: League) = when (l.abbr) { "MLS", "NBA" -> "am"; "WC", "FRI", "F1", "ATP", "WTA" -> "world"; else -> "eu" }
-    val CONTINENTS = listOf("eu" to "Evropa", "am" to "Amerika", "world" to "Svjetska takmičenja")
+    fun contOf(l: League) = when (l.abbr) { "MLS", "NBA" -> "na"; "WC", "FRI", "F1", "ATP", "WTA" -> "world"; else -> "eu" }
+    val CONTINENTS = listOf("eu" to "Evropa", "sa" to "Južna Amerika", "na" to "Sjeverna Amerika", "af" to "Afrika", "as" to "Azija")
+    /** competitions grouped as in Settings › Sport */
+    val LEAGUE_GROUPS = listOf(
+        "Reprezentacije" to listOf("WC", "EURO", "UNL", "WCQ", "FRI"),
+        "Evropski klubovi" to listOf("UCL", "UEL", "UECL"),
+        "Top lige" to listOf("PL", "LL", "BL", "SA", "L1"),
+        "Naša regija" to listOf("BIH", "SRB", "HNL", "BL2", "AUT", "SUI"),
+        "Ostale lige" to listOf("ERE", "POR", "TSL", "DFB", "MLS"),
+        "Košarka" to listOf("NBA"), "Formula 1" to listOf("F1"), "Tenis" to listOf("ATP", "WTA"),
+    )
+    val BIG = listOf("WC", "EURO", "UNL", "WCQ", "UCL", "UEL", "UECL", "PL", "LL", "BL", "SA", "L1", "NBA", "F1", "ATP", "WTA")
+    val REGION = listOf("BIH", "SRB", "HNL", "BL2", "AUT", "SUI")
     /** competitions you follow: chosen competitions (all when none chosen) on the chosen continents */
     fun activeLeagues(): List<League> {
-        val sel = Prefs.str("sport_leagues").split(',').filter { it.isNotBlank() }.toSet()
-        val cont = Prefs.str("sport_cont", "eu,am,world").split(',').toSet()
-        return LEAGUES.filter { (sel.isEmpty() || it.abbr in sel) && contOf(it) in cont }.ifEmpty { LEAGUES }
+        val raw = Prefs.str("sport_leagues", BIG.joinToString(","))
+        if (raw == "-") return emptyList()
+        val sel = raw.split(',').filter { it.isNotBlank() }.toSet()
+        val cont = Prefs.str("sport_cont", "eu").split(',').map { if (it == "am") "na" else it }.toSet() + "world"
+        return LEAGUES.filter { (sel.isEmpty() || it.abbr in sel) && contOf(it) in cont }
     }
     /** favourite teams, written in Settings (comma separated) */
     fun teams(): List<String> = Prefs.str("sport_teams").split(',').map { norm(it.trim()) }.filter { it.length >= 3 }

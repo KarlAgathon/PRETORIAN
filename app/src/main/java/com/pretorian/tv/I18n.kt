@@ -481,8 +481,8 @@ Ne radi na svim uređajima. Ako je box potpuno ugašen, podsjetnik ne može doć
 Tvoji podsjetnici|Your reminders|Deine Erinnerungen|Tvoji podsjetnici|Твоји подсетници|Твоите напомняния|Mementourile tale|Hatırlatıcıların|I tuoi promemoria|تذكيراتك
 Nema podsjetnika.|No reminders.|Keine Erinnerungen.|Nema podsjetnika.|Нема подсетника.|Няма напомняния.|Niciun memento.|Hatırlatıcı yok.|Nessun promemoria.|لا توجد تذكيرات.
 Obriši|Delete|Löschen|Obriši|Обриши|Изтрий|Șterge|Sil|Elimina|حذف
-Backup je spremljen|Backup saved|Backup gespeichert|Sigurnosna kopija je spremljenaaaaaaaaaaaaaaaaaaaaaaaaaaaa|Бекап је сачуван|Копието е запазено|Backup salvat|Yedek kaydedildi|Backup salvato|تم حفظ النسخة
-Backup nije spremljen|Backup not saved|Backup nicht gespeichert|Sigurnosna kopija nije spremljenaaaaaaaaaaaaaaaaaaaaaaaaaaaa|Бекап није сачуван|Копието не е запазено|Backup nesalvat|Yedek kaydedilmedi|Backup non salvato|لم تُحفظ النسخة
+Backup je spremljen|Backup saved|Backup gespeichert|Sigurnosna kopija je spremljenaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|Бекап је сачуван|Копието е запазено|Backup salvat|Yedek kaydedildi|Backup salvato|تم حفظ النسخة
+Backup nije spremljen|Backup not saved|Backup nicht gespeichert|Sigurnosna kopija nije spremljenaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|Бекап није сачуван|Копието не е запазено|Backup nesalvat|Yedek kaydedilmedi|Backup non salvato|لم تُحفظ النسخة
 Sve je vraćeno. PRETORIAN se ponovo pokreće.|Everything restored. PRETORIAN restarts.|Alles wiederhergestellt. PRETORIAN startet neu.|Sve je vraćeno. PRETORIAN se ponovo pokreće.|Све је враћено. PRETORIAN се поново покреће.|Всичко е възстановено. PRETORIAN се рестартира.|Totul a fost restaurat. PRETORIAN repornește.|Her şey geri yüklendi. PRETORIAN yeniden başlıyor.|Tutto ripristinato. PRETORIAN si riavvia.|تمت الاستعادة. يُعاد تشغيل PRETORIAN.
 Vraćanje nije uspjelo|Restore failed|Wiederherstellung fehlgeschlagen|Vraćanje nije uspjelo|Враћање није успело|Възстановяването не успя|Restaurarea a eșuat|Geri yükleme başarısız|Ripristino non riuscito|فشلت الاستعادة
 Backup i vraćanje|Backup and restore|Sichern und wiederherstellen|Sigurnosna kopija i vraćanje|Бекап и враћање|Резервно копие|Backup și restaurare|Yedekle ve geri yükle|Backup e ripristino|النسخ والاستعادة
@@ -1306,6 +1306,26 @@ film ostaje u listi, samo nestaje odavde|it stays in the list, it only goes from
 OK = mala slika · OK još jednom = cijeli ekran|OK = small picture · OK again = full screen|OK = kleines Bild · nochmal OK = Vollbild|OK = mala slika · OK još jednom = cijeli zaslon|OK = мала слика · OK још једном = цео екран|OK = малка картина · OK отново = цял екран|OK = imagine mică · OK din nou = ecran complet|OK = küçük görüntü · tekrar OK = tam ekran|OK = immagine piccola · OK di nuovo = schermo intero|OK = صورة صغيرة · OK مرة أخرى = ملء الشاشة
 OK = cijeli ekran|OK = full screen|OK = Vollbild|OK = cijeli zaslon|OK = цео екран|OK = цял екран|OK = ecran complet|OK = tam ekran|OK = schermo intero|OK = ملء الشاشة
 Ova tema ima svoju boju fokusa. Boje rade u temama Tamna, Svijetla, Glass i Winter Dew.|This theme has its own focus colour. Colours work in the Dark, Light, Glass and Winter Dew themes.|Dieses Thema hat eine eigene Fokusfarbe. Farben wirken in den Themen Dunkel, Hell, Glass und Winter Dew.|Ova tema ima svoju boju fokusa. Boje rade u temama Tamna, Svijetla, Glass i Winter Dew.|Ова тема има своју боју фокуса. Боје раде у темама Тамна, Светла, Glass и Winter Dew.|Тази тема има свой цвят на фокуса. Цветовете работят в темите Тъмна, Светла, Glass и Winter Dew.|Această temă are propria culoare de focus. Culorile funcționează în temele Întunecată, Luminoasă, Glass și Winter Dew.|Bu temanın kendi odak rengi var. Renkler Koyu, Açık, Glass ve Winter Dew temalarında çalışır.|Questo tema ha il suo colore di focus. I colori funzionano nei temi Scuro, Chiaro, Glass e Winter Dew.|لهذه السمة لون تركيز خاص بها. الألوان تعمل في سمات داكنة وفاتحة وGlass وWinter Dew.
+Ostali sportovi|Other sports|Andere Sportarten|Ostali sportovi|Остали спортови|Други спортове|Alte sporturi|Diğer sporlar|Altri sport|رياضات أخرى
+više odjednom · svjetska takmičenja uvijek|several at once · world competitions always|mehrere gleichzeitig · Weltwettbewerbe immer|više odjednom · svjetska natjecanja uvijek|више одједном · светска такмичења увек|няколко наведнъж · световните състезания винаги|mai multe odată · competițiile mondiale mereu|aynı anda birden çok · dünya turnuvaları her zaman|più insieme · competizioni mondiali sempre|عدة معًا · المسابقات العالمية دائمًا
+ključ upisan|key entered|Schlüssel eingetragen|ključ upisan|кључ уписан|ключът е въведен|cheie introdusă|anahtar girildi|chiave inserita|تم إدخال المفتاح
+nema ključa|no key|kein Schlüssel|nema ključa|нема кључа|няма ключ|fără cheie|anahtar yok|nessuna chiave|لا يوجد مفتاح
+%s od %s uključeno|%s of %s on|%s von %s an|%s od %s uključeno|%s од %s укључено|%s от %s включени|%s din %s active|%s / %s açık|%s di %s attivi|%s من %s مفعّلة
+Traži tim ili ligu|Search a team or league|Team oder Liga suchen|Traži momčad ili ligu|Тражи тим или лигу|Търси отбор или лига|Caută echipă sau ligă|Takım veya lig ara|Cerca squadra o campionato|ابحث عن فريق أو دوري
+Tim ili liga|Team or league|Team oder Liga|Momčad ili liga|Тим или лига|Отбор или лига|Echipă sau ligă|Takım veya lig|Squadra o campionato|فريق أو دوري
+Dan|Day|Tag|Dan|Дан|Ден|Zi|Gün|Giorno|اليوم
+za %s d|in %s d|in %s T.|za %s d|за %s д|след %s д|în %s z|%s gün sonra|tra %s g|بعد %s يوم
+za %s|in %s|in %s|za %s|за %s|след %s|în %s|%s sonra|tra %s|بعد %s
+Južna Amerika|South America|Südamerika|Južna Amerika|Јужна Америка|Южна Америка|America de Sud|Güney Amerika|Sud America|أمريكا الجنوبية
+Sjeverna Amerika|North America|Nordamerika|Sjeverna Amerika|Северна Америка|Северна Америка|America de Nord|Kuzey Amerika|Nord America|أمريكا الشمالية
+Afrika|Africa|Afrika|Afrika|Африка|Африка|Africa|Afrika|Africa|أفريقيا
+Azija|Asia|Asien|Azija|Азија|Азия|Asia|Asya|Asia|آسيا
+Velika takmičenja|Big competitions|Große Wettbewerbe|Velika natjecanja|Велика такмичења|Големи състезания|Competiții mari|Büyük turnuvalar|Grandi competizioni|المسابقات الكبرى
+Moja regija|My region|Meine Region|Moja regija|Мој регион|Моят регион|Regiunea mea|Bölgem|La mia regione|منطقتي
+Švicarska Super liga|Swiss Super League|Schweizer Super League|Švicarska Super liga|Швајцарска Супер лига|Швейцарска Суперлига|Super Liga Elveției|İsviçre Süper Ligi|Super League svizzera|الدوري السويسري الممتاز
+Top lige|Top leagues|Top-Ligen|Top lige|Топ лиге|Топ лиги|Ligi de top|En iyi ligler|Campionati top|أفضل الدوريات
+Naša regija|Our region|Unsere Region|Naša regija|Наш регион|Нашият регион|Regiunea noastră|Bölgemiz|La nostra regione|منطقتنا
+Ostale lige|Other leagues|Andere Ligen|Ostale lige|Остале лиге|Други лиги|Alte ligi|Diğer ligler|Altri campionati|دوريات أخرى
 Nepoznat jezik|Unknown language|Unbekannte Sprache|Nepoznat jezik|Непознат језик|Неизвестен език|Limbă necunoscută|Bilinmeyen dil|Lingua sconosciuta|لغة غير معروفة
 """.trimIndent()
 

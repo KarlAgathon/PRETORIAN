@@ -98,6 +98,9 @@ fun SportsScreen(nav: Nav) {
     var pick by remember { mutableStateOf<SportEvent?>(null) }
     var view by remember { mutableStateOf(SportsMemory.view) }   // all, live, done
     val memFr = remember { FocusRequester() }
+    var q by remember { mutableStateOf("") }
+    var searchDlg by remember { mutableStateOf(false) }
+    var dayMenu by remember { mutableStateOf(false) }
     val memId = remember { SportsMemory.evId }
     val sc = rememberScrollState()
     val scope = rememberCoroutineScope()
@@ -150,8 +153,9 @@ fun SportsScreen(nav: Nav) {
     }
     val guideFailed = guide is Load.Err
     val all: List<SportEvent>? = combined
-    val shown = remember(all, sport, league, mine, view) {
+    val shown = remember(all, sport, league, mine, view, q) {
         all?.filter { e ->
+            (q.isBlank() || listOfNotNull(e.title, e.league, e.home?.name, e.away?.name).any { it.contains(q.trim(), ignoreCase = true) }) &&
             (sport == "all" || e.sport == sport) && (league == null || e.league == league) && (!mine || e.channels.isNotEmpty() || e.maybe.isNotEmpty() || e.ai.isNotEmpty()) &&
                 (view == "all" || (view == "live" && e.live) || (view == "done" && e.state == "post"))
         } ?: emptyList()
@@ -195,18 +199,34 @@ fun SportsScreen(nav: Nav) {
         // ---------------------------------------------------------------- top
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Column(Modifier.weight(1f)) {
-                T("Sports Center", 26.sp, C.Text, FontWeight.Bold)
+                T("Sport", 24.sp, C.Text, FontWeight.Bold)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val live = liveCount
-                    T(dayName(day) + " · " + trf("%s utakmica", all?.size ?: 0), 13.sp, C.Muted)
-                    if (live > 0) T(" · " + trf("%s uživo", live), 13.sp, Color(0xFFFF4D55), FontWeight.SemiBold)
-                    if (updated > 0) T(" · " + trf("ažurirano %s", hhmm(updated)), 13.sp, C.Muted)
+                    val date = if (day in -1..6) SimpleDateFormat("EEEE, d. MMMM", Locale(Look.lang)).format(Date(Sports.dayStart(day))) else ""
+                    T(dayName(day) + (if (date.isNotBlank()) " · $date" else ""), 12.sp, C.Muted)
+                    if (live > 0) T(" · " + trf("%s uživo", live), 12.sp, Color(0xFFFF4D55), FontWeight.SemiBold)
+                    T(" · " + trf("%s utakmica", all?.size ?: 0) + " · " + Prefs.str("sport_cont", "eu").split(',').mapNotNull { c -> Sports.CONTINENTS.firstOrNull { it.first == c }?.second?.let { tr(it) } }.joinToString(", "), 12.sp, C.Muted)
+                }
+            }
+            Focusable(onClick = { searchDlg = true }, shape = Pill, normal = Color.Transparent, focused = C.Red, zoom = 1.03f, modifier = Modifier.height(34.dp).width(190.dp).border(1.dp, C.Line, Pill)) { f ->
+                Row(Modifier.align(Alignment.CenterStart).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Ico(R.drawable.lc_search, 14.dp, if (f) C.OnRed else C.Muted)
+                    T(q.ifBlank { tr("Traži tim ili ligu") }, 12.sp, if (f) C.OnRed else if (q.isBlank()) C.Muted else C.Text)
+                }
+            }
+            Focusable(onClick = { tick++; Sports.lastCombined.clear() }, shape = Pill, normal = Color.Transparent, focused = C.Red, zoom = 1.03f, modifier = Modifier.height(34.dp).border(1.dp, C.Line, Pill)) { f ->
+                Row(Modifier.align(Alignment.Center).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Ico(R.drawable.lc_refresh_cw, 14.dp, if (f) C.OnRed else C.Text); T("Osvježi", 12.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold)
                 }
             }
             Box(Modifier.onPreviewKeyEvent { e ->
                 // Up from the days goes to the menu on top (TV, Filmovi…)
                 if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionUp) { try { TopNav.fr.requestFocus() } catch (_: Exception) {}; true } else false
-            }.onFocusChanged { if (it.hasFocus) scope.launch { sc.animateScrollTo(0) } }) { DayTabs(day, dayFr) { day = it; league = null; SportsMemory.evId = null } }
+            }.onFocusChanged { if (it.hasFocus) scope.launch { sc.animateScrollTo(0) } }) {
+                Focusable(onClick = { dayMenu = true }, focusRequester = dayFr, shape = Pill, normal = C.CardHi, focused = C.Red, zoom = 1.03f, modifier = Modifier.height(34.dp)) { f ->
+                    T(dayName(day) + " ▾", 12.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, modifier = Modifier.align(Alignment.Center).padding(horizontal = 14.dp))
+                }
+            }
         }
         if (day == UPCOMING) UpcomingView { pick = it } else {
         // ---------------------------------------------------------------- picture on the left, the match on the right
@@ -288,6 +308,10 @@ fun SportsScreen(nav: Nav) {
     }
     }
 
+    if (searchDlg) TextDialog("Traži tim ili ligu", "Tim ili liga", q, onDismiss = { searchDlg = false }) { v -> q = v; searchDlg = false }
+    if (dayMenu) Popup("Dan", { dayMenu = false }) {
+        (listOf(UPCOMING) + (-1..3)).forEach { d -> OptionRow(dayName(d), if (d == day) R.drawable.lc_check else null, color = if (d == day) C.Green else null) { day = d; league = null; SportsMemory.evId = null; dayMenu = false } }
+    }
     pick?.let { ev -> EventPopup(ev, onDismiss = { pick = null }) { chs, i -> pick = null; play(ev, chs, i) } }
     var focused by remember { mutableStateOf(false) }
     LaunchedEffect(events is Load.Ok) {
@@ -673,11 +697,15 @@ private fun EventCard(ev: SportEvent, fr: FocusRequester? = null, onFocus: () ->
                 StateBadge(ev)
             }
             if (ev.home != null && ev.away != null) {
-                TeamLine(ev.home, if (ev.state != "pre") ev.home.score else null)
-                TeamLine(ev.away, if (ev.state != "pre") ev.away.score else null)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Crest(ev.home, 34.dp)
+                    T(if (ev.state != "pre") "${ev.home.score ?: 0} : ${ev.away.score ?: 0}" else "vs", if (ev.state != "pre") 18.sp else 14.sp, if (ev.state != "pre") C.Text else C.Muted,
+                        FontWeight.Bold, modifier = Modifier.weight(1f), align = androidx.compose.ui.text.style.TextAlign.Center)
+                    Crest(ev.away, 34.dp)
+                }
+                T(ev.home.name + " – " + ev.away.name, 14.sp, C.Text, FontWeight.Bold)
             } else T(ev.title, 15.sp, C.Text, FontWeight.SemiBold, maxLines = 2)
             Spacer(Modifier.weight(1f))
-            Box(Modifier.fillMaxWidth().height(1.dp).background(C.Line))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (ev.channels.isNotEmpty()) {
                     Ico(R.drawable.lc_tv, 14.dp, C.Green)
@@ -691,10 +719,21 @@ private fun EventCard(ev: SportEvent, fr: FocusRequester? = null, onFocus: () ->
                     Ico(R.drawable.lc_tv, 14.dp, C.Amber)
                     T(trf("Mogući prenos: %s", ev.maybe.first().name), 12.sp, C.Amber, modifier = Modifier.weight(1f, fill = false))
                     if (ev.maybe.size > 1) T("+${ev.maybe.size - 1}", 12.sp, C.Amber)
-                } else T("Prenos nije pronađen u tvojoj listi", 12.sp, C.Muted)
+                } else T("Prenos nije pronađen u tvojoj listi", 12.sp, C.Muted, modifier = Modifier.weight(1f))
+                if (ev.state == "pre") { Spacer(Modifier.weight(0.01f)); Countdown(ev.start) }
             }
         }
     }
+}
+
+/** "za 3:12:40" until the match starts */
+@Composable
+private fun Countdown(start: Long) {
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(start) { while (now < start) { delay(1000); now = System.currentTimeMillis() } }
+    val left = ((start - now) / 1000).coerceAtLeast(0)
+    if (left <= 0) return
+    T(if (left >= 86_400) trf("za %s d", left / 86_400) else trf("za %s", "%d:%02d:%02d".format(left / 3600, (left % 3600) / 60, left % 60)), 12.sp, C.Amber, FontWeight.SemiBold)
 }
 
 @Composable
