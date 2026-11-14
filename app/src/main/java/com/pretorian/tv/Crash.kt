@@ -39,6 +39,31 @@ object CrashLog {
         }
     }
 
+    /** Freeze watch: if the screen stops answering for 6 s, the place where it hangs is written down and shown next time. */
+    @Volatile private var tick = 0L
+    private var watching = false
+    fun watch(c: Context) {
+        if (watching) return; watching = true
+        val app = c.applicationContext
+        val main = android.os.Handler(android.os.Looper.getMainLooper())
+        Thread({
+            var reported = false
+            while (true) {
+                val sent = System.currentTimeMillis()
+                main.post { tick = sent }
+                try { Thread.sleep(6_000) } catch (_: InterruptedException) { return@Thread }
+                if (tick != sent) {
+                    if (!reported) try {
+                        val st = android.os.Looper.getMainLooper().thread.stackTrace.joinToString("\n") { "  at $it" }
+                        file(app).writeText("PRETORIAN ${BuildInfo.VERSION} · ${android.os.Build.MODEL} · Android ${android.os.Build.VERSION.RELEASE}\n" +
+                            "ZAMRZNUTO (ANR) > 6 s\n" + st.take(6000))
+                        reported = true
+                    } catch (_: Throwable) {}
+                } else reported = false
+            }
+        }, "pretorian-watchdog").apply { isDaemon = true; priority = Thread.MIN_PRIORITY }.start()
+    }
+
     fun take(c: Context): String? = try { file(c).takeIf { it.exists() }?.let { val s = it.readText(); it.delete(); s } } catch (e: Exception) { null }
 }
 

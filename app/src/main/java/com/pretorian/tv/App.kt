@@ -76,6 +76,8 @@ class MainActivity : ComponentActivity() {
         AutoTranslate.dir = filesDir
         Look.load(this)
         onyxMigrate(this)
+        Perf.init(this)
+        CrashLog.watch(this)
         Lock.load()
         Notes.load()
         setContent { PretorianApp() }
@@ -130,7 +132,7 @@ class Nav(
     val playlistsChanged: () -> Unit,
 )
 
-object BuildInfo { const val VERSION = "0.6.2" }
+object BuildInfo { const val VERSION = "0.6.3" }
 
 @Composable
 fun PretorianApp() {

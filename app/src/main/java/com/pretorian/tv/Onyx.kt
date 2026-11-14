@@ -48,6 +48,24 @@ object MyList {
     }
 }
 
+/** Program mode: Lite (no big pictures, smaller images, no fades) for weak boxes, Full for strong ones. */
+object Perf {
+    var mode by mutableIntStateOf(0)          // 0 automatic, 1 Lite, 2 Full
+    var ramGb = 4.0; private set
+    var weak = false; private set
+    val lite get() = if (mode == 0) weak else mode == 1
+    fun init(c: Context) {
+        val am = c.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+        val mi = android.app.ActivityManager.MemoryInfo(); am.getMemoryInfo(mi)
+        ramGb = mi.totalMem / 1_073_741_824.0
+        // under ~3.5 GB of usable RAM (2 GB and 3 GB boxes like the Mi Box) or a "low RAM" device counts as weak
+        weak = am.isLowRamDevice || ramGb < 3.5 || android.os.Build.VERSION.SDK_INT < 28
+        mode = Prefs.long("perf_mode", 0).toInt().coerceIn(0, 2)
+    }
+    fun set(m: Int) { mode = m; Prefs.put("perf_mode", m.toLong()) }
+    val MODES = listOf("Automatski", "Lite", "Full")
+}
+
 /** Pictures used when the provider has none for a film: calm landscapes that fit the dark look. */
 private val FALLBACKS = intArrayOf(R.drawable.fallback_bd1, R.drawable.fallback_bd2, R.drawable.fallback_bd3,
     R.drawable.fallback_bd4, R.drawable.fallback_bd5, R.drawable.fallback_bd6)
@@ -55,17 +73,30 @@ fun fallbackFor(key: String): Int = FALLBACKS[(key.hashCode() and 0x7fffffff) % 
 
 /** Picture that falls back to a landscape when there is no image or it fails to load. */
 @Composable
-fun OnyxImage(url: String?, key: String, modifier: Modifier = Modifier) {
+fun OnyxImage(url: String?, key: String, modifier: Modifier = Modifier, maxW: Int = 360) {
+    val ctx = LocalContext.current
     val fb = painterResource(fallbackFor(key))
     if (url.isNullOrBlank()) Image(fb, null, modifier, contentScale = ContentScale.Crop)
-    else AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Crop, modifier = modifier, error = fb, placeholder = fb)
+    else {
+        // never decode more pixels than the screen shows; Lite also uses half the memory per pixel
+        val w = if (Perf.lite) maxW * 2 / 3 else maxW
+        val req = remember(url, w) {
+            coil.request.ImageRequest.Builder(ctx).data(url).size(w, w * 3 / 2).allowRgb565(Perf.lite).crossfade(!Perf.lite).build()
+        }
+        AsyncImage(model = req, contentDescription = null, contentScale = ContentScale.Crop, modifier = modifier, error = fb, placeholder = fb)
+    }
 }
 
 /** Full-screen picture behind a screen, fading into the background on the left and at the bottom. */
 @Composable
 fun OnyxBackdrop(url: String?, key: String, startX: Float = 0f) {
+    if (Perf.lite) {   // Lite: no picture, only a quiet light from the top right
+        Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(C.Text.copy(alpha = 0.07f), Color.Transparent),
+            center = androidx.compose.ui.geometry.Offset(1400f, 0f), radius = 1400f)))
+        return
+    }
     Box(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize().padding(start = startX.dp)) { OnyxImage(url, key, Modifier.fillMaxSize()) }
+        Box(Modifier.fillMaxSize().padding(start = startX.dp)) { OnyxImage(url, key, Modifier.fillMaxSize(), maxW = 960) }
         Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(
             listOf(C.Bg, C.Bg.copy(alpha = 0.88f), C.Bg.copy(alpha = 0.2f), C.Bg.copy(alpha = 0.35f)))))
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
@@ -243,7 +274,7 @@ private fun RowTitle(t: String) {
 fun WideCard(title: String, sub: String, image: String?, key: String, progress: Float?, onClick: () -> Unit) {
     Column(Modifier.width(250.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
         Focusable(onClick = onClick, shape = Rnd(12.dp), normal = C.Card, zoom = 1.05f, modifier = Modifier.fillMaxWidth().height(122.dp)) { f ->
-            OnyxImage(image, key, Modifier.fillMaxSize().clip(Rnd(12.dp)))
+            OnyxImage(image, key, Modifier.fillMaxSize().clip(Rnd(12.dp)), maxW = 420)
             Box(Modifier.fillMaxSize().clip(Rnd(12.dp)).background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xD9000000)), startY = 90f)))
             if (f) Box(Modifier.fillMaxSize().border(2.dp, Color.White, Rnd(12.dp)))
             T(cleanTitle(title).first, 15.sp, Color.White, FontWeight.Bold, modifier = Modifier.align(Alignment.BottomStart).padding(start = 12.dp, end = 12.dp, bottom = 12.dp))
