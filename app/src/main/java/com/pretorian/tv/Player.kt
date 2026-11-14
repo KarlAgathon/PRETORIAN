@@ -307,6 +307,10 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
 
     LaunchedEffect(index, items) {
         if (s.live) TvMemory.channel = index
+        if (s.live) items.getOrNull(index)?.channel?.let { c ->
+            val g = TvMemory.group
+            try { Recent.add(c, g?.pid, g?.cat?.id ?: c.group, g?.cat?.name ?: c.group) } catch (_: Exception) {}
+        }
         error = null; retried = false; showInfo = true; videoH = 0
         val cur = items[index]
         subFile = cur.subFile

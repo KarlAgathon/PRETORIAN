@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
@@ -335,7 +337,9 @@ private fun TvList(nav: Nav, onGuide: () -> Unit) {
         if (!locked && st.group?.key != f.key && !inChannels) { TvMemory.channel = -1; st.group = f; TvMemory.group = f }
     }
 
-    Row(Modifier.fillMaxSize()) {
+    LaunchedEffect(focusedCh) { val c = focusedCh ?: return@LaunchedEffect; delay(500); Dusk.set(c.logo, c.name) }
+    Column(Modifier.fillMaxSize()) {
+    Row(Modifier.weight(1f).fillMaxWidth()) {
         if (!inChannels) {
             GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, 290.dp, "TV", null,
                 onFocusGroup = { focusedGroup = it },
@@ -381,7 +385,52 @@ private fun TvList(nav: Nav, onGuide: () -> Unit) {
             }
         }
     }
+    if (Look.age) RecentStrip(nav)
+    }
     TvDialogs(st, rows)
+}
+
+/** "Recently watched": the last 10 channels at the bottom of TV. OK plays it; Back returns to its group. */
+@Composable
+private fun RecentStrip(nav: Nav) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val list = remember(Recent.rev) { Recent.list() }
+    if (list.isEmpty()) return
+    var menu by remember { mutableStateOf<Recent.Item?>(null) }
+    Column(Modifier.fillMaxWidth().padding(start = 40.dp, end = 40.dp, top = 8.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.fillMaxWidth()) {
+            T("ZADNJE GLEDANO", 11.sp, C.Muted, FontWeight.Bold, modifier = Modifier.weight(1f))
+            T(trf("%s KANALA", list.size), 11.sp, C.Muted, FontWeight.Bold)
+        }
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            items(list, key = { it.ch.url }) { r ->
+                Focusable(onClick = {
+                    scope.launch {
+                        val g = GroupRef(r.pid, Category(r.catId, r.catName))
+                        val chs = try { channelsOf(ctx, g) } catch (e: Exception) { emptyList() }
+                        val i = chs.indexOfFirst { it.url == r.ch.url }
+                        if (i >= 0) { TvMemory.group = g; TvMemory.channel = i; TvMemory.restore = true; playChannels(nav, chs, i) }
+                        else playChannels(nav, listOf(r.ch), 0)
+                    }
+                }, onMenu = { menu = r }, shape = Rnd(14.dp), normal = C.Rail, focused = C.Red, zoom = 1.04f,
+                    modifier = Modifier.width(186.dp).height(54.dp).border(1.dp, C.Line, Rnd(14.dp))) { f ->
+                    Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        ChannelLogo(r.ch, 32.dp, onLight = f)
+                        Column(Modifier.weight(1f)) {
+                            T(r.ch.name, 13.sp, if (f) C.OnRed else C.Text, FontWeight.Bold)
+                            T(r.catName, 11.sp, if (f) C.OnRed.copy(alpha = 0.6f) else C.Muted)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    menu?.let { r ->
+        Popup(r.ch.name, onDismiss = { menu = null }) {
+            OptionRow("Ukloni iz Zadnje gledano", R.drawable.lc_x) { Recent.remove(r.ch.url); menu = null }
+        }
+    }
 }
 
 /** Rename, move, hide, lock or delete a group. Used by TV, movies, series and the group manager.

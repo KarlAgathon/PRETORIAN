@@ -132,7 +132,7 @@ class Nav(
     val playlistsChanged: () -> Unit,
 )
 
-object BuildInfo { const val VERSION = "0.6.3" }
+object BuildInfo { const val VERSION = "0.6.4" }
 
 @Composable
 fun PretorianApp() {
@@ -197,6 +197,7 @@ fun PretorianApp() {
                 PlayerScreen(top, nav)
             } else if (Lock.simple && Look.age) {
                 Box(Modifier.fillMaxSize().background(C.BgBrush)) {
+                    DuskBackground()
                     key(version, top) {
                         if (top == Screen.Home || top == Screen.Settings) OnyxHome(nav, simple = true)
                         else Column(Modifier.fillMaxSize()) {
@@ -250,6 +251,7 @@ fun PretorianApp() {
                         }
                 }
                 if (Look.age && !Chrome.driven) Box(Modifier.fillMaxSize().background(C.BgBrush)) {
+                    DuskBackground()
                     if (top == Screen.Home) key(version) { OnyxHome(nav) }
                     else Column(Modifier.fillMaxSize()) {
                         OnyxTopBar(top, nav)

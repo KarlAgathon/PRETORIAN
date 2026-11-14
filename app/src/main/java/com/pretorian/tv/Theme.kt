@@ -39,13 +39,13 @@ object Look {
         "Narandžasta" to Color(0xFFEA580C), "Ljubičasta" to Color(0xFF9333EA), "Tirkizna" to Color(0xFF0891B2),
         "Roza" to Color(0xFFDB2777), "Zlatna" to Color(0xFFCA8A04),
     )
-    val THEMES = listOf("bw" to "Crno-bijela", "staklo" to "Svijetlo staklo", "pijesak" to "Pijesak", "dark" to "Tamna", "light" to "Svijetla", "glass" to "Glass", "dew" to "Winter Dew")
+    val THEMES = listOf("vece" to "Predvečerje", "bw" to "Crno-bijela", "staklo" to "Svijetlo staklo", "pijesak" to "Pijesak", "dark" to "Tamna", "light" to "Svijetla", "glass" to "Glass", "dew" to "Winter Dew")
 
     private fun sp(c: Context) = c.getSharedPreferences("pretorian", Context.MODE_PRIVATE)
 
     fun load(c: Context) {
         val p = sp(c)
-        theme = p.getString("look_theme", "bw") ?: "bw"
+        theme = p.getString("look_theme", "vece") ?: "vece"
         accent = p.getInt("look_accent", 0).coerceIn(0, ACCENTS.lastIndex)
         shade = p.getInt("look_shade", 0)
         opacity = p.getInt("look_opacity", 80)
@@ -97,6 +97,8 @@ private fun palette(): Palette {
             Color(0xFF14171D), Color(0xFF555C68), Color(0xFF2B3039), Color.White, true)
         "bw" -> Palette(Color(0xFF050505), alpha(Color(0xFF0A0A0C), o.coerceAtLeast(55)), Color(0x14FFFFFF), Color(0x1FFFFFFF),
             Color(0xFFFAFAFA), Color(0xFF8A8A8A), Color(0xFFC4C4C4), Color(0xFF151515), false)
+        "vece" -> Palette(Color(0xFF070912), alpha(Color(0xFF141620), (o * 0.56f).toInt().coerceIn(30, 90)), Color(0x14FFFFFF), Color(0x1FFFFFFF),
+            Color(0xFFFAFAFA), Color(0xFF8A8F9E), Color(0xFFC8CBD4), Color(0xFF151827), false)
         "staklo" -> Palette(Color(0xFFF7F7F8), alpha(Color.White, o.coerceAtMost(75)), Color(0x0F000000), Color(0x1A000000),
             Color(0xFF0B0B0F), Color(0xFF5A5A66), Color(0xFF2A2A33), Color(0xFFE9E9EE), true)
         "pijesak" -> Palette(Color(0xFFECE9E4), alpha(Color(0xFFFAF8F4), o.coerceAtMost(80)), Color(0x10000000), Color(0x1C000000),
@@ -132,7 +134,7 @@ object C {
     /** accent colour with the chosen shade; black-and-white theme uses white */
     val Red: Color
         get() {
-            if (Look.theme == "bw") return Color.White
+            if (Look.theme == "bw" || Look.theme == "vece") return Color.White
             if (Look.theme == "staklo" || Look.theme == "pijesak") return Color(0xFF0B0B0F)
             val base = Look.ACCENTS.getOrElse(Look.accent) { Look.ACCENTS[0] }.second
             val s = Look.shade.coerceIn(-2, 2)
@@ -143,8 +145,8 @@ object C {
             }
         }
     /** text drawn on top of the accent colour */
-    val OnRed get() = if (Look.theme == "bw") Color.Black else Color.White  // staklo/pijesak: black accent, white text
-    val RedText get() = if (Look.theme == "bw") Color.White else if (Look.theme == "staklo" || Look.theme == "pijesak") Color(0xFF0B0B0F) else lerp(Red, if (IsLight) Color.Black else Color.White, if (IsLight) 0.2f else 0.35f)
+    val OnRed get() = if (Look.theme == "bw" || Look.theme == "vece") Color.Black else Color.White  // staklo/pijesak: black accent, white text
+    val RedText get() = if (Look.theme == "bw" || Look.theme == "vece") Color.White else if (Look.theme == "staklo" || Look.theme == "pijesak") Color(0xFF0B0B0F) else lerp(Red, if (IsLight) Color.Black else Color.White, if (IsLight) 0.2f else 0.35f)
     val CardFocus get() = if (Look.theme == "dew") Color(0x40FFFFFF) else Red.copy(alpha = 0.18f)
     val Green get() = if (IsLight) Color(0xFF15803D) else Color(0xFF4ADE80)
     val Amber get() = if (IsLight) Color(0xFFB45309) else Color(0xFFFBBF24)

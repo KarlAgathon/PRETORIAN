@@ -87,9 +87,30 @@ fun OnyxImage(url: String?, key: String, modifier: Modifier = Modifier, maxW: In
     }
 }
 
+/** "Predvečerje": the colour of what you are on, as a soft glow behind the whole app.
+ *  A tiny 64 px copy of the picture is stretched over the screen - it looks blurred and costs almost nothing. */
+object Dusk {
+    var image by mutableStateOf<Any?>(null)
+    fun set(url: String?, key: String) { image = url?.takeIf { it.isNotBlank() } ?: fallbackFor(key) }
+}
+
+@Composable
+fun DuskBackground() {
+    if (Look.theme != "vece") return
+    val ctx = LocalContext.current
+    val img = Dusk.image ?: R.drawable.fallback_bd2
+    val req = remember(img) { coil.request.ImageRequest.Builder(ctx).data(img).size(64, 36).allowRgb565(true).crossfade(if (Perf.lite) 0 else 500).build() }
+    Box(Modifier.fillMaxSize()) {
+        AsyncImage(model = req, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(), alpha = 0.9f)
+        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xB8070912), Color(0x6B070912), Color(0x38070912)))))
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0x73070912), Color.Transparent, Color.Transparent, Color(0xB305060C)))))
+    }
+}
+
 /** Full-screen picture behind a screen, fading into the background on the left and at the bottom. */
 @Composable
 fun OnyxBackdrop(url: String?, key: String, startX: Float = 0f) {
+    if (Look.theme == "vece") { LaunchedEffect(url, key) { Dusk.set(url, key) }; return }
     if (Perf.lite) {   // Lite: no picture, only a quiet light from the top right
         Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(C.Text.copy(alpha = 0.07f), Color.Transparent),
             center = androidx.compose.ui.geometry.Offset(1400f, 0f), radius = 1400f)))
@@ -302,12 +323,53 @@ fun PosterCard(title: String, image: String?, key: String, progress: Float?, mod
     }
 }
 
-/** 0.6.0: everyone gets the new dark look and the top menu once; afterwards they can change it. */
+/** 0.6.0/0.6.4: everyone gets the new look and the top menu once; afterwards they can change it. */
 fun onyxMigrate(c: Context) {
     val p = c.getSharedPreferences("pretorian", Context.MODE_PRIVATE)
-    if (p.getInt("look_v", 0) < 6) {
-        Look.theme = "bw"; Look.layout = 2
-        p.edit().putInt("look_v", 6).putString("look_theme", "bw").putInt("look_layout", 2).apply()
+    if (p.getInt("look_v", 0) < 7) {   // 0.6.4: "Predvečerje" becomes the look for everyone once
+        Look.theme = "vece"; Look.layout = 2
+        p.edit().putInt("look_v", 7).putString("look_theme", "vece").putInt("look_layout", 2).apply()
+    }
+}
+
+/** The last 10 TV channels you watched, newest first, with the group they were played from. */
+object Recent {
+    var rev by mutableIntStateOf(0)
+    data class Item(val ch: Channel, val pid: String?, val catId: String, val catName: String)
+    fun list(): List<Item> = try {
+        val a = JSONArray(Prefs.str("recent_ch", "[]"))
+        (0 until a.length()).map { a.getJSONObject(it) }.map { o ->
+            Item(Channel(o.optString("id"), o.optInt("num"), o.optString("n"), o.optString("l").ifBlank { null }, o.optString("g"), o.optString("u"),
+                o.optString("e").ifBlank { null }, o.optString("p"), o.optInt("a")), o.optString("gp").ifBlank { null }, o.optString("gi"), o.optString("gn"))
+        }
+    } catch (e: Exception) { emptyList() }
+    fun add(c: Channel, pid: String?, catId: String, catName: String) {
+        val keep = list().filter { it.ch.url != c.url }.take(9)
+        val a = JSONArray()
+        (listOf(Item(c, pid, catId, catName)) + keep).forEach { i ->
+            a.put(JSONObject().put("id", i.ch.id).put("num", i.ch.num).put("n", i.ch.name).put("l", i.ch.logo ?: "").put("g", i.ch.group).put("u", i.ch.url)
+                .put("e", i.ch.epg ?: "").put("p", i.ch.pid).put("a", i.ch.archive).put("gp", i.pid ?: "").put("gi", i.catId).put("gn", i.catName))
+        }
+        Prefs.put("recent_ch", a.toString()); rev++
+    }
+    fun remove(url: String) {
+        val a = JSONArray(); list().filter { it.ch.url != url }.forEach { i ->
+            a.put(JSONObject().put("id", i.ch.id).put("num", i.ch.num).put("n", i.ch.name).put("l", i.ch.logo ?: "").put("g", i.ch.group).put("u", i.ch.url)
+                .put("e", i.ch.epg ?: "").put("p", i.ch.pid).put("a", i.ch.archive).put("gp", i.pid ?: "").put("gi", i.catId).put("gn", i.catName))
+        }
+        Prefs.put("recent_ch", a.toString()); rev++
+    }
+}
+
+/** Channel logo from the provider; without one a see-through glass tile with the first letters. */
+@Composable
+fun ChannelLogo(c: Channel, size: androidx.compose.ui.unit.Dp, onLight: Boolean = false) {
+    var failed by remember(c.logo) { mutableStateOf(c.logo.isNullOrBlank()) }
+    Box(Modifier.size(size).clip(Rnd(9.dp)).background(if (onLight) Color(0x12000000) else Color(0x1FFFFFFF))
+        .border(1.dp, if (onLight) Color(0x26000000) else Color(0x38FFFFFF), Rnd(9.dp)), contentAlignment = Alignment.Center) {
+        if (!failed) AsyncImage(model = c.logo, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(4.dp),
+            onError = { failed = true })
+        else T(c.name.filter { it.isLetterOrDigit() }.take(2).uppercase().ifBlank { "TV" }, (size.value * 0.32f).sp, if (onLight) Color(0xFF0A0A0A) else Color.White, FontWeight.ExtraBold)
     }
 }
 
