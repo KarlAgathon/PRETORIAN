@@ -75,6 +75,7 @@ class MainActivity : ComponentActivity() {
         SportsAI.dir = cacheDir
         AutoTranslate.dir = filesDir
         Look.load(this)
+        onyxMigrate(this)
         Lock.load()
         Notes.load()
         setContent { PretorianApp() }
@@ -129,7 +130,7 @@ class Nav(
     val playlistsChanged: () -> Unit,
 )
 
-object BuildInfo { const val VERSION = "0.5.5" }
+object BuildInfo { const val VERSION = "0.6.0" }
 
 @Composable
 fun PretorianApp() {
@@ -192,6 +193,26 @@ fun PretorianApp() {
                 ProfilePicker()
             } else if (top is Screen.Player) {
                 PlayerScreen(top, nav)
+            } else if (Lock.simple && Look.age) {
+                Box(Modifier.fillMaxSize().background(C.BgBrush)) {
+                    key(version, top) {
+                        if (top == Screen.Home || top == Screen.Settings) OnyxHome(nav, simple = true)
+                        else Column(Modifier.fillMaxSize()) {
+                            OnyxTopBar(top, nav, simple = true)
+                            Box(Modifier.weight(1f).fillMaxWidth()) {
+                                when (top) {
+                                    Screen.Tv -> TvScreen(nav)
+                                    Screen.Movies -> MoviesScreen(nav)
+                                    Screen.Series -> SeriesScreen(nav)
+                                    is Screen.MovieDetail -> MovieDetailScreen(top.vod, nav)
+                                    is Screen.SeriesDetail -> SeriesDetailScreen(top.item, nav)
+                                    else -> {}
+                                }
+                            }
+                        }
+                    }
+                }
+                AdvancedGate(nav)
             } else if (Lock.simple) {
                 Box(Modifier.fillMaxSize().background(C.BgBrush)) {
                     key(version, top) {
@@ -226,10 +247,12 @@ fun PretorianApp() {
                             }
                         }
                 }
-                if (Look.age && !Chrome.driven) Column(Modifier.fillMaxSize().background(C.BgBrush)) {
-                    TopBar(top, nav)
-                    Box(Modifier.weight(1f).fillMaxWidth()) { content() }
-                    if (Look.wave) HintBar()
+                if (Look.age && !Chrome.driven) Box(Modifier.fillMaxSize().background(C.BgBrush)) {
+                    if (top == Screen.Home) key(version) { OnyxHome(nav) }
+                    else Column(Modifier.fillMaxSize()) {
+                        OnyxTopBar(top, nav)
+                        Box(Modifier.weight(1f).fillMaxWidth()) { content() }
+                    }
                 } else Row(Modifier.fillMaxSize().background(C.BgBrush)) {
                     Rail(top, nav)
                     Column(Modifier.weight(1f).fillMaxHeight()) {
@@ -279,7 +302,6 @@ fun Rail(current: Screen, nav: Nav) {
         RailItem(Screen.Movies, R.drawable.lc_film, "Filmovi", NewContent.count("vod")),
         RailItem(Screen.Series, R.drawable.lc_monitor, "Serije", NewContent.count("series")),
         RailItem(Screen.Sports, R.drawable.lc_trophy, "Sport"),
-        RailItem(Screen.Catchup, R.drawable.lc_history, "Catch-up"),
         RailItem(Screen.Search, R.drawable.lc_search, "Pretraga"),
     )
     val section = when (current) {
@@ -648,7 +670,6 @@ private fun TopBar(current: Screen, nav: Nav) {
         RailItem(Screen.Movies, R.drawable.lc_film, "Filmovi", NewContent.count("vod")),
         RailItem(Screen.Series, R.drawable.lc_monitor, "Serije", NewContent.count("series")),
         RailItem(Screen.Sports, R.drawable.lc_trophy, "Sport"),
-        RailItem(Screen.Catchup, R.drawable.lc_history, "Catch-up"),
         RailItem(Screen.Search, R.drawable.lc_search, "Pretraga"),
         RailItem(Screen.Settings, R.drawable.lc_settings, "Postavke", if (Updater.available != null) 1 else 0),
     )

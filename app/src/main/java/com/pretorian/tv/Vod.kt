@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -66,17 +67,19 @@ private data class Poster(val id: String, val name: String, val image: String?, 
 
 private const val G_CONTINUE = "__continue__"
 private const val G_NEW = "__new__"
+private const val G_MYLIST = "__mylist__"
 
 /** Rows of the category column: playlist headers (when several are on), "Continue watching", "New", then the categories. */
 private sealed class VRow {
     data class Header(val p: Playlist, val open: Boolean) : VRow()
     data class Group(val cat: Category, val count: Int = 0) : VRow()
-    val id get() = when (this) { is Header -> "h:" + p.id; is Group -> "g:" + cat.id }
+    data class Title(val text: String) : VRow()
+    val id get() = when (this) { is Header -> "h:" + p.id; is Group -> "g:" + cat.id; is Title -> "t:" + text }
 }
 
 @Composable
 private fun VodBrowser(nav: Nav, series: Boolean) {
-    if (Look.wave) { WaveBrowser(nav, series); return }
+    if (Look.wave && !Look.age) { WaveBrowser(nav, series); return }
     VodClassic(nav, series)
 }
 
@@ -259,13 +262,16 @@ private fun VodClassic(nav: Nav, series: Boolean) {
     val pls = remember(rev) { Store.actives(ctx) }
     val kind = if (series) "series" else "vod"
     val ovr = remember(p.id) { Ovr(ctx, p.id) }
-    val rowsState by load(p.id, series, rev, NewContent.rev, Watch.rev, keep = true) {
+    val rowsState by load(p.id, series, rev, NewContent.rev, Watch.rev, MyList.rev, keep = true) {
         val out = ArrayList<VRow>()
         if (pls.size > 1) out.add(VRow.Header(p, true))
         val cont = Watch.continueList(ctx).filter { (it.series != null) == series && (it.pid.isBlank() || it.pid == p.id) }
+        if (Look.age) out.add(VRow.Title(tr("MOJE")))
         if (cont.isNotEmpty()) out.add(VRow.Group(Category(G_CONTINUE, tr("Nastavi gledati")), cont.size))
+        if (Look.age) out.add(VRow.Group(Category(G_MYLIST, tr("Moja lista")), MyList.items(kind).size))
         val nw = NewContent.items(p.id, kind)
         if (nw.isNotEmpty()) out.add(VRow.Group(Category(G_NEW, tr("Novo dodano")), nw.size))
+        if (Look.age) out.add(VRow.Title(tr("KATEGORIJE PROVIDERA")))
         if (p.type == SourceType.XTREAM) ovr.groups(kind, if (series) Repo.seriesGroups(p) else Repo.vodGroups(p))
             .forEach { out.add(VRow.Group(it, NewContent.countCat(p.id, kind, it.id))) }
         pls.drop(1).forEach { out.add(VRow.Header(it, false)) }
@@ -286,18 +292,23 @@ private fun VodClassic(nav: Nav, series: Boolean) {
     }
 
     Row(Modifier.fillMaxSize()) {
-        Column(Modifier.width(290.dp).fillMaxHeight().padding(start = 16.dp, end = 10.dp, top = 22.dp)) {
-            T(if (series) "Serije" else "Filmovi", 26.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 10.dp, bottom = 12.dp))
+        Column(if (Look.age) Modifier.padding(start = 40.dp, top = 10.dp, bottom = 22.dp).width(270.dp).fillMaxHeight().clip(Rnd(18.dp)).background(C.Rail)
+                .border(1.dp, C.Line, Rnd(18.dp)).padding(6.dp)
+            else Modifier.width(290.dp).fillMaxHeight().padding(start = 16.dp, end = 10.dp, top = 22.dp)) {
+            if (!Look.age) T(if (series) "Serije" else "Filmovi", 26.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 10.dp, bottom = 12.dp))
             when (val s = rowsState) {
                 is Load.Loading -> Loading("Učitavam kategorije…")
                 is Load.Err -> Message("Greška", s.message)
                 is Load.Ok -> {
                     val all = s.value
+                    val firstIdx = all.indexOfFirst { it !is VRow.Title }.coerceAtLeast(0)
                     LazyColumn(state = gState, verticalArrangement = Arrangement.spacedBy(4.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
                         itemsIndexed(all, key = { _, r -> r.id }) { i, r ->
                             val m = Modifier.fillMaxWidth().height(Rows.group).wrapKeys(i, all.size, gWrap)
-                            val fr = gWrap.requester(i, if (i == 0) firstGroup else null)
+                            val fr = gWrap.requester(i, if (i == firstIdx) firstGroup else null)
                             when (r) {
+                                is VRow.Title -> androidx.compose.material3.Text(r.text, style = androidx.compose.ui.text.TextStyle(fontFamily = Inter, fontSize = 11.sp,
+                                    color = C.Muted, fontWeight = FontWeight.Bold, letterSpacing = 2.sp), modifier = Modifier.padding(start = 12.dp, top = 10.dp, bottom = 2.dp))
                                 is VRow.Header -> Focusable(modifier = m.height(Rows.group + 6.dp), focusRequester = fr, normal = C.Card, zoom = 1f,
                                     onClick = { if (!r.open) { Store.open(ctx, r.p.id); group = null; rev++ } }) { _ ->
                                     Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
@@ -313,24 +324,27 @@ private fun VodClassic(nav: Nav, series: Boolean) {
                                     val special = g.id == G_CONTINUE || g.id == G_NEW
                                     val shape = Rnd(12.dp)
                                     Focusable(
-                                        modifier = m.then(if (Look.groupFrame) Modifier.border(if (selected) 1.5.dp else 1.dp,
+                                        modifier = m.then(if (Look.groupFrame && !Look.age) Modifier.border(if (selected) 1.5.dp else 1.dp,
                                             C.Red.copy(alpha = if (selected) 0.9f else 0.28f), shape) else Modifier),
                                         shape = shape,
                                         onClick = { gate.run("$kind:${g.id}", locked) { group = g } },
                                         onFocus = { focusedGroup = g },
                                         onMenu = if (Lock.simple || special) null else ({ groupMenu = g }),
                                         focusRequester = fr,
-                                        normal = if (selected) C.Red.copy(alpha = 0.28f) else Color.Transparent,
+                                        normal = if (selected) (if (Look.age) C.CardHi else C.Red.copy(alpha = 0.28f)) else Color.Transparent,
+                                        focused = if (Look.age) C.Red else null,
                                         zoom = 1.0f,
-                                    ) { _ ->
+                                    ) { gf ->
+                                        val onW = Look.age && gf
                                         Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                             if (g.id == G_CONTINUE) Ico(R.drawable.lc_history, 15.dp, C.RedText)
                                             if (g.id == G_NEW) Ico(R.drawable.lc_sparkles, 15.dp, C.Amber)
-                                            T(g.name, Rows.font, if (selected) C.Text else C.Soft, if (selected || special) FontWeight.SemiBold else FontWeight.Normal,
+                                            T(g.name, Rows.font, if (onW) C.OnRed else if (selected) C.Text else C.Soft, if (selected || special) FontWeight.SemiBold else FontWeight.Normal,
                                                 modifier = Modifier.weight(1f))
+                                            if (Look.age && r.count > 0 && g.id != G_NEW) T("${r.count}", 12.sp, if (onW) C.OnRed else C.Muted)
                                             if (locked) Ico(R.drawable.lc_lock, 15.dp, C.Muted)
-                                            if (r.count > 0 && g.id != G_CONTINUE) Box(Modifier.clip(Pill).background(if (g.id == G_NEW) C.Amber else C.Danger).padding(horizontal = 7.dp, vertical = 1.dp)) {
+                                            if (!Look.age && r.count > 0 && g.id != G_CONTINUE) Box(Modifier.clip(Pill).background(if (g.id == G_NEW) C.Amber else C.Danger).padding(horizontal = 7.dp, vertical = 1.dp)) {
                                                 T(if (g.id == G_NEW) "${r.count}" else trf("%s nova", r.count), 10.sp, Color.White, FontWeight.Bold)
                                             }
                                         }
@@ -343,13 +357,13 @@ private fun VodClassic(nav: Nav, series: Boolean) {
                 }
             }
         }
-        Box(Modifier.width(1.dp).fillMaxHeight().background(C.Line))
+        if (!Look.age) Box(Modifier.width(1.dp).fillMaxHeight().background(C.Line))
         Box(Modifier.weight(1f).fillMaxHeight()) {
             val g = group
             if (g == null) {
                 Message("Izaberi kategoriju", "Drži OK na kategoriji za opcije")
             } else {
-                val state by load(p.id, g.id, series, Watch.rev, NewContent.rev) {
+                val state by load(p.id, g.id, series, Watch.rev, NewContent.rev, MyList.rev) {
                     when (g.id) {
                         G_CONTINUE -> Watch.continueList(ctx).filter { (it.series != null) == series }.map { pr ->
                             val play = { nav.push(Screen.Player(listOf(PlayItem(pr.title, pr.url, pr.poster, null, null, pr.series, pr.season, pr.episode)), 0, live = false)) }
@@ -361,6 +375,12 @@ private fun VodClassic(nav: Nav, series: Boolean) {
                             else { val v = Vod(o.str("id"), o.str("n"), o.str("i").orNullIfBlank(), o.str("r").orNullIfBlank(), o.str("u"))
                                 Poster(v.id, v.name, v.poster, v.rating, v.url, true, { nav.push(Screen.MovieDetail(v)) }) }
                         }
+                        G_MYLIST -> MyList.items(kind).map { o ->
+                            if (series) { val si = SeriesItem(o.str("id"), o.str("n"), o.str("i").orNullIfBlank(), null, null)
+                                Poster(si.id, si.name, si.cover, null, null, false, { nav.push(Screen.SeriesDetail(si)) }) }
+                            else { val v = Vod(o.str("id"), o.str("n"), o.str("i").orNullIfBlank(), null, o.str("u"))
+                                Poster(v.id, v.name, v.poster, null, v.url, false, { nav.push(Screen.MovieDetail(v)) }) }
+                        }
                         else -> if (series) Repo.series(p, g.id).map { s -> Poster(s.id, s.name, s.cover, s.rating, null, NewContent.isNew(p.id, kind, s.id), open = { nav.push(Screen.SeriesDetail(s)) }, added = s.added) }
                         else Repo.movies(p, g.id).map { v -> Poster(v.id, v.name, v.poster, v.rating, v.url, NewContent.isNew(p.id, kind, v.id), open = { nav.push(Screen.MovieDetail(v)) }, added = v.added) }
                     }
@@ -368,7 +388,9 @@ private fun VodClassic(nav: Nav, series: Boolean) {
                 when (val s = state) {
                     is Load.Loading -> Loading()
                     is Load.Err -> Message("Nije se učitalo", s.message)
-                    is Load.Ok -> if (s.value.isEmpty()) Message("Kategorija je prazna") else PosterGrid(g.name, s.value, g.id == G_NEW, kind, p.id)
+                    is Load.Ok -> if (s.value.isEmpty()) Message(if (g.id == G_MYLIST) "Lista je prazna" else "Kategorija je prazna", if (g.id == G_MYLIST) "Drži OK na filmu ili seriji i izaberi Dodaj na Moju listu" else null)
+                        else if (Look.age) OnyxPosters(g.name, s.value, kind, p.id)
+                        else PosterGrid(g.name, s.value, g.id == G_NEW, kind, p.id)
                 }
             }
         }
@@ -439,6 +461,71 @@ private fun PosterGrid(title: String, items: List<Poster>, newList: Boolean, kin
             if (m.isNew) OptionRow("Ukloni oznaku NOVO", R.drawable.lc_sparkles) { NewContent.seen(pid, kind, m.id); menu = null }
             OptionRow("Otvori", R.drawable.lc_info) { menu = null; m.open() }
         }
+    }
+}
+
+/** New look: the focused film as a big title with its picture behind, posters below. */
+@Composable
+private fun OnyxPosters(title: String, items: List<Poster>, kind: String, pid: String) {
+    val ctx = LocalContext.current
+    var cur by remember(items) { mutableStateOf(items.firstOrNull()) }
+    var shown by remember(items) { mutableStateOf(items.firstOrNull()) }
+    LaunchedEffect(cur) { delay(450); shown = cur }   // the big picture changes only when you stop on a poster
+    var menu by remember { mutableStateOf<Poster?>(null) }
+    Box(Modifier.fillMaxSize()) {
+        val h = shown
+        OnyxBackdrop(h?.image, h?.id ?: title)
+        Column(Modifier.fillMaxSize().padding(start = 28.dp, end = 40.dp, top = 4.dp)) {
+            Row(Modifier.fillMaxWidth()) {
+                Spacer(Modifier.weight(1f))
+                androidx.compose.material3.Text(trf("%s NASLOVA", items.size), style = androidx.compose.ui.text.TextStyle(fontFamily = Inter, fontSize = 11.sp, color = C.Muted, letterSpacing = 1.sp))
+            }
+            if (h != null) {
+                val (name, year) = cleanTitle(h.name)
+                androidx.compose.material3.Text(title.uppercase(), style = androidx.compose.ui.text.TextStyle(fontFamily = Inter, fontSize = 12.sp, color = C.Soft,
+                    fontWeight = FontWeight.SemiBold, letterSpacing = 3.sp), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                androidx.compose.material3.Text(name, style = androidx.compose.ui.text.TextStyle(fontFamily = Inter, fontSize = 38.sp, color = C.Text, fontWeight = FontWeight.ExtraBold),
+                    maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+                val pr = h.url?.let { Watch.get(ctx, it) }
+                val meta = listOfNotNull(year, h.rating?.toDoubleOrNull()?.takeIf { it > 0 }?.let { "★ " + String.format("%.1f", it) }, qualityOf(h.name),
+                    if (MyList.has(kind, h.id)) tr("Na mojoj listi") else null).joinToString(" · ")
+                T(meta.ifBlank { " " }, 13.sp, C.Soft, modifier = Modifier.padding(top = 2.dp))
+                if (pr != null && pr.started && !pr.watched) Box(Modifier.padding(top = 10.dp).width(240.dp).height(3.dp).clip(Pill).background(C.Line)) {
+                    Box(Modifier.fillMaxWidth(pr.fraction).fillMaxHeight().background(C.Text))
+                }
+                T("OK – otvori · drži OK – Moja lista", 11.sp, C.Muted, modifier = Modifier.padding(top = 10.dp))
+            }
+            LazyVerticalGrid(columns = GridCells.Adaptive(120.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(top = 14.dp, bottom = 30.dp), modifier = Modifier.fillMaxSize()) {
+                items(items, key = { it.id }) { it ->
+                    val pr = it.url?.let { u -> Watch.get(ctx, u) }
+                    PosterCard(cleanTitle(it.name).first, it.image, it.id, pr?.takeIf { p -> p.started && !p.watched }?.fraction, Modifier.fillMaxWidth(),
+                        onFocus = { cur = it }, onMenu = { menu = it }, onClick = it.open)
+                }
+            }
+        }
+    }
+    menu?.let { m -> PosterMenu(m, kind, pid) { menu = null } }
+}
+
+@Composable
+private fun PosterMenu(m: Poster, kind: String, pid: String, onDismiss: () -> Unit) {
+    val ctx = LocalContext.current
+    Popup(cleanTitle(m.name).first, onDismiss = onDismiss) {
+        val on = MyList.has(kind, m.id)
+        OptionRow(if (on) "Ukloni s Moje liste" else "Dodaj na Moju listu", if (on) R.drawable.lc_x else R.drawable.lc_plus,
+            sub = if (on) null else "da ga pogledaš kasnije", color = if (on) null else C.Green) {
+            MyList.toggle(kind, m.id, m.name, m.image, m.url, pid); onDismiss()
+        }
+        OptionRow("Otvori", R.drawable.lc_info) { onDismiss(); m.open() }
+        val u = m.url
+        if (u != null) {
+            val w = Watch.get(ctx, u)?.watched == true
+            OptionRow(if (w) "Označi kao negledano" else "Označi kao gledano", if (w) R.drawable.lc_circle_slash else R.drawable.lc_circle_check) {
+                Watch.setWatched(ctx, u, m.name, m.image, !w); onDismiss()
+            }
+        }
+        if (m.isNew) OptionRow("Ukloni oznaku NOVO", R.drawable.lc_sparkles) { NewContent.seen(pid, kind, m.id); onDismiss() }
     }
 }
 

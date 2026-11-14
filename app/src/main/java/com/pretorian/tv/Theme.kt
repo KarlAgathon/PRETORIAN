@@ -39,13 +39,13 @@ object Look {
         "Narandžasta" to Color(0xFFEA580C), "Ljubičasta" to Color(0xFF9333EA), "Tirkizna" to Color(0xFF0891B2),
         "Roza" to Color(0xFFDB2777), "Zlatna" to Color(0xFFCA8A04),
     )
-    val THEMES = listOf("dark" to "Tamna", "light" to "Svijetla", "bw" to "Crno-bijela", "glass" to "Glass", "dew" to "Winter Dew")
+    val THEMES = listOf("bw" to "Crno-bijela", "staklo" to "Svijetlo staklo", "pijesak" to "Pijesak", "dark" to "Tamna", "light" to "Svijetla", "glass" to "Glass", "dew" to "Winter Dew")
 
     private fun sp(c: Context) = c.getSharedPreferences("pretorian", Context.MODE_PRIVATE)
 
     fun load(c: Context) {
         val p = sp(c)
-        theme = p.getString("look_theme", "dark") ?: "dark"
+        theme = p.getString("look_theme", "bw") ?: "bw"
         accent = p.getInt("look_accent", 0).coerceIn(0, ACCENTS.lastIndex)
         shade = p.getInt("look_shade", 0)
         opacity = p.getInt("look_opacity", 80)
@@ -64,7 +64,7 @@ object Look {
         corner = p.getInt("look_corner", 0)
         groupFrame = p.getBoolean("look_groupframe", true)
         resBadge = p.getInt("look_resbadge", 1)
-        layout = p.getInt("look_layout", 1)
+        layout = p.getInt("look_layout", 2)
         // 0.3: the new modern home tiles become the default once
         if (p.getInt("look_v", 0) < 3) { tileStyle = 3; p.edit().putInt("look_v", 3).putInt("look_tilestyle", 3).apply() }
         // 0.4.2: inside a group the small picture starts by itself (you asked for it)
@@ -95,8 +95,12 @@ private fun palette(): Palette {
     return when (Look.theme) {
         "light" -> Palette(Color(0xFFF2F3F6), alpha(Color.White, o), Color(0x0F000000), Color(0x1A000000),
             Color(0xFF14171D), Color(0xFF555C68), Color(0xFF2B3039), Color.White, true)
-        "bw" -> Palette(Color.Black, alpha(Color(0xFF0A0A0A), o), Color(0x14FFFFFF), Color(0x33FFFFFF),
-            Color.White, Color(0xFFA6A6A6), Color(0xFFDDDDDD), Color(0xFF151515), false)
+        "bw" -> Palette(Color(0xFF050505), alpha(Color(0xFF0A0A0C), o.coerceAtLeast(55)), Color(0x14FFFFFF), Color(0x1FFFFFFF),
+            Color(0xFFFAFAFA), Color(0xFF8A8A8A), Color(0xFFC4C4C4), Color(0xFF151515), false)
+        "staklo" -> Palette(Color(0xFFF7F7F8), alpha(Color.White, o.coerceAtMost(75)), Color(0x0F000000), Color(0x1A000000),
+            Color(0xFF0B0B0F), Color(0xFF5A5A66), Color(0xFF2A2A33), Color(0xFFE9E9EE), true)
+        "pijesak" -> Palette(Color(0xFFECE9E4), alpha(Color(0xFFFAF8F4), o.coerceAtMost(80)), Color(0x10000000), Color(0x1C000000),
+            Color(0xFF0B0B0F), Color(0xFF5A5A66), Color(0xFF2A2A33), Color(0xFFE2DED7), true)
         "glass" -> Palette(Color(0xFF16202B), alpha(Color(0xFF26323F), o), Color(0x1AFFFFFF), Color(0x24FFFFFF),
             Color(0xFFF4F6F8), Color(0xFFA9B3BE), Color(0xFFD5DBE1), alpha(Color(0xFF2E3C4A), o), false)
         "dew" -> Palette(Color(0xFF221B36), alpha(Color(0xFF2A2340), (o * 0.55f).toInt().coerceAtLeast(25)), Color(0x1CFFFFFF), Color(0x2EFFFFFF),
@@ -129,6 +133,7 @@ object C {
     val Red: Color
         get() {
             if (Look.theme == "bw") return Color.White
+            if (Look.theme == "staklo" || Look.theme == "pijesak") return Color(0xFF0B0B0F)
             val base = Look.ACCENTS.getOrElse(Look.accent) { Look.ACCENTS[0] }.second
             val s = Look.shade.coerceIn(-2, 2)
             return when {
@@ -138,8 +143,8 @@ object C {
             }
         }
     /** text drawn on top of the accent colour */
-    val OnRed get() = if (Look.theme == "bw") Color.Black else Color.White
-    val RedText get() = if (Look.theme == "bw") Color.White else lerp(Red, if (IsLight) Color.Black else Color.White, if (IsLight) 0.2f else 0.35f)
+    val OnRed get() = if (Look.theme == "bw") Color.Black else Color.White  // staklo/pijesak: black accent, white text
+    val RedText get() = if (Look.theme == "bw") Color.White else if (Look.theme == "staklo" || Look.theme == "pijesak") Color(0xFF0B0B0F) else lerp(Red, if (IsLight) Color.Black else Color.White, if (IsLight) 0.2f else 0.35f)
     val CardFocus get() = if (Look.theme == "dew") Color(0x40FFFFFF) else Red.copy(alpha = 0.18f)
     val Green get() = if (IsLight) Color(0xFF15803D) else Color(0xFF4ADE80)
     val Amber get() = if (IsLight) Color(0xFFB45309) else Color(0xFFFBBF24)

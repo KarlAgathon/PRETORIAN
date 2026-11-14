@@ -481,8 +481,8 @@ Ne radi na svim uređajima. Ako je box potpuno ugašen, podsjetnik ne može doć
 Tvoji podsjetnici|Your reminders|Deine Erinnerungen|Tvoji podsjetnici|Твоји подсетници|Твоите напомняния|Mementourile tale|Hatırlatıcıların|I tuoi promemoria|تذكيراتك
 Nema podsjetnika.|No reminders.|Keine Erinnerungen.|Nema podsjetnika.|Нема подсетника.|Няма напомняния.|Niciun memento.|Hatırlatıcı yok.|Nessun promemoria.|لا توجد تذكيرات.
 Obriši|Delete|Löschen|Obriši|Обриши|Изтрий|Șterge|Sil|Elimina|حذف
-Backup je spremljen|Backup saved|Backup gespeichert|Sigurnosna kopija je spremljenaaaaaaaaaaaaaa|Бекап је сачуван|Копието е запазено|Backup salvat|Yedek kaydedildi|Backup salvato|تم حفظ النسخة
-Backup nije spremljen|Backup not saved|Backup nicht gespeichert|Sigurnosna kopija nije spremljenaaaaaaaaaaaaaa|Бекап није сачуван|Копието не е запазено|Backup nesalvat|Yedek kaydedilmedi|Backup non salvato|لم تُحفظ النسخة
+Backup je spremljen|Backup saved|Backup gespeichert|Sigurnosna kopija je spremljenaaaaaaaaaaaaaaa|Бекап је сачуван|Копието е запазено|Backup salvat|Yedek kaydedildi|Backup salvato|تم حفظ النسخة
+Backup nije spremljen|Backup not saved|Backup nicht gespeichert|Sigurnosna kopija nije spremljenaaaaaaaaaaaaaaa|Бекап није сачуван|Копието не е запазено|Backup nesalvat|Yedek kaydedilmedi|Backup non salvato|لم تُحفظ النسخة
 Sve je vraćeno. PRETORIAN se ponovo pokreće.|Everything restored. PRETORIAN restarts.|Alles wiederhergestellt. PRETORIAN startet neu.|Sve je vraćeno. PRETORIAN se ponovo pokreće.|Све је враћено. PRETORIAN се поново покреће.|Всичко е възстановено. PRETORIAN се рестартира.|Totul a fost restaurat. PRETORIAN repornește.|Her şey geri yüklendi. PRETORIAN yeniden başlıyor.|Tutto ripristinato. PRETORIAN si riavvia.|تمت الاستعادة. يُعاد تشغيل PRETORIAN.
 Vraćanje nije uspjelo|Restore failed|Wiederherstellung fehlgeschlagen|Vraćanje nije uspjelo|Враћање није успело|Възстановяването не успя|Restaurarea a eșuat|Geri yükleme başarısız|Ripristino non riuscito|فشلت الاستعادة
 Backup i vraćanje|Backup and restore|Sichern und wiederherstellen|Sigurnosna kopija i vraćanje|Бекап и враћање|Резервно копие|Backup și restaurare|Yedekle ve geri yükle|Backup e ripristino|النسخ والاستعادة
@@ -913,6 +913,30 @@ Pozicija %s od %s|Position %s of %s|Position %s von %s|Pozicija %s od %s|Поз�
 ▲ ▼ voziš kanal (drži za brže), OK spušta|▲ ▼ carry the channel (hold for faster), OK drops it|▲ ▼ Sender verschieben (halten = schneller), OK ablegen|▲ ▼ voziš kanal (drži za brže), OK spušta|▲ ▼ возиш канал (држи за брже), OK спушта|▲ ▼ местиш канала (задръж за по-бързо), OK пуска|▲ ▼ muți canalul (ține pentru rapid), OK îl lasă|▲ ▼ kanalı taşı (hızlı için basılı tut), OK bırakır|▲ ▼ sposti il canale (tieni per veloce), OK lo rilascia|▲ ▼ انقل القناة (اضغط مطولًا للسرعة)، OK للإفلات
 Na samo dno|To the very bottom|Ganz nach unten|Na samo dno|На само дно|Най-отдолу|Jos de tot|En alta|In fondo|إلى الأسفل تمامًا
 Dodaj|Add|Hinzufügen|Dodaj|Додај|Добави|Adaugă|Ekle|Aggiungi|إضافة
+JEDNOSTAVNI MOD|SIMPLE MODE|EINFACHER MODUS|JEDNOSTAVNI NAČIN|ЈЕДНОСТАВНИ РЕЖИМ|ОПРОСТЕН РЕЖИМ|MOD SIMPLU|BASİT MOD|MODALITÀ SEMPLICE|الوضع البسيط
+%s dana|%s days|%s Tage|%s dana|%s дана|%s дни|%s zile|%s gün|%s giorni|%s يوم
+NASTAVI GLEDANJE · SERIJA|CONTINUE WATCHING · SERIES|WEITERSCHAUEN · SERIE|NASTAVI GLEDATI · SERIJA|НАСТАВИ ГЛЕДАЊЕ · СЕРИЈА|ПРОДЪЛЖИ ГЛЕДАНЕТО · СЕРИАЛ|CONTINUĂ VIZIONAREA · SERIAL|İZLEMEYE DEVAM · DİZİ|CONTINUA A GUARDARE · SERIE|متابعة المشاهدة · مسلسل
+NASTAVI GLEDANJE · FILM|CONTINUE WATCHING · MOVIE|WEITERSCHAUEN · FILM|NASTAVI GLEDATI · FILM|НАСТАВИ ГЛЕДАЊЕ · ФИЛМ|ПРОДЪЛЖИ ГЛЕДАНЕТО · ФИЛМ|CONTINUĂ VIZIONAREA · FILM|İZLEMEYE DEVAM · FİLM|CONTINUA A GUARDARE · FILM|متابعة المشاهدة · فيلم
+ostalo %s min|%s min left|noch %s Min.|ostalo %s min|остало %s мин|остават %s мин|mai sunt %s min|%s dk kaldı|mancano %s min|متبقي %s دقيقة
+Nastavi|Continue|Weiter|Nastavi|Настави|Продължи|Continuă|Devam et|Continua|متابعة
+NOVO KOD PROVIDERA · SERIJA|NEW FROM PROVIDER · SERIES|NEU BEIM ANBIETER · SERIE|NOVO KOD PRUŽATELJA · SERIJA|НОВО КОД ПРОВАЈДЕРА · СЕРИЈА|НОВО ОТ ДОСТАВЧИКА · СЕРИАЛ|NOU LA FURNIZOR · SERIAL|SAĞLAYICIDA YENİ · DİZİ|NOVITÀ DAL PROVIDER · SERIE|جديد من المزود · مسلسل
+NOVO KOD PROVIDERA · FILM|NEW FROM PROVIDER · MOVIE|NEU BEIM ANBIETER · FILM|NOVO KOD PRUŽATELJA · FILM|НОВО КОД ПРОВАЈДЕРА · ФИЛМ|НОВО ОТ ДОСТАВЧИКА · ФИЛМ|NOU LA FURNIZOR · FILM|SAĞLAYICIDA YENİ · FİLM|NOVITÀ DAL PROVIDER · FILM|جديد من المزود · فيلم
+Gledaj|Watch|Ansehen|Gledaj|Гледај|Гледай|Vizionează|İzle|Guarda|شاهد
+Svijetlo staklo|Light glass|Helles Glas|Svijetlo staklo|Светло стакло|Светло стъкло|Sticlă deschisă|Açık cam|Vetro chiaro|زجاج فاتح
+Pijesak|Sand|Sand|Pijesak|Песак|Пясък|Nisip|Kum|Sabbia|رملي
+MOJE|MINE|MEINE|MOJE|МОЈЕ|МОИ|ALE MELE|BENİM|MIEI|خاصتي
+Moja lista|My list|Meine Liste|Moj popis|Моја листа|Моят списък|Lista mea|Listem|La mia lista|قائمتي
+KATEGORIJE PROVIDERA|PROVIDER CATEGORIES|KATEGORIEN DES ANBIETERS|KATEGORIJE PRUŽATELJA|КАТЕГОРИЈЕ ПРОВАЈДЕРА|КАТЕГОРИИ НА ДОСТАВЧИКА|CATEGORIILE FURNIZORULUI|SAĞLAYICI KATEGORİLERİ|CATEGORIE DEL PROVIDER|فئات المزود
+Lista je prazna|The list is empty|Die Liste ist leer|Popis je prazan|Листа је празна|Списъкът е празен|Lista este goală|Liste boş|La lista è vuota|القائمة فارغة
+Drži OK na filmu ili seriji i izaberi Dodaj na Moju listu|Hold OK on a movie or series and choose Add to My list|Halte OK auf einem Film oder einer Serie und wähle Zu meiner Liste hinzufügen|Drži OK na filmu ili seriji i odaberi Dodaj na moj popis|Држи OK на филму или серији и изабери Додај на моју листу|Задръж OK върху филм или сериал и избери Добави в моя списък|Ține apăsat OK pe un film sau serial și alege Adaugă în lista mea|Bir film veya dizide OK'a basılı tut ve Listeme ekle'yi seç|Tieni premuto OK su un film o una serie e scegli Aggiungi alla mia lista|اضغط مطولاً على OK على فيلم أو مسلسل واختر أضف إلى قائمتي
+%s NASLOVA|%s TITLES|%s TITEL|%s NASLOVA|%s НАСЛОВА|%s ЗАГЛАВИЯ|%s TITLURI|%s BAŞLIK|%s TITOLI|%s عنوان
+Na mojoj listi|On my list|Auf meiner Liste|Na mom popisu|На мојој листи|В моя списък|În lista mea|Listemde|Nella mia lista|في قائمتي
+OK – otvori · drži OK – Moja lista|OK – open · hold OK – My list|OK – öffnen · OK halten – Meine Liste|OK – otvori · drži OK – Moj popis|OK – отвори · држи OK – Моја листа|OK – отвори · задръж OK – Моят списък|OK – deschide · ține OK – Lista mea|OK – aç · OK basılı tut – Listem|OK – apri · tieni OK – La mia lista|OK – فتح · اضغط مطولاً – قائمتي
+Ukloni s Moje liste|Remove from My list|Von meiner Liste entfernen|Ukloni s mog popisa|Уклони са моје листе|Премахни от моя списък|Elimină din lista mea|Listemden kaldır|Rimuovi dalla mia lista|إزالة من قائمتي
+Dodaj na Moju listu|Add to My list|Zu meiner Liste hinzufügen|Dodaj na moj popis|Додај на моју листу|Добави в моя списък|Adaugă în lista mea|Listeme ekle|Aggiungi alla mia lista|أضف إلى قائمتي
+da ga pogledaš kasnije|to watch it later|um ihn später anzusehen|da ga pogledaš kasnije|да га погледаш касније|за да го гледаш по-късно|ca să-l vezi mai târziu|daha sonra izlemek için|per guardarlo più tardi|لمشاهدته لاحقاً
+NASTAVI GLEDANJE|CONTINUE WATCHING|WEITERSCHAUEN|NASTAVI GLEDATI|НАСТАВИ ГЛЕДАЊЕ|ПРОДЪЛЖИ ГЛЕДАНЕТО|CONTINUĂ VIZIONAREA|İZLEMEYE DEVAM|CONTINUA A GUARDARE|متابعة المشاهدة
+NOVO DODANO|NEWLY ADDED|NEU HINZUGEFÜGT|NOVO DODANO|НОВО ДОДАТО|НОВО ДОБАВЕНО|ADĂUGATE RECENT|YENİ EKLENEN|AGGIUNTI DI RECENTE|أضيف حديثاً
 Nepoznat jezik|Unknown language|Unbekannte Sprache|Nepoznat jezik|Непознат језик|Неизвестен език|Limbă necunoscută|Bilinmeyen dil|Lingua sconosciuta|لغة غير معروفة
 """.trimIndent()
 

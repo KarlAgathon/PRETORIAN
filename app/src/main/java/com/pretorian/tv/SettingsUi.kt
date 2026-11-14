@@ -460,7 +460,15 @@ private fun LookPage() {
         OptionRow("Preuzmi još ikona", R.drawable.lc_download, sub = "Novi setovi s PRETORIAN GitHub stranice", value = dlBusy) {
             scope.launch { remote = try { IconSets.remote() } catch (e: Exception) { Toast.makeText(ctx, tr("Lista setova se nije učitala"), Toast.LENGTH_LONG).show(); null } }
         }
-        Segmented(Look.THEMES.map { it.second }, Look.THEMES.indexOfFirst { it.first == Look.theme }.coerceAtLeast(0)) { Look.theme = Look.THEMES[it].first; save() }
+        var themeMenu by remember { mutableStateOf(false) }
+        OptionRow("Tema", R.drawable.lc_palette, value = tr(Look.THEMES.firstOrNull { it.first == Look.theme }?.second ?: "Crno-bijela") + "  ▼") { themeMenu = true }
+        if (themeMenu) Popup("Tema", { themeMenu = false }) {
+            Look.THEMES.forEach { (id, name) ->
+                OptionRow(name, if (id == Look.theme) R.drawable.lc_check else R.drawable.lc_palette, color = if (id == Look.theme) C.Green else null) {
+                    Look.theme = id; save(); themeMenu = false
+                }
+            }
+        }
         Label("Akcentna boja")
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Look.ACCENTS.forEachIndexed { i, pair ->
