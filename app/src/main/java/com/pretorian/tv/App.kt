@@ -129,7 +129,7 @@ class Nav(
     val playlistsChanged: () -> Unit,
 )
 
-object BuildInfo { const val VERSION = "0.5.4" }
+object BuildInfo { const val VERSION = "0.5.5" }
 
 @Composable
 fun PretorianApp() {
@@ -291,16 +291,10 @@ fun Rail(current: Screen, nav: Nav) {
     // one look everywhere: icon with the name under it
     val width = 96.dp
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
-    // standing on a menu item opens its section after a moment, the focus stays in the menu
-    var hover by remember { mutableStateOf<Screen?>(null) }
-    LaunchedEffect(hover) {
-        val h = hover ?: return@LaunchedEffect
-        delay(500)
-        if (Chrome.inRail && hover == h && section != h) nav.root(h)
-    }
+    // a section opens only on OK; moving through the menu changes nothing (the last one you clicked stays open)
     Column(
         Modifier.width(width).fillMaxHeight().background(C.Rail).padding(vertical = 14.dp)
-            .onFocusChanged { Chrome.inRail = it.hasFocus; if (!it.hasFocus) hover = null },
+            .onFocusChanged { Chrome.inRail = it.hasFocus },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -310,11 +304,9 @@ fun Rail(current: Screen, nav: Nav) {
             Chrome.inRail = false
             if (section == s) focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Right) else nav.root(s)
         }
-        items.forEach { RailButton(it.icon, it.label, section == it.screen, 3, it.badge,
-            onFocus = { hover = if (it.screen == Screen.Search) null else it.screen }) { go(it.screen) } }
+        items.forEach { RailButton(it.icon, it.label, section == it.screen, 3, it.badge) { go(it.screen) } }
         Spacer(Modifier.weight(1f))
-        RailButton(R.drawable.lc_settings, "Postavke", section == Screen.Settings, 3, if (Updater.available != null) 1 else 0,
-            onFocus = { hover = null }) { go(Screen.Settings) }
+        RailButton(R.drawable.lc_settings, "Postavke", section == Screen.Settings, 3, if (Updater.available != null) 1 else 0) { go(Screen.Settings) }
     }
 }
 
