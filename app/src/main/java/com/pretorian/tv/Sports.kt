@@ -177,7 +177,14 @@ fun SportsScreen(nav: Nav) {
         }
     }
     var sel by remember { mutableStateOf<SportEvent?>(null) }
-    val top = remember(sel, shown, hero) { sel?.let { x -> shown.find { it.id == x.id } ?: x } ?: hero }
+    // the match on top is the one you picked with OK (it stays when you come back from the full screen)
+    var chosen by remember { mutableStateOf(SportsMemory.evId) }
+    val top = remember(chosen, shown, hero) { chosen?.let { id -> shown.find { it.id == id } } ?: hero }
+    val miniFr = remember { FocusRequester() }
+    fun choose(ev: SportEvent) {
+        chosen = ev.id; SportsMemory.evId = ev.id; SportsMemory.day = day; SportsMemory.sport = sport; SportsMemory.mine = mine; SportsMemory.view = view; SportsMemory.league = league
+        scope.launch { sc.animateScrollTo(0); delay(120); miniFr.tryFocus() }
+    }
     val sections = remember(shown) {
         val rest = shown
         fun s(l: List<SportEvent>) = l.sortedWith(compareBy({ watchRank(it) }, { it.start }))
@@ -234,7 +241,7 @@ fun SportsScreen(nav: Nav) {
         // the picture of the match and its broadcasts scroll with the list, so the lower rows can always be reached
         if (events is Load.Ok) Box(Modifier.onPreviewKeyEvent { e ->
             if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionUp) { scope.launch { sc.animateScrollTo(0) }; try { dayFr.requestFocus() } catch (_: Exception) {}; true } else false
-        }) { SportTop(top, onFocus = { scope.launch { sc.animateScrollTo(0) } }, onPlay = { chs -> top?.let { play(it, chs, 0) } }) { top?.let { open(it) } } }
+        }) { SportTop(top, miniFr, onFocus = { scope.launch { sc.animateScrollTo(0) } }, onPlay = { chs -> top?.let { play(it, chs, 0) } }) { top?.let { open(it) } } }
         // every TV station that shows the match, worldwide; the ones you have are green and play on OK
         // the first row: its whole card stays visible, and Up goes to the days
         if (events is Load.Ok && top != null) Box(Modifier.onFocusChanged { if (it.hasFocus) scope.launch { sc.animateScrollTo(0) } }) { BroadcastRow(top) { chs, i -> play(top, chs, i) } }
@@ -250,7 +257,8 @@ fun SportsScreen(nav: Nav) {
             item { FilterChip("Uživo sada", view == "live", if (view == "live") C.Red else null, dot = Color(0xFFFF4D55)) { view = if (view == "live") "all" else "live" } }
             item { FilterChip("Moji kanali", mine, if (mine) C.Green else null, icon = R.drawable.lc_tv) { mine = !mine } }
             item { Box(Modifier.width(1.dp).height(38.dp).background(C.Line)) }
-            items(Sports.SPORTS + extra) { (id, label) ->
+            val enabledSports = Prefs.str("sport_enabled", "football").split(',').filter { it.isNotBlank() }
+            items((Sports.SPORTS + extra).filter { enabledSports.isEmpty() || it.first in enabledSports }) { (id, label) ->
                 FilterChip(label, sport == id, if (sport == id) Sports.sportColor(id) else null, dot = Sports.sportColor(id)) {
                     sport = if (sport == id) "all" else id; league = null
                 }
@@ -278,9 +286,9 @@ fun SportsScreen(nav: Nav) {
                     }
                 }
                 val firstSec = listOf(sections.first, sections.second, sections.third).indexOfFirst { it.isNotEmpty() }
-                Section("Uživo sada", sections.first, live = true, if (firstSec == 0) heroFr else null, { sel = it }, memId, memFr) { open(it) }
-                Section("Kasnije", sections.second, false, if (firstSec == 1) heroFr else null, { sel = it }, memId, memFr) { open(it) }
-                Section("Završeno", sections.third, false, if (firstSec == 2) heroFr else null, { sel = it }, memId, memFr) { open(it) }
+                Section("Uživo sada", sections.first, live = true, if (firstSec == 0) heroFr else null, { sel = it }, memId, memFr, onMenu = { pick = it }) { choose(it) }
+                Section("Kasnije", sections.second, false, if (firstSec == 1) heroFr else null, { sel = it }, memId, memFr, onMenu = { pick = it }) { choose(it) }
+                Section("Završeno", sections.third, false, if (firstSec == 2) heroFr else null, { sel = it }, memId, memFr, onMenu = { pick = it }) { choose(it) }
                 // ---------------------------------------------------------- leagues
                 if (leagues.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     T("Lige", 14.sp, C.Muted, FontWeight.SemiBold)
@@ -320,7 +328,7 @@ fun SportsScreen(nav: Nav) {
         delay(100)
         // back from the full screen: the match you had picked, else the first one
         val back = memId != null && shown.any { it.id == memId }
-        if (back) { delay(250); memFr.tryFocus() } else if (shown.isNotEmpty()) heroFr.tryFocus() else dayFr.tryFocus()
+        if (back) { sc.scrollTo(0); delay(200); if (!miniFr.tryFocus()) memFr.tryFocus() } else if (shown.isNotEmpty()) heroFr.tryFocus() else dayFr.tryFocus()
     }
 }
 
@@ -591,7 +599,7 @@ private fun StationChip(label: String, mine: Boolean, onClick: () -> Unit) {
 
 /** top of Sports: live picture of the match on the left, score and details on the right */
 @Composable
-private fun SportTop(ev: SportEvent?, onFocus: () -> Unit = {}, onPlay: (List<Channel>) -> Unit = {}, onOpen: () -> Unit = {}) {
+private fun SportTop(ev: SportEvent?, miniFr: FocusRequester, onFocus: () -> Unit = {}, onPlay: (List<Channel>) -> Unit = {}, onOpen: () -> Unit = {}) {
     val chs = ev?.let { it.channels.ifEmpty { it.ai } } ?: emptyList()
     val ch = chs.firstOrNull()
     // the small picture starts only when you pick it: OK on it starts it, OK again goes full screen
@@ -600,7 +608,7 @@ private fun SportTop(ev: SportEvent?, onFocus: () -> Unit = {}, onPlay: (List<Ch
     Row(Modifier.fillMaxWidth().height(200.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Focusable(onClick = {
             if (ch == null) onOpen() else if (pv == null && Prefs.bool("sport_preview", true)) pv = ch else onPlay(chs)
-        }, onFocus = onFocus, shape = Rnd(18.dp), normal = Color.Transparent, focused = Color.Transparent, zoom = 1.02f, modifier = Modifier.fillMaxHeight().aspectRatio(16f / 9f)) { f ->
+        }, onFocus = onFocus, focusRequester = miniFr, shape = Rnd(18.dp), normal = Color.Transparent, focused = Color.Transparent, zoom = 1.02f, modifier = Modifier.fillMaxHeight().aspectRatio(16f / 9f)) { f ->
             val c = pv
             if (c != null && Prefs.bool("sport_preview", true)) PreviewBox(c, Modifier.fillMaxSize())
             else Column(Modifier.fillMaxSize().clip(Rnd(18.dp)).background(Color.Black.copy(alpha = 0.55f)).border(1.dp, C.Line, Rnd(18.dp)),
@@ -668,7 +676,7 @@ private fun HeroTeam(t: Team) {
 
 @Composable
 private fun Section(title: String, list: List<SportEvent>, live: Boolean = false, fr: FocusRequester? = null,
-                    onFocus: (SportEvent) -> Unit = {}, memId: String? = null, memFr: FocusRequester? = null, onOpen: (SportEvent) -> Unit) {
+                    onFocus: (SportEvent) -> Unit = {}, memId: String? = null, memFr: FocusRequester? = null, onMenu: (SportEvent) -> Unit = {}, onOpen: (SportEvent) -> Unit) {
     if (list.isEmpty()) return
     val rowState = androidx.compose.foundation.lazy.rememberLazyListState()
     val memIdx = list.indexOfFirst { it.id == memId }
@@ -680,15 +688,15 @@ private fun Section(title: String, list: List<SportEvent>, live: Boolean = false
             T("· ${list.size}", 15.sp, C.Muted)
         }
         AlignStart { LazyRow(state = rowState, horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(end = 12.dp)) {
-            itemsIndexed(list, key = { _, e -> e.id }) { i, ev -> EventCard(ev, if (ev.id == memId && memFr != null) memFr else if (i == 0) fr else null, { onFocus(ev) }) { onOpen(ev) } }
+            itemsIndexed(list, key = { _, e -> e.id }) { i, ev -> EventCard(ev, if (ev.id == memId && memFr != null) memFr else if (i == 0) fr else null, { onFocus(ev) }, { onMenu(ev) }) { onOpen(ev) } }
         } }
     }
 }
 
 @Composable
-private fun EventCard(ev: SportEvent, fr: FocusRequester? = null, onFocus: () -> Unit = {}, onClick: () -> Unit) {
+private fun EventCard(ev: SportEvent, fr: FocusRequester? = null, onFocus: () -> Unit = {}, onMenu: (() -> Unit)? = null, onClick: () -> Unit) {
     val none = ev.channels.isEmpty() && ev.ai.isEmpty() && ev.maybe.isEmpty()
-    Focusable(modifier = Modifier.width(272.dp).height(138.dp), onClick = onClick, shape = Rnd(18.dp), focusRequester = fr, onFocus = onFocus,
+    Focusable(modifier = Modifier.width(272.dp).height(138.dp), onClick = onClick, onMenu = onMenu, shape = Rnd(18.dp), focusRequester = fr, onFocus = onFocus,
         normal = C.Card, focused = C.CardFocus, zoom = 1.03f) { f ->
         Column(Modifier.fillMaxSize().then(if (none && !f) Modifier.alpha(0.6f) else Modifier).padding(horizontal = 14.dp, vertical = 11.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

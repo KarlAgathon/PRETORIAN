@@ -238,7 +238,13 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
                             // short OK: menu of the show; long OK (handled while held): channel options
                             if (longFired) { longFired = false; return@onPreviewKeyEvent true }
                             val ch = list.getOrNull(row) ?: return@onPreviewKeyEvent true
-                            detail = ch to progsOf(ch).firstOrNull { it.start <= focusTime && it.end > focusTime }
+                            val pr = progsOf(ch).firstOrNull { it.start <= focusTime && it.end > focusTime }
+                            val t = System.currentTimeMillis()
+                            // on what is on now: straight to full screen, no question; past or coming shows: their menu
+                            if (pr == null || (pr.start <= t && pr.end > t)) {
+                                val i = list.indexOfFirst { it.url == ch.url }.coerceAtLeast(0)
+                                gate.run("c:${ch.url}", Ovr(ctx, ch.pid).isChLocked(ch)) { TvMemory.channel = i; TvMemory.group = g; TvMemory.restore = true; playChannels(nav, list, i) }
+                            } else detail = ch to pr
                             return@onPreviewKeyEvent true
                         }
                         if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false

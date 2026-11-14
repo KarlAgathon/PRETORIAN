@@ -77,7 +77,19 @@ fun buildPlayer(ctx: Context, preview: Boolean = false): ExoPlayer {
         .setAllowCrossProtocolRedirects(true)
         .setConnectTimeoutMs(15_000)
         .setReadTimeoutMs(30_000)
-    val renderers = DefaultRenderersFactory(ctx)
+    // sound: by default the box decodes Dolby (AC3/E-AC3) itself and sends plain sound over HDMI.
+    // Sending Dolby "as it is" (passthrough) gives silence on many TVs and soundbars - that was why some channels had no sound.
+    val passthrough = Prefs.bool("audio_passthrough", false)
+    val renderers = object : DefaultRenderersFactory(ctx) {
+        @Suppress("DEPRECATION")
+        override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioTrackPlaybackParams: Boolean): androidx.media3.exoplayer.audio.AudioSink? =
+            if (passthrough) super.buildAudioSink(context, enableFloatOutput, enableAudioTrackPlaybackParams)
+            else androidx.media3.exoplayer.audio.DefaultAudioSink.Builder(context)
+                .setAudioCapabilities(androidx.media3.exoplayer.audio.AudioCapabilities.DEFAULT_AUDIO_CAPABILITIES)
+                .setEnableFloatOutput(enableFloatOutput)
+                .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                .build()
+    }
         .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
         .setEnableDecoderFallback(true)
     val builder = ExoPlayer.Builder(ctx, renderers)
@@ -205,6 +217,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     var prevIndex by remember { mutableIntStateOf(-1) }
     var saver by remember { mutableStateOf(false) }   // screen saver after a long pause
     var buffering by remember { mutableStateOf(true) }
+    var favAsk by remember { mutableStateOf<Channel?>(null) }
+    var okLong by remember { mutableStateOf(false) }
     var playing by remember { mutableStateOf(true) }
     var position by remember { mutableLongStateOf(0L) }
     var duration by remember { mutableLongStateOf(0L) }
@@ -363,6 +377,20 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             .focusRequester(focus)
             .onPreviewKeyEvent { e ->
                 if (saver) { if (e.type == KeyEventType.KeyDown) saver = false; return@onPreviewKeyEvent true }
+                // live TV: short OK pauses / plays, holding OK asks to add the channel to favourites
+                val okKey = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter
+                if (s.live && okKey && dialog == null && side == null && resume == null && !bar && error == null && digits.isEmpty() && favAsk == null) {
+                    if (e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount == 0) { okLong = false; return@onPreviewKeyEvent true }
+                    if (e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount > 0) {
+                        if (!okLong) { okLong = true; items.getOrNull(index)?.channel?.let { favAsk = it } }
+                        return@onPreviewKeyEvent true
+                    }
+                    if (e.type == KeyEventType.KeyUp) {
+                        if (!okLong) { if (player.isPlaying) player.pause() else player.play(); showInfo = true }
+                        okLong = false
+                        return@onPreviewKeyEvent true
+                    }
+                }
                 if (dialog != null || side != null || resume != null || bar || e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 if (error != null && (e.key == Key.DirectionCenter || e.key == Key.Enter)) { error = null; retried = false; reconnect = 0; retryToken++; return@onPreviewKeyEvent true }
                 // live: numbers on the remote pick a channel; 0 alone goes back to the previous channel
@@ -380,9 +408,9 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 when (e.key) {
                     Key.Menu, Key.Info -> { dialog = "menu"; true }
                     Key.DirectionUp, Key.ChannelUp -> if (s.live && (e.key == Key.ChannelUp || Prefs.bool("zap_updown", true))) { index = (index - 1 + n) % n; true } else { showInfo = true; true }
+                    // ▼ opens the channel options (the bar); CH− changes the channel
                     Key.DirectionDown, Key.ChannelDown -> if (s.live && e.key == Key.ChannelDown) { index = (index + 1) % n; true }
-                        else if (s.live && !Prefs.bool("zap_updown", true)) { bar = true; showInfo = true; true }
-                        else if (s.live && !showInfo) { index = (index + 1) % n; true } else { bar = true; showInfo = true; true }
+                        else { bar = true; showInfo = true; true }
                     Key.DirectionLeft, Key.MediaRewind -> if (!s.live) { player.seekTo((player.currentPosition - step).coerceAtLeast(0)); showInfo = true; true }
                         else { side = "channels"; showInfo = false; true }
                     Key.DirectionRight, Key.MediaFastForward -> if (!s.live) { player.seekTo(player.currentPosition + step); showInfo = true; true }
@@ -486,6 +514,20 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         }
         if (limitPin) PinDialog("Dnevno vrijeme je isteklo", tr("Unesi PIN za još gledanja danas"), onDismiss = { limitPin = false; nav.back() }) { pin ->
             val err = Lock.check(pin); if (err == null) { WatchLimit.allowToday(); limitPin = false; player.play() }; err
+        }
+
+        favAsk?.let { ch ->
+            val lists = Favs.lists(ctx)
+            val inFav = Favs.inAny(ctx, ch)
+            Popup(if (inFav) trf("Ukloniti %s iz favorita?", ch.name) else trf("Dodati %s u favorite?", ch.name), { favAsk = null }) {
+                OptionRow("Da", R.drawable.lc_check, color = C.Green) {
+                    if (inFav) lists.forEach { l -> if (Favs.contains(l.id, ch)) Favs.toggle(l.id, ch) }
+                    else (lists.firstOrNull() ?: Favs.addList(ctx, tr("Favoriti"))).let { Favs.toggle(it.id, ch) }
+                    android.widget.Toast.makeText(ctx, tr(if (inFav) "Uklonjeno iz favorita" else "Dodano u favorite"), android.widget.Toast.LENGTH_SHORT).show()
+                    favAsk = null
+                }
+                OptionRow("Ne", R.drawable.lc_x) { favAsk = null }
+            }
         }
 
         LaunchedEffect(playing, buffering) { saver = false; if (!playing && !buffering) { delay(10 * 60_000L); saver = true } }

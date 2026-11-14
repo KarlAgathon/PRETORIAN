@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -96,7 +98,7 @@ object Dusk {
 
 @Composable
 fun DuskBackground() {
-    if (C.IsLight) return
+    if (Look.theme != "vece") return   // the evening blue belongs to Predvečerje only; other themes have their own background
     // "evening in New York": deep navy, a soft blue light at the top right, darker towards the bottom. No picture at all.
     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF0A0F1F), Color(0xFF0C1428), Color(0xFF080B14)))))
     Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color(0x593B5BA8), Color(0x1F27407A), Color.Transparent),
@@ -217,19 +219,20 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
     Box(Modifier.fillMaxSize()) {
         OnyxBackdrop(hero?.image, hero?.key ?: "home")
         Column(Modifier.fillMaxSize()) {
-            OnyxTopBar(Screen.Home, nav, simple, first)
-            Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 28.dp), verticalArrangement = Arrangement.Bottom) {
-                Box(Modifier.padding(bottom = 14.dp)) { ExpiryChip() }
+            OnyxTopBar(Screen.Home, nav, simple)
+            // everything sits higher and bigger: no empty half screen, nothing cut at the bottom of the TV
+            Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 28.dp, end = 28.dp, top = 18.dp, bottom = 36.dp)) {
+                Box(Modifier.padding(bottom = 8.dp)) { ExpiryChip() }
                 if (hero != null) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         if (cont.isEmpty()) Box(Modifier.clip(Rnd(5.dp)).background(C.Text).padding(horizontal = 8.dp, vertical = 2.dp)) { T("NOVO", 10.sp, C.Bg, FontWeight.ExtraBold) }
                         Text(hero.kicker, style = TextStyle(fontFamily = Inter, fontSize = 12.sp, color = C.Soft, fontWeight = FontWeight.SemiBold, letterSpacing = 3.sp), maxLines = 1)
                     }
-                    Text(hero.title, style = TextStyle(fontFamily = Inter, fontSize = 34.sp, color = C.Text, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.5).sp),
+                    Text(hero.title, style = TextStyle(fontFamily = Inter, fontSize = 38.sp, color = C.Text, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.5).sp),
                         maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp).widthIn(max = 600.dp))
                     if (hero.meta.isNotBlank()) T(hero.meta, 12.sp, C.Soft, modifier = Modifier.padding(top = 2.dp))
                     Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Focusable(onClick = hero.play, shape = Pill, normal = C.Text, focused = C.Text, zoom = 1.06f, modifier = Modifier.height(36.dp)) { _ ->
+                        Focusable(onClick = hero.play, focusRequester = first, shape = Pill, normal = C.Text, focused = C.Text, zoom = 1.06f, modifier = Modifier.height(40.dp)) { _ ->
                             Row(Modifier.align(Alignment.Center).padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                                 Ico(R.drawable.lc_play, 13.dp, C.Bg); T(hero.button, 13.sp, C.Bg, FontWeight.Bold)
                             }
@@ -248,7 +251,7 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                 Spacer(Modifier.height(16.dp))
                 if (cont.isNotEmpty()) {
                     RowTitle("NASTAVI GLEDANJE")
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(end = 40.dp)) {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(18.dp), contentPadding = PaddingValues(end = 40.dp, top = 6.dp, bottom = 6.dp)) {
                         items(cont, key = { it.url }) { pr ->
                             WideCard(pr.series ?: pr.title, if (pr.season != null) "S${pr.season} E${pr.episode}" else fmtTime(pr.dur), pr.poster, pr.url,
                                 if (pr.next) null else pr.fraction, onMenu = { contMenu = pr }, onClick = playOf(pr))
@@ -262,7 +265,9 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                         }
                     }
                 }
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(10.dp))
+                // the channels you watched last, next to Continue watching
+                RecentStrip(nav)
             }
         }
     }
@@ -289,12 +294,12 @@ private fun RowTitle(t: String) {
 /** Landscape card with picture, title and a thin progress line. */
 @Composable
 fun WideCard(title: String, sub: String, image: String?, key: String, progress: Float?, onMenu: (() -> Unit)? = null, onClick: () -> Unit) {
-    Column(Modifier.width(196.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        Focusable(onClick = onClick, onMenu = onMenu, shape = Rnd(12.dp), normal = C.Card, zoom = 1.05f, modifier = Modifier.fillMaxWidth().height(100.dp)) { f ->
+    Column(Modifier.width(250.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Focusable(onClick = onClick, onMenu = onMenu, shape = Rnd(12.dp), normal = C.Card, zoom = 1.05f, modifier = Modifier.fillMaxWidth().height(140.dp)) { f ->
             OnyxImage(image, key, Modifier.fillMaxSize().clip(Rnd(12.dp)), maxW = 420)
-            Box(Modifier.fillMaxSize().clip(Rnd(12.dp)).background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xD9000000)), startY = 90f)))
+            Box(Modifier.fillMaxSize().clip(Rnd(12.dp)).background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xD9000000)), startY = 150f)))
             if (f) Box(Modifier.fillMaxSize().border(2.dp, Color.White, Rnd(12.dp)))
-            T(cleanTitle(title).first, 13.sp, Color.White, FontWeight.Bold, modifier = Modifier.align(Alignment.BottomStart).padding(start = 10.dp, end = 10.dp, bottom = 10.dp))
+            T(cleanTitle(title).first, 15.sp, Color.White, FontWeight.Bold, modifier = Modifier.align(Alignment.BottomStart).padding(start = 10.dp, end = 10.dp, bottom = 10.dp))
             if (progress != null) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Color(0x33FFFFFF))) {
                 Box(Modifier.fillMaxWidth(progress.coerceAtLeast(0.02f)).fillMaxHeight().background(Color.White))
             }
@@ -306,12 +311,18 @@ fun WideCard(title: String, sub: String, image: String?, key: String, progress: 
 /** Portrait poster with title on the picture and an optional progress line. */
 @Composable
 fun PosterCard(title: String, image: String?, key: String, progress: Float?, modifier: Modifier, onFocus: (() -> Unit)? = null,
-               onMenu: (() -> Unit)? = null, fr: FocusRequester? = null, onClick: () -> Unit) {
+               onMenu: (() -> Unit)? = null, fr: FocusRequester? = null, rating: String? = null, onClick: () -> Unit) {
     Focusable(onClick = onClick, onFocus = onFocus, onMenu = onMenu, focusRequester = fr, shape = Rnd(12.dp), normal = C.Card, zoom = 1.05f, modifier = modifier.aspectRatio(2f / 3f)) { f ->
         OnyxImage(image, key, Modifier.fillMaxSize().clip(Rnd(12.dp)))
         Box(Modifier.fillMaxSize().clip(Rnd(12.dp)).background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xE0000000)), startY = 160f)))
         if (f) Box(Modifier.fillMaxSize().border(2.dp, Color.White, Rnd(12.dp)))
-        T(title, 13.sp, Color.White, FontWeight.Bold, maxLines = 2,
+        // the provider's rating in the corner
+        rating?.toDoubleOrNull()?.takeIf { it > 0 }?.let { r ->
+            Box(Modifier.align(Alignment.TopEnd).padding(6.dp).clip(Rnd(6.dp)).background(Color(0xCC000000)).padding(horizontal = 6.dp, vertical = 2.dp)) {
+                T("★ " + String.format("%.1f", if (r > 10) r / 10 else r), 11.sp, Color(0xFFFBBF24), FontWeight.Bold)
+            }
+        }
+        T(title, 14.sp, Color.White, FontWeight.Bold, maxLines = 2,
             modifier = Modifier.align(Alignment.BottomStart).padding(start = 10.dp, end = 10.dp, bottom = if (progress != null) 18.dp else 10.dp))
         if (progress != null) Box(Modifier.align(Alignment.BottomStart).padding(start = 10.dp, end = 10.dp, bottom = 8.dp).fillMaxWidth().height(3.dp).clip(Pill).background(Color(0x40FFFFFF))) {
             Box(Modifier.fillMaxWidth(progress.coerceAtLeast(0.03f)).fillMaxHeight().background(Color.White))

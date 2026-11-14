@@ -40,13 +40,16 @@ object Look {
         "Narandžasta" to Color(0xFFEA580C), "Ljubičasta" to Color(0xFF9333EA), "Tirkizna" to Color(0xFF0891B2),
         "Roza" to Color(0xFFDB2777), "Zlatna" to Color(0xFFCA8A04),
     )
-    val THEMES = listOf("vece" to "Predvečerje", "bw" to "Crno-bijela", "staklo" to "Svijetlo staklo", "pijesak" to "Pijesak", "dark" to "Tamna", "light" to "Svijetla", "glass" to "Glass", "dew" to "Winter Dew")
+    val THEMES = listOf("vece" to "Predvečerje", "bw" to "Crno-bijela", "pijesak" to "Pijesak", "glass" to "Glass")
+    /** size of everything together, 0–100 (Settings › Look › Size): 100 is about 35 % bigger */
+    var uiScale by mutableIntStateOf(0)
 
     private fun sp(c: Context) = c.getSharedPreferences("pretorian", Context.MODE_PRIVATE)
 
     fun load(c: Context) {
         val p = sp(c)
-        theme = p.getString("look_theme", "vece") ?: "vece"
+        theme = (p.getString("look_theme", "vece") ?: "vece").let { t -> if (THEMES.any { it.first == t }) t else "vece" }
+        uiScale = p.getInt("look_scale", 0).coerceIn(0, 100)
         accent = p.getInt("look_accent", 0).coerceIn(0, ACCENTS.lastIndex)
         shade = p.getInt("look_shade", 0)
         opacity = p.getInt("look_opacity", 80)
@@ -66,7 +69,7 @@ object Look {
         groupFrame = p.getBoolean("look_groupframe", true)
         resBadge = p.getInt("look_resbadge", 1)
         layout = 2   // the new look is the only one now (old layouts could be switched on by accident)
-        bigText = p.getBoolean("look_bigtext", false)
+        bigText = false   // replaced by the size slider, which grows everything together
         // 0.3: the new modern home tiles become the default once
         if (p.getInt("look_v", 0) < 3) { tileStyle = 3; p.edit().putInt("look_v", 3).putInt("look_tilestyle", 3).apply() }
         // 0.4.2: inside a group the small picture starts by itself (you asked for it)
@@ -81,7 +84,7 @@ object Look {
             .putInt("look_overlay", overlay).putBoolean("look_preview", preview).putInt("look_previewmode", previewMode)
             .putInt("look_menuopacity", menuOpacity).putInt("look_rowsize", rowSize).putString("app_lang", lang)
             .putString("look_iconset", iconSet).putInt("look_iconstyle", iconStyle).putInt("look_corner", corner)
-            .putBoolean("look_groupframe", groupFrame).putInt("look_resbadge", resBadge).putInt("look_layout", layout).putBoolean("look_bigtext", bigText).apply()
+            .putBoolean("look_groupframe", groupFrame).putInt("look_resbadge", resBadge).putInt("look_layout", layout).putBoolean("look_bigtext", bigText).putInt("look_scale", uiScale).apply()
     }
 }
 
@@ -103,8 +106,8 @@ private fun palette(): Palette {
             Color(0xFFFAFAFA), Color(0xFF8C94A8), Color(0xFFC8CDD8), Color(0xFF16203A), false)
         "staklo" -> Palette(Color(0xFFF7F7F8), alpha(Color.White, o.coerceAtMost(75)), Color(0x0F000000), Color(0x1A000000),
             Color(0xFF0B0B0F), Color(0xFF5A5A66), Color(0xFF2A2A33), Color(0xFFE9E9EE), true)
-        "pijesak" -> Palette(Color(0xFFECE9E4), alpha(Color(0xFFFAF8F4), o.coerceAtMost(80)), Color(0x10000000), Color(0x1C000000),
-            Color(0xFF0B0B0F), Color(0xFF5A5A66), Color(0xFF2A2A33), Color(0xFFE2DED7), true)
+        "pijesak" -> Palette(Color(0xFF16100A), alpha(Color(0xFF2A1F14), (o * 0.7f).toInt().coerceIn(35, 95)), Color(0x1AE8C38A), Color(0x2EE8C38A),
+            Color(0xFFF7EBD7), Color(0xFFA8977E), Color(0xFFE2D2B8), Color(0xFF2A1F14), false)
         "glass" -> Palette(Color(0xFF16202B), alpha(Color(0xFF26323F), o), Color(0x1AFFFFFF), Color(0x24FFFFFF),
             Color(0xFFF4F6F8), Color(0xFFA9B3BE), Color(0xFFD5DBE1), alpha(Color(0xFF2E3C4A), o), false)
         "dew" -> Palette(Color(0xFF221B36), alpha(Color(0xFF2A2340), (o * 0.55f).toInt().coerceAtLeast(25)), Color(0x1CFFFFFF), Color(0x2EFFFFFF),
@@ -128,7 +131,13 @@ object C {
     val IsLight get() = palette().light
     /** app background: Winter Dew is a frosted dusk gradient, the others a plain colour */
     val BgBrush: androidx.compose.ui.graphics.Brush
-        get() = if (Look.theme == "dew") androidx.compose.ui.graphics.Brush.linearGradient(
+        get() = if (Look.theme == "pijesak") androidx.compose.ui.graphics.Brush.linearGradient(
+            listOf(Color(0xFF120C07), Color(0xFF241809), Color(0xFF3A2610)),
+            start = androidx.compose.ui.geometry.Offset(0f, 0f), end = androidx.compose.ui.geometry.Offset(2400f, 1400f))
+        else if (Look.theme == "glass") androidx.compose.ui.graphics.Brush.linearGradient(
+            listOf(Color(0xFF0E1A26), Color(0xFF1B3346), Color(0xFF2B4A5E)),
+            start = androidx.compose.ui.geometry.Offset(0f, 0f), end = androidx.compose.ui.geometry.Offset(2400f, 1400f))
+        else if (Look.theme == "dew") androidx.compose.ui.graphics.Brush.linearGradient(
             listOf(Color(0xFF1C2140), Color(0xFF2E2347), Color(0xFF4A2A48), Color(0xFF5C3045)),
             start = androidx.compose.ui.geometry.Offset(0f, 0f), end = androidx.compose.ui.geometry.Offset(2400f, 1400f))
         else androidx.compose.ui.graphics.SolidColor(palette().bg)
@@ -137,7 +146,7 @@ object C {
     val Red: Color
         get() {
             if (Look.theme == "bw" || Look.theme == "vece") return Color.White
-            if (Look.theme == "staklo" || Look.theme == "pijesak") return Color(0xFF0B0B0F)
+            if (Look.theme == "pijesak") return Color(0xFFE0B25C)
             val base = Look.ACCENTS.getOrElse(Look.accent) { Look.ACCENTS[0] }.second
             val s = Look.shade.coerceIn(-2, 2)
             return when {
@@ -147,8 +156,8 @@ object C {
             }
         }
     /** text drawn on top of the accent colour */
-    val OnRed get() = if (Look.theme == "bw" || Look.theme == "vece") Color.Black else Color.White  // staklo/pijesak: black accent, white text
-    val RedText get() = if (Look.theme == "bw" || Look.theme == "vece") Color.White else if (Look.theme == "staklo" || Look.theme == "pijesak") Color(0xFF0B0B0F) else lerp(Red, if (IsLight) Color.Black else Color.White, if (IsLight) 0.2f else 0.35f)
+    val OnRed get() = if (Look.theme == "bw" || Look.theme == "vece" || Look.theme == "pijesak") Color.Black else Color.White  // staklo/pijesak: black accent, white text
+    val RedText get() = if (Look.theme == "bw" || Look.theme == "vece") Color.White else if (Look.theme == "pijesak") Color(0xFFE0B25C) else lerp(Red, if (IsLight) Color.Black else Color.White, if (IsLight) 0.2f else 0.35f)
     val CardFocus get() = if (Look.theme == "dew") Color(0x40FFFFFF) else Red.copy(alpha = 0.18f)
     val Green get() = if (IsLight) Color(0xFF15803D) else Color(0xFF4ADE80)
     val Amber get() = if (IsLight) Color(0xFFB45309) else Color(0xFFFBBF24)

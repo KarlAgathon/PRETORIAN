@@ -104,6 +104,8 @@ class MainActivity : ComponentActivity() {
         val away = System.currentTimeMillis() - stoppedAt
         val fromExternal = ExtPlayer.launchedAt > 0 && ExtPlayer.launchedAt >= stoppedAt - 10_000
         if (stoppedAt > 0 && away > 15_000 && !fromExternal && Profiles.askAtStart) Profiles.picker = true
+        // every start of the app opens Home (not after the external player or a short trip to the system)
+        if (stoppedAt > 0 && away > 15_000 && !fromExternal) AppHome.tick++
     }
 
     // leaving the app: send changes to Google Drive
@@ -115,6 +117,9 @@ class MainActivity : ComponentActivity() {
         kotlinx.coroutines.GlobalScope.launch { try { Drive.autoSync(app) } catch (_: Exception) {} }
     }
 }
+
+/** Asks the app to go back to Home (a new start from the launcher). */
+object AppHome { var tick by mutableIntStateOf(0) }
 
 sealed class Screen {
     object Home : Screen()
@@ -156,6 +161,7 @@ fun PretorianApp() {
         )
     }
     BackHandler(enabled = stack.size > 1) { nav.back() }
+    LaunchedEffect(AppHome.tick) { if (AppHome.tick > 0 && Store.playlists(ctx).isNotEmpty()) { Preview.stop(); stack.clear(); stack.add(Screen.Home) } }
 
     // new version at start and every 6 hours; "new" movies and series once in 12 hours; weekly backup
     LaunchedEffect(Unit) {
@@ -202,7 +208,7 @@ fun PretorianApp() {
     val scheme = if (C.IsLight) lightColorScheme(primary = C.Red, background = C.Bg, surface = C.Bg)
                  else darkColorScheme(primary = C.Red, background = C.Bg, surface = C.Bg)
     val dens = androidx.compose.ui.platform.LocalDensity.current
-    CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(dens.density, dens.fontScale * (if (Look.bigText) 1.15f else 1f))) {
+    CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(dens.density * (1f + Look.uiScale * 0.0035f), dens.fontScale)) {
     MaterialTheme(colorScheme = scheme) {
         CompositionLocalProvider(LocalLayoutDirection provides if (Look.lang == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr) {
             val top = stack.last()

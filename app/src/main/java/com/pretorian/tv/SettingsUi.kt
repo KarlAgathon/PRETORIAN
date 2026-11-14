@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -1006,6 +1008,7 @@ fun SettingsScreen2(nav: Nav) {
     var sub by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(section) { SettingsNav.last = section; sub = null }
     val first = remember { FocusRequester() }
+    var listFocused by remember { mutableIntStateOf(0) }
     // optional: Settings behind the PIN
     var unlocked by remember { mutableStateOf(!(Prefs.bool("pin_settings") && Lock.hasPin())) }
     if (!unlocked) {
@@ -1013,19 +1016,19 @@ fun SettingsScreen2(nav: Nav) {
         return
     }
     Row(Modifier.fillMaxSize()) {
-        Column(Modifier.width(250.dp).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 8.dp, top = 6.dp, bottom = 16.dp),
+        Column(Modifier.width(270.dp).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 8.dp, top = 6.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp)) {
             list.forEach { s ->
                 val sel = s.id == section
-                Focusable(modifier = Modifier.fillMaxWidth().height(44.dp), onClick = { section = s.id; sub = null },
+                Focusable(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), onClick = { section = s.id; sub = null }, onFocus = { listFocused++ },
                     focusRequester = if (sel) first else null, normal = if (sel) C.CardHi else Color.Transparent, focused = C.Red, zoom = 1f) { f ->
                     Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Box(Modifier.size(26.dp).clip(Rnd(8.dp)).background(if (f) C.OnRed.copy(alpha = 0.08f) else C.Card), contentAlignment = Alignment.Center) {
                             Ico(s.icon, 14.dp, if (f) C.OnRed else C.Text)
                         }
                         Column(Modifier.weight(1f)) {
-                            T(s.title, 12.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, maxLines = 1)
-                            T(if (s.id == "mode") (if (SetMode.advanced) "Napredno" else "Osnovno") else s.sub, 10.sp, if (f) C.OnRed.copy(alpha = 0.6f) else C.Muted, maxLines = 1)
+                            T(s.title, 14.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, maxLines = 1)
+                            T(if (s.id == "mode") (if (SetMode.advanced) "Napredno" else "Osnovno") else s.sub, 11.sp, if (f) C.OnRed.copy(alpha = 0.6f) else C.Muted, maxLines = 1)
                         }
                         if (s.id == "update" && Updater.available != null) Box(Modifier.size(16.dp).clip(CircleShape).background(C.Danger), contentAlignment = Alignment.Center) {
                             T("1", 9.sp, Color.White, FontWeight.Bold)
@@ -1036,8 +1039,16 @@ fun SettingsScreen2(nav: Nav) {
         }
         var inPage by remember { mutableStateOf(false) }
         val scope = rememberCoroutineScope()
-        BackHandler(enabled = inPage) { if (sub != null) sub = null else { inPage = false; scope.launch { first.tryFocus() } } }
-        Box(Modifier.weight(1f).fillMaxHeight().onFocusChanged { inPage = it.hasFocus }.padding(start = 18.dp, end = 24.dp, top = 4.dp, bottom = 8.dp)) {
+        // Back goes one step: sub-page → its page, page → the list of sections, list → out of Settings
+        BackHandler(enabled = true) {
+            when {
+                sub != null -> { SetFocus.pending = true; sub = null }
+                inPage -> { inPage = false; scope.launch { first.tryFocus() } }
+                else -> nav.back()
+            }
+        }
+        LaunchedEffect(listFocused) { inPage = false }
+        Box(Modifier.weight(1f).fillMaxHeight().onFocusChanged { if (it.hasFocus) inPage = true }.padding(start = 18.dp, end = 24.dp, top = 4.dp, bottom = 8.dp)) {
             key(section, sub) {
                 when (sub) {
                     "groups" -> GroupManager(nav)
@@ -1083,15 +1094,15 @@ fun setFocusFr(id: String, given: FocusRequester? = null): FocusRequester {
 @Composable
 fun SetPage(title: String, sub: String? = null, content: @Composable () -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        T(title, 20.sp, C.Text, FontWeight.Bold)
-        if (sub != null) T(sub, 11.sp, C.Muted, maxLines = 2)
+        T(title, 23.sp, C.Text, FontWeight.Bold)
+        if (sub != null) T(sub, 13.sp, C.Muted, maxLines = 2)
         content()
     }
 }
 
 @Composable
 fun SetSection(t: String) {
-    androidx.compose.material3.Text(tr(t).uppercase(), style = androidx.compose.ui.text.TextStyle(fontFamily = Inter, fontSize = 10.sp, color = C.Muted,
+    androidx.compose.material3.Text(tr(t).uppercase(), style = androidx.compose.ui.text.TextStyle(fontFamily = Inter, fontSize = 12.sp, color = C.Muted,
         fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp), modifier = Modifier.padding(top = 10.dp, bottom = 2.dp))
 }
 
@@ -1101,21 +1112,21 @@ fun SetRow(title: String, sub: String? = null, value: String? = null, arrow: Str
            focusRequester: FocusRequester? = null, onClick: () -> Unit) {
     val id = "row:$title"
     val fr = setFocusFr(id, focusRequester)
-    Focusable(modifier = Modifier.fillMaxWidth().height(if (sub != null) 50.dp else 42.dp).border(1.dp, C.Line, Rnd(12.dp)),
+    Focusable(modifier = Modifier.fillMaxWidth().heightIn(min = if (sub != null) 56.dp else 48.dp).border(1.dp, C.Line, Rnd(12.dp)),
         onClick = { SetFocus.last = id; SetFocus.pending = true; onClick() }, onFocus = { SetFocus.last = id },
         focusRequester = fr, shape = Rnd(12.dp), normal = C.Rail, focused = C.Red, zoom = 1.01f) { f ->
-        Row(Modifier.fillMaxSize().padding(start = 14.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 10.dp, top = 7.dp, bottom = 7.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    T(title, 13.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, maxLines = 1)
+                    T(title, 15.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, maxLines = 1)
                     if (new) Box(Modifier.clip(Rnd(4.dp)).background(C.Green.copy(alpha = 0.2f)).padding(horizontal = 4.dp)) { T("NOVO", 8.sp, C.Green, FontWeight.Bold) }
                 }
-                if (sub != null) T(sub, 10.sp, if (f) C.OnRed.copy(alpha = 0.65f) else C.Muted, maxLines = 1)
+                if (sub != null) T(sub, 12.sp, if (f) C.OnRed.copy(alpha = 0.65f) else C.Muted, maxLines = 2)
             }
             if (value != null || arrow.isNotEmpty()) Row(Modifier.clip(Rnd(9.dp)).background(if (f) Color(0x14000000) else C.Card)
                 .border(1.dp, if (f) Color(0x26000000) else C.Line, Rnd(9.dp)).padding(horizontal = 10.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                if (value != null) T(value, 12.sp, if (f) C.OnRed else (valueColor ?: C.Text), FontWeight.SemiBold, maxLines = 1)
+                if (value != null) T(value, 14.sp, if (f) C.OnRed else (valueColor ?: C.Text), FontWeight.SemiBold, maxLines = 1, modifier = Modifier.widthIn(max = 300.dp))
                 if (arrow.isNotEmpty()) T(arrow, 10.sp, if (f) C.OnRed else C.Muted)
             }
         }
@@ -1177,57 +1188,79 @@ private fun LampRow(label: String, on: Boolean, onClick: () -> Unit) {
 fun SetSwitch(title: String, sub: String? = null, on: Boolean, new: Boolean = false, onChange: (Boolean) -> Unit) {
     val id = "sw:$title"
     val fr = setFocusFr(id)
-    Focusable(modifier = Modifier.fillMaxWidth().height(if (sub != null) 50.dp else 42.dp).border(1.dp, C.Line, Rnd(12.dp)),
-        onClick = { SetFocus.last = id; SetFocus.pending = true; onChange(!on) }, onFocus = { SetFocus.last = id }, focusRequester = fr,
+    var cur by remember(on) { mutableStateOf(on) }
+    Focusable(modifier = Modifier.fillMaxWidth().heightIn(min = if (sub != null) 54.dp else 46.dp).border(1.dp, C.Line, Rnd(12.dp)),
+        onClick = { SetFocus.last = id; cur = !cur; onChange(cur) }, onFocus = { SetFocus.last = id }, focusRequester = fr,
         shape = Rnd(12.dp), normal = C.Rail, focused = C.Red, zoom = 1.01f) { f ->
-        Row(Modifier.fillMaxSize().padding(start = 14.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 7.dp, bottom = 7.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    T(title, 13.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, maxLines = 1)
+                    T(title, 15.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, maxLines = 1)
                     if (new) Box(Modifier.clip(Rnd(4.dp)).background(Color(0xFFFBBF24)).padding(horizontal = 4.dp)) { T("NOVO", 8.sp, Color(0xFF111111), FontWeight.Bold) }
                 }
-                if (sub != null) T(sub, 10.sp, if (f) C.OnRed.copy(alpha = 0.65f) else C.Muted, maxLines = 1)
+                if (sub != null) T(sub, 12.sp, if (f) C.OnRed.copy(alpha = 0.65f) else C.Muted, maxLines = 2)
             }
-            Box(Modifier.width(40.dp).height(22.dp).clip(Pill).background(if (on) Color(0xFF2563EB) else (if (f) Color(0x26000000) else C.CardHi))) {
-                Box(Modifier.align(if (on) Alignment.CenterEnd else Alignment.CenterStart).padding(3.dp).size(16.dp).clip(CircleShape).background(Color.White))
+            Box(Modifier.width(40.dp).height(22.dp).clip(Pill).background(if (cur) Color(0xFF2563EB) else (if (f) Color(0x26000000) else C.CardHi))) {
+                Box(Modifier.align(if (cur) Alignment.CenterEnd else Alignment.CenterStart).padding(3.dp).size(16.dp).clip(CircleShape).background(Color.White))
             }
         }
     }
 }
 
-/** Slider: ◀ ▶ on the remote change the value. */
+/** Slider: the row shows the value; OK opens a small window where ◀ ▶ change it, OK or Back closes it.
+ *  (◀ ▶ on the row itself move between rows, like everywhere else.) */
 @Composable
-fun SetSlider(title: String, sub: String?, value: Int, min: Int, max: Int, step: Int, label: String, onChange: (Int) -> Unit) {
+fun SetSlider(title: String, sub: String?, value: Int, min: Int, max: Int, step: Int, fmt: (Int) -> String = { "$it" }, onChange: (Int) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    var cur by remember(value) { mutableIntStateOf(value) }
     val id = "sl:$title"
     val fr = setFocusFr(id)
-    Focusable(modifier = Modifier.fillMaxWidth().height(62.dp).border(1.dp, C.Line, Rnd(12.dp)).onPreviewKeyEvent { e ->
-        if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-        when (e.key) {
-            Key.DirectionLeft -> { SetFocus.last = id; SetFocus.pending = true; onChange((value - step).coerceAtLeast(min)); true }
-            Key.DirectionRight -> { SetFocus.last = id; SetFocus.pending = true; onChange((value + step).coerceAtMost(max)); true }
-            else -> false
+    @Composable
+    fun Bar(v: Int, f: Boolean, h: androidx.compose.ui.unit.Dp) {
+        Box(Modifier.fillMaxWidth().height(h).clip(Pill).background(if (f) Color(0x33000000) else C.Line)) {
+            Box(Modifier.fillMaxWidth(((v - min).toFloat() / (max - min).coerceAtLeast(1)).coerceIn(0.02f, 1f)).fillMaxHeight().background(Color(0xFF2563EB)))
         }
-    }, onClick = {}, onFocus = { SetFocus.last = id }, focusRequester = fr, shape = Rnd(12.dp), normal = C.Rail, focused = C.CardHi, zoom = 1.01f) { f ->
-        Column(Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+    }
+    Focusable(modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).border(1.dp, C.Line, Rnd(12.dp)),
+        onClick = { SetFocus.last = id; open = true }, onFocus = { SetFocus.last = id }, focusRequester = fr,
+        shape = Rnd(12.dp), normal = C.Rail, focused = C.Red, zoom = 1.01f) { f ->
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 9.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                T(title, 13.sp, C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                T(label, 13.sp, Color(0xFF60A5FA), FontWeight.Bold)
+                T(title, 15.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                T(fmt(cur), 15.sp, if (f) C.OnRed else Color(0xFF60A5FA), FontWeight.Bold)
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                T("◀", 10.sp, if (f) C.Text else C.Muted)
-                Box(Modifier.weight(1f).height(4.dp).clip(Pill).background(C.Line)) {
-                    Box(Modifier.fillMaxWidth(((value - min).toFloat() / (max - min).coerceAtLeast(1)).coerceIn(0.02f, 1f)).fillMaxHeight().background(Color(0xFF2563EB)))
-                }
-                T("▶", 10.sp, if (f) C.Text else C.Muted)
-            }
-            if (sub != null) T(sub, 9.sp, C.Muted, maxLines = 1)
+            Bar(cur, f, 4.dp)
+            if (sub != null) T(sub, 11.sp, if (f) C.OnRed.copy(alpha = 0.65f) else C.Muted, maxLines = 1)
         }
+    }
+    if (open) Popup(title, { open = false; SetFocus.tick++ }, width = 520.dp) {
+        val pfr = remember { FocusRequester() }
+        Focusable(onClick = { open = false; SetFocus.tick++ }, focusRequester = pfr, shape = Rnd(14.dp), normal = C.Card, focused = C.CardHi, zoom = 1f,
+            modifier = Modifier.fillMaxWidth().height(96.dp).onPreviewKeyEvent { e ->
+                if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                when (e.key) {
+                    Key.DirectionLeft -> { cur = (cur - step).coerceAtLeast(min); onChange(cur); true }
+                    Key.DirectionRight -> { cur = (cur + step).coerceAtMost(max); onChange(cur); true }
+                    else -> false
+                }
+            }) { _ ->
+            Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    T("◀", 18.sp, C.Text); Spacer(Modifier.weight(1f))
+                    T(fmt(cur), 26.sp, C.Text, FontWeight.ExtraBold)
+                    Spacer(Modifier.weight(1f)); T("▶", 18.sp, C.Text)
+                }
+                Bar(cur, false, 8.dp)
+            }
+        }
+        T("◀ ▶ mijenja · OK ili Nazad zatvara", 12.sp, C.Muted)
+        LaunchedEffect(Unit) { pfr.tryFocus() }
     }
 }
 
 private val THEME_SWATCH = mapOf("vece" to (Color(0xFF0C1428) to Color(0xFF1C2A4D)), "bw" to (Color(0xFF050505) to Color(0xFF1A1A1A)),
-    "staklo" to (Color(0xFFF7F7F8) to Color.White), "pijesak" to (Color(0xFFECE9E4) to Color(0xFFFAF8F4)), "dark" to (Color(0xFF0B0D12) to Color(0xFF1A1F2A)),
-    "light" to (Color(0xFFF2F3F6) to Color.White), "glass" to (Color(0xFF16202B) to Color(0xFF2E3C4A)), "dew" to (Color(0xFF221B36) to Color(0xFF3A2F55)))
+    "staklo" to (Color(0xFFF7F7F8) to Color.White), "pijesak" to (Color(0xFF1E140A) to Color(0xFF8A6A3A)), "dark" to (Color(0xFF0B0D12) to Color(0xFF1A1F2A)),
+    "light" to (Color(0xFFF2F3F6) to Color.White), "glass" to (Color(0xFF1B3346) to Color(0x66FFFFFF)), "dew" to (Color(0xFF221B36) to Color(0xFF3A2F55)))
 
 /** Themes as small pictures. */
 @Composable
@@ -1416,7 +1449,7 @@ private fun LanguageV2() {
                     SetDrop("Opisi filmova i serija", null, listOf(tr("Kao aplikacija")) + Langs.MEDIA.map { it.native },
                         metaOpts.indexOf(Prefs.metaLang).coerceAtLeast(0)) { Prefs.metaLang = metaOpts[it]; rev++ }
                 }
-                Box(Modifier.weight(1f)) { SetSwitch("Automatski prevedi opise", null, AutoTranslate.on) { Prefs.put("auto_translate", it); rev++ } }
+                Box(Modifier.weight(1f)) { SetSwitch("Automatski prevedi opise", null, AutoTranslate.on) { Prefs.put("auto_translate", it) } }
             }
         }
     }
@@ -1435,18 +1468,18 @@ private fun LookV2(openSub: (String) -> Unit) {
             ThemeCards { rev++ }
             SetSection("Boja")
             // these themes have their own colour (white or black focus): the dots would change nothing
-            if (Look.theme in setOf("bw", "vece", "staklo", "pijesak")) T("Ova tema ima svoju boju fokusa. Boje rade u temama Tamna, Svijetla, Glass i Winter Dew.", 11.sp, C.Muted, maxLines = 2)
+            if (Look.theme != "glass") T("Ova tema ima svoju boju fokusa. Boje rade u temi Glass.", 12.sp, C.Muted, maxLines = 2)
             else ColorDots { rev++ }
             val transp = (100 - Look.opacity).coerceIn(0, 50)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.weight(1f)) { SetSlider("Prozirnost", "0 – 50 %, korak 5 %", transp, 0, 50, 5, "$transp %") { Look.opacity = 100 - it; save(); rev++ } }
-                Box(Modifier.weight(1f)) { SetSlider("Svjetlina boje", "tamnije ◀ ▶ svjetlije, korak 5 %", Look.shade, -2, 2, 1, (if (Look.shade > 0) "+" else "") + "${Look.shade * 5} %") { Look.shade = it; save(); rev++ } }
+                Box(Modifier.weight(1f)) { SetSlider("Prozirnost", "0 – 50 %, korak 5 %", transp, 0, 50, 5, { "$it %" }) { Look.opacity = 100 - it; save() } }
+                Box(Modifier.weight(1f)) { SetSlider("Svjetlina boje", "tamnije ◀ ▶ svjetlije, korak 5 %", Look.shade, -2, 2, 1, { (if (it > 0) "+" else "") + "${it * 5} %" }) { Look.shade = it; save() } }
             }
             SetSection("Veličina i prikaz")
             SetDrop("Veličina", "tekst, pločice i plakati zajedno", listOf("Mala", "Srednja", "Velika"), Look.posterSize) {
                 Look.posterSize = it; Look.tileSize = it; Look.rowSize = it; save(); rev++
             }
-            SetDrop("Veći tekst", "za gledanje s daljeg kauča", ON_OFF, onOff(Look.bigText)) { Look.bigText = it == 0; save(); rev++ }
+            SetSlider("Veličina svega", "slova, polja i slike zajedno · OK pa ◀ ▶", Look.uiScale, 0, 100, 5) { Look.uiScale = it; save() }
             SetDrop("Mala slika kanala", "pregled dok stojiš na kanalu", listOf("Automatski", "Na OK", "Isključena"), 2 - Look.previewMode) {
                 Look.previewMode = 2 - it; Look.preview = Look.previewMode > 0; save(); rev++
             }
@@ -1456,7 +1489,15 @@ private fun LookV2(openSub: (String) -> Unit) {
             SetDrop("Mod programa", trf("Ovaj uređaj: %s GB RAM · %s", String.format("%.1f", Perf.ramGb), tr(if (Perf.weak) "slabiji" else "jak")),
                 listOf(tr("Automatski") + " (" + tr(if (Perf.weak) "Lite" else "Full") + ")", "Lite", "Full"), Perf.mode,
                 note = tr("Lite: bez velikih slika u pozadini i bez prelaza, manje slike. Za slabije uređaje. Full: puni izgled sa slikama.")) { Perf.set(it); rev++ }
-            if (SetMode.advanced) SetRow("Dodatne opcije izgleda", "ikone, oblik ivica, okviri, rezolucija u plejeru") { openSub("lookmore") }
+            if (SetMode.advanced) {
+                SetDrop("Oblik ivica", null, listOf("Zaobljene", "Blago zaobljene", "Oštre"), Look.corner) { Look.corner = it; save(); rev++ }
+                val sets = IconSets.BUILTIN
+                SetDrop("Set ikona", null, sets.map { it.name }, sets.indexOfFirst { it.id == Look.iconSet }.coerceAtLeast(0)) { i ->
+                    Look.iconSet = sets[i].id; Look.iconStyle = if (sets[i].styles.size > 1) 1.coerceAtMost(sets[i].styles.lastIndex) else 0; save(); rev++
+                }
+                SetSwitch("Okvir oko grupa", "tanka linija oko TV grupa", Look.groupFrame) { Look.groupFrame = it; save() }
+                SetDrop("Rezolucija u plejeru", "u uglu slike", listOf("Isključeno", "Na početku", "Uvijek"), Look.resBadge) { Look.resBadge = it; save(); rev++ }
+            }
         }
     }
 }
@@ -1482,7 +1523,7 @@ private fun PlayerV2(openSub: (String) -> Unit) {
                 }
             }
             SetSection("Titlovi")
-            SetSwitch("Uključi titlove sami", "ugrađeni, na tvom jeziku", Prefs.autoSubs) { Prefs.autoSubs = it; rev++ }
+            SetSwitch("Uključi titlove sami", "ugrađeni, na tvom jeziku", Prefs.autoSubs) { Prefs.autoSubs = it }
             val sub0 = Prefs.subLangs.split(',').firstOrNull() ?: "bs"
             SetDrop("Jezik titla", null, listOf(tr("Default (od providera)")) + langs.map { Langs.label(it) },
                 if (!Prefs.autoSubs) 0 else langs.indexOf(sub0) + 1) { i ->
@@ -1502,11 +1543,11 @@ private fun PlayerV2(openSub: (String) -> Unit) {
             }
             SetSection("Kontrole")
             SetDrop("Preskok ◀ ▶", null, listOf("10 s", "20 s", "30 s"), listOf(10, 20, 30).indexOf(Prefs.seekStep).coerceAtLeast(0)) { Prefs.seekStep = listOf(10, 20, 30)[it]; rev++ }
-            SetSwitch("▲ ▼ mijenja kanal", "u TV-u, preko cijelog ekrana", Prefs.bool("zap_updown", true), new = true) { Prefs.put("zap_updown", it); rev++ }
+            SetSwitch("▲ ▼ mijenja kanal", "u TV-u, preko cijelog ekrana", Prefs.bool("zap_updown", true), new = true) { Prefs.put("zap_updown", it) }
             SetDrop("Nastavi gdje si stao", null, listOf("Pitaj", "Uvijek nastavi", "Uvijek od početka"), Prefs.str("resume_mode", "0").toIntOrNull() ?: 0, new = true) {
                 Prefs.put("resume_mode", it.toString()); rev++
             }
-            SetSwitch("Sljedeća epizoda sama", "odbrojava 10 s na kraju", Prefs.bool("next_ep", true), new = true) { Prefs.put("next_ep", it); rev++ }
+            SetSwitch("Sljedeća epizoda sama", "odbrojava 10 s na kraju", Prefs.bool("next_ep", true), new = true) { Prefs.put("next_ep", it) }
             if (SetMode.advanced) {
                 SetSection("Napredno")
                 val players = remember { ExtPlayer.installed(ctx) }
@@ -1514,8 +1555,17 @@ private fun PlayerV2(openSub: (String) -> Unit) {
                     if (!ExtPlayer.always) 0 else (players.indexOfFirst { it.pkg == ExtPlayer.saved } + 1).coerceAtLeast(0)) { i ->
                     if (i == 0) ExtPlayer.always = false else { ExtPlayer.saved = players[i - 1].pkg; ExtPlayer.always = true }; rev++
                 }
-                SetSwitch("Slab internet", "veći bafer, manje zastoja", Prefs.bool("slow_net"), new = true) { Prefs.put("slow_net", it); rev++ }
-                SetRow("Ostale opcije plejera", "više jezika po redu, file manager") { openSub("player") }
+                SetSwitch("Slab internet", "veći bafer, manje zastoja", Prefs.bool("slow_net"), new = true) { Prefs.put("slow_net", it) }
+                SetSwitch("Dolby zvuk direktno na TV (passthrough)", "ako neki kanali nemaju zvuk, ostavi isključeno", Prefs.bool("audio_passthrough", false)) { Prefs.put("audio_passthrough", it) }
+                var langEdit by remember { mutableStateOf<String?>(null) }
+                SetRow("Jezici titlova po redu", "prvi koji postoji se uključi", langList(Prefs.subLangs)) { langEdit = "sub" }
+                SetRow("Jezici zvuka po redu", "prvi koji postoji se uključi", langList(Prefs.audioLangs)) { langEdit = "audio" }
+                val fm = listOf("" to tr("Pitaj svaki put"), "builtin" to tr("PRETORIAN (ugrađeni)")) + FileAccess.pickers(ctx).map { it.pkg to it.label }
+                SetDrop("File manager", "za titlove i backup s USB-a", fm.map { it.second }, fm.indexOfFirst { it.first == FileAccess.app }.coerceAtLeast(0)) { FileAccess.app = fm[it].first; rev++ }
+                when (langEdit) {
+                    "sub" -> LangOrderPicker("Jezici titla", Prefs.subLangs.split(',').filter { it.isNotBlank() }, onDismiss = { langEdit = null; SetFocus.tick++ }) { Prefs.subLangs = it.joinToString(","); langEdit = null; rev++ }
+                    "audio" -> LangOrderPicker("Jezici zvuka", Prefs.audioLangs.split(',').filter { it.isNotBlank() }, onDismiss = { langEdit = null; SetFocus.tick++ }) { Prefs.audioLangs = it.joinToString(","); langEdit = null; rev++ }
+                }
             }
         }
     }
@@ -1663,7 +1713,7 @@ private fun RemindersV2(nav: Nav) {
                 Reminders.before = listOf(0, 1, 5, 10, 15)[it]; rev++
             }
             SetDrop("Obavijest stoji", null, listOf("10 s", "20 s", "30 s"), listOf(10, 20, 30).indexOf(Reminders.popupSec).coerceAtLeast(1)) { Reminders.popupSec = listOf(10, 20, 30)[it]; rev++ }
-            SetSwitch("Zvuk obavijesti", null, Prefs.bool("rem_sound", true), new = true) { Prefs.put("rem_sound", it); rev++ }
+            SetSwitch("Zvuk obavijesti", null, Prefs.bool("rem_sound", true), new = true) { Prefs.put("rem_sound", it) }
             SetSection("Ostalo")
             SetDrop("Kad je aplikacija zatvorena", "ne radi na svim uređajima", listOf("Otvori PRETORIAN", "Ništa"), if (Reminders.wake) 0 else 1, new = true) { Reminders.wake = it == 0; rev++ }
             SetDrop("Stari podsjetnici", null, listOf("Obriši nakon 1 dan", "Obriši nakon 7 dana", "Obriši odmah"),
