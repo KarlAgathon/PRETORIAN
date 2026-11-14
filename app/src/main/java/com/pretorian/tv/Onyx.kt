@@ -1,5 +1,6 @@
 package com.pretorian.tv
 
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import androidx.compose.ui.input.key.Key
@@ -296,7 +297,7 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                     val cScope = rememberCoroutineScope()
                     val cFirst = remember { FocusRequester() }; val cLast = remember { FocusRequester() }
                     LazyRow(state = cState, horizontalArrangement = Arrangement.spacedBy(18.dp), contentPadding = PaddingValues(end = 40.dp, top = 6.dp, bottom = 6.dp)) {
-                        androidx.compose.foundation.lazy.itemsIndexed(cont, key = { _, it -> it.url }) { i, pr ->
+                        itemsIndexed(cont, key = { _, it -> it.url }) { i, pr ->
                             WideCard(pr.series ?: pr.title, if (pr.season != null) "S${pr.season} E${pr.episode}" else fmtTime(pr.dur), pr.poster, pr.url,
                                 if (pr.next) null else pr.fraction, onMenu = { contMenu = pr }, height = cardH,
                                 fr = if (i == 0) cFirst else if (i == cont.lastIndex) cLast else null,
