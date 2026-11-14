@@ -138,7 +138,7 @@ class Nav(
     val playlistsChanged: () -> Unit,
 )
 
-object BuildInfo { const val VERSION = "0.7.1" }
+object BuildInfo { const val VERSION = "0.8.0" }
 
 @Composable
 fun PretorianApp() {
@@ -166,6 +166,7 @@ fun PretorianApp() {
                 Updater.check(ctx)?.let { if (Prefs.bool("upd_note", true)) Notes.add("update", trf("Nova verzija %s", it.name), "update:${it.name}") }
             Store.actives(ctx).forEach { p -> try { NewContent.scan(ctx, p) } catch (_: Exception) {} }
             try { Follow.check(ctx) } catch (_: Exception) {}
+            try { Sports.remindTeams() } catch (_: Exception) {}
             delay(6 * 3600_000L)
         }
     }
@@ -179,7 +180,11 @@ fun PretorianApp() {
     LaunchedEffect(Unit) {
         delay(4_000)
         Drive.checkRemote(ctx)
-        while (true) { delay(10 * 60_000L); Drive.autoSync(ctx) }
+        while (true) {
+            val every = Prefs.str("drive_every", "10").toIntOrNull() ?: 10
+            delay((if (every <= 0) 30 else every) * 60_000L)
+            if (every > 0) Drive.autoSync(ctx)
+        }
     }
     // reminders: checked every 15 seconds, wherever you are in the app
     LaunchedEffect(Unit) {
@@ -263,6 +268,7 @@ fun PretorianApp() {
                 if (Look.age) Box(Modifier.fillMaxSize().background(C.BgBrush)) {
                     DuskBackground()
                     if (top == Screen.Home) key(version) { OnyxHome(nav) }
+                    else if (top == Screen.AddPlaylist && Store.playlists(ctx).isEmpty() && Welcome.tab < 0) content()
                     else Column(Modifier.fillMaxSize()) {
                         OnyxTopBar(top, nav)
                         Box(Modifier.weight(1f).fillMaxWidth()) { content() }
@@ -296,6 +302,9 @@ fun playReminder(nav: Nav, r: Reminder) {
 @Composable
 private fun ReminderPopup(nav: Nav) {
     val r = Reminders.showing ?: return
+    LaunchedEffect(r.id) {
+        if (Prefs.bool("rem_sound", true)) try { android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 70).startTone(android.media.ToneGenerator.TONE_PROP_BEEP2, 400) } catch (_: Exception) {}
+    }
     LaunchedEffect(r.id) { delay(Reminders.popupSec * 1000L); if (Reminders.showing?.id == r.id) Reminders.showing = null }
     val mins = ((r.start - System.currentTimeMillis()) / 60_000).coerceAtLeast(0)
     Popup(if (mins > 0) trf("Za %s min počinje", mins) else tr("Počinje sada"), onDismiss = { Reminders.showing = null }) {

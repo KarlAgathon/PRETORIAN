@@ -19,6 +19,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -348,7 +357,8 @@ fun AddPlaylistScreen(nav: Nav) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val old = remember { EditPlaylist.target }
-    var tab by remember { mutableIntStateOf(if (old?.type == SourceType.M3U) 1 else 0) }
+    if (Look.age && old == null && Store.playlists(ctx).isEmpty() && Welcome.tab < 0) { WelcomeScreen(nav); return }
+    var tab by remember { mutableIntStateOf(if (old?.type == SourceType.M3U || (old == null && Welcome.tab == 1)) 1 else 0) }
     var name by remember { mutableStateOf(old?.name ?: "") }
     var server by remember { mutableStateOf(old?.server ?: "") }
     var user by remember { mutableStateOf(old?.user ?: "") }
@@ -414,6 +424,7 @@ fun AddPlaylistScreen(nav: Nav) {
                     }
                 }
                 if (Store.playlists(ctx).isNotEmpty()) Button("Odustani", R.drawable.lc_x) { EditPlaylist.target = null; nav.back() }
+                else if (Look.age) Button("Nazad", R.drawable.lc_x) { Welcome.tab = -1 }
             }
         }
     }
@@ -855,6 +866,11 @@ private fun SportPage() {
     var rev by remember { mutableIntStateOf(0) }
     key(rev) {
         Page("Sport i AI", "Sports Center prvo prikazuje ono što je važno u tvojoj državi.") {
+            val conts = Sports.CONTINENTS
+            val cOn = csv("sport_cont", "eu,am,world")
+            SetMulti("Kontinenti", "više odjednom", conts.map { it.second }, conts.indices.filter { conts[it].first in cOn }.toSet(), all = false) { s2 ->
+                Prefs.put("sport_cont", (if (s2.isEmpty()) setOf(0) else s2).sorted().joinToString(",") { conts[it].first }); Sports.lastCombined.clear(); rev++
+            }
             val cur = Prefs.str("sport_country")
             OptionRow("Država", R.drawable.lc_map_pin, sub = "Koje lige su važnije (npr. Njemačka: Bundesliga)",
                 value = tr(COUNTRIES.firstOrNull { it.first == cur }?.second ?: cur) + if (cur.isBlank()) " · " + Sports.country else "") { pickCountry = true }
@@ -1139,6 +1155,97 @@ private fun LampRow(label: String, on: Boolean, onClick: () -> Unit) {
     }
 }
 
+/** Switch row: OK turns it on or off. */
+@Composable
+fun SetSwitch(title: String, sub: String? = null, on: Boolean, new: Boolean = false, onChange: (Boolean) -> Unit) {
+    Focusable(modifier = Modifier.fillMaxWidth().height(if (sub != null) 50.dp else 42.dp).border(1.dp, C.Line, Rnd(12.dp)), onClick = { onChange(!on) },
+        shape = Rnd(12.dp), normal = C.Rail, focused = C.Red, zoom = 1.01f) { f ->
+        Row(Modifier.fillMaxSize().padding(start = 14.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    T(title, 13.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, maxLines = 1)
+                    if (new) Box(Modifier.clip(Rnd(4.dp)).background(Color(0xFFFBBF24)).padding(horizontal = 4.dp)) { T("NOVO", 8.sp, Color(0xFF111111), FontWeight.Bold) }
+                }
+                if (sub != null) T(sub, 10.sp, if (f) C.OnRed.copy(alpha = 0.65f) else C.Muted, maxLines = 1)
+            }
+            Box(Modifier.width(40.dp).height(22.dp).clip(Pill).background(if (on) Color(0xFF2563EB) else (if (f) Color(0x26000000) else C.CardHi))) {
+                Box(Modifier.align(if (on) Alignment.CenterEnd else Alignment.CenterStart).padding(3.dp).size(16.dp).clip(CircleShape).background(Color.White))
+            }
+        }
+    }
+}
+
+/** Slider: ◀ ▶ on the remote change the value. */
+@Composable
+fun SetSlider(title: String, sub: String?, value: Int, min: Int, max: Int, step: Int, label: String, onChange: (Int) -> Unit) {
+    Focusable(modifier = Modifier.fillMaxWidth().height(62.dp).border(1.dp, C.Line, Rnd(12.dp)).onPreviewKeyEvent { e ->
+        if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+        when (e.key) {
+            Key.DirectionLeft -> { onChange((value - step).coerceAtLeast(min)); true }
+            Key.DirectionRight -> { onChange((value + step).coerceAtMost(max)); true }
+            else -> false
+        }
+    }, onClick = {}, shape = Rnd(12.dp), normal = C.Rail, focused = C.CardHi, zoom = 1.01f) { f ->
+        Column(Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                T(title, 13.sp, C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                T(label, 13.sp, Color(0xFF60A5FA), FontWeight.Bold)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                T("◀", 10.sp, if (f) C.Text else C.Muted)
+                Box(Modifier.weight(1f).height(4.dp).clip(Pill).background(C.Line)) {
+                    Box(Modifier.fillMaxWidth(((value - min).toFloat() / (max - min).coerceAtLeast(1)).coerceIn(0.02f, 1f)).fillMaxHeight().background(Color(0xFF2563EB)))
+                }
+                T("▶", 10.sp, if (f) C.Text else C.Muted)
+            }
+            if (sub != null) T(sub, 9.sp, C.Muted, maxLines = 1)
+        }
+    }
+}
+
+private val THEME_SWATCH = mapOf("vece" to (Color(0xFF0C1428) to Color(0xFF1C2A4D)), "bw" to (Color(0xFF050505) to Color(0xFF1A1A1A)),
+    "staklo" to (Color(0xFFF7F7F8) to Color.White), "pijesak" to (Color(0xFFECE9E4) to Color(0xFFFAF8F4)), "dark" to (Color(0xFF0B0D12) to Color(0xFF1A1F2A)),
+    "light" to (Color(0xFFF2F3F6) to Color.White), "glass" to (Color(0xFF16202B) to Color(0xFF2E3C4A)), "dew" to (Color(0xFF221B36) to Color(0xFF3A2F55)))
+
+/** Themes as small pictures. */
+@Composable
+fun ThemeCards(onPick: () -> Unit) {
+    val ctx = LocalContext.current
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        items(Look.THEMES) { (id, name) ->
+            val sel = Look.theme == id
+            val (bg, card) = THEME_SWATCH[id] ?: (Color.DarkGray to Color.Gray)
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Focusable(onClick = { Look.theme = id; Look.save(ctx); onPick() }, shape = Rnd(12.dp), normal = bg, focused = bg, zoom = 1.06f,
+                    modifier = Modifier.width(112.dp).height(64.dp).border(2.dp, if (sel) Color(0xFF22C55E) else C.Line, Rnd(12.dp))) { _ ->
+                    Column(Modifier.fillMaxSize().padding(8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Box(Modifier.width(36.dp).height(4.dp).clip(Pill).background(card.copy(alpha = 0.9f)))
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { repeat(3) { i -> Box(Modifier.size(22.dp).clip(Rnd(5.dp)).background(card).then(if (i == 0) Modifier.border(1.dp, Color(0xFF3B82F6), Rnd(5.dp)) else Modifier)) } }
+                    }
+                    if (sel) Box(Modifier.align(Alignment.TopEnd).padding(5.dp).size(16.dp).clip(CircleShape).background(Color(0xFF22C55E)), contentAlignment = Alignment.Center) { Ico(R.drawable.lc_check, 11.dp, Color.White) }
+                }
+                T(name, 11.sp, if (sel) C.Text else C.Soft, FontWeight.SemiBold)
+            }
+        }
+    }
+}
+
+/** Accent colours as round dots. */
+@Composable
+fun ColorDots(onPick: () -> Unit) {
+    val ctx = LocalContext.current
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Look.ACCENTS.forEachIndexed { i, (_, col) ->
+            val sel = Look.accent == i
+            Focusable(onClick = { Look.accent = i; Look.save(ctx); onPick() }, shape = CircleShape, normal = col, focused = col, zoom = 1.15f,
+                modifier = Modifier.size(30.dp).border(2.dp, if (sel) Color.White else Color.Transparent, CircleShape)) { _ ->
+                if (sel) Box(Modifier.align(Alignment.Center)) { Ico(R.drawable.lc_check, 14.dp, Color.White) }
+            }
+        }
+        T(Look.ACCENTS.getOrNull(Look.accent)?.first ?: "", 12.sp, C.Soft)
+    }
+}
+
 private fun csv(k: String, def: String) = Prefs.str(k, def).split(',').filter { it.isNotBlank() }
 private fun onOff(b: Boolean) = if (b) 0 else 1
 private val ON_OFF = listOf("Uključeno", "Isključeno")
@@ -1156,12 +1263,17 @@ private fun PlaylistsV2(nav: Nav, openSub: (String) -> Unit) {
         val sec = a.exp.toLongOrNull()
         trf("Aktivna: %s", a.name) + (if (sec != null && sec > 0) " · " + trf("ističe %s", java.text.SimpleDateFormat("dd.MM.yy", java.util.Locale.getDefault()).format(java.util.Date(sec * 1000))) else "")
     }) {
-        SetRow("Dodaj playlistu", "Xtream, M3U link ili fajl, Stalker") { EditPlaylist.target = null; nav.push(Screen.AddPlaylist) }
-        SetRow("Uredi playliste", trf("%s playliste · uredi, aktiviraj, isključi, osvježi, obriši", list.size),
-            "● " + trf("%s aktivna", list.count { it.active }), valueColor = C.Green) { openSub("plists") }
+        T("OK otvara playlistu · drži OK za brzi meni", 11.sp, C.Muted)
+        list.forEach { pl ->
+            val sec = pl.exp.toLongOrNull()
+            SetRow(pl.name, (if (pl.type == SourceType.XTREAM) "Xtream" else "M3U") +
+                (if (sec != null && sec > 0) " · " + trf("ističe %s", java.text.SimpleDateFormat("dd.MM.yy", java.util.Locale.getDefault()).format(java.util.Date(sec * 1000))) else ""),
+                if (pl.active) "● " + tr("Aktivna") else "○ " + tr("Isključena"), arrow = "", valueColor = if (pl.active) C.Green else C.Muted) { openSub("plists") }
+        }
+        SetRow("+  " + tr("Dodaj playlistu"), "Xtream, M3U link ili fajl") { EditPlaylist.target = null; nav.push(Screen.AddPlaylist) }
         if (act != null) {
             SetSection(trf("Za aktivnu playlistu · %s", act.name))
-            SetRow("Uređivanje grupa i kanala", "pomjeri, sakrij, preimenuj, premjesti, PIN") { openSub("groups") }
+            SetRow("Grupe i kanali", "sakrij, pomjeri, PIN") { openSub("groups") }
             SetRow("EPG izvori", "dodaj, uredi, osvježi, izbriši", "● " + trf("%s aktivna", EpgSources.list().count { it.on } + 1), valueColor = C.Green) { openSub("epg") }
             SetRow(if (busy) "Osvježavam…" else "Osvježi sve", "kanali, filmovi, serije, EPG") {
                 if (busy) return@SetRow
@@ -1272,18 +1384,13 @@ private fun LookV2(openSub: (String) -> Unit) {
     key(rev) {
         SetPage("Izgled", "Promjene se vide odmah.") {
             SetSection("Tema")
-            SetDrop("Tema", null, Look.THEMES.map { it.second }, Look.THEMES.indexOfFirst { it.first == Look.theme }.coerceAtLeast(0)) { Look.theme = Look.THEMES[it].first; save(); rev++ }
-            SetDrop("Boja", "boja fokusa u temama koje je koriste", Look.ACCENTS.map { it.first }, Look.accent) { Look.accent = it; save(); rev++ }
+            ThemeCards { rev++ }
+            SetSection("Boja")
+            ColorDots { rev++ }
             val transp = (100 - Look.opacity).coerceIn(0, 50)
-            SetRow("Prozirnost", "0 – 50 %, korak 5 %", "$transp %", "◀ ▶") { }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button("− 5 %", R.drawable.lc_minus) { Look.opacity = (100 - (transp - 5).coerceAtLeast(0)); save(); rev++ }
-                Button("+ 5 %", R.drawable.lc_plus) { Look.opacity = (100 - (transp + 5).coerceAtMost(50)); save(); rev++ }
-            }
-            SetRow("Svjetlina boje", "tamnije ◀ ▶ svjetlije, korak 5 %", (if (Look.shade > 0) "+" else "") + "${Look.shade * 5} %", "◀ ▶") { }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button("Tamnije", R.drawable.lc_minus) { Look.shade = (Look.shade - 1).coerceAtLeast(-2); save(); rev++ }
-                Button("Svjetlije", R.drawable.lc_plus) { Look.shade = (Look.shade + 1).coerceAtMost(2); save(); rev++ }
+                Box(Modifier.weight(1f)) { SetSlider("Prozirnost", "0 – 50 %, korak 5 %", transp, 0, 50, 5, "$transp %") { Look.opacity = 100 - it; save(); rev++ } }
+                Box(Modifier.weight(1f)) { SetSlider("Svjetlina boje", "tamnije ◀ ▶ svjetlije, korak 5 %", Look.shade, -2, 2, 1, (if (Look.shade > 0) "+" else "") + "${Look.shade * 5} %") { Look.shade = it; save(); rev++ } }
             }
             SetSection("Veličina i prikaz")
             SetDrop("Veličina", "tekst, pločice i plakati zajedno", listOf("Mala", "Srednja", "Velika"), Look.posterSize) {
@@ -1293,7 +1400,7 @@ private fun LookV2(openSub: (String) -> Unit) {
             SetDrop("Mala slika kanala", "pregled dok stojiš na kanalu", listOf("Automatski", "Na OK", "Isključena"), 2 - Look.previewMode) {
                 Look.previewMode = 2 - it; Look.preview = Look.previewMode > 0; save(); rev++
             }
-            SetDrop("TV se otvara kao", null, listOf("Lista kanala", "TV vodič"), if (Prefs.str("tv_view", "list") == "guide") 1 else 0) {
+            SetDrop("Kad otvoriš TV, prvo vidiš", null, listOf("Lista kanala", "TV vodič"), if (Prefs.str("tv_view", "list") == "guide") 1 else 0) {
                 Prefs.put("tv_view", if (it == 1) "guide" else "list"); rev++
             }
             SetDrop("Mod programa", trf("Ovaj uređaj: %s GB RAM · %s", String.format("%.1f", Perf.ramGb), tr(if (Perf.weak) "slabiji" else "jak")),
@@ -1313,7 +1420,19 @@ private fun PlayerV2(openSub: (String) -> Unit) {
     val langs = listOf("bs", "hr", "sr", "en", "de", "tr", "it", "ro", "bg", "ar")
     key(rev) {
         SetPage("Plejer") {
+            // how a subtitle will look, with the chosen size and style
+            val sz = Prefs.str("sub_size", "1").toIntOrNull() ?: 1
+            val sty = Prefs.str("sub_style", "0").toIntOrNull() ?: 0
+            Box(Modifier.fillMaxWidth().height(74.dp).clip(Rnd(14.dp)).background(Brush.verticalGradient(listOf(Color(0xFF1E293B), Color(0xFF0B1020)))).border(1.dp, C.Line, Rnd(14.dp))) {
+                T("Pregled titla", 10.sp, C.Muted, modifier = Modifier.padding(10.dp))
+                Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp).then(if (sty == 2) Modifier.clip(Rnd(4.dp)).background(Color(0xCC000000)).padding(horizontal = 8.dp) else Modifier)) {
+                    androidx.compose.material3.Text(tr("Ovako izgleda titl na ekranu."), style = androidx.compose.ui.text.TextStyle(fontFamily = Inter, fontSize = listOf(13, 16, 19, 22)[sz.coerceIn(0, 3)].sp,
+                        color = Color.White, fontWeight = FontWeight.SemiBold,
+                        shadow = if (sty == 0) androidx.compose.ui.graphics.Shadow(Color.Black, androidx.compose.ui.geometry.Offset(2f, 2f), 4f) else if (sty == 1) androidx.compose.ui.graphics.Shadow(Color.Black, androidx.compose.ui.geometry.Offset(0f, 0f), 6f) else null))
+                }
+            }
             SetSection("Titlovi")
+            SetSwitch("Uključi titlove sami", "ugrađeni, na tvom jeziku", Prefs.autoSubs) { Prefs.autoSubs = it; rev++ }
             val sub0 = Prefs.subLangs.split(',').firstOrNull() ?: "bs"
             SetDrop("Jezik titla", null, listOf(tr("Default (od providera)")) + langs.map { Langs.label(it) },
                 if (!Prefs.autoSubs) 0 else langs.indexOf(sub0) + 1) { i ->
@@ -1333,11 +1452,11 @@ private fun PlayerV2(openSub: (String) -> Unit) {
             }
             SetSection("Kontrole")
             SetDrop("Preskok ◀ ▶", null, listOf("10 s", "20 s", "30 s"), listOf(10, 20, 30).indexOf(Prefs.seekStep).coerceAtLeast(0)) { Prefs.seekStep = listOf(10, 20, 30)[it]; rev++ }
-            SetDrop("▲ ▼ mijenja kanal", null, ON_OFF, onOff(Prefs.bool("zap_updown", true)), new = true) { Prefs.put("zap_updown", it == 0); rev++ }
+            SetSwitch("▲ ▼ mijenja kanal", "u TV-u, preko cijelog ekrana", Prefs.bool("zap_updown", true), new = true) { Prefs.put("zap_updown", it); rev++ }
             SetDrop("Nastavi gdje si stao", null, listOf("Pitaj", "Uvijek nastavi", "Uvijek od početka"), Prefs.str("resume_mode", "0").toIntOrNull() ?: 0, new = true) {
                 Prefs.put("resume_mode", it.toString()); rev++
             }
-            SetDrop("Sljedeća epizoda sama", null, listOf("Odmah", "Isključeno"), if (Prefs.bool("next_ep", true)) 0 else 1, new = true) { Prefs.put("next_ep", it == 0); rev++ }
+            SetSwitch("Sljedeća epizoda sama", "odbrojava 10 s na kraju", Prefs.bool("next_ep", true), new = true) { Prefs.put("next_ep", it); rev++ }
             if (SetMode.advanced) {
                 SetSection("Napredno")
                 val players = remember { ExtPlayer.installed(ctx) }
@@ -1345,7 +1464,7 @@ private fun PlayerV2(openSub: (String) -> Unit) {
                     if (!ExtPlayer.always) 0 else (players.indexOfFirst { it.pkg == ExtPlayer.saved } + 1).coerceAtLeast(0)) { i ->
                     if (i == 0) ExtPlayer.always = false else { ExtPlayer.saved = players[i - 1].pkg; ExtPlayer.always = true }; rev++
                 }
-                SetDrop("Slab internet", "veći bafer: kasnije krene, rjeđe zastane", ON_OFF, onOff(Prefs.bool("slow_net")), new = true) { Prefs.put("slow_net", it == 0); rev++ }
+                SetSwitch("Slab internet", "veći bafer, manje zastoja", Prefs.bool("slow_net"), new = true) { Prefs.put("slow_net", it); rev++ }
                 SetRow("Ostale opcije plejera", "više jezika po redu, file manager") { openSub("player") }
             }
         }
@@ -1368,14 +1487,39 @@ private fun SportV2() {
             SetMulti("Sportovi", "više odjednom", sports.map { it.second }, sports.indices.filter { sports[it].first in en }.toSet()) { s ->
                 Prefs.put("sport_enabled", s.sorted().joinToString(",") { sports[it].first }); rev++
             }
+            val conts = Sports.CONTINENTS
+            val cOn = csv("sport_cont", "eu,am,world")
+            SetMulti("Kontinenti", "više odjednom", conts.map { it.second }, conts.indices.filter { conts[it].first in cOn }.toSet(), all = false) { s2 ->
+                Prefs.put("sport_cont", (if (s2.isEmpty()) setOf(0) else s2).sorted().joinToString(",") { conts[it].first }); Sports.lastCombined.clear(); rev++
+            }
             val cur = Prefs.str("sport_country")
             SetDrop("Moja država", "najbliže tebi ide prvo", COUNTRIES.map { it.second }, COUNTRIES.indexOfFirst { it.first == cur }.coerceAtLeast(0)) {
                 Prefs.put("sport_country", COUNTRIES[it].first); Sports.lastCombined.clear(); rev++
             }
+            val lgs = Sports.LEAGUES.filter { it.sport in en }
+            val lOn = csv("sport_leagues", "")
+            SetMulti("Takmičenja", lgs.take(3).joinToString(", ") { it.name } + "…", lgs.map { it.name },
+                if (lOn.isEmpty()) lgs.indices.toSet() else lgs.indices.filter { lgs[it].abbr in lOn }.toSet()) { s2 ->
+                Prefs.put("sport_leagues", if (s2.size == lgs.size) "" else s2.sorted().joinToString(",") { lgs[it].abbr }); Sports.lastCombined.clear(); rev++
+            }
+            var teamDlg by remember { mutableStateOf(false) }
+            val teams = Prefs.str("sport_teams").split(',').map { it.trim() }.filter { it.isNotBlank() }
+            SetRow("Omiljeni timovi", "njihove utakmice uvijek na vrhu", if (teams.isEmpty()) tr("Nijedan") else trf("%s tima", teams.size), new = true) { teamDlg = true }
+            if (teamDlg) TextDialog("Omiljeni timovi", "Imena, odvojena zarezom (npr. Željezničar, Bayern)", Prefs.str("sport_teams"), onDismiss = { teamDlg = false }) { v ->
+                Prefs.put("sport_teams", v); teamDlg = false; Sports.lastCombined.clear(); rev++
+            }
             SetSection("Prikaz")
+            SetDrop("Mala slika utakmice", null, listOf("Automatski", "Isključena"), if (Prefs.bool("sport_preview", true)) 0 else 1) { Prefs.put("sport_preview", it == 0); rev++ }
+            SetDrop("Podsjeti me prije utakmice", "za omiljene timove", listOf("Isključeno", "5 min", "15 min", "30 min"),
+                listOf(0, 5, 15, 30).indexOf(Prefs.str("sport_team_remind", "0").toIntOrNull() ?: 0).coerceAtLeast(0), new = true) {
+                Prefs.put("sport_team_remind", listOf(0, 5, 15, 30)[it].toString()); rev++
+            }
             SetDrop("Osvježavanje rezultata", null, listOf("Svake minute", "Svake 3 min", "Svakih 5 min"),
                 listOf(1, 3, 5).indexOf(Prefs.str("sport_refresh", "1").toIntOrNull() ?: 1).coerceAtLeast(0), new = true) { Prefs.put("sport_refresh", listOf(1, 3, 5)[it].toString()); rev++ }
-            SetSection("Ko prenosi · AI")
+            SetSection("Ko prenosi · izvori")
+            val srcKeys = listOf("sport_src_rights", "sport_src_ai")
+            SetMulti("Izvori", "odakle se traži ko prenosi · tvoj TV vodič uvijek", listOf("Prava prenosa po ligi", "AI pretraga"),
+                srcKeys.indices.filter { Prefs.bool(srcKeys[it], true) }.toSet(), all = false, new = true) { s2 -> srcKeys.forEachIndexed { i, k -> Prefs.put(k, i in s2) }; Sports.lastCombined.clear(); rev++ }
             val pv = SportsAI.prov
             SetDrop("AI", tr(if (pv.free) "besplatno" else "plaća se po upitu"), SportsAI.PROVIDERS.map { it.name },
                 SportsAI.PROVIDERS.indexOfFirst { it.id == SportsAI.provider }.coerceAtLeast(0)) { SportsAI.provider = SportsAI.PROVIDERS[it].id; status = null; rev++ }
@@ -1408,11 +1552,18 @@ private fun RemindersV2(nav: Nav) {
                 Reminders.before = listOf(0, 1, 5, 10, 15)[it]; rev++
             }
             SetDrop("Obavijest stoji", null, listOf("10 s", "20 s", "30 s"), listOf(10, 20, 30).indexOf(Reminders.popupSec).coerceAtLeast(1)) { Reminders.popupSec = listOf(10, 20, 30)[it]; rev++ }
-            SetDrop("Probudi box iz mirovanja", "ne radi na svim uređajima", ON_OFF, onOff(Reminders.wake)) { Reminders.wake = it == 0; rev++ }
+            SetSwitch("Zvuk obavijesti", null, Prefs.bool("rem_sound", true), new = true) { Prefs.put("rem_sound", it); rev++ }
+            SetSection("Ostalo")
+            SetDrop("Kad je aplikacija zatvorena", "ne radi na svim uređajima", listOf("Otvori PRETORIAN", "Ništa"), if (Reminders.wake) 0 else 1, new = true) { Reminders.wake = it == 0; rev++ }
+            SetDrop("Stari podsjetnici", null, listOf("Obriši nakon 1 dan", "Obriši nakon 7 dana", "Obriši odmah"),
+                listOf(24, 168, 1).indexOf(Prefs.str("rem_keep", "24").toIntOrNull() ?: 24).coerceAtLeast(0), new = true) { Prefs.put("rem_keep", listOf(24, 168, 1)[it].toString()); rev++ }
         }
     }
     menu?.let { r ->
         Popup(r.title, { menu = null }) {
+            if (r.channelUrl != null) OptionRow("Gledaj kanal sada", R.drawable.lc_play, color = C.Green) { menu = null; playReminder(nav, r) }
+            OptionRow("Pomjeri 5 min ranije", R.drawable.lc_arrow_up) { Reminders.remove(r.id); Reminders.add(r.copy(start = r.start - 5 * 60_000L)); menu = null; rev++ }
+            OptionRow("Pomjeri 5 min kasnije", R.drawable.lc_arrow_down) { Reminders.remove(r.id); Reminders.add(r.copy(start = r.start + 5 * 60_000L)); menu = null; rev++ }
             OptionRow("Obriši podsjetnik", R.drawable.lc_trash_2, color = C.Danger) { Reminders.remove(r.id); menu = null; rev++ }
             OptionRow("Zatvori", R.drawable.lc_x) { menu = null }
         }
@@ -1438,15 +1589,19 @@ private fun SimpleV2(nav: Nav) {
             SetMulti("Šta se vidi", "lampicama biraš", items, ids.indices.filter { ids[it] in on }.toSet(), all = false) { s ->
                 Prefs.put("simple_items", (if (s.isEmpty()) setOf(0) else s).sorted().joinToString(",") { ids[it] }); rev++
             }
+            val lim = listOf(0, 60, 120, 180, 240)
+            SetDrop("Dnevno vrijeme gledanja", "1 h, 2 h, 3 h… pa traži PIN", listOf("Bez ograničenja", "1 h", "2 h", "3 h", "4 h"),
+                lim.indexOf(WatchLimit.limitMin).coerceAtLeast(0), new = true,
+                note = tr("Kad vrijeme istekne, plejer stane i traži PIN. Treba postaviti PIN.")) { Prefs.put("watch_limit", lim[it].toString()); rev++ }
             SetDrop("Izlaz iz jednostavnog moda", null, listOf("Traži PIN", "Bez PIN-a"), if (Prefs.bool("pin_simple_exit", true)) 0 else 1) { Prefs.put("pin_simple_exit", it == 0); rev++ }
             SetSection("PIN")
             SetRow("PIN", if (Lock.hasPin()) "promijeni ili postavi novi" else "4 cifre", tr(if (Lock.hasPin()) "Postavljen ✓" else "Nije postavljen"),
                 valueColor = if (Lock.hasPin()) C.Green else null) { setup = "pin" }
             if (Lock.hasPin()) SetRow("Zaboravljen PIN?", "upišeš novi, stari ne treba", tr("Resetuj PIN"), new = true) { setup = "pin" }
-            val pinFor = listOf("Izlaz iz jednostavnog moda", "Postavke", "Brisanje playliste")
-            val keys = listOf("pin_simple_exit", "pin_settings", "pin_delpl")
-            SetMulti("PIN traži za", "više odjednom · zaključane grupe i kanali uvijek", pinFor,
-                keys.indices.filter { Prefs.bool(keys[it], it == 0) }.toSet(), all = false) { s -> keys.forEachIndexed { i, k -> Prefs.put(k, i in s) }; rev++ }
+            val pinFor = listOf("Izlaz iz jednostavnog moda", "Zaključane grupe i kanali", "Postavke", "Brisanje playliste")
+            val keys = listOf("pin_simple_exit", "pin_locked", "pin_settings", "pin_delpl")
+            SetMulti("PIN traži za", "više odjednom", pinFor,
+                keys.indices.filter { Prefs.bool(keys[it], it <= 1) }.toSet(), all = false) { s -> keys.forEachIndexed { i, k -> Prefs.put(k, i in s) }; rev++ }
         }
     }
     when (setup) {
@@ -1470,29 +1625,41 @@ private fun ProfilesV2() {
     var pinFor by remember { mutableStateOf<Profile?>(null) }
     SetPage("Profili i Google Drive") {
         SetSection("Profili · OK = meni profila")
-        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            all.forEach { p ->
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Focusable(onClick = { menu = p }, shape = CircleShape, normal = Color.Transparent, focused = C.Red, zoom = 1.08f, modifier = Modifier.size(64.dp)) { _ ->
-                        Box(Modifier.align(Alignment.Center)) { Avatar(p, 56.dp) }
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            items(all) { p ->
+                val now = p.id == cur.id
+                Focusable(onClick = { menu = p }, shape = Rnd(16.dp), normal = C.Rail, focused = C.Red, zoom = 1.05f,
+                    modifier = Modifier.width(110.dp).height(116.dp).border(2.dp, if (now) Color(0xFF22C55E) else C.Line, Rnd(16.dp))) { f ->
+                    Column(Modifier.fillMaxSize().padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically)) {
+                        Avatar(p, 50.dp)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            T(p.name, 13.sp, if (f) C.OnRed else C.Text, FontWeight.Bold, maxLines = 1)
+                            if (p.pinHash != null) Ico(R.drawable.lc_lock, 11.dp, if (f) C.OnRed else C.Amber)
+                        }
+                        if (now) T("● gleda sada", 10.sp, if (f) C.OnRed else C.Green)
                     }
-                    T(p.name, 12.sp, C.Text, FontWeight.SemiBold, maxLines = 1)
-                    T(if (p.id == cur.id) "● gleda sada" else " ", 10.sp, C.Green)
                 }
             }
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Focusable(onClick = { add = true }, shape = CircleShape, normal = C.Card, focused = C.Red, zoom = 1.08f, modifier = Modifier.size(56.dp).border(1.dp, C.Line, CircleShape)) { f ->
-                    Box(Modifier.align(Alignment.Center)) { Ico(R.drawable.lc_plus, 22.dp, if (f) C.OnRed else C.Text) }
+            item {
+                Focusable(onClick = { add = true }, shape = Rnd(16.dp), normal = Color.Transparent, focused = C.Red, zoom = 1.05f,
+                    modifier = Modifier.width(110.dp).height(116.dp).border(1.dp, C.Line, Rnd(16.dp))) { f ->
+                    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically)) {
+                        Ico(R.drawable.lc_plus, 22.dp, if (f) C.OnRed else C.Text); T("Dodaj", 13.sp, if (f) C.OnRed else C.Muted, FontWeight.SemiBold)
+                    }
                 }
-                T("Dodaj", 12.sp, C.Muted)
             }
         }
         SetDrop("Pitaj „Ko gleda?” pri pokretanju", null, listOf("Da", "Ne"), if (Profiles.askAtStart) 0 else 1) { Profiles.askAtStart = it == 0; Profiles.rev++ }
+        val kid = Prefs.str("kids_profile")
+        SetDrop("Profil za djecu", "ulazi odmah u jednostavni mod", listOf(tr("Nijedan")) + all.map { it.name },
+            (all.indexOfFirst { it.id == kid } + 1).coerceAtLeast(0), new = true) { Prefs.put("kids_profile", if (it == 0) "" else all[it - 1].id); Profiles.rev++ }
         SetSection("Google Drive")
         SetRow("Račun", "prijava kodom s telefona", if (Drive.signedIn) Drive.statusLine() else tr("Nije prijavljen"), valueColor = if (Drive.signedIn) C.Green else null) {
             if (!Drive.signedIn) Drive.loginOpen = true
         }
         if (Drive.signedIn) {
+            SetDrop("Sinhronizacija", "playliste, favoriti, gledano, postavke", listOf("Svakih 10 min", "Svakih sat", "Isključena"),
+                listOf(10, 60, 0).indexOf(Prefs.str("drive_every", "10").toIntOrNull() ?: 10).coerceAtLeast(0)) { Prefs.put("drive_every", listOf(10, 60, 0)[it].toString()); Profiles.rev++ }
             SetRow("Sinhronizuj sada", "playliste, favoriti, gledano, postavke") { kotlinx.coroutines.GlobalScope.launch { try { Drive.upload(ctx) } catch (_: Exception) {}; Profiles.rev++ } }
             SetRow("Vrati s Google Drivea", "povuci sve na ovaj uređaj") { Drive.restoreAsk = true }
             SetRow("Odjavi se", null) { Drive.logout(); Profiles.rev++ }
@@ -1538,7 +1705,15 @@ private fun BackupV2(nav: Nav) {
     key(rev) {
         SetPage("Backup i vraćanje") {
             SetSection("Napravi backup")
-            SetRow("Napravi backup sada", "USB, memorija TV-a ili tvoj file manager", arrow = "›") { step = "browse" }
+            val where = Prefs.str("backup_where", "0").toIntOrNull() ?: 0
+            SetRow("Napravi backup sada", null, arrow = "›") {
+                if (where == 1) {
+                    try { val d = java.io.File(ctx.filesDir, "backups").apply { mkdirs() }; java.io.File(d, Backup.fileName()).writeText(Backup.export(ctx, null, parts))
+                        Toast.makeText(ctx, tr("Spremljeno u memoriju TV-a"), Toast.LENGTH_LONG).show(); rev++ }
+                    catch (e: Exception) { Toast.makeText(ctx, e.message ?: "", Toast.LENGTH_LONG).show() }
+                } else step = "browse"
+            }
+            SetDrop("Gdje", "USB ili memorija TV-a", listOf("USB / folder", "Memorija TV-a"), where.coerceIn(0, 1)) { Prefs.put("backup_where", it.toString()); rev++ }
             SetMulti("Šta uključiti", "sve ili samo neke dijelove", BACKUP_PARTS, parts,
                 note = tr("AI ključevi su po defaultu isključeni, zbog sigurnosti")) { s -> Prefs.put("backup_parts", s.sorted().joinToString(",")); rev++ }
             SetDrop("Automatski backup", "u memoriji TV-a, čuvaju se zadnja 3", listOf("Isključen", "Sedmično", "Dnevno"),
@@ -1707,6 +1882,16 @@ private fun AboutV2() {
         SetRow("Šta je novo", "promjene u ovoj verziji", BuildInfo.VERSION) { WhatsNew.show = true }
         SetRow("Licence", "biblioteke otvorenog koda") { dlg = "lic" }
         SetRow("Privatnost", "šta aplikacija čuva i gdje", tr("Pogledaj")) { dlg = "priv" }
+        // help page as a QR code: open it with the phone
+        Row(Modifier.fillMaxWidth().clip(Rnd(14.dp)).background(C.Rail).border(1.dp, C.Line, Rnd(14.dp)).padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            val qr = remember { qrBitmap("https://github.com/KarlAgathon/PRETORIAN/issues", 240) }  // i18n-ignore
+            if (qr != null) androidx.compose.foundation.Image(qr, null, Modifier.size(64.dp).clip(Rnd(6.dp)))
+            Column(Modifier.weight(1f)) {
+                T("Pomoć i prijava greške", 13.sp, C.Text, FontWeight.Bold)
+                T("Skeniraj telefonom – otvara stranicu projekta", 10.sp, C.Muted, maxLines = 2)
+            }
+        }
         SetSection(if (step == 0) tr("Dijagnostika") + " · " + tr("provjera u toku…") else tr("Dijagnostika") + " · " + tr("gotovo"))
         SetRow("Test interneta", "brzina i ping", net ?: tr("Provjeravam…"), "↻", valueColor = if (net != null) C.Green else C.Muted) { step = 0 }
         SetRow("Server playliste", Store.active(ctx)?.name, when (server) { true -> tr("Online"); false -> tr("Ne odgovara"); null -> tr("Provjeravam…") },
@@ -1716,6 +1901,7 @@ private fun AboutV2() {
         SetSection("Uređaj")
         SetRow("Model", "i Android verzija", android.os.Build.MODEL + " · Android " + android.os.Build.VERSION.RELEASE) {}
         SetRow("Keš memorija", "slike, EPG, privremeni podaci", "$cacheMb MB", "▼") { dlg = "cache" }
+        SetRow("Log za podršku", "sačuvaj na USB ili u folder", tr("Izvezi"), "▼") { dlg = "log" }
     }
     when (dlg) {
         "lic" -> Popup("Licence", { dlg = null }) {
@@ -1729,6 +1915,15 @@ private fun AboutV2() {
             T((crash ?: "").take(1500), 11.sp, C.Soft, maxLines = 24)
             OptionRow("Obriši izvještaj", R.drawable.lc_trash_2) { java.io.File(ctx.filesDir, "last_crash.txt").delete(); dlg = null }
         }
+        "log" -> FileBrowser("Izaberi folder", emptySet(), pickDir = true, onDismiss = { dlg = null }) { dir ->
+            try {
+                val log = Runtime.getRuntime().exec(arrayOf("logcat", "-d", "-t", "3000")).inputStream.bufferedReader().readText()
+                val f = java.io.File(dir, "pretorian_log_" + System.currentTimeMillis() / 1000 + ".txt")
+                f.writeText("PRETORIAN " + BuildInfo.VERSION + " · " + android.os.Build.MODEL + " · Android " + android.os.Build.VERSION.RELEASE + "\n\n" + (crash ?: "") + "\n\n" + log)
+                Toast.makeText(ctx, trf("Spremljeno: %s", f.path), Toast.LENGTH_LONG).show()
+            } catch (e: Exception) { Toast.makeText(ctx, tr("U taj folder se ne može pisati. Izaberi drugi ili PRETORIAN folder."), Toast.LENGTH_LONG).show() }
+            dlg = null
+        }
         "cache" -> Popup("Keš memorija", { dlg = null }) {
             OptionRow("Očisti keš", R.drawable.lc_trash_2, sub = "slike i privremeni podaci se ponovo učitaju") {
                 scope.launch(kotlinx.coroutines.Dispatchers.IO) { ctx.cacheDir.listFiles()?.forEach { it.deleteRecursively() } }
@@ -1738,3 +1933,11 @@ private fun AboutV2() {
         else -> {}
     }
 }
+
+/** A QR code as a picture (black on white). */
+fun qrBitmap(text: String, px: Int): androidx.compose.ui.graphics.ImageBitmap? = try {
+    val m = com.google.zxing.qrcode.QRCodeWriter().encode(text, com.google.zxing.BarcodeFormat.QR_CODE, px, px, mapOf(com.google.zxing.EncodeHintType.MARGIN to 1))
+    val b = android.graphics.Bitmap.createBitmap(px, px, android.graphics.Bitmap.Config.RGB_565)
+    for (x in 0 until px) for (y in 0 until px) b.setPixel(x, y, if (m.get(x, y)) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
+    b.asImageBitmap()
+} catch (e: Exception) { null }

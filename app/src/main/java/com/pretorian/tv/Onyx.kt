@@ -232,6 +232,10 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                                 Ico(R.drawable.lc_play, 13.dp, C.Bg); T(hero.button, 13.sp, C.Bg, FontWeight.Bold)
                             }
                         }
+                        // details of the film you continue (its number is in the link)
+                        cont.firstOrNull()?.takeIf { it.series == null && it.url.contains("/movie/") }?.let { pr ->
+                            PillBtn("Detalji") { nav.push(Screen.MovieDetail(Vod(pr.url.substringAfterLast('/').substringBefore('.'), pr.title, pr.poster, null, pr.url))) }
+                        }
                     }
                     hero.progress?.let { f ->
                         Box(Modifier.padding(top = 10.dp).width(240.dp).height(3.dp).clip(Pill).background(C.Line)) {

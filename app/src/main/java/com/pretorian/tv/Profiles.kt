@@ -68,7 +68,7 @@ object Profiles {
         "clapperboard", "tv", "trophy", "star", "sun", "moon", "snowflake", "leaf", "cake", "coffee")
     val COLORS = listOf(0xFFE11D48, 0xFF2563EB, 0xFF16A34A, 0xFFF59E0B, 0xFF9333EA, 0xFF0D9488, 0xFFDB2777, 0xFFEA580C, 0xFF475569).map { it.toInt() }
 
-    private val SHARED = setOf("playlists", "pl_multi", "pl_open", "epg_url", "tmdb_key", "omdb_key", "os_key", "os_user", "os_pass", "subdl_key",
+    private val SHARED = setOf("kids_profile", "pin_hash", "playlists", "pl_multi", "pl_open", "epg_url", "tmdb_key", "omdb_key", "os_key", "os_user", "os_pass", "subdl_key",
         "upd_last", "backup_auto", "backup_auto_at", "ext_player", "file_app", "reminders", "rem_action", "rem_before", "rem_popup", "rem_wake",
         "notes", "new_items", "pin_hash", "pin_salt", "gemini_key", "sport_country")
     private val SHARED_PREFIX = listOf("prof", "gd_", "sync_", "ai_")
@@ -187,6 +187,7 @@ object Profiles {
         val snap = File(dir(c), target.id + ".json").takeIf { it.exists() }?.let { try { JSONObject(it.readText()) } catch (e: Exception) { null } }
         apply(c, snap)
         sp(c).edit().putString("profile_cur", target.id).putBoolean("profile_skip_ask", true).commit()
+        if (sp(c).getString("kids_profile", "") == target.id) sp(c).edit().putBoolean("simple_mode", true).commit()   // the children's profile starts in simple mode
         restart(c)
     }
 

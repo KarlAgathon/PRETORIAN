@@ -81,6 +81,29 @@ object Sports {
         League("tennis", "tennis/wta", "WTA", "WTA"),
     )
 
+    /** where a competition is played (Settings › Sport › Continents) */
+    fun contOf(l: League) = when (l.abbr) { "MLS", "NBA" -> "am"; "WC", "FRI", "F1", "ATP", "WTA" -> "world"; else -> "eu" }
+    val CONTINENTS = listOf("eu" to "Evropa", "am" to "Amerika", "world" to "Svjetska takmičenja")
+    /** competitions you follow: chosen competitions (all when none chosen) on the chosen continents */
+    fun activeLeagues(): List<League> {
+        val sel = Prefs.str("sport_leagues").split(',').filter { it.isNotBlank() }.toSet()
+        val cont = Prefs.str("sport_cont", "eu,am,world").split(',').toSet()
+        return LEAGUES.filter { (sel.isEmpty() || it.abbr in sel) && contOf(it) in cont }.ifEmpty { LEAGUES }
+    }
+    /** favourite teams, written in Settings (comma separated) */
+    fun teams(): List<String> = Prefs.str("sport_teams").split(',').map { norm(it.trim()) }.filter { it.length >= 3 }
+    fun isFav(ev: SportEvent): Boolean { val t = teams(); if (t.isEmpty()) return false
+        val names = listOfNotNull(ev.home?.name, ev.away?.name, ev.title).map { norm(it) }; return t.any { w -> names.any { it.contains(w) } } }
+    /** reminders for the matches of your favourite teams in the next 3 days */
+    suspend fun remindTeams() {
+        val min = Prefs.str("sport_team_remind", "0").toIntOrNull() ?: 0
+        if (min <= 0 || teams().isEmpty()) return
+        upcoming(3).filter { isFav(it) }.forEach { ev ->
+            val t = listOfNotNull(ev.home?.name, ev.away?.name).joinToString(" – ").ifBlank { ev.title }
+            if (!Reminders.has(t, ev.start)) Reminders.add(Reminder("sp" + ev.id.hashCode(), t, ev.start, null, ev.league, null, null, "sport"))
+        }
+    }
+
     /** the sports in the filter row, in this order; others that have matches that day follow */
     val SPORTS = listOf("football" to "Fudbal", "basketball" to "Košarka", "volleyball" to "Odbojka",
         "f1" to "Formula 1", "tennis" to "Tenis", "handball" to "Rukomet", "motogp" to "MotoGP")
@@ -198,7 +221,7 @@ object Sports {
     suspend fun day(offset: Int): List<SportEvent> = withContext(Dispatchers.IO) {
         val from = dayStart(offset); val to = dayStart(offset + 1)
         coroutineScope {
-            LEAGUES.map { lg ->
+            activeLeagues().map { lg ->
                 async {
                     // US-dated feeds: European evening matches are on the same date, night games on the day before
                     val dates = listOf(espnDate(from), espnDate(from - 86_400_000L)).distinct()
@@ -216,7 +239,7 @@ object Sports {
         val now = System.currentTimeMillis()
         val range = espnDate(dayStart(0) - 86_400_000L) + "-" + espnDate(dayStart(days))
         val list = coroutineScope {
-            LEAGUES.map { lg -> async { try { espn(lg, range) } catch (e: Exception) { emptyList() } } }.awaitAll().flatten()
+            activeLeagues().map { lg -> async { try { espn(lg, range) } catch (e: Exception) { emptyList() } } }.awaitAll().flatten()
         }.filter { it.state == "pre" && it.start > now - 60_000 && it.start < dayStart(days) }.distinctBy { it.id }
         list.sortedWith(compareBy({ if (it.sport == "football") 0 else 1 }, { priority(it) }, { it.start }))
     }
@@ -294,6 +317,7 @@ object Sports {
     )
 
     private fun maybeFor(ev: SportEvent, all: List<Pair<Channel, String>>): List<Channel> {
+        if (!Prefs.bool("sport_src_rights", true)) return emptyList()
         val words = RIGHTS[ev.leagueAbbr] ?: return emptyList()
         return all.filter { (_, n) -> words.any { n.contains(it) } }.map { it.first }
             .distinctBy { it.url }
@@ -321,7 +345,7 @@ object Sports {
         }
         return top + rest + listOf("ERE", "POR", "TSL", "MLS", "BL2", "TV", "FRI")
     }
-    fun priority(ev: SportEvent): Int = priorityList().indexOf(ev.leagueAbbr).let { if (it < 0) 50 else it } -
+    fun priority(ev: SportEvent): Int = priorityList().indexOf(ev.leagueAbbr).let { if (it < 0) 50 else it } - (if (isFav(ev)) 300 else 0) -
         (if (ev.channels.isNotEmpty()) 100 else if (ev.ai.isNotEmpty()) 60 else 0)
 
     /** match details (goals, cards) from the feed, for finished and live matches */

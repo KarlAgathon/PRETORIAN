@@ -99,8 +99,8 @@ private fun palette(): Palette {
             Color(0xFF14171D), Color(0xFF555C68), Color(0xFF2B3039), Color.White, true)
         "bw" -> Palette(Color(0xFF050505), alpha(Color(0xFF0A0A0C), o.coerceAtLeast(55)), Color(0x14FFFFFF), Color(0x1FFFFFFF),
             Color(0xFFFAFAFA), Color(0xFF8A8A8A), Color(0xFFC4C4C4), Color(0xFF151515), false)
-        "vece" -> Palette(Color(0xFF070912), alpha(Color(0xFF141620), (o * 0.56f).toInt().coerceIn(30, 90)), Color(0x14FFFFFF), Color(0x1FFFFFFF),
-            Color(0xFFFAFAFA), Color(0xFF8A8F9E), Color(0xFFC8CBD4), Color(0xFF151827), false)
+        "vece" -> Palette(Color(0xFF0A0F1F), alpha(Color(0xFF121B33), (o * 0.56f).toInt().coerceIn(30, 90)), Color(0x14FFFFFF), Color(0x1FFFFFFF),
+            Color(0xFFFAFAFA), Color(0xFF8C94A8), Color(0xFFC8CDD8), Color(0xFF16203A), false)
         "staklo" -> Palette(Color(0xFFF7F7F8), alpha(Color.White, o.coerceAtMost(75)), Color(0x0F000000), Color(0x1A000000),
             Color(0xFF0B0B0F), Color(0xFF5A5A66), Color(0xFF2A2A33), Color(0xFFE9E9EE), true)
         "pijesak" -> Palette(Color(0xFFECE9E4), alpha(Color(0xFFFAF8F4), o.coerceAtMost(80)), Color(0x10000000), Color(0x1C000000),

@@ -172,7 +172,8 @@ object Reminders {
 
     private fun save(l: List<Reminder>) {
         val a = JSONArray()
-        l.filter { it.start > System.currentTimeMillis() - 6 * 3600_000L }.forEach {
+        val keepH = Prefs.str("rem_keep", "24").toLongOrNull() ?: 24L
+        l.filter { keepH <= 0 || it.start > System.currentTimeMillis() - keepH * 3600_000L }.forEach {
             a.put(JSONObject().put("id", it.id).put("title", it.title).put("start", it.start).put("ch", it.channelUrl ?: "").put("chName", it.channelName ?: "")
                 .put("logo", it.logo ?: "").put("pid", it.pid ?: "").put("kind", it.kind).put("fired", it.fired))
         }

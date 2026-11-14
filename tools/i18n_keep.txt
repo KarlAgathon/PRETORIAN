@@ -192,3 +192,11 @@ Online
 %s Mbit/s
 audio_default
 hide_adult_default
+m3u
+m3u8
+sport_teams
+watch_limit
+log
+pretorian_log_
+SAT.1
+SAT1

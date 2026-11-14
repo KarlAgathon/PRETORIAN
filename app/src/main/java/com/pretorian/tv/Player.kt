@@ -476,6 +476,18 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             if (Sleep.until == u) { Sleep.until = 0; player.pause(); nav.root(Screen.Home) }
         }
 
+        // daily watching limit (Settings › Simple mode and PIN): when the time is used up, the PIN is needed to go on today
+        var limitPin by remember { mutableStateOf(false) }
+        LaunchedEffect(playing) {
+            while (playing) {
+                delay(60_000L)
+                if (WatchLimit.tick() && !limitPin) { player.pause(); limitPin = true }
+            }
+        }
+        if (limitPin) PinDialog("Dnevno vrijeme je isteklo", tr("Unesi PIN za još gledanja danas"), onDismiss = { limitPin = false; nav.back() }) { pin ->
+            val err = Lock.check(pin); if (err == null) { WatchLimit.allowToday(); limitPin = false; player.play() }; err
+        }
+
         LaunchedEffect(playing, buffering) { saver = false; if (!playing && !buffering) { delay(10 * 60_000L); saver = true } }
         if (saver) ScreenSaver(item.title)
 
@@ -748,6 +760,20 @@ private fun SideLists(mode: String, sideGroup: GroupRef?, items: List<PlayItem>,
 private fun fmt(ms: Long): String {
     val s = ms / 1000
     return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, (s % 3600) / 60, s % 60) else "%d:%02d".format(s / 60, s % 60)
+}
+
+/** Daily watching limit: minutes counted per day; at the limit the PIN unlocks the rest of that day. */
+object WatchLimit {
+    private fun today() = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date())  // i18n-ignore
+    val limitMin get() = Prefs.str("watch_limit", "0").toIntOrNull() ?: 0
+    /** adds one minute; true when the limit has just been reached */
+    fun tick(): Boolean {
+        val d = today()
+        if (Prefs.str("watch_day") != d) { Prefs.put("watch_day", d); Prefs.put("watch_min", 0L); Prefs.put("watch_ok", "") }
+        val used = Prefs.long("watch_min") + 1; Prefs.put("watch_min", used)
+        return limitMin > 0 && Lock.hasPin() && used >= limitMin && Prefs.str("watch_ok") != d
+    }
+    fun allowToday() = Prefs.put("watch_ok", today())
 }
 
 /** Sleep timer of the player (survives switching channels). */

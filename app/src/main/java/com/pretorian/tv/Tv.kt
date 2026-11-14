@@ -95,7 +95,7 @@ object Chrome {
 class PinGate {
     var pending by mutableStateOf<Pair<String, () -> Unit>?>(null)
     fun run(key: String, locked: Boolean, action: () -> Unit) {
-        if (!locked || key in Lock.unlocked || !Lock.hasPin()) action() else pending = key to action
+        if (!locked || key in Lock.unlocked || !Lock.hasPin() || !Prefs.bool("pin_locked", true)) action() else pending = key to action
     }
 }
 
@@ -798,6 +798,7 @@ fun NoPlaylist(nav: Nav) {
 /** Settings › Groups and channels: order, names, hidden and locked groups for TV, movies and series. */
 @Composable
 fun GroupManager(nav: Nav) {
+    if (Look.age) { BulkEditor(nav); return }
     val ctx = LocalContext.current
     val p = remember { Store.active(ctx) } ?: run { NoPlaylist(nav); return }
     val ovr = remember(p.id) { Ovr(ctx, p.id) }

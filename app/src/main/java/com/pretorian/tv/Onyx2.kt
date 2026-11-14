@@ -689,3 +689,258 @@ fun OnyxSeriesDetail(s: SeriesItem, nav: Nav) {
     ext?.let { e -> ExternalPicker(e.url, "$title · S${e.season}E${e.num}", Watch.get(ctx, e.url)?.pos ?: 0, onDismiss = { ext = null }) }
     LaunchedEffect(eps is Load.Ok) { if (eps is Load.Ok) playFr.tryFocus() }
 }
+
+/* ============================================================== first start */
+
+object Welcome { var tab by mutableIntStateOf(-1) }
+
+/** First start: pick how to add the playlist (Xtream, M3U link, file from USB), the language on top, restore from a backup below. */
+@Composable
+fun WelcomeScreen(nav: Nav) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var langMenu by remember { mutableStateOf(false) }
+    var pick by remember { mutableStateOf<String?>(null) }
+    var rev by remember { mutableIntStateOf(0) }
+    val first = remember { FocusRequester() }
+    key(rev, Look.lang) {
+        Box(Modifier.fillMaxSize()) {
+            val cur = Langs.APP.firstOrNull { it.code == Look.lang } ?: Langs.APP[0]
+            Focusable(onClick = { langMenu = true }, shape = Pill, normal = Color.Transparent, focused = C.Red, zoom = 1.04f,
+                modifier = Modifier.align(Alignment.TopEnd).padding(20.dp).height(36.dp).border(1.dp, C.Line, Pill)) { f ->
+                Row(Modifier.align(Alignment.Center).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Ico(R.drawable.lc_globe, 15.dp, if (f) C.OnRed else C.Text); T(cur.native + " ▾", 13.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold)
+                }
+            }
+            Column(Modifier.align(Alignment.Center).fillMaxWidth().padding(horizontal = 60.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.logo_mark), null, Modifier.size(64.dp))
+                T(trf("Dobrodošli u %s", "PRETORIAN"), 30.sp, C.Text, FontWeight.ExtraBold)
+                T("Dodaj svoju playlistu i za minut gledaš.", 15.sp, C.Soft)
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    WelcomeCard("Xtream prijava", "Server, korisničko ime, lozinka", R.drawable.lc_server, first) { Welcome.tab = 0 }
+                    WelcomeCard("M3U link", "Zalijepi ili ukucaj link", R.drawable.lc_link, null) { Welcome.tab = 1 }
+                    WelcomeCard("Fajl s USB-a", ".m3u ili .m3u8", R.drawable.lc_usb, null) { pick = "m3u" }
+                }
+                Spacer(Modifier.height(6.dp))
+                Focusable(onClick = { pick = "json" }, shape = Pill, normal = Color.Transparent, focused = C.CardHi, zoom = 1.02f, modifier = Modifier.height(32.dp)) { _ ->
+                    T("Imaš backup? Vrati postavke s USB-a", 12.sp, C.Muted, modifier = Modifier.align(Alignment.Center).padding(horizontal = 12.dp))
+                }
+            }
+        }
+    }
+    if (langMenu) Popup("Jezik", { langMenu = false }) {
+        Langs.APP.forEach { l -> OptionRow(l.native, if (l.code == Look.lang) R.drawable.lc_check else null) { setAppLang(ctx, l.code); langMenu = false; rev++ } }
+    }
+    when (pick) {
+        "m3u" -> FilePicker("Izaberi playlistu", setOf("m3u", "m3u8"), onDismiss = { pick = null }) { bytes, name ->
+            pick = null
+            scope.launch {
+                try {
+                    val id = System.currentTimeMillis().toString()
+                    val f = java.io.File(ctx.filesDir, "playlist_$id.m3u"); f.writeBytes(bytes)
+                    val pl = Playlist(id = id, name = name.substringBeforeLast('.').ifBlank { "M3U" }, type = SourceType.M3U, url = "file://" + f.path, active = true)
+                    Repo.test(pl)
+                    Store.savePlaylists(ctx, Store.playlists(ctx) + pl); nav.playlistsChanged(); nav.root(Screen.Home)
+                } catch (e: Exception) { Toast.makeText(ctx, trf("Nije uspjelo: %s", e.message ?: ""), Toast.LENGTH_LONG).show() }
+            }
+        }
+        "json" -> FilePicker("Izaberi backup", setOf("json"), onDismiss = { pick = null }) { bytes, _ ->
+            pick = null
+            try { Backup.restore(ctx, String(bytes), null); Toast.makeText(ctx, tr("Sve je vraćeno. PRETORIAN se ponovo pokreće."), Toast.LENGTH_LONG).show()
+                (ctx as? android.app.Activity)?.recreate() }
+            catch (e: Exception) { Toast.makeText(ctx, e.message ?: tr("Vraćanje nije uspjelo"), Toast.LENGTH_LONG).show() }
+        }
+    }
+    LaunchedEffect(Unit) { first.tryFocus() }
+}
+
+@Composable
+private fun WelcomeCard(title: String, sub: String, icon: Int, fr: FocusRequester?, onClick: () -> Unit) {
+    Focusable(onClick = onClick, focusRequester = fr, shape = Rnd(20.dp), normal = Color.Transparent, focused = C.Red, zoom = 1.04f,
+        modifier = Modifier.width(230.dp).height(132.dp).glass(20.dp)) { f ->
+        Column(Modifier.fillMaxSize().padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(Modifier.size(38.dp).clip(Rnd(11.dp)).background(if (f) Color(0x1A000000) else C.CardHi), contentAlignment = Alignment.Center) { Ico(icon, 18.dp, if (f) C.OnRed else C.Text) }
+            Spacer(Modifier.weight(1f))
+            T(title, 16.sp, if (f) C.OnRed else C.Text, FontWeight.Bold)
+            T(sub, 11.sp, if (f) C.OnRed.copy(alpha = 0.7f) else C.Muted)
+        }
+    }
+}
+
+/* ============================================================== groups and channels, several at once */
+
+@Composable
+private fun ToolBtn(text: String, icon: Int, enabled: Boolean = true, onClick: () -> Unit) {
+    Focusable(onClick = { if (enabled) onClick() }, shape = Pill, normal = C.CardHi, focused = C.Red, zoom = 1.05f, modifier = Modifier.height(32.dp)) { f ->
+        Row(Modifier.align(Alignment.Center).padding(horizontal = 11.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            val c = if (!enabled) C.Muted else if (f) C.OnRed else C.Text
+            Ico(icon, 13.dp, c); T(text, 12.sp, c, FontWeight.SemiBold)
+        }
+    }
+}
+
+@Composable
+private fun CheckBox(on: Boolean, focused: Boolean) {
+    Box(Modifier.size(18.dp).clip(Rnd(5.dp)).background(if (on) Color(0xFF2563EB) else Color.Transparent)
+        .border(1.5.dp, if (on) Color(0xFF60A5FA) else if (focused) C.OnRed.copy(alpha = 0.6f) else C.Muted, Rnd(5.dp)), contentAlignment = Alignment.Center) {
+        if (on) Ico(R.drawable.lc_check, 12.dp, Color.White)
+    }
+}
+
+/** Settings › Playlists › Groups and channels: tick several, then move, hide, show or lock them together. */
+@Composable
+fun BulkEditor(nav: Nav) {
+    val ctx = LocalContext.current
+    val p = remember { Store.active(ctx) } ?: run { NoPlaylist(nav); return }
+    val ovr = remember(p.id) { Ovr(ctx, p.id) }
+    var tab by remember { mutableIntStateOf(0) }
+    var rev by remember { mutableIntStateOf(0) }
+    val changed = remember { booleanArrayOf(false) }
+    DisposableEffect(Unit) { onDispose { if (changed[0]) nav.playlistsChanged() } }
+    val kind = listOf("live", "vod", "series")[tab]
+    val st by load(p.id, kind, rev, keep = true) {
+        ovr.groups(kind, when (kind) { "live" -> Repo.liveGroups(p); "vod" -> Repo.vodGroups(p); else -> Repo.seriesGroups(p) }, all = true)
+    }
+    val groups = (st as? Load.Ok)?.value ?: emptyList()
+    var cur by remember { mutableStateOf<Category?>(null) }
+    var focusG by remember { mutableStateOf<Category?>(null) }
+    LaunchedEffect(focusG) { val g = focusG ?: return@LaunchedEffect; delay(250); if (kind == "live") cur = g }
+    val chSt by load(p.id, cur?.id, rev, keep = true) {
+        val g = cur ?: return@load emptyList<Channel>()
+        if (g.id.startsWith("my_")) ovr.channels(g.id, emptyList(), all = true) else ovr.channels(g.id, Repo.channels(p, g.id), all = true)
+    }
+    val chans = if (kind == "live") (chSt as? Load.Ok)?.value ?: emptyList() else emptyList()
+    val selG = remember { mutableStateListOf<String>() }
+    val selC = remember { mutableStateListOf<String>() }
+    var pinSetup by remember { mutableStateOf(false) }
+    var moveTo by remember { mutableStateOf(false) }
+    var rename by remember { mutableStateOf<Channel?>(null) }
+    var menu by remember { mutableStateOf<Category?>(null) }
+    LaunchedEffect(tab) { selG.clear(); selC.clear(); cur = null }
+    fun done() { rev++; changed[0] = true }
+    fun reorder(ids: List<String>, sel: List<String>, how: String): List<String> {
+        val l = ids.toMutableList()
+        when (how) {
+            "up" -> for (i in 1 until l.size) if (l[i] in sel && l[i - 1] !in sel) { val t = l[i]; l[i] = l[i - 1]; l[i - 1] = t }
+            "down" -> for (i in l.size - 2 downTo 0) if (l[i] in sel && l[i + 1] !in sel) { val t = l[i]; l[i] = l[i + 1]; l[i + 1] = t }
+            "top" -> return l.filter { it in sel } + l.filter { it !in sel }
+            "bottom" -> return l.filter { it !in sel } + l.filter { it in sel }
+        }
+        return l
+    }
+    fun act(how: String) {
+        if (selC.isNotEmpty() && cur != null) {
+            val chosen = chans.filter { it.url in selC }
+            when (how) {
+                "hide" -> chosen.forEach { if (!ovr.isChHidden(it)) ovr.toggleChHidden(it) }
+                "show" -> chosen.forEach { if (ovr.isChHidden(it)) ovr.toggleChHidden(it) }
+                "pin" -> { if (!Lock.hasPin()) { pinSetup = true; return }; val lock = chosen.any { !ovr.isChLocked(it) }; chosen.forEach { if (ovr.isChLocked(it) != lock) ovr.toggleChLocked(it) } }
+                else -> ovr.setChannelOrder(cur!!.id, reorder(chans.map { it.url }, selC.toList(), how))
+            }
+        } else if (selG.isNotEmpty()) {
+            when (how) {
+                "hide" -> ovr.setHidden(kind, selG.toList(), true)
+                "show" -> ovr.setHidden(kind, selG.toList(), false)
+                "pin" -> { if (!Lock.hasPin()) { pinSetup = true; return }; val lock = selG.any { !ovr.isLocked(kind, it) }; selG.forEach { if (ovr.isLocked(kind, it) != lock) ovr.toggleLocked(kind, it) } }
+                else -> ovr.setGroupOrder(kind, reorder(groups.map { it.id }, selG.toList(), how))
+            }
+        }
+        done()
+    }
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                T(tr("Playliste") + " › " + p.name, 10.sp, C.Muted)
+                T("Uređivanje grupa i kanala", 19.sp, C.Text, FontWeight.Bold)
+            }
+            Segmented(listOf("TV", "Filmovi", "Serije"), tab) { tab = it }
+        }
+        // what you can do with the ticked rows
+        val n = if (selC.isNotEmpty()) selC.size else selG.size
+        Row(Modifier.fillMaxWidth().clip(Rnd(14.dp)).background(Color(0x332563EB)).border(1.dp, Color(0x552563EB), Rnd(14.dp)).padding(horizontal = 10.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            T(if (n == 0) tr("OK označava · onda biraš radnju") else if (selC.isNotEmpty()) trf("%s kanala označeno", n) else trf("%s grupe označene", n), 12.sp, C.Text, FontWeight.Bold,
+                modifier = Modifier.widthIn(max = 150.dp))
+            androidx.compose.foundation.lazy.LazyRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                item { ToolBtn("Gore", R.drawable.lc_arrow_up, n > 0) { act("up") } }
+                item { ToolBtn("Dole", R.drawable.lc_arrow_down, n > 0) { act("down") } }
+                item { ToolBtn("Na vrh", R.drawable.lc_chevrons_up, n > 0) { act("top") } }
+                item { ToolBtn("Na dno", R.drawable.lc_chevrons_down, n > 0) { act("bottom") } }
+                item { ToolBtn("Sakrij", R.drawable.lc_eye_off, n > 0) { act("hide") } }
+                item { ToolBtn("Prikaži", R.drawable.lc_eye, n > 0) { act("show") } }
+                item { ToolBtn("PIN", R.drawable.lc_lock, n > 0) { act("pin") } }
+                if (selC.isNotEmpty()) {
+                    item { ToolBtn("Premjesti u grupu", R.drawable.lc_layers) { moveTo = true } }
+                    if (selC.size == 1) item { ToolBtn("Preimenuj", R.drawable.lc_pencil) { rename = chans.firstOrNull { it.url == selC.first() } } }
+                }
+                item { ToolBtn("Poništi", R.drawable.lc_x, n > 0) { selG.clear(); selC.clear() } }
+            }
+        }
+        Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            // groups
+            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    T(trf("Grupe · %s", groups.size), 13.sp, C.Text, FontWeight.Bold, modifier = Modifier.weight(1f))
+                    ToolBtn("Sakrij sve", R.drawable.lc_eye_off) { ovr.setHidden(kind, groups.map { it.id }, true); done() }
+                    ToolBtn("Prikaži sve", R.drawable.lc_eye) { ovr.setHidden(kind, groups.map { it.id }, false); done() }
+                }
+                if (st is Load.Loading && groups.isEmpty()) Loading("") else LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
+                    itemsIndexed(groups, key = { _, g -> g.id }) { i, g ->
+                        val on = g.id in selG
+                        val hidden = ovr.isHidden(kind, g.id)
+                        Focusable(onClick = { if (on) selG.remove(g.id) else { selC.clear(); selG.add(g.id) } }, onFocus = { focusG = g }, onMenu = { menu = g },
+                            shape = Rnd(12.dp), normal = if (on) Color(0x332563EB) else if (cur?.id == g.id) C.CardHi else C.Rail, focused = C.Red, zoom = 1.01f,
+                            modifier = Modifier.fillMaxWidth().height(40.dp)) { f ->
+                            Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                CheckBox(on, f)
+                                T("${i + 1}", 11.sp, if (f) C.OnRed else C.Muted, modifier = Modifier.width(22.dp))
+                                T(g.name, 13.sp, if (f) C.OnRed else if (hidden) C.Muted else C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                                if (hidden) Ico(R.drawable.lc_eye_off, 13.dp, if (f) C.OnRed else C.Muted)
+                                if (ovr.isLocked(kind, g.id)) Ico(R.drawable.lc_lock, 13.dp, if (f) C.OnRed else C.Amber)
+                            }
+                        }
+                    }
+                }
+            }
+            // channels of the group you stand on (TV only)
+            if (kind == "live") Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    T((cur?.name ?: tr("Stani na grupu")) + " · " + tr("kanali"), 13.sp, C.Text, FontWeight.Bold, modifier = Modifier.weight(1f))
+                    if (cur != null) {
+                        ToolBtn("Sakrij sve", R.drawable.lc_eye_off) { chans.forEach { if (!ovr.isChHidden(it)) ovr.toggleChHidden(it) }; done() }
+                        ToolBtn("Prikaži sve", R.drawable.lc_eye) { chans.forEach { if (ovr.isChHidden(it)) ovr.toggleChHidden(it) }; done() }
+                    }
+                }
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
+                    itemsIndexed(chans, key = { i, c -> "$i${c.url}" }) { i, c ->
+                        val on = c.url in selC
+                        val hidden = ovr.isChHidden(c)
+                        Focusable(onClick = { if (on) selC.remove(c.url) else { selG.clear(); selC.add(c.url) } }, shape = Rnd(12.dp),
+                            normal = if (on) Color(0x332563EB) else C.Rail, focused = C.Red, zoom = 1.01f, modifier = Modifier.fillMaxWidth().height(40.dp)) { f ->
+                            Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                CheckBox(on, f)
+                                T("${i + 1}", 11.sp, if (f) C.OnRed else C.Muted, modifier = Modifier.width(22.dp))
+                                T(ovr.chName(c), 13.sp, if (f) C.OnRed else if (hidden) C.Muted else C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                                if (hidden) Ico(R.drawable.lc_eye_off, 13.dp, if (f) C.OnRed else C.Muted)
+                                if (ovr.isChLocked(c)) Ico(R.drawable.lc_lock, 13.dp, if (f) C.OnRed else C.Amber)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (pinSetup) PinSetupDialog(onDismiss = { pinSetup = false }) { pinSetup = false }
+    if (moveTo) Popup("Premjesti u grupu", { moveTo = false }) {
+        groups.filter { it.id != cur?.id }.forEach { tg ->
+            OptionRow(tg.name, R.drawable.lc_layers) {
+                chans.filter { it.url in selC }.forEach { ovr.moveChannelTo(it, tg.id) }
+                Toast.makeText(ctx, trf("Premješteno u %s", tg.name), Toast.LENGTH_SHORT).show()
+                selC.clear(); moveTo = false; done()
+            }
+        }
+    }
+    rename?.let { c -> TextDialog("Preimenuj kanal", "Novi naziv", ovr.chName(c), onDismiss = { rename = null }) { v -> if (v.isNotBlank()) ovr.renameChannel(c, v); rename = null; selC.clear(); done() } }
+    menu?.let { g -> GroupOptions(kind, g, ovr, groups, onDismiss = { menu = null }) { close -> done(); if (close) menu = null } }
+}

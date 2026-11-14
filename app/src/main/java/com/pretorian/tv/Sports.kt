@@ -550,7 +550,7 @@ private fun SportTop(ev: SportEvent?) {
     Row(Modifier.fillMaxWidth().height(200.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Box(Modifier.fillMaxHeight().aspectRatio(16f / 9f)) {
             val c = pv
-            if (c != null) PreviewBox(c, Modifier.fillMaxSize())
+            if (c != null && Prefs.bool("sport_preview", true)) PreviewBox(c, Modifier.fillMaxSize())
             else Column(Modifier.fillMaxSize().clip(Rnd(18.dp)).background(Color.Black.copy(alpha = 0.55f)).border(1.dp, C.Line, Rnd(18.dp)),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically)) {
                 if (ch != null) ChannelLogo(ch.logo, ch.name) else Ico(R.drawable.lc_tv, 34.dp, C.Soft)

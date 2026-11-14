@@ -32,7 +32,7 @@ object SportsAI {
     fun keyOf(id: String) = Prefs.str("ai_key_$id").ifBlank { if (id == "gemini") Prefs.str("gemini_key") else "" }
     fun setKey(id: String, v: String) = Prefs.put("ai_key_$id", v.trim())
     var key: String get() = keyOf(provider); set(v) = setKey(provider, v)
-    val ready: Boolean get() = key.isNotBlank()
+    val ready: Boolean get() = key.isNotBlank() && Prefs.bool("sport_src_ai", true)
     /** true when the last answer used a web search, false when it was only the AI's own knowledge */
     var lastSearch by androidx.compose.runtime.mutableStateOf(true)
     private val mem = HashMap<String, List<String>>()

@@ -27,11 +27,11 @@ import java.util.Locale
 object WhatsNew {
     val VERSION = BuildInfo.VERSION
     val POINTS = listOf(
-        "Predvečerje" to "Nova zadana tema: mekana boja onoga na čemu stojiš iza cijele aplikacije.",
-        "Zadnje gledano" to "Zadnjih 10 kanala na dnu TV-a i u grupi Zadnje gledano.",
-        "Plejer" to "OK otvara brzi meni s tajmerom za spavanje i formatom slike. Broj na daljinskom bira kanal, 0 vraća prethodni.",
-        "Filmovi" to "Veliki naslov s opisom i slikom filma, dugmad Gledaj i Moja lista.",
-        "Pouzdanije" to "Kanal se sam ponovo spaja kad veza pukne, a kad provider ne radi, odmah piše na početnoj.",
+        "TV" to "Grupe, kanali s programom i trakom, desno slika i šta slijedi. Zadnje gledano na dnu.",
+        "Večer u New Yorku" to "Jedna mirna tamnoplava pozadina za cijelu aplikaciju, bez slika iza.",
+        "Filmovi i serije" to "Nove stranice: sezone lijevo, epizode s napretkom. Drži OK na posteru za meni.",
+        "Pretraga" to "Veliko polje, glasovna pretraga, kanali, emisije i filmovi odvojeno.",
+        "Postavke" to "Teme kao sličice, boje, klizači, dnevno vrijeme gledanja, omiljeni timovi, uređivanje više grupa odjednom.",
     )
     var show by mutableStateOf(false)
     /** after an update (not on a brand new install, there is nothing "new" yet) */
