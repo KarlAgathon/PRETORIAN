@@ -586,6 +586,18 @@ private fun FavListOptions(g: GroupRef, onDismiss: () -> Unit, onChanged: (Boole
 }
 
 /** Play [list] from [index], with the preview stopped first (one connection at a time). */
+/** Plays a channel so that Back lands in TV, inside the channel's own group, on that channel. */
+suspend fun openInGroup(ctx: android.content.Context, nav: Nav, ch: Channel) {
+    val p = Store.byId(ctx, ch.pid) ?: Store.active(ctx) ?: run { playChannels(nav, listOf(ch), 0); return }
+    val cat = try { Repo.liveGroups(p).firstOrNull { it.id == ch.group } } catch (e: Exception) { null } ?: Category(ch.group, ch.group)
+    val g = GroupRef(p.id, cat)
+    val chs = try { channelsOf(ctx, g) } catch (e: Exception) { emptyList() }
+    val i = chs.indexOfFirst { it.url == ch.url }
+    if (i < 0) { playChannels(nav, listOf(ch), 0); return }
+    TvMemory.group = g; TvMemory.channel = i; TvMemory.restore = true; TvMemory.preview = chs[i]
+    nav.root(Screen.Tv); playChannels(nav, chs, i)
+}
+
 fun playChannels(nav: Nav, list: List<Channel>, index: Int) {
     Preview.stop()
     nav.push(Screen.Player(list.map { PlayItem(it.name, it.url, it.logo, "${it.num}", it) }, index, live = true))

@@ -133,6 +133,13 @@ fun OnyxTv(nav: Nav, onGuide: () -> Unit) {
     var enterTick by remember { mutableIntStateOf(0) }
     val gFr = remember { FocusRequester() }
     LaunchedEffect(Unit) { if (!coming) { TvMemory.restore = false; st.refocus++ } }
+    // coming back from a channel: the group list shows that channel's group too
+    LaunchedEffect(rows is Load.Ok) {
+        val list = (rows as? Load.Ok)?.value ?: return@LaunchedEffect
+        if (!coming) return@LaunchedEffect
+        val idx = list.indexOfFirst { it.id == "g:" + (st.group?.key ?: "") }
+        if (idx >= 0) { st.focusKey = list[idx].id; gState.scrollToItem((idx - 3).coerceAtLeast(0)) }
+    }
     fun backToGroups() { st.focusKey = "g:" + (st.group?.key ?: ""); inChannels = false; st.refocus++ }
     BackHandler(enabled = inChannels && st.groupMenu == null) { backToGroups() }
     // a group opens only with OK; moving over the list changes nothing on the right

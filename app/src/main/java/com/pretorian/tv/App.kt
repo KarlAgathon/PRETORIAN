@@ -143,7 +143,7 @@ class Nav(
     val playlistsChanged: () -> Unit,
 )
 
-object BuildInfo { const val VERSION = "0.8.6" }
+object BuildInfo { const val VERSION = "0.8.7" }
 
 @Composable
 fun PretorianApp() {

@@ -320,29 +320,32 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                         Triple(mv, se, ch)
                     }
                     (disc as? Load.Ok)?.value?.let { (mv, se, ch) ->
-                        val pw = (cardH * 0.62f).coerceIn(70.dp, 92.dp)
+                        // about 5 posters across the screen; each row goes round (end ▶ first, first ◀ end)
+                        val pw = ((maxWidth - 56.dp - 14.dp * 4) / 5.4f).coerceIn(110.dp, 220.dp)
                         if (mv.isNotEmpty()) {
                             RowTitle("NAJNOVIJI FILMOVI")
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(end = 40.dp, top = 4.dp, bottom = 8.dp)) {
-                                items(mv, key = { it.id }) { v -> PosterCard(cleanTitle(v.name).first, v.poster, v.id, null, Modifier.width(pw), rating = v.rating) { nav.push(Screen.MovieDetail(v)) } }
+                            RoundRow(mv.size, 14.dp) { i, fr, keys ->
+                                val v = mv[i]
+                                PosterCard(cleanTitle(v.name).first, v.poster, v.id, null, Modifier.width(pw).then(keys), fr = fr, rating = v.rating) { nav.push(Screen.MovieDetail(v)) }
                             }
                         }
                         if (se.isNotEmpty()) {
                             RowTitle("NAJNOVIJE SERIJE")
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(end = 40.dp, top = 4.dp, bottom = 8.dp)) {
-                                items(se, key = { it.id }) { v -> PosterCard(cleanTitle(v.name).first, v.cover, v.id, null, Modifier.width(pw), rating = v.rating) { nav.push(Screen.SeriesDetail(v)) } }
+                            RoundRow(se.size, 14.dp) { i, fr, keys ->
+                                val v = se[i]
+                                PosterCard(cleanTitle(v.name).first, v.cover, v.id, null, Modifier.width(pw).then(keys), fr = fr, rating = v.rating) { nav.push(Screen.SeriesDetail(v)) }
                             }
                         }
                         if (ch.isNotEmpty()) {
                             RowTitle("NOVI KANALI")
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(end = 40.dp, top = 2.dp, bottom = 4.dp)) {
-                                items(ch, key = { it.url }) { c ->
-                                    Focusable(onClick = { playChannels(nav, listOf(c), 0) }, shape = Rnd(14.dp), normal = C.Rail, focused = C.Red, zoom = 1.04f,
-                                        modifier = Modifier.width(186.dp).height(50.dp).border(1.dp, C.Line, Rnd(14.dp))) { f ->
-                                        Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                            ChannelLogo(c, 32.dp, onLight = f)
-                                            T(c.name, 13.sp, if (f) C.OnRed else C.Text, FontWeight.Bold, modifier = Modifier.weight(1f))
-                                        }
+                            val sc = rememberCoroutineScope()
+                            RoundRow(ch.size, 10.dp) { i, fr, keys ->
+                                val c = ch[i]
+                                Focusable(onClick = { sc.launch { openInGroup(ctx, nav, c) } }, focusRequester = fr, shape = Rnd(14.dp), normal = C.Rail, focused = C.Red, zoom = 1.04f,
+                                    modifier = Modifier.width(200.dp).height(54.dp).border(1.dp, C.Line, Rnd(14.dp)).then(keys)) { f ->
+                                    Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        ChannelLogo(c, 34.dp, onLight = f)
+                                        T(c.name, 13.sp, if (f) C.OnRed else C.Text, FontWeight.Bold, modifier = Modifier.weight(1f))
                                     }
                                 }
                             }
@@ -410,6 +413,25 @@ fun SubscriptionCard() {
                     }
                 }
             }
+        }
+    }
+}
+
+/** A sideways row that goes round: ▶ on the last item jumps to the first, ◀ on the first jumps to the last. */
+@Composable
+fun RoundRow(count: Int, gap: Dp, item: @Composable (Int, FocusRequester?, Modifier) -> Unit) {
+    val st = androidx.compose.foundation.lazy.rememberLazyListState()
+    val sc = rememberCoroutineScope()
+    val first = remember { FocusRequester() }; val last = remember { FocusRequester() }
+    LazyRow(state = st, horizontalArrangement = Arrangement.spacedBy(gap), contentPadding = PaddingValues(end = 40.dp, top = 6.dp, bottom = 10.dp)) {
+        items(count) { i ->
+            val keys = Modifier.onPreviewKeyEvent { e ->
+                if (e.type != KeyEventType.KeyDown || count < 2) false
+                else if (i == count - 1 && e.key == Key.DirectionRight) { sc.launch { st.scrollToItem(0); delay(30); first.tryFocus() }; true }
+                else if (i == 0 && e.key == Key.DirectionLeft) { sc.launch { st.scrollToItem(count - 1); delay(30); last.tryFocus() }; true }
+                else false
+            }
+            item(i, if (i == 0) first else if (i == count - 1) last else null, keys)
         }
     }
 }
