@@ -65,7 +65,7 @@ object Look {
         corner = p.getInt("look_corner", 0)
         groupFrame = p.getBoolean("look_groupframe", true)
         resBadge = p.getInt("look_resbadge", 1)
-        layout = p.getInt("look_layout", 2)
+        layout = 2   // the new look is the only one now (old layouts could be switched on by accident)
         bigText = p.getBoolean("look_bigtext", false)
         // 0.3: the new modern home tiles become the default once
         if (p.getInt("look_v", 0) < 3) { tileStyle = 3; p.edit().putInt("look_v", 3).putInt("look_tilestyle", 3).apply() }

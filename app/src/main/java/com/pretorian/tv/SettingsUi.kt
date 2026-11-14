@@ -437,13 +437,6 @@ private fun LookPage() {
         }
         T(if (tvView == "guide") "TV vodič: kanali odozgo prema dolje, emisije vodoravno po vremenu (kao TiviMate)."
           else "Lista kanala: grupe lijevo, kanali u sredini, mali pregled slike i program desno.", 12.sp, C.Muted, maxLines = 2)
-        Label("Raspored")
-        Segmented(listOf("Klasični", "New Wave", "New Age"), Look.layout) { Look.layout = it; save() }
-        T(when (Look.layout) {
-            0 -> "Klasični: meni lijevo, kategorije u koloni."
-            1 -> "New Wave: filmovi i serije preko cijelog ekrana, kategorije gore, pomoć za daljinski na dnu."
-            else -> "New Age: meni gore, redovi postera po kategorijama, velike kartice epizoda."
-        }, 12.sp, C.Muted, maxLines = 2)
         Label("Oblik ivica")
         Segmented(listOf("Zaobljene", "Blago zaobljene", "Oštre"), Look.corner) { Look.corner = it; save() }
         Label("Set ikona")
