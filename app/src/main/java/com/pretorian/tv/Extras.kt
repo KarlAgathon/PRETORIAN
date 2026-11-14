@@ -77,30 +77,40 @@ fun TipOnce(key: String, title: String, text: String) {
 /** Is the provider answering? Checked on the home screen only; null = not known yet. */
 object ProviderCheck {
     var down by mutableStateOf<String?>(null)   // playlist name when it does not answer
-    private suspend fun reachable(url: String): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val c = URL(url).openConnection() as HttpURLConnection
-            c.connectTimeout = 5000; c.readTimeout = 5000; c.requestMethod = "GET"; c.instanceFollowRedirects = true
-            val code = c.responseCode; c.disconnect(); code in 100..599
-        } catch (e: Exception) { false }
+    private var fails = 0
+    /** the same way the app itself talks to the provider (incl. its DNS fallback) */
+    private suspend fun answers(url: String): Boolean = withContext(Dispatchers.IO) {
+        try { Http.request(url); true } catch (e: java.io.IOException) {
+            // an HTTP error page is still an answer; only no connection at all counts
+            e.message?.contains("HTTP", ignoreCase = true) == true
+        } catch (e: Exception) { true }
+    }
+    private suspend fun internet(): Boolean = withContext(Dispatchers.IO) {
+        try { val c = URL("https://connectivitycheck.gstatic.com/generate_204").openConnection() as HttpURLConnection
+            c.connectTimeout = 5000; c.readTimeout = 5000; val ok = c.responseCode in 200..399; c.disconnect(); ok } catch (e: Exception) { false }
     }
     suspend fun run(ctx: Context) {
         val p = Store.active(ctx) ?: return
-        val base = when {
-            p.server.isNotBlank() -> p.server.trimEnd('/') + "/player_api.php"
+        val url = when {
+            p.server.isNotBlank() -> p.server.trimEnd('/') + "/player_api.php?username=" + java.net.URLEncoder.encode(p.user, "UTF-8") +
+                "&password=" + java.net.URLEncoder.encode(p.pass, "UTF-8")
             p.url.startsWith("http") -> p.url
             else -> return
         }
-        if (reachable(base)) { down = null; return }
-        // the provider is silent; only blame it when the internet itself works
-        down = if (reachable("https://connectivitycheck.gstatic.com/generate_204")) p.name else null
+        if (answers(url)) { fails = 0; down = null; return }
+        fails++
+        // two misses in a row while the internet works: only then it is the provider
+        down = if (fails >= 2 && internet()) p.name else null
     }
 }
 
 @Composable
 fun ProviderBanner() {
     val ctx = LocalContext.current
-    LaunchedEffect(Unit) { while (true) { ProviderCheck.run(ctx); delay(if (ProviderCheck.down != null) 30_000 else 10 * 60_000L) } }
+    LaunchedEffect(Unit) {
+        delay(8_000)   // let the home screen settle first
+        while (true) { ProviderCheck.run(ctx); delay(if (ProviderCheck.down != null) 30_000 else 10 * 60_000L) }
+    }
     val name = ProviderCheck.down ?: return
     var busy by remember { mutableStateOf(false) }
     LaunchedEffect(busy) { if (busy) { ProviderCheck.run(ctx); busy = false } }

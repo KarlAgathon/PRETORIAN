@@ -190,10 +190,11 @@ fun SportsScreen(nav: Nav) {
         }
         if (day == UPCOMING) UpcomingView { pick = it } else {
         // ---------------------------------------------------------------- picture on the left, the match on the right
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        // the picture of the match and its broadcasts scroll with the list, so the lower rows can always be reached
         if (events is Load.Ok) SportTop(top)
         // every TV station that shows the match, worldwide; the ones you have are green and play on OK
         if (events is Load.Ok && top != null) BroadcastRow(top) { chs, i -> play(top, chs, i) }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         // ---------------------------------------------------------------- filters (one scrolling row, nothing is hidden)
         // one row: All · Live · My channels · then the sports (football first), then other sports that have matches
         val extra = remember(all) { Sports.MORE_SPORTS.filter { (id, _) -> all?.any { it.sport == id } == true } }

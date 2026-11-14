@@ -294,7 +294,7 @@ private fun VodClassic(nav: Nav, series: Boolean) {
     }
 
     Row(Modifier.fillMaxSize()) {
-        Column(if (Look.age) Modifier.padding(start = 40.dp, top = 10.dp, bottom = 22.dp).width(270.dp).fillMaxHeight().clip(Rnd(18.dp)).background(C.Rail)
+        Column(if (Look.age) Modifier.padding(start = 24.dp, top = 6.dp, bottom = 14.dp).width(220.dp).fillMaxHeight().clip(Rnd(18.dp)).background(C.Rail)
                 .border(1.dp, C.Line, Rnd(18.dp)).padding(6.dp)
             else Modifier.width(290.dp).fillMaxHeight().padding(start = 16.dp, end = 10.dp, top = 22.dp)) {
             if (!Look.age) T(if (series) "Serije" else "Filmovi", 26.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 10.dp, bottom = 12.dp))
@@ -484,7 +484,7 @@ private fun OnyxPosters(title: String, items: List<Poster>, kind: String, pid: S
     Box(Modifier.fillMaxSize()) {
         val h = shown
         OnyxBackdrop(info?.backdrop ?: h?.image, h?.id ?: title)
-        Column(Modifier.fillMaxSize().padding(start = 28.dp, end = 40.dp, top = 4.dp)) {
+        Column(Modifier.fillMaxSize().padding(start = 20.dp, end = 24.dp, top = 2.dp)) {
             Row(Modifier.fillMaxWidth()) {
                 Spacer(Modifier.weight(1f))
                 androidx.compose.material3.Text(trf("%s NASLOVA", items.size), style = androidx.compose.ui.text.TextStyle(fontFamily = Inter, fontSize = 11.sp, color = C.Muted, letterSpacing = 1.sp))
@@ -493,32 +493,32 @@ private fun OnyxPosters(title: String, items: List<Poster>, kind: String, pid: S
                 val (name, year) = cleanTitle(h.name)
                 androidx.compose.material3.Text(title.uppercase(), style = androidx.compose.ui.text.TextStyle(fontFamily = Inter, fontSize = 12.sp, color = C.Soft,
                     fontWeight = FontWeight.SemiBold, letterSpacing = 3.sp), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                androidx.compose.material3.Text(name, style = androidx.compose.ui.text.TextStyle(fontFamily = Inter, fontSize = 38.sp, color = C.Text, fontWeight = FontWeight.ExtraBold),
+                androidx.compose.material3.Text(name, style = androidx.compose.ui.text.TextStyle(fontFamily = Inter, fontSize = 26.sp, color = C.Text, fontWeight = FontWeight.ExtraBold),
                     maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
                 val pr = h.url?.let { Watch.get(ctx, it) }
                 val meta = listOfNotNull(year ?: info?.year?.take(4), info?.duration?.takeIf { it.isNotBlank() },
                     (h.rating ?: info?.rating)?.toDoubleOrNull()?.takeIf { it > 0 }?.let { "★ " + String.format("%.1f", it) }, qualityOf(h.name)).joinToString(" · ")
                 T(meta.ifBlank { " " }, 13.sp, C.Soft, modifier = Modifier.padding(top = 2.dp))
-                info?.plot?.takeIf { it.isNotBlank() }?.let { T(it, 13.sp, C.Muted, maxLines = 2, modifier = Modifier.padding(top = 4.dp).widthIn(max = 640.dp)) }
+                info?.plot?.takeIf { it.isNotBlank() }?.let { T(it, 12.sp, C.Muted, maxLines = 1, modifier = Modifier.padding(top = 2.dp).widthIn(max = 560.dp)) }
                 if (pr != null && pr.started && !pr.watched) Box(Modifier.padding(top = 10.dp).width(240.dp).height(3.dp).clip(Pill).background(C.Line)) {
                     Box(Modifier.fillMaxWidth(pr.fraction).fillMaxHeight().background(C.Text))
                 }
-                Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Focusable(onClick = h.open, shape = Pill, normal = C.Text, focused = C.Text, zoom = 1.05f, modifier = Modifier.height(38.dp)) { _ ->
+                Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Focusable(onClick = h.open, shape = Pill, normal = C.Text, focused = C.Text, zoom = 1.05f, modifier = Modifier.height(32.dp)) { _ ->
                         Row(Modifier.align(Alignment.Center).padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Ico(R.drawable.lc_play, 14.dp, C.Bg); T(if (pr != null && pr.started && !pr.watched) "Nastavi" else "Gledaj", 14.sp, C.Bg, FontWeight.Bold)
                         }
                     }
                     val onList = remember(MyList.rev, h.id) { MyList.has(kind, h.id) }
                     Focusable(onClick = { MyList.toggle(kind, h.id, h.name, h.image, h.url, pid) }, shape = Pill, normal = C.Card, focused = C.Red, zoom = 1.05f,
-                        modifier = Modifier.height(38.dp).border(1.dp, C.Line, Pill)) { f ->
+                        modifier = Modifier.height(32.dp).border(1.dp, C.Line, Pill)) { f ->
                         T(if (onList) "✓ Na mojoj listi" else "+ Moja lista", 14.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold,
                             modifier = Modifier.align(Alignment.Center).padding(horizontal = 16.dp))
                     }
                 }
             }
-            LazyVerticalGrid(columns = GridCells.Adaptive(120.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(16.dp),
-                contentPadding = PaddingValues(top = 14.dp, bottom = 30.dp), modifier = Modifier.fillMaxSize()) {
+            LazyVerticalGrid(columns = GridCells.Adaptive(96.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(14.dp),
+                contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp, start = 4.dp, end = 4.dp), modifier = Modifier.fillMaxSize()) {
                 items(items, key = { it.id }) { it ->
                     val pr = it.url?.let { u -> Watch.get(ctx, u) }
                     PosterCard(cleanTitle(it.name).first, it.image, it.id, pr?.takeIf { p -> p.started && !p.watched }?.fraction, Modifier.fillMaxWidth(),

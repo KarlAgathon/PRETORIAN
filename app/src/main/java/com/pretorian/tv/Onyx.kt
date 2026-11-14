@@ -99,7 +99,10 @@ fun DuskBackground() {
     if (Look.theme != "vece") return
     val ctx = LocalContext.current
     val img = Dusk.image ?: R.drawable.fallback_bd2
-    val req = remember(img) { coil.request.ImageRequest.Builder(ctx).data(img).size(64, 36).allowRgb565(true).crossfade(if (Perf.lite) 0 else 500).build() }
+    val req = remember(img) {
+        coil.request.ImageRequest.Builder(ctx).data(img).size(48, 27).precision(coil.size.Precision.EXACT)
+            .memoryCacheKey("dusk:$img").placeholderMemoryCacheKey(null as String?).allowRgb565(true).crossfade(if (Perf.lite) 0 else 400).build()
+    }
     Box(Modifier.fillMaxSize()) {
         AsyncImage(model = req, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(), alpha = 0.9f)
         Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xB8070912), Color(0x6B070912), Color(0x38070912)))))
@@ -145,46 +148,38 @@ fun OnyxTopBar(current: Screen, nav: Nav, simple: Boolean = false, firstFocus: F
         if (!simple) { add(NavItem(Screen.Sports, R.drawable.lc_ball, "Sport")); add(NavItem(Screen.Search, R.drawable.lc_search, "Pretraga")) }
     }
     val section = when (current) { is Screen.MovieDetail -> Screen.Movies; is Screen.SeriesDetail -> Screen.Series; Screen.AddPlaylist -> Screen.Settings; else -> current }
-    Column(Modifier.fillMaxWidth().padding(start = 40.dp, end = 40.dp, top = 18.dp)) {
-        Row(Modifier.fillMaxWidth().height(36.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text("PRETORIAN", style = TextStyle(fontFamily = Inter, fontSize = 17.sp, color = C.Text, fontWeight = FontWeight.Light, letterSpacing = 7.sp), maxLines = 1)
-            if (simple) Box(Modifier.clip(Pill).border(1.dp, C.Line, Pill).padding(horizontal = 10.dp, vertical = 3.dp)) {
-                T("JEDNOSTAVNI MOD", 10.sp, C.Soft, FontWeight.Bold)
+    // one compact row: wordmark · menu · status (a TV screen is only about 960×540 dp)
+    Row(Modifier.fillMaxWidth().height(56.dp).padding(start = 28.dp, end = 24.dp), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("PRETORIAN", style = TextStyle(fontFamily = Inter, fontSize = 13.sp, color = C.Text, fontWeight = FontWeight.Light, letterSpacing = 4.sp), maxLines = 1)
+            if (simple) Box(Modifier.clip(Pill).border(1.dp, C.Line, Pill).padding(horizontal = 8.dp, vertical = 2.dp)) {
+                T("JEDNOSTAVNI MOD", 9.sp, C.Soft, FontWeight.Bold)
             }
-            Spacer(Modifier.weight(1f))
-            val p = pls.firstOrNull()
-            if (p != null) {
-                Ico(R.drawable.lc_wifi, 15.dp, C.Muted)
-                T(p.name, 13.sp, C.Text, maxLines = 1, modifier = Modifier.widthIn(max = 160.dp))
-                val sec = p.exp.toLongOrNull()
-                if (sec != null && sec > 0) {
-                    val days = (sec * 1000 - System.currentTimeMillis()) / 86_400_000L
-                    T(SimpleDateFormat("dd.MM.yy", Locale.getDefault()).format(Date(sec * 1000)), 13.sp, C.Muted)  // i18n-ignore
-                    T(trf("%s dana", days.coerceAtLeast(0)), 13.sp, if (days <= 5) C.Danger else C.Muted, if (days <= 5) FontWeight.Bold else FontWeight.Normal)
-                }
-                Box(Modifier.width(1.dp).height(16.dp).background(C.Line))
-            }
-            T(SimpleDateFormat("EEE d.M.", Locale(Look.lang)).format(now), 13.sp, C.Muted)  // i18n-ignore
-            T(SimpleDateFormat("HH:mm", Locale.getDefault()).format(now), 13.sp, C.Text, FontWeight.SemiBold)  // i18n-ignore
-            if (!simple) ProfileButton(26.dp)
-            Box {
-                Focusable(onClick = { notes = true }, shape = CircleShape, normal = Color.Transparent, focused = C.CardHi, zoom = 1.08f,
-                    modifier = Modifier.size(34.dp).border(1.dp, C.Line, CircleShape)) { _ ->
-                    Box(Modifier.align(Alignment.Center)) { Ico(R.drawable.lc_bell, 16.dp, C.Text) }
-                }
-                if (Notes.unread() > 0) Box(Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 7.dp).size(6.dp).clip(CircleShape).background(C.Text))
-            }
-        }
-        Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Spacer(Modifier.width(6.dp))
             items.forEachIndexed { i, it ->
                 NavPill(it, section == it.screen, if (i == 0) firstFocus else null, big = simple) { nav.root(it.screen) }
             }
-            Spacer(Modifier.weight(1f))
             NavPill(NavItem(Screen.Settings, if (simple) R.drawable.lc_lock else R.drawable.lc_settings, "Postavke",
                 if (Updater.available != null) 1 else 0), section == Screen.Settings, null, big = false) {
                 if (simple) OnyxState.askAdvanced = true else nav.root(Screen.Settings)
             }
-        }
+            Spacer(Modifier.weight(1f))
+            val p = pls.firstOrNull()
+            if (p != null) {
+                val sec = p.exp.toLongOrNull()
+                val days = if (sec != null && sec > 0) (sec * 1000 - System.currentTimeMillis()) / 86_400_000L else null
+                T(p.name + (if (days != null) " · " + trf("%s dana", days.coerceAtLeast(0)) else ""), 11.sp, if (days != null && days <= 5) C.Danger else C.Muted,
+                    maxLines = 1, modifier = Modifier.widthIn(max = 150.dp))
+            }
+            T(SimpleDateFormat("HH:mm", Locale.getDefault()).format(now), 13.sp, C.Text, FontWeight.SemiBold)  // i18n-ignore
+            if (!simple) ProfileButton(24.dp)
+            Box {
+                Focusable(onClick = { notes = true }, shape = CircleShape, normal = Color.Transparent, focused = C.CardHi, zoom = 1.08f,
+                    modifier = Modifier.size(30.dp).border(1.dp, C.Line, CircleShape)) { _ ->
+                    Box(Modifier.align(Alignment.Center)) { Ico(R.drawable.lc_bell, 14.dp, C.Text) }
+                }
+                if (Notes.unread() > 0) Box(Modifier.align(Alignment.TopEnd).padding(top = 5.dp, end = 6.dp).size(6.dp).clip(CircleShape).background(C.Text))
+            }
     }
     if (notes) NotesPopup({ notes = false }, nav)
 }
@@ -193,12 +188,12 @@ fun OnyxTopBar(current: Screen, nav: Nav, simple: Boolean = false, firstFocus: F
 private fun NavPill(it: NavItem, selected: Boolean, fr: FocusRequester?, big: Boolean, onClick: () -> Unit) {
     Box {
         Focusable(onClick = onClick, focusRequester = fr, shape = Pill, normal = if (selected) C.CardHi else Color.Transparent,
-            focused = C.Red, zoom = 1.04f, modifier = Modifier.height(if (big) 48.dp else 42.dp)) { f ->
-            Row(Modifier.align(Alignment.Center).padding(horizontal = if (big) 22.dp else 16.dp), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            focused = C.Red, zoom = 1.04f, modifier = Modifier.height(if (big) 38.dp else 32.dp)) { f ->
+            Row(Modifier.align(Alignment.Center).padding(horizontal = if (big) 16.dp else 11.dp), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 val col = if (f) C.OnRed else if (selected) C.Text else C.Soft
-                Ico(it.icon, if (big) 22.dp else 18.dp, col)
-                T(it.label, if (big) 18.sp else 15.sp, col, FontWeight.SemiBold)
+                Ico(it.icon, if (big) 17.dp else 14.dp, col)
+                T(it.label, if (big) 15.sp else 12.sp, col, FontWeight.SemiBold)
             }
         }
         if (it.badge > 0) Box(Modifier.align(Alignment.TopEnd)) { Bell(it.badge) }
@@ -239,30 +234,30 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
         Column(Modifier.fillMaxSize()) {
             OnyxTopBar(Screen.Home, nav, simple, first)
             ProviderBanner()
-            Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 40.dp), verticalArrangement = Arrangement.Bottom) {
+            Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 28.dp), verticalArrangement = Arrangement.Bottom) {
                 Box(Modifier.padding(bottom = 14.dp)) { ExpiryChip() }
                 if (hero != null) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         if (cont.isEmpty()) Box(Modifier.clip(Rnd(5.dp)).background(C.Text).padding(horizontal = 8.dp, vertical = 2.dp)) { T("NOVO", 10.sp, C.Bg, FontWeight.ExtraBold) }
                         Text(hero.kicker, style = TextStyle(fontFamily = Inter, fontSize = 12.sp, color = C.Soft, fontWeight = FontWeight.SemiBold, letterSpacing = 3.sp), maxLines = 1)
                     }
-                    Text(hero.title, style = TextStyle(fontFamily = Inter, fontSize = 50.sp, color = C.Text, fontWeight = FontWeight.ExtraBold, letterSpacing = (-1).sp),
-                        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp).widthIn(max = 760.dp))
-                    if (hero.meta.isNotBlank()) T(hero.meta, 14.sp, C.Soft, modifier = Modifier.padding(top = 4.dp))
-                    Row(Modifier.padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Focusable(onClick = hero.play, shape = Pill, normal = C.Text, focused = C.Text, zoom = 1.06f, modifier = Modifier.height(46.dp)) { _ ->
-                            Row(Modifier.align(Alignment.Center).padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                                Ico(R.drawable.lc_play, 16.dp, C.Bg); T(hero.button, 15.sp, C.Bg, FontWeight.Bold)
+                    Text(hero.title, style = TextStyle(fontFamily = Inter, fontSize = 34.sp, color = C.Text, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.5).sp),
+                        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp).widthIn(max = 600.dp))
+                    if (hero.meta.isNotBlank()) T(hero.meta, 12.sp, C.Soft, modifier = Modifier.padding(top = 2.dp))
+                    Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Focusable(onClick = hero.play, shape = Pill, normal = C.Text, focused = C.Text, zoom = 1.06f, modifier = Modifier.height(36.dp)) { _ ->
+                            Row(Modifier.align(Alignment.Center).padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                                Ico(R.drawable.lc_play, 13.dp, C.Bg); T(hero.button, 13.sp, C.Bg, FontWeight.Bold)
                             }
                         }
                     }
                     hero.progress?.let { f ->
-                        Box(Modifier.padding(top = 16.dp).width(300.dp).height(3.dp).clip(Pill).background(C.Line)) {
+                        Box(Modifier.padding(top = 10.dp).width(240.dp).height(3.dp).clip(Pill).background(C.Line)) {
                             Box(Modifier.fillMaxWidth(f).fillMaxHeight().background(C.Text))
                         }
                     }
                 } else T("Dodaj playlistu u Postavkama", 18.sp, C.Soft)
-                Spacer(Modifier.height(28.dp))
+                Spacer(Modifier.height(16.dp))
                 if (cont.isNotEmpty()) {
                     RowTitle("NASTAVI GLEDANJE")
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(end = 40.dp)) {
@@ -279,7 +274,7 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                         }
                     }
                 }
-                Spacer(Modifier.height(26.dp))
+                Spacer(Modifier.height(16.dp))
             }
         }
     }
@@ -289,24 +284,24 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
 
 @Composable
 private fun RowTitle(t: String) {
-    Text(tr(t), style = TextStyle(fontFamily = Inter, fontSize = 12.sp, color = C.Muted, fontWeight = FontWeight.SemiBold, letterSpacing = 2.sp),
-        modifier = Modifier.padding(bottom = 10.dp))
+    Text(tr(t), style = TextStyle(fontFamily = Inter, fontSize = 11.sp, color = C.Muted, fontWeight = FontWeight.SemiBold, letterSpacing = 2.sp),
+        modifier = Modifier.padding(bottom = 7.dp))
 }
 
 /** Landscape card with picture, title and a thin progress line. */
 @Composable
 fun WideCard(title: String, sub: String, image: String?, key: String, progress: Float?, onClick: () -> Unit) {
-    Column(Modifier.width(250.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-        Focusable(onClick = onClick, shape = Rnd(12.dp), normal = C.Card, zoom = 1.05f, modifier = Modifier.fillMaxWidth().height(122.dp)) { f ->
+    Column(Modifier.width(196.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Focusable(onClick = onClick, shape = Rnd(12.dp), normal = C.Card, zoom = 1.05f, modifier = Modifier.fillMaxWidth().height(100.dp)) { f ->
             OnyxImage(image, key, Modifier.fillMaxSize().clip(Rnd(12.dp)), maxW = 420)
             Box(Modifier.fillMaxSize().clip(Rnd(12.dp)).background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xD9000000)), startY = 90f)))
             if (f) Box(Modifier.fillMaxSize().border(2.dp, Color.White, Rnd(12.dp)))
-            T(cleanTitle(title).first, 15.sp, Color.White, FontWeight.Bold, modifier = Modifier.align(Alignment.BottomStart).padding(start = 12.dp, end = 12.dp, bottom = 12.dp))
+            T(cleanTitle(title).first, 13.sp, Color.White, FontWeight.Bold, modifier = Modifier.align(Alignment.BottomStart).padding(start = 10.dp, end = 10.dp, bottom = 10.dp))
             if (progress != null) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Color(0x33FFFFFF))) {
                 Box(Modifier.fillMaxWidth(progress.coerceAtLeast(0.02f)).fillMaxHeight().background(Color.White))
             }
         }
-        T(sub, 12.sp, C.Muted)
+        T(sub, 11.sp, C.Muted)
     }
 }
 

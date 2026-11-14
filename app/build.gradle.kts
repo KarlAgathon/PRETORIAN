@@ -13,8 +13,8 @@ android {
         minSdk = 24
         targetSdk = 34
         // raise both numbers for every new version (needed for updates)
-        versionCode = 30
-        versionName = "0.6.6"
+        versionCode = 31
+        versionName = "0.6.7"
         // Google sign-in for Drive sync ("TVs and Limited Input devices" client), from the GitHub secrets
         // GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET. Empty: the app asks for them in Settings.
         buildConfigField("String", "GOOGLE_CLIENT_ID", "\"" + (System.getenv("GOOGLE_CLIENT_ID") ?: "") + "\"")

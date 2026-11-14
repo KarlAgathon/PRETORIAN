@@ -481,8 +481,8 @@ Ne radi na svim uređajima. Ako je box potpuno ugašen, podsjetnik ne može doć
 Tvoji podsjetnici|Your reminders|Deine Erinnerungen|Tvoji podsjetnici|Твоји подсетници|Твоите напомняния|Mementourile tale|Hatırlatıcıların|I tuoi promemoria|تذكيراتك
 Nema podsjetnika.|No reminders.|Keine Erinnerungen.|Nema podsjetnika.|Нема подсетника.|Няма напомняния.|Niciun memento.|Hatırlatıcı yok.|Nessun promemoria.|لا توجد تذكيرات.
 Obriši|Delete|Löschen|Obriši|Обриши|Изтрий|Șterge|Sil|Elimina|حذف
-Backup je spremljen|Backup saved|Backup gespeichert|Sigurnosna kopija je spremljenaaaaaaaaaaaaaaaaaaa|Бекап је сачуван|Копието е запазено|Backup salvat|Yedek kaydedildi|Backup salvato|تم حفظ النسخة
-Backup nije spremljen|Backup not saved|Backup nicht gespeichert|Sigurnosna kopija nije spremljenaaaaaaaaaaaaaaaaaaa|Бекап није сачуван|Копието не е запазено|Backup nesalvat|Yedek kaydedilmedi|Backup non salvato|لم تُحفظ النسخة
+Backup je spremljen|Backup saved|Backup gespeichert|Sigurnosna kopija je spremljenaaaaaaaaaaaaaaaaaaaa|Бекап је сачуван|Копието е запазено|Backup salvat|Yedek kaydedildi|Backup salvato|تم حفظ النسخة
+Backup nije spremljen|Backup not saved|Backup nicht gespeichert|Sigurnosna kopija nije spremljenaaaaaaaaaaaaaaaaaaaa|Бекап није сачуван|Копието не е запазено|Backup nesalvat|Yedek kaydedilmedi|Backup non salvato|لم تُحفظ النسخة
 Sve je vraćeno. PRETORIAN se ponovo pokreće.|Everything restored. PRETORIAN restarts.|Alles wiederhergestellt. PRETORIAN startet neu.|Sve je vraćeno. PRETORIAN se ponovo pokreće.|Све је враћено. PRETORIAN се поново покреће.|Всичко е възстановено. PRETORIAN се рестартира.|Totul a fost restaurat. PRETORIAN repornește.|Her şey geri yüklendi. PRETORIAN yeniden başlıyor.|Tutto ripristinato. PRETORIAN si riavvia.|تمت الاستعادة. يُعاد تشغيل PRETORIAN.
 Vraćanje nije uspjelo|Restore failed|Wiederherstellung fehlgeschlagen|Vraćanje nije uspjelo|Враћање није успело|Възстановяването не успя|Restaurarea a eșuat|Geri yükleme başarısız|Ripristino non riuscito|فشلت الاستعادة
 Backup i vraćanje|Backup and restore|Sichern und wiederherstellen|Sigurnosna kopija i vraćanje|Бекап и враћање|Резервно копие|Backup și restaurare|Yedekle ve geri yükle|Backup e ripristino|النسخ والاستعادة
@@ -984,6 +984,7 @@ Uključeno|On|An|Uključeno|Укључено|Включено|Pornit|Açık|Acce
 ✓ Na mojoj listi|✓ On my list|✓ Auf meiner Liste|✓ Na mom popisu|✓ На мојој листи|✓ В моя списък|✓ În lista mea|✓ Listemde|✓ Nella mia lista|✓ في قائمتي
 + Moja lista|+ My list|+ Meine Liste|+ Moj popis|+ Моја листа|+ Моят списък|+ Lista mea|+ Listem|+ La mia lista|+ قائمتي
 Drži OK na bilo čemu za opcije: Moja lista, Favoriti, Sakrij.|Hold OK on anything for options: My list, Favourites, Hide.|Halte OK auf etwas gedrückt für Optionen: Meine Liste, Favoriten, Ausblenden.|Drži OK na bilo čemu za opcije: Moj popis, Favoriti, Sakrij.|Држи OK на било чему за опције: Моја листа, Фаворити, Сакриј.|Задръж OK върху каквото и да е за опции: Моят списък, Любими, Скрий.|Ține apăsat OK pe orice pentru opțiuni: Lista mea, Favorite, Ascunde.|Seçenekler için herhangi bir şeyde OK'a basılı tut: Listem, Favoriler, Gizle.|Tieni premuto OK su qualsiasi cosa per le opzioni: La mia lista, Preferiti, Nascondi.|اضغط مطولاً على OK على أي شيء للخيارات: قائمتي، المفضلة، إخفاء.
+Savjet|Tip|Tipp|Savjet|Савет|Съвет|Sfat|İpucu|Suggerimento|نصيحة
 Nepoznat jezik|Unknown language|Unbekannte Sprache|Nepoznat jezik|Непознат језик|Неизвестен език|Limbă necunoscută|Bilinmeyen dil|Lingua sconosciuta|لغة غير معروفة
 """.trimIndent()
 
