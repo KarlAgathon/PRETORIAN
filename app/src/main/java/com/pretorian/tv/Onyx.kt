@@ -239,6 +239,7 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
             androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             // the card height follows the free space, so hero, Continue watching and Recent channels all fit without scrolling
             val cardH = (maxHeight - 372.dp).coerceIn(84.dp, 140.dp)
+            val fullW = maxWidth
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 28.dp, end = 28.dp, top = 14.dp, bottom = 12.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
                 Column(Modifier.weight(1f)) {
@@ -321,7 +322,7 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                     }
                     (disc as? Load.Ok)?.value?.let { (mv, se, ch) ->
                         // 5 posters across the screen; each row scrolls sideways and goes round
-                        val pw = ((maxWidth - 56.dp - 14.dp * 4) / 5).coerceIn(90.dp, 220.dp)
+                        val pw = ((fullW - 56.dp - 14.dp * 4) / 5).coerceIn(90.dp, 220.dp)
                         val dScope = rememberCoroutineScope()
                         if (mv.isNotEmpty()) {
                             val w = remember(mv.size) { RowWrap(mv.size) }
