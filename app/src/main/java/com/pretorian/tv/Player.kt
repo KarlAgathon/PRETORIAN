@@ -85,9 +85,13 @@ fun buildPlayer(ctx: Context, preview: Boolean = false): ExoPlayer {
     // the small picture starts as soon as half a second is loaded
     if (preview) builder.setLoadControl(androidx.media3.exoplayer.DefaultLoadControl.Builder()
         .setBufferDurationsMs(2_000, 15_000, 500, 1_000).build())
+    // "slow internet": a bigger buffer, starts a little later but stops less often
+    else if (Prefs.bool("slow_net")) builder.setLoadControl(androidx.media3.exoplayer.DefaultLoadControl.Builder()
+        .setBufferDurationsMs(30_000, 120_000, 3_000, 6_000).build())
     val player = builder.build()
     val audio = Prefs.audioLangs.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toTypedArray()
-    val b = player.trackSelectionParameters.buildUpon().setPreferredAudioLanguages(*audio)
+    val b = player.trackSelectionParameters.buildUpon()
+    if (!Prefs.bool("audio_default")) b.setPreferredAudioLanguages(*audio)
     if (Prefs.autoSubs) {
         val langs = Prefs.subLangs.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toTypedArray()
         b.setPreferredTextLanguages(*langs)
@@ -292,7 +296,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             override fun onPlaybackStateChanged(state: Int) {
                 buffering = state == Player.STATE_BUFFERING
                 if (state == Player.STATE_READY) { error = null; reconnect = 0 }
-                if (state == Player.STATE_ENDED && !s.live) { saveProgress(done = true); if (index < n - 1) index++ }
+                if (state == Player.STATE_ENDED && !s.live) { saveProgress(done = true); if (index < n - 1 && Prefs.bool("next_ep", true)) index++ }
             }
             override fun onIsPlayingChanged(isPlaying: Boolean) { playing = isPlaying }
             override fun onTracksChanged(tracks: Tracks) {
@@ -327,7 +331,9 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         val cur = items[index]
         subFile = cur.subFile
         val saved = if (!s.live) Watch.get(ctx, cur.url) else null
-        if (saved != null && saved.started && cur.subFile == null) { resume = saved; loadMedia(cur, subFile, saved.pos, play = false) }
+        val rm = Prefs.str("resume_mode", "0")
+        if (saved != null && saved.started && cur.subFile == null && rm == "0") { resume = saved; loadMedia(cur, subFile, saved.pos, play = false) }
+        else if (saved != null && saved.started && cur.subFile == null && rm == "1") loadMedia(cur, subFile, saved.pos)
         else loadMedia(cur, subFile, 0L)
         nowNext = emptyList()
         val ch = cur.channel
@@ -373,8 +379,9 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 }
                 when (e.key) {
                     Key.Menu, Key.Info -> { dialog = "menu"; true }
-                    Key.DirectionUp, Key.ChannelUp -> if (s.live) { index = (index - 1 + n) % n; true } else { showInfo = true; true }
+                    Key.DirectionUp, Key.ChannelUp -> if (s.live && (e.key == Key.ChannelUp || Prefs.bool("zap_updown", true))) { index = (index - 1 + n) % n; true } else { showInfo = true; true }
                     Key.DirectionDown, Key.ChannelDown -> if (s.live && e.key == Key.ChannelDown) { index = (index + 1) % n; true }
+                        else if (s.live && !Prefs.bool("zap_updown", true)) { bar = true; showInfo = true; true }
                         else if (s.live && !showInfo) { index = (index + 1) % n; true } else { bar = true; showInfo = true; true }
                     Key.DirectionLeft, Key.MediaRewind -> if (!s.live) { player.seekTo((player.currentPosition - step).coerceAtLeast(0)); showInfo = true; true }
                         else { side = "channels"; showInfo = false; true }
@@ -402,6 +409,17 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                         isFocusable = false
                         descendantFocusability = android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
                         setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
+                        // subtitle size and look from Settings › Player
+                        subtitleView?.let { sv ->
+                            val size = listOf(0.8f, 1f, 1.25f, 1.5f).getOrElse(Prefs.str("sub_size", "1").toIntOrNull() ?: 1) { 1f }
+                            sv.setFractionalTextSize(androidx.media3.ui.SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * size)
+                            val st = Prefs.str("sub_style", "0").toIntOrNull() ?: 0
+                            sv.setApplyEmbeddedStyles(st == 0)
+                            sv.setStyle(androidx.media3.ui.CaptionStyleCompat(android.graphics.Color.WHITE,
+                                if (st == 2) 0xB3000000.toInt() else android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT,
+                                if (st == 1) androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_OUTLINE else if (st == 0) androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW else androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_NONE,
+                                android.graphics.Color.BLACK, null))
+                        }
                     }
                 },
                 update = { v -> v.resizeMode = when (resize) { 1 -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM; 2 -> AspectRatioFrameLayout.RESIZE_MODE_FILL; else -> AspectRatioFrameLayout.RESIZE_MODE_FIT } },

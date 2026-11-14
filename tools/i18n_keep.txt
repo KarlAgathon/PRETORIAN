@@ -181,3 +181,14 @@ pijesak
 gemini-flash-lite-latest
 format
 EEEE, d. MMMM
+pin_simple_exit
+mode
+settings_adv
+pin_settings
+Svi3e
+t3smo@aol.com
+Lucide ikone · ISC
+Online
+%s Mbit/s
+audio_default
+hide_adult_default

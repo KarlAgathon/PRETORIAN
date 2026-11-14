@@ -142,9 +142,10 @@ fun OnyxTopBar(current: Screen, nav: Nav, simple: Boolean = false, firstFocus: F
     var notes by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { while (true) { now = Date(); delay(15_000) } }
     val items = buildList {
-        add(NavItem(Screen.Tv, R.drawable.lc_tv, "TV", Notes.unread("reminder")))
-        add(NavItem(Screen.Movies, R.drawable.lc_film, "Filmovi", NewContent.count("vod")))
-        add(NavItem(Screen.Series, R.drawable.lc_monitor, "Serije", NewContent.count("series")))
+        val show = if (simple) Prefs.str("simple_items", "tv,vod,series").split(',') else listOf("tv", "vod", "series")
+        if ("tv" in show) add(NavItem(Screen.Tv, R.drawable.lc_tv, "TV", Notes.unread("reminder")))
+        if ("vod" in show) add(NavItem(Screen.Movies, R.drawable.lc_film, "Filmovi", NewContent.count("vod")))
+        if ("series" in show) add(NavItem(Screen.Series, R.drawable.lc_monitor, "Serije", NewContent.count("series")))
         if (!simple) { add(NavItem(Screen.Sports, R.drawable.lc_ball, "Sport")); add(NavItem(Screen.Search, R.drawable.lc_search, "Pretraga")) }
     }
     val section = when (current) { is Screen.MovieDetail -> Screen.Movies; is Screen.SeriesDetail -> Screen.Series; Screen.AddPlaylist -> Screen.Settings; else -> current }
@@ -382,7 +383,10 @@ fun AdvancedGate(nav: Nav) {
         T("Pažnja: aktivirate napredni mod i dodatne opcije. Nastavite s pažnjom, jer možete izazvati nepoželjne posljedice i pokvariti podešavanja programa.",
             16.sp, C.Soft, maxLines = 5)
         OptionRow("Ostani u jednostavnom modu", R.drawable.lc_check) { OnyxState.askAdvanced = false }
-        OptionRow("Nastavi i unesi PIN", R.drawable.lc_key_round, color = C.Amber) { OnyxState.askAdvanced = false; pin = true }
+        OptionRow(if (Prefs.bool("pin_simple_exit", true) && Lock.hasPin()) "Nastavi i unesi PIN" else "Nastavi", R.drawable.lc_key_round, color = C.Amber) {
+            OnyxState.askAdvanced = false
+            if (Prefs.bool("pin_simple_exit", true) && Lock.hasPin()) pin = true else { Lock.switchSimple(false); nav.root(Screen.Settings) }
+        }
     }
     if (pin) PinDialog("PIN za napredni mod", onDismiss = { pin = false }) { entered ->
         val err = Lock.check(entered)

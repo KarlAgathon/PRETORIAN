@@ -92,11 +92,12 @@ fun SportsScreen(nav: Nav) {
     val dayFr = remember { FocusRequester() }
 
     // live scores refresh every minute while you look at today
-    LaunchedEffect(day) { while (day == 0) { delay(60_000); tick++ } }
+    LaunchedEffect(day) { while (day == 0) { delay((Prefs.str("sport_refresh", "1").toLongOrNull() ?: 1L) * 60_000L); tick++ } }
 
     val g = (guide as? Load.Ok)?.value
     // matching matches to your guide is heavy: it runs in the background, the screen keeps the old result meanwhile
-    val evs = (events as? Load.Ok)?.value
+    // only the sports chosen in Settings › Sport (football by default)
+    val evs = (events as? Load.Ok)?.value?.let { l -> val en = Prefs.str("sport_enabled", "football").split(',').filter { it.isNotBlank() }; if (en.isEmpty()) l else l.filter { it.sport in en } }
     var matching by remember { mutableStateOf(true) }
     var tookMs by remember { mutableStateOf(-1L) }
     // channels are matched once per day and guide; live score refreshes only update the scores (no new search)

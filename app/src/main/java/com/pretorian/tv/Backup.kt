@@ -27,10 +27,28 @@ object Backup {
     /** stay on this device: sign-in, chosen external player and file manager */
     private val DEVICE_ONLY = setOf("ext_player", "file_app", "profile_skip_ask")
 
-    private fun payload(ctx: Context): JSONObject {
+    /** which part of the backup a setting belongs to (see "Šta uključiti"); -1 = always */
+    private fun part(k: String): Int = when {
+        k == "playlists" || k.startsWith("pl_") -> 0
+        k.startsWith("epg") -> 1
+        k.startsWith("ovr_") -> 2
+        k.startsWith("profile") || k.startsWith("pin_") || k == "simple_mode" || k == "simple_items" -> 3
+        k.startsWith("fav") || k == "mylist" -> 4
+        k == "recent_ch" -> 5
+        k == "reminders" || k.startsWith("rem_") -> 6
+        k.startsWith("look_") || k == "perf_mode" || k == "tv_view" -> 7
+        k in setOf("app_lang", "meta_lang", "sub_langs", "audio_langs", "auto_subs", "auto_translate", "seek_step", "sub_size", "sub_style", "audio_default") -> 8
+        k.startsWith("sport_") || k.startsWith("follow") -> 9
+        k.startsWith("ai_") || k.endsWith("_key") || k.startsWith("os_") || k == "gemini_key" -> 10
+        else -> -1
+    }
+
+    private fun payload(ctx: Context, parts: Set<Int>? = null): JSONObject {
         val p = JSONObject()
         prefs(ctx).all.forEach { (k, v) ->
             if (k.startsWith("gd_") || k.startsWith("sync_") || k in DEVICE_ONLY) return@forEach
+            val pt = part(k)
+            if (parts != null && pt >= 0 && pt !in parts) return@forEach
             val o = JSONObject()
             when (v) {
                 is String -> o.put("t", "s").put("v", v)
@@ -43,8 +61,10 @@ object Backup {
             p.put(k, o)
         }
         val files = JSONObject()
-        listOf("progress.json").forEach { n -> File(ctx.filesDir, n).takeIf { it.exists() }?.let { files.put(n, it.readText()) } }
-        return JSONObject().put("prefs", p).put("files", files).put("profiles", Profiles.allSnapshots(ctx))
+        if (parts == null || 5 in parts) listOf("progress.json").forEach { n -> File(ctx.filesDir, n).takeIf { it.exists() }?.let { files.put(n, it.readText()) } }
+        val out = JSONObject().put("prefs", p).put("files", files)
+        if (parts == null || 3 in parts) out.put("profiles", Profiles.allSnapshots(ctx))
+        return out
     }
 
     private fun key(password: String, salt: ByteArray): SecretKeySpec {
@@ -53,8 +73,8 @@ object Backup {
         return SecretKeySpec(k, "AES")
     }
 
-    fun export(ctx: Context, password: String?): String {
-        val data = payload(ctx)
+    fun export(ctx: Context, password: String?, parts: Set<Int>? = null): String {
+        val data = payload(ctx, parts)
         val out = JSONObject().put("pretorian_backup", 1).put("app", BuildInfo.VERSION)
             .put("date", SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date()))
             .put("playlists", Store.playlists(ctx).size).put("favLists", Favs.lists(ctx).size)
@@ -111,7 +131,7 @@ object Backup {
     /** weekly automatic backup inside the box (last 3 kept) */
     fun auto(ctx: Context) {
         if (!Prefs.bool("backup_auto", true)) return
-        if (System.currentTimeMillis() - Prefs.long("backup_auto_at") < 7 * 86_400_000L) return
+        if (System.currentTimeMillis() - Prefs.long("backup_auto_at") < (if (Prefs.bool("backup_daily")) 1 else 7) * 86_400_000L) return
         try {
             val d = File(ctx.filesDir, "backups").apply { mkdirs() }
             File(d, fileName()).writeText(export(ctx, null))

@@ -138,7 +138,7 @@ class Nav(
     val playlistsChanged: () -> Unit,
 )
 
-object BuildInfo { const val VERSION = "0.6.7" }
+object BuildInfo { const val VERSION = "0.7.0" }
 
 @Composable
 fun PretorianApp() {
@@ -161,7 +161,9 @@ fun PretorianApp() {
     LaunchedEffect(Unit) {
         Backup.auto(ctx)
         while (true) {
-            Updater.check(ctx)?.let { Notes.add("update", trf("Nova verzija %s", it.name), "update:${it.name}") }
+            val um = Prefs.str("upd_mode", "0")
+            if (um == "0" || (um == "1" && System.currentTimeMillis() - Prefs.long("upd_last") > 20 * 3600_000L))
+                Updater.check(ctx)?.let { if (Prefs.bool("upd_note", true)) Notes.add("update", trf("Nova verzija %s", it.name), "update:${it.name}") }
             Store.actives(ctx).forEach { p -> try { NewContent.scan(ctx, p) } catch (_: Exception) {} }
             try { Follow.check(ctx) } catch (_: Exception) {}
             delay(6 * 3600_000L)
