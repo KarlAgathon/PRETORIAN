@@ -179,3 +179,4 @@ EEE d.M.
 staklo
 pijesak
 gemini-flash-lite-latest
+format

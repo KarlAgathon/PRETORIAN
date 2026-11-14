@@ -129,6 +129,12 @@ class Ovr(private val ctx: Context, private val pid: String) {
 
     /** custom groups + provider groups, renamed and in your order; hidden ones only when [all] */
     fun groups(kind: String, raw: List<Category>, all: Boolean = false): List<Category> {
+        // new installs: adult groups start hidden (once per playlist and kind); show them again in the group manager
+        if (raw.isNotEmpty() && Prefs.bool("hide_adult_default") && !list("adultDone").contains(kind)) {
+            val adult = raw.filter { ADULT.containsMatchIn(it.name) }.map { it.id }
+            if (adult.isNotEmpty()) setHidden(kind, adult, true)
+            setList("adultDone", list("adultDone") + kind)
+        }
         val merged = customGroups(kind) + raw
         val order = list("gOrder_$kind")
         val sorted = merged.withIndex().sortedBy { (i, g) -> order.indexOf(g.id).let { if (it < 0) 100_000 + i else it } }.map { it.value }
@@ -193,3 +199,6 @@ class Ovr(private val ctx: Context, private val pid: String) {
 
     fun resetAll() { Prefs.put(key, "{}") }
 }
+
+/** group names that are for adults only */
+val ADULT = Regex("(?i)\\b(xxx|adult|adults|18\\+|porn\\w*|erotic\\w*|for adults|za odrasle|\\+18)\\b|xxx")

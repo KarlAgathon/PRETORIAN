@@ -127,7 +127,10 @@ fun PinSetupDialog(onDismiss: () -> Unit, onDone: () -> Unit) {
 const val ALL_GROUP = "__all__"
 
 /** Channels of a group: favourites, all channels, or a provider group with your changes. */
+const val RECENT_GROUP = "__recent__"
+
 suspend fun channelsOf(ctx: android.content.Context, ref: GroupRef): List<Channel> {
+    if (ref.cat.id == RECENT_GROUP) return Recent.list().map { it.ch }
     if (ref.pid == null) return Favs.channels(favListId(ref.cat.id))
     val p = Store.byId(ctx, ref.pid) ?: return emptyList()
     val ovr = Ovr(ctx, p.id)
@@ -149,6 +152,7 @@ sealed class GRow {
 
 suspend fun groupRows(ctx: android.content.Context): List<GRow> {
     val out = ArrayList<GRow>()
+    if (Look.age && Recent.list().isNotEmpty()) out.add(GRow.Group(GroupRef(null, Category(RECENT_GROUP, tr("Zadnje gledano")))))
     Favs.lists(ctx).forEach { out.add(GRow.Group(GroupRef(null, Category(FAV_PREFIX + it.id, "★ " + it.name)))) }
     if (!Lock.simple) out.add(GRow.NewFav())
     val pls = Store.actives(ctx)
@@ -208,7 +212,7 @@ fun GroupColumn(
                                     shape = shape,
                                     onClick = { onOpen(g) },
                                     onFocus = { onFocusRow(r.id); onFocusGroup(g) },
-                                    onMenu = if (Lock.simple || g.cat.id == ALL_GROUP) null else ({ onMenu(g) }),
+                                    onMenu = if (Lock.simple || g.cat.id == ALL_GROUP || g.cat.id == RECENT_GROUP) null else ({ onMenu(g) }),
                                     focusRequester = fr,
                                     normal = if (selected) C.Red.copy(alpha = 0.28f) else Color.Transparent,
                                     zoom = 1.0f,
@@ -316,7 +320,7 @@ fun openGroup(ctx: android.content.Context, st: TvState, g: GroupRef) {
 private fun TvList(nav: Nav, onGuide: () -> Unit) {
     val ctx = LocalContext.current
     val st = remember { TvState() }
-    val rows by load(st.rev, Favs.rev, keep = true) { groupRows(ctx) }
+    val rows by load(st.rev, Favs.rev, Recent.rev, keep = true) { groupRows(ctx) }
     val gState = rememberLazyListState()
     WrapEffect(st.wrap, gState)
     val coming = remember { TvMemory.restore && TvMemory.group != null && TvMemory.channel >= 0 }

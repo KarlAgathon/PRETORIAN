@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.border
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -194,6 +195,10 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     var error by remember { mutableStateOf<String?>(null) }
     var retried by remember { mutableStateOf(false) }
     var retryToken by remember { mutableIntStateOf(0) }
+    var reconnect by remember { mutableIntStateOf(0) }          // live: attempt 1..3 of getting the stream back
+    var digits by remember { mutableStateOf("") }              // channel number typed on the remote
+    var digitTick by remember { mutableIntStateOf(0) }
+    var prevIndex by remember { mutableIntStateOf(-1) }
     var buffering by remember { mutableStateOf(true) }
     var playing by remember { mutableStateOf(true) }
     var position by remember { mutableLongStateOf(0L) }
@@ -279,11 +284,13 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     DisposableEffect(Unit) {
         val l = object : Player.Listener {
             override fun onPlayerError(e: PlaybackException) {
-                if (!retried) { retried = true; retryToken++ } else error = errorText(e, s.live)
+                if (s.live && reconnect < 3) { reconnect++; retryToken++ }
+                else if (!s.live && !retried) { retried = true; retryToken++ }
+                else { reconnect = 0; error = errorText(e, s.live) }
             }
             override fun onPlaybackStateChanged(state: Int) {
                 buffering = state == Player.STATE_BUFFERING
-                if (state == Player.STATE_READY) { error = null }
+                if (state == Player.STATE_READY) { error = null; reconnect = 0 }
                 if (state == Player.STATE_ENDED && !s.live) { saveProgress(done = true); if (index < n - 1) index++ }
             }
             override fun onIsPlayingChanged(isPlaying: Boolean) { playing = isPlaying }
@@ -305,8 +312,12 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         onDispose { saveProgress(); player.removeListener(l); player.removeAnalyticsListener(a); player.release() }
     }
 
+    var lastIndex by remember { mutableIntStateOf(-1) }
     LaunchedEffect(index, items) {
+        if (lastIndex >= 0 && lastIndex != index) prevIndex = lastIndex
+        lastIndex = index
         if (s.live) TvMemory.channel = index
+        reconnect = 0
         if (s.live) items.getOrNull(index)?.channel?.let { c ->
             val g = TvMemory.group
             try { Recent.add(c, g?.pid, g?.cat?.id ?: c.group, g?.cat?.name ?: c.group) } catch (_: Exception) {}
@@ -323,7 +334,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     }
     LaunchedEffect(retryToken) {
         if (retryToken == 0) return@LaunchedEffect
-        delay(2000)
+        delay(if (s.live) when (reconnect) { 2 -> 5000L; 3 -> 10_000L; else -> 2000L } else 2000L)
         loadMedia(items[index], subFile, if (s.live) 0L else player.currentPosition)
     }
     LaunchedEffect(showInfo, index, playing, bar) { if (showInfo && !bar && (s.live || playing)) { delay(5000); showInfo = false } }
@@ -345,7 +356,19 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             .focusRequester(focus)
             .onPreviewKeyEvent { e ->
                 if (dialog != null || side != null || resume != null || bar || e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                if (error != null && (e.key == Key.DirectionCenter || e.key == Key.Enter)) { error = null; retried = false; retryToken++; return@onPreviewKeyEvent true }
+                if (error != null && (e.key == Key.DirectionCenter || e.key == Key.Enter)) { error = null; retried = false; reconnect = 0; retryToken++; return@onPreviewKeyEvent true }
+                // live: numbers on the remote pick a channel; 0 alone goes back to the previous channel
+                val d = digitOf(e.key)
+                if (s.live && d != null) {
+                    if (digits.isEmpty() && d == 0) { if (prevIndex in 0 until n) index = prevIndex; return@onPreviewKeyEvent true }
+                    if (digits.length < 4) { digits += d; digitTick++ }
+                    return@onPreviewKeyEvent true
+                }
+                if (s.live && digits.isNotEmpty() && (e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter)) {
+                    val t = items.indexOfFirst { it.channel?.num == digits.toIntOrNull() }; digits = ""
+                    if (t >= 0) index = t
+                    return@onPreviewKeyEvent true
+                }
                 when (e.key) {
                     Key.Menu, Key.Info -> { dialog = "menu"; true }
                     Key.DirectionUp, Key.ChannelUp -> if (s.live) { index = (index - 1 + n) % n; true } else { showInfo = true; true }
@@ -356,7 +379,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                     Key.DirectionRight, Key.MediaFastForward -> if (!s.live) { player.seekTo(player.currentPosition + step); showInfo = true; true }
                         else { side = "epg"; showInfo = false; true }
                     Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.MediaPlayPause -> {
-                        if (s.live) { if (showInfo && e.key != Key.MediaPlayPause) bar = true else showInfo = true }
+                        if (s.live) { if (e.key != Key.MediaPlayPause) { showInfo = true; bar = true } else showInfo = true }
                         else { if (player.isPlaying) player.pause() else player.play(); showInfo = true }
                         true
                     }
@@ -391,6 +414,46 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         LaunchedEffect(resUntil) { if (resUntil > 0) { delay(resUntil - System.currentTimeMillis() + 100); resUntil = resUntil } }
         if (showRes) Box(Modifier.align(Alignment.TopEnd).padding(24.dp).clip(Rnd(10.dp)).background(Color(0x99000000)).padding(horizontal = 12.dp, vertical = 6.dp)) {
             T("${qualityLabel(videoH)} · ${videoW}×$videoH" + (if (fps > 0) " · ${fps.toInt()} FPS" else ""), 14.sp, Color.White, FontWeight.SemiBold)
+        }
+
+        // channel number typed on the remote: shown top right, switches after 1.5 s
+        LaunchedEffect(digitTick) {
+            if (digits.isEmpty()) return@LaunchedEffect
+            delay(1500)
+            val t = items.indexOfFirst { it.channel?.num == digits.toIntOrNull() }
+            if (t >= 0) index = t
+            delay(if (t >= 0) 0 else 1200); digits = ""
+        }
+        if (digits.isNotEmpty()) {
+            val m = items.firstOrNull { it.channel?.num == digits.toIntOrNull() }
+            Row(Modifier.align(Alignment.TopEnd).padding(top = 36.dp, end = 44.dp).clip(Rnd(18.dp)).background(Color(0xE60E101A))
+                .border(1.dp, Color(0x1FFFFFFF), Rnd(18.dp)).padding(horizontal = 22.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                T(digits, 46.sp, Color.White, FontWeight.ExtraBold)
+                Box(Modifier.width(1.dp).height(46.dp).background(Color(0x26FFFFFF)))
+                if (m?.channel != null) {
+                    ChannelLogo(m.channel, 42.dp)
+                    Column { T(m.title, 17.sp, Color.White, FontWeight.Bold); T("OK odmah", 12.sp, Color(0xFFC8CBD4)) }
+                } else T(trf("Nema kanala %s", digits), 16.sp, Color(0xFFC8CBD4))
+            }
+        }
+        // live stream dropped: trying again by itself
+        if (reconnect > 0 && error == null && s.live) {
+            Column(Modifier.align(Alignment.Center).clip(Rnd(22.dp)).background(Color(0xE60E101A)).border(1.dp, Color(0x1FFFFFFF), Rnd(22.dp)).padding(horizontal = 30.dp, vertical = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                T("Spajam ponovo…", 20.sp, Color.White, FontWeight.Bold)
+                T(trf("Veza s kanalom %s je prekinuta", item.title), 13.sp, Color(0xFFC8CBD4), maxLines = 2)
+                T(trf("Pokušaj %s od 3", reconnect), 13.sp, Color(0xFFC8CBD4))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    (1..3).forEach { k -> Box(Modifier.width(28.dp).height(4.dp).clip(Pill).background(if (k <= reconnect) Color.White else Color(0x33FFFFFF))) }
+                }
+            }
+        }
+        // sleep timer: stops and goes home when the time is up
+        LaunchedEffect(Sleep.until) {
+            val u = Sleep.until; if (u <= 0) return@LaunchedEffect
+            delay((u - System.currentTimeMillis()).coerceAtLeast(0))
+            if (Sleep.until == u) { Sleep.until = 0; player.pause(); nav.root(Screen.Home) }
         }
 
         error?.let { msg ->
@@ -437,7 +500,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                         a?.let { (it.sampleMimeType?.substringAfter('/')?.uppercase() ?: "") + " " + if (it.channelCount >= 6) "5.1" else "Stereo" }).joinToString(" · "), 12.sp, Color(0xFF9AA4B2))
                     if (bar) PlayerBar(s.live, playing, item.channel != null,
                         onPause = { if (player.isPlaying) player.pause() else player.play() },
-                        onAction = { a2 -> bar = false; when (a2) { "epg" -> side = "epg"; "channels" -> side = "channels"; else -> dialog = a2 } })
+                        onAction = { a2 -> bar = false; when (a2) { "epg" -> side = "epg"; "channels" -> side = "channels"; "format" -> { resize = (resize + 1) % 3; bar = true }; else -> dialog = a2 } })
                     else T(if (s.live) "▲ ▼ kanal · ◀ lista kanala · ▶ TV vodič · OK još jednom = dugmad"
                       else trf("OK pauza · ◀ ▶ %s s · ▼ = dugmad (audio, titlovi, format slike)", Prefs.seekStep), 13.sp, Color(0xFFB6BCC6))
                 }
@@ -536,6 +599,21 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 dialog = null
             }
         }
+        "sleep" -> Popup("Tajmer za spavanje", onDismiss = { dialog = null }) {
+            T("Kad vrijeme istekne, gledanje stane i aplikacija se vrati na početnu.", 14.sp, C.Soft, maxLines = 3)
+            OptionRow("Isključen", if (Sleep.until <= 0) R.drawable.lc_check else R.drawable.lc_moon, color = if (Sleep.until <= 0) C.Green else null) { Sleep.until = 0; dialog = null }
+            listOf(15, 30, 60, 90).forEach { m ->
+                OptionRow(trf("%s min", m), R.drawable.lc_moon) { Sleep.until = System.currentTimeMillis() + m * 60_000L; dialog = null }
+            }
+            nowNext.getOrNull(0)?.let { now ->
+                val end = Regex("(\\d{1,2}):(\\d{2})").findAll(now.first).lastOrNull()
+                if (end != null) OptionRow("Na kraju emisije", R.drawable.lc_moon, value = end.value) {
+                    val c = java.util.Calendar.getInstance(); c.set(java.util.Calendar.HOUR_OF_DAY, end.groupValues[1].toInt()); c.set(java.util.Calendar.MINUTE, end.groupValues[2].toInt()); c.set(java.util.Calendar.SECOND, 0)
+                    if (c.timeInMillis < System.currentTimeMillis()) c.add(java.util.Calendar.DAY_OF_MONTH, 1)
+                    Sleep.until = c.timeInMillis; dialog = null
+                }
+            }
+        }
         "info" -> Popup("Kvalitet i informacije", onDismiss = { dialog = null }) {
             val v = player.videoFormat; val a = player.audioFormat
             OptionRow("Slika", R.drawable.lc_monitor, value = if (v != null) "${qualityLabel(v.height)} · ${v.width}×${v.height}" + (if (v.frameRate > 0) " · ${v.frameRate.toInt()} FPS" else "") else "—") {}
@@ -558,6 +636,8 @@ private fun PlayerBar(live: Boolean, playing: Boolean, hasChannel: Boolean, onPa
         if (live && hasChannel) add(Triple("fav", "Favorit", R.drawable.lc_star))
         add(Triple("subs", "Titlovi", R.drawable.lc_captions))
         add(Triple("audio", "Audio", R.drawable.lc_volume))
+        add(Triple("format", "Format slike", R.drawable.lc_maximize))
+        add(Triple("sleep", if (Sleep.until > 0) trf("Tajmer: %s min", ((Sleep.until - System.currentTimeMillis()) / 60_000 + 1).coerceAtLeast(1)) else tr("Tajmer za spavanje"), R.drawable.lc_moon))
         add(Triple("info", "Kvalitet", R.drawable.lc_gauge2))
         if (live) { add(Triple("epg", "Vodič", R.drawable.lc_calendar_clock)); add(Triple("channels", "Grupa", R.drawable.lc_list)) }
         add(Triple("menu", "Više", R.drawable.lc_layout_grid))
@@ -645,4 +725,13 @@ private fun SideLists(mode: String, sideGroup: GroupRef?, items: List<PlayItem>,
 private fun fmt(ms: Long): String {
     val s = ms / 1000
     return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, (s % 3600) / 60, s % 60) else "%d:%02d".format(s / 60, s % 60)
+}
+
+/** Sleep timer of the player (survives switching channels). */
+object Sleep { var until by mutableLongStateOf(0L) }
+
+private fun digitOf(k: Key): Int? = when (k) {
+    Key.Zero, Key.NumPad0 -> 0; Key.One, Key.NumPad1 -> 1; Key.Two, Key.NumPad2 -> 2; Key.Three, Key.NumPad3 -> 3; Key.Four, Key.NumPad4 -> 4
+    Key.Five, Key.NumPad5 -> 5; Key.Six, Key.NumPad6 -> 6; Key.Seven, Key.NumPad7 -> 7; Key.Eight, Key.NumPad8 -> 8; Key.Nine, Key.NumPad9 -> 9
+    else -> null
 }

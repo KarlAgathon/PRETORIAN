@@ -326,6 +326,7 @@ fun PosterCard(title: String, image: String?, key: String, progress: Float?, mod
 /** 0.6.0/0.6.4: everyone gets the new look and the top menu once; afterwards they can change it. */
 fun onyxMigrate(c: Context) {
     val p = c.getSharedPreferences("pretorian", Context.MODE_PRIVATE)
+    if (p.getInt("look_v", 0) == 0 && !p.contains("look_theme")) p.edit().putBoolean("hide_adult_default", true).apply()  // brand new install
     if (p.getInt("look_v", 0) < 7) {   // 0.6.4: "Predvečerje" becomes the look for everyone once
         Look.theme = "vece"; Look.layout = 2
         p.edit().putInt("look_v", 7).putString("look_theme", "vece").putInt("look_layout", 2).apply()

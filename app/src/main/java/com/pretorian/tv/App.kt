@@ -77,6 +77,11 @@ class MainActivity : ComponentActivity() {
         Look.load(this)
         onyxMigrate(this)
         Perf.init(this)
+        // picture cache: limited so the disk never fills up (150 MB on weaker boxes, 400 MB otherwise)
+        coil.Coil.setImageLoader(coil.ImageLoader.Builder(this)
+            .memoryCache { coil.memory.MemoryCache.Builder(this).maxSizePercent(if (Perf.weak) 0.15 else 0.25).build() }
+            .diskCache { coil.disk.DiskCache.Builder().directory(cacheDir.resolve("images")).maxSizeBytes(if (Perf.weak) 150L shl 20 else 400L shl 20).build() }
+            .build())
         CrashLog.watch(this)
         Lock.load()
         Notes.load()
@@ -132,7 +137,7 @@ class Nav(
     val playlistsChanged: () -> Unit,
 )
 
-object BuildInfo { const val VERSION = "0.6.4" }
+object BuildInfo { const val VERSION = "0.6.5" }
 
 @Composable
 fun PretorianApp() {

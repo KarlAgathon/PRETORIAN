@@ -481,8 +481,8 @@ Ne radi na svim uređajima. Ako je box potpuno ugašen, podsjetnik ne može doć
 Tvoji podsjetnici|Your reminders|Deine Erinnerungen|Tvoji podsjetnici|Твоји подсетници|Твоите напомняния|Mementourile tale|Hatırlatıcıların|I tuoi promemoria|تذكيراتك
 Nema podsjetnika.|No reminders.|Keine Erinnerungen.|Nema podsjetnika.|Нема подсетника.|Няма напомняния.|Niciun memento.|Hatırlatıcı yok.|Nessun promemoria.|لا توجد تذكيرات.
 Obriši|Delete|Löschen|Obriši|Обриши|Изтрий|Șterge|Sil|Elimina|حذف
-Backup je spremljen|Backup saved|Backup gespeichert|Sigurnosna kopija je spremljenaaaaaaaaaaaaaaaaa|Бекап је сачуван|Копието е запазено|Backup salvat|Yedek kaydedildi|Backup salvato|تم حفظ النسخة
-Backup nije spremljen|Backup not saved|Backup nicht gespeichert|Sigurnosna kopija nije spremljenaaaaaaaaaaaaaaaaa|Бекап није сачуван|Копието не е запазено|Backup nesalvat|Yedek kaydedilmedi|Backup non salvato|لم تُحفظ النسخة
+Backup je spremljen|Backup saved|Backup gespeichert|Sigurnosna kopija je spremljenaaaaaaaaaaaaaaaaaa|Бекап је сачуван|Копието е запазено|Backup salvat|Yedek kaydedildi|Backup salvato|تم حفظ النسخة
+Backup nije spremljen|Backup not saved|Backup nicht gespeichert|Sigurnosna kopija nije spremljenaaaaaaaaaaaaaaaaaa|Бекап није сачуван|Копието не е запазено|Backup nesalvat|Yedek kaydedilmedi|Backup non salvato|لم تُحفظ النسخة
 Sve je vraćeno. PRETORIAN se ponovo pokreće.|Everything restored. PRETORIAN restarts.|Alles wiederhergestellt. PRETORIAN startet neu.|Sve je vraćeno. PRETORIAN se ponovo pokreće.|Све је враћено. PRETORIAN се поново покреће.|Всичко е възстановено. PRETORIAN се рестартира.|Totul a fost restaurat. PRETORIAN repornește.|Her şey geri yüklendi. PRETORIAN yeniden başlıyor.|Tutto ripristinato. PRETORIAN si riavvia.|تمت الاستعادة. يُعاد تشغيل PRETORIAN.
 Vraćanje nije uspjelo|Restore failed|Wiederherstellung fehlgeschlagen|Vraćanje nije uspjelo|Враћање није успело|Възстановяването не успя|Restaurarea a eșuat|Geri yükleme başarısız|Ripristino non riuscito|فشلت الاستعادة
 Backup i vraćanje|Backup and restore|Sichern und wiederherstellen|Sigurnosna kopija i vraćanje|Бекап и враћање|Резервно копие|Backup și restaurare|Yedekle ve geri yükle|Backup e ripristino|النسخ والاستعادة
@@ -949,6 +949,17 @@ Predvečerje|Dusk|Abenddämmerung|Predvečerje|Предвечерје|Здрач
 ZADNJE GLEDANO|RECENTLY WATCHED|ZULETZT GESEHEN|ZADNJE GLEDANO|ПОСЛЕДЊЕ ГЛЕДАНО|ГЛЕДАНИ НАСКОРО|VIZIONATE RECENT|SON İZLENENLER|VISTI DI RECENTE|شوهد مؤخراً
 %s KANALA|%s CHANNELS|%s SENDER|%s KANALA|%s КАНАЛА|%s КАНАЛА|%s CANALE|%s KANAL|%s CANALI|%s قناة
 Ukloni iz Zadnje gledano|Remove from Recently watched|Aus Zuletzt gesehen entfernen|Ukloni iz Zadnje gledano|Уклони из Последње гледано|Премахни от Гледани наскоро|Elimină din Vizionate recent|Son izlenenlerden kaldır|Rimuovi da Visti di recente|إزالة من شوهد مؤخراً
+OK odmah|OK now|OK sofort|OK odmah|OK одмах|OK веднага|OK acum|OK hemen|OK subito|OK الآن
+Nema kanala %s|No channel %s|Kein Sender %s|Nema kanala %s|Нема канала %s|Няма канал %s|Nu există canalul %s|%s kanalı yok|Nessun canale %s|لا توجد قناة %s
+Spajam ponovo…|Reconnecting…|Verbinde erneut…|Ponovno spajanje…|Поново повезујем…|Свързване отново…|Se reconectează…|Yeniden bağlanıyor…|Riconnessione…|إعادة الاتصال…
+Veza s kanalom %s je prekinuta|The connection to %s dropped|Die Verbindung zu %s wurde unterbrochen|Veza s kanalom %s je prekinuta|Веза са каналом %s је прекинута|Връзката с %s прекъсна|Conexiunea cu %s s-a întrerupt|%s bağlantısı koptu|La connessione a %s si è interrotta|انقطع الاتصال بـ %s
+Pokušaj %s od 3|Attempt %s of 3|Versuch %s von 3|Pokušaj %s od 3|Покушај %s од 3|Опит %s от 3|Încercarea %s din 3|Deneme %s / 3|Tentativo %s di 3|المحاولة %s من 3
+Tajmer za spavanje|Sleep timer|Schlaf-Timer|Mjerač za spavanje|Тајмер за спавање|Таймер за сън|Temporizator de somn|Uyku zamanlayıcısı|Timer di spegnimento|مؤقت النوم
+Kad vrijeme istekne, gledanje stane i aplikacija se vrati na početnu.|When the time is up, playback stops and the app goes back home.|Wenn die Zeit um ist, stoppt die Wiedergabe und die App geht zum Start zurück.|Kad vrijeme istekne, gledanje stane i aplikacija se vrati na početnu.|Кад време истекне, гледање стане и апликација се врати на почетну.|Когато времето изтече, гледането спира и приложението се връща в началото.|Când timpul expiră, redarea se oprește și aplicația revine la început.|Süre dolunca oynatma durur ve uygulama ana ekrana döner.|Allo scadere del tempo la riproduzione si ferma e l'app torna alla home.|عند انتهاء الوقت يتوقف التشغيل ويعود التطبيق إلى البداية.
+%s min|%s min|%s Min.|%s min|%s мин|%s мин|%s min|%s dk|%s min|%s دقيقة
+Na kraju emisije|At the end of the show|Am Ende der Sendung|Na kraju emisije|На крају емисије|В края на предаването|La sfârșitul emisiunii|Program bitince|Alla fine del programma|في نهاية البرنامج
+Tajmer: %s min|Timer: %s min|Timer: %s Min.|Mjerač: %s min|Тајмер: %s мин|Таймер: %s мин|Temporizator: %s min|Zamanlayıcı: %s dk|Timer: %s min|المؤقت: %s دقيقة
+Zadnje gledano|Recently watched|Zuletzt gesehen|Zadnje gledano|Последње гледано|Гледани наскоро|Vizionate recent|Son izlenenler|Visti di recente|شوهد مؤخراً
 Nepoznat jezik|Unknown language|Unbekannte Sprache|Nepoznat jezik|Непознат језик|Неизвестен език|Limbă necunoscută|Bilinmeyen dil|Lingua sconosciuta|لغة غير معروفة
 """.trimIndent()
 
