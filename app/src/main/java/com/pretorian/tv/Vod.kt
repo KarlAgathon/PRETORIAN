@@ -97,10 +97,10 @@ private suspend fun postersOf(ctx: Context, nav: Nav, p: Playlist, g: Category, 
             if (series) { val si = SeriesItem(o.str("id"), o.str("n"), o.str("i").orNullIfBlank(), null, o.str("r").orNullIfBlank())
                 Poster(si.id, si.name, si.cover, si.rating, null, true, { nav.push(Screen.SeriesDetail(si)) }) }
             else { val v = Vod(o.str("id"), o.str("n"), o.str("i").orNullIfBlank(), o.str("r").orNullIfBlank(), o.str("u"))
-                Poster(v.id, v.name, v.poster, v.rating, v.url, true, { nav.push(Screen.MovieDetail(v)) }) }
+                Poster(v.id, v.name, v.poster, v.rating, v.url, true, { nav.push(Screen.MovieDetail(v)) }, { nav.push(Screen.Player(listOf(PlayItem(v.name, v.url, v.poster, null, null, v.name)), 0, live = false)) }) }
         }
         else -> if (series) Repo.series(p, g.id).map { s -> Poster(s.id, s.name, s.cover, s.rating, null, NewContent.isNew(p.id, kind, s.id), open = { nav.push(Screen.SeriesDetail(s)) }, added = s.added) }
-        else Repo.movies(p, g.id).map { v -> Poster(v.id, v.name, v.poster, v.rating, v.url, NewContent.isNew(p.id, kind, v.id), open = { nav.push(Screen.MovieDetail(v)) }, added = v.added) }
+        else Repo.movies(p, g.id).map { v -> Poster(v.id, v.name, v.poster, v.rating, v.url, NewContent.isNew(p.id, kind, v.id), open = { nav.push(Screen.MovieDetail(v)) }, play = { nav.push(Screen.Player(listOf(PlayItem(v.name, v.url, v.poster, null, null, v.name)), 0, live = false)) }, added = v.added) }
     }
 }
 
@@ -375,16 +375,16 @@ private fun VodClassic(nav: Nav, series: Boolean) {
                             if (series) { val si = SeriesItem(o.str("id"), o.str("n"), o.str("i").orNullIfBlank(), null, o.str("r").orNullIfBlank())
                                 Poster(si.id, si.name, si.cover, si.rating, null, true, { nav.push(Screen.SeriesDetail(si)) }) }
                             else { val v = Vod(o.str("id"), o.str("n"), o.str("i").orNullIfBlank(), o.str("r").orNullIfBlank(), o.str("u"))
-                                Poster(v.id, v.name, v.poster, v.rating, v.url, true, { nav.push(Screen.MovieDetail(v)) }) }
+                                Poster(v.id, v.name, v.poster, v.rating, v.url, true, { nav.push(Screen.MovieDetail(v)) }, { nav.push(Screen.Player(listOf(PlayItem(v.name, v.url, v.poster, null, null, v.name)), 0, live = false)) }) }
                         }
                         G_MYLIST -> MyList.items(kind).map { o ->
                             if (series) { val si = SeriesItem(o.str("id"), o.str("n"), o.str("i").orNullIfBlank(), null, null)
                                 Poster(si.id, si.name, si.cover, null, null, false, { nav.push(Screen.SeriesDetail(si)) }) }
                             else { val v = Vod(o.str("id"), o.str("n"), o.str("i").orNullIfBlank(), null, o.str("u"))
-                                Poster(v.id, v.name, v.poster, null, v.url, false, { nav.push(Screen.MovieDetail(v)) }) }
+                                Poster(v.id, v.name, v.poster, null, v.url, false, { nav.push(Screen.MovieDetail(v)) }, { nav.push(Screen.Player(listOf(PlayItem(v.name, v.url, v.poster, null, null, v.name)), 0, live = false)) }) }
                         }
                         else -> if (series) Repo.series(p, g.id).map { s -> Poster(s.id, s.name, s.cover, s.rating, null, NewContent.isNew(p.id, kind, s.id), open = { nav.push(Screen.SeriesDetail(s)) }, added = s.added) }
-                        else Repo.movies(p, g.id).map { v -> Poster(v.id, v.name, v.poster, v.rating, v.url, NewContent.isNew(p.id, kind, v.id), open = { nav.push(Screen.MovieDetail(v)) }, added = v.added) }
+                        else Repo.movies(p, g.id).map { v -> Poster(v.id, v.name, v.poster, v.rating, v.url, NewContent.isNew(p.id, kind, v.id), open = { nav.push(Screen.MovieDetail(v)) }, play = { nav.push(Screen.Player(listOf(PlayItem(v.name, v.url, v.poster, null, null, v.name)), 0, live = false)) }, added = v.added) }
                     }
                 }
                 when (val s = state) {
@@ -533,21 +533,24 @@ private fun OnyxPosters(title: String, items: List<Poster>, kind: String, pid: S
 @Composable
 private fun PosterMenu(m: Poster, kind: String, pid: String, onDismiss: () -> Unit) {
     val ctx = LocalContext.current
-    Popup(cleanTitle(m.name).first, onDismiss = onDismiss) {
+    val (name, year) = cleanTitle(m.name)
+    PosterSheet(tr(if (kind == "series") "Serija" else "Film") + (year?.let { " · $it" } ?: ""), name, m.image, m.id, onDismiss) {
         val on = MyList.has(kind, m.id)
-        OptionRow(if (on) "Ukloni s Moje liste" else "Dodaj na Moju listu", if (on) R.drawable.lc_x else R.drawable.lc_plus,
-            sub = if (on) null else "da ga pogledaš kasnije", color = if (on) null else C.Green) {
+        SheetRow(if (on) "Ukloni s Moje liste" else "Dodaj na Moju listu", if (on) null else "da ga pogledaš kasnije", if (on) R.drawable.lc_x else R.drawable.lc_list) {
             MyList.toggle(kind, m.id, m.name, m.image, m.url, pid); onDismiss()
         }
-        OptionRow("Otvori", R.drawable.lc_info) { onDismiss(); m.open() }
         val u = m.url
+        if (u != null && kind == "vod") SheetRow("Gledaj", "od početka", R.drawable.lc_play) {
+            Watch.remove(ctx, u); onDismiss(); (m.play ?: m.open)()
+        }
         if (u != null) {
             val w = Watch.get(ctx, u)?.watched == true
-            OptionRow(if (w) "Označi kao negledano" else "Označi kao gledano", if (w) R.drawable.lc_circle_slash else R.drawable.lc_circle_check) {
+            SheetRow(if (w) "Označi kao negledano" else "Označi kao odgledano", if (w) null else "skloni iz Nastavi gledanje", R.drawable.lc_eye) {
                 Watch.setWatched(ctx, u, m.name, m.image, !w); onDismiss()
             }
         }
-        if (m.isNew) OptionRow("Ukloni oznaku NOVO", R.drawable.lc_sparkles) { NewContent.seen(pid, kind, m.id); onDismiss() }
+        SheetRow("Detalji", "opis, glumci, trailer", R.drawable.lc_info) { onDismiss(); m.open() }
+        if (m.isNew) SheetRow("Ukloni oznaku NOVO", null, R.drawable.lc_sparkles) { NewContent.seen(pid, kind, m.id); onDismiss() }
     }
 }
 
@@ -610,7 +613,7 @@ fun openTrailer(ctx: Context, title: String, youtubeKey: String?) {
 
 @Composable
 private fun Backdrop(url: String?) {
-    if (url == null) return
+    if (url == null || Look.age) return
     Box(Modifier.fillMaxSize()) {
         AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(C.Bg, C.Bg.copy(alpha = 0.9f), C.Bg.copy(alpha = 0.35f)))))
@@ -643,7 +646,7 @@ data class TrackChoice(val subFile: File? = null, val subOff: Boolean = false, v
 
 /** Subtitle + audio buttons next to Play: green frame when a subtitle is ready. */
 @Composable
-private fun TrackButtons(search: String, season: Int?, episode: Int?, url: String, choice: TrackChoice, onChange: (TrackChoice) -> Unit) {
+fun TrackButtons(search: String, season: Int?, episode: Int?, url: String, choice: TrackChoice, onChange: (TrackChoice) -> Unit) {
     var showSubs by remember { mutableStateOf(false) }
     var showAudio by remember { mutableStateOf(false) }
     val subText = when {
@@ -665,6 +668,7 @@ private fun TrackButtons(search: String, season: Int?, episode: Int?, url: Strin
 
 @Composable
 fun MovieDetailScreen(v: Vod, nav: Nav) {
+    if (Look.age) { OnyxMovieDetail(v, nav); return }
     val ctx = LocalContext.current
     val p = remember { Store.active(ctx) } ?: return
     val info by load(v.id) { Repo.movieInfo(p, v.id) }
@@ -740,6 +744,7 @@ fun MovieDetailScreen(v: Vod, nav: Nav) {
 
 @Composable
 fun SeriesDetailScreen(s: SeriesItem, nav: Nav) {
+    if (Look.age) { OnyxSeriesDetail(s, nav); return }
     val ctx = LocalContext.current
     val p = remember { Store.active(ctx) } ?: return
     val eps by load(s.id) { Repo.episodes(p, s.id) }

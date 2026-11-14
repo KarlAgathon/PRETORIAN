@@ -87,46 +87,28 @@ fun OnyxImage(url: String?, key: String, modifier: Modifier = Modifier, maxW: In
     }
 }
 
-/** "Predvečerje": the colour of what you are on, as a soft glow behind the whole app.
- *  A tiny 64 px copy of the picture is stretched over the screen - it looks blurred and costs almost nothing. */
+/** One quiet picture behind the whole app (dark mountains). No film or channel pictures in the background:
+ *  calmer to look at and lighter for the box. */
 object Dusk {
-    var image by mutableStateOf<Any?>(null)
-    fun set(url: String?, key: String) { image = url?.takeIf { it.isNotBlank() } ?: fallbackFor(key) }
+    var image by mutableStateOf<Any?>(R.drawable.fallback_bd1)
+    @Suppress("UNUSED_PARAMETER") fun set(url: String?, key: String) {}
 }
 
 @Composable
 fun DuskBackground() {
-    if (Look.theme != "vece") return
-    val ctx = LocalContext.current
-    val img = Dusk.image ?: R.drawable.fallback_bd2
-    val req = remember(img) {
-        coil.request.ImageRequest.Builder(ctx).data(img).size(48, 27).precision(coil.size.Precision.EXACT)
-            .memoryCacheKey("dusk:$img").placeholderMemoryCacheKey(null as String?).allowRgb565(true).crossfade(if (Perf.lite) 0 else 400).build()
-    }
-    Box(Modifier.fillMaxSize()) {
-        AsyncImage(model = req, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(), alpha = 0.9f)
-        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xB8070912), Color(0x6B070912), Color(0x38070912)))))
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0x73070912), Color.Transparent, Color.Transparent, Color(0xB305060C)))))
-    }
+    if (C.IsLight) return
+    // "evening in New York": deep navy, a soft blue light at the top right, darker towards the bottom. No picture at all.
+    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF0A0F1F), Color(0xFF0C1428), Color(0xFF080B14)))))
+    Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color(0x593B5BA8), Color(0x1F27407A), Color.Transparent),
+        center = androidx.compose.ui.geometry.Offset(1500f, 250f), radius = 1300f)))
+    Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color(0x26303C78), Color.Transparent),
+        center = androidx.compose.ui.geometry.Offset(150f, 900f), radius = 900f)))
 }
 
-/** Full-screen picture behind a screen, fading into the background on the left and at the bottom. */
+/** Was the film's picture behind a screen; now the app has one background for everything. */
+@Suppress("UNUSED_PARAMETER")
 @Composable
-fun OnyxBackdrop(url: String?, key: String, startX: Float = 0f) {
-    if (Look.theme == "vece") { LaunchedEffect(url, key) { Dusk.set(url, key) }; return }
-    if (Perf.lite) {   // Lite: no picture, only a quiet light from the top right
-        Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(C.Text.copy(alpha = 0.07f), Color.Transparent),
-            center = androidx.compose.ui.geometry.Offset(1400f, 0f), radius = 1400f)))
-        return
-    }
-    Box(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize().padding(start = startX.dp)) { OnyxImage(url, key, Modifier.fillMaxSize(), maxW = 960) }
-        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(
-            listOf(C.Bg, C.Bg.copy(alpha = 0.88f), C.Bg.copy(alpha = 0.2f), C.Bg.copy(alpha = 0.35f)))))
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
-            listOf(C.Bg.copy(alpha = 0.6f), Color.Transparent, Color.Transparent, C.Bg), startY = 0f)))
-    }
-}
+fun OnyxBackdrop(url: String?, key: String, startX: Float = 0f) {}
 
 /** Height taken by the top bar; screens under it start below this. */
 val ONYX_TOP = 118.dp
@@ -234,7 +216,6 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
         OnyxBackdrop(hero?.image, hero?.key ?: "home")
         Column(Modifier.fillMaxSize()) {
             OnyxTopBar(Screen.Home, nav, simple, first)
-            ProviderBanner()
             Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 28.dp), verticalArrangement = Arrangement.Bottom) {
                 Box(Modifier.padding(bottom = 14.dp)) { ExpiryChip() }
                 if (hero != null) {
@@ -309,8 +290,8 @@ fun WideCard(title: String, sub: String, image: String?, key: String, progress: 
 /** Portrait poster with title on the picture and an optional progress line. */
 @Composable
 fun PosterCard(title: String, image: String?, key: String, progress: Float?, modifier: Modifier, onFocus: (() -> Unit)? = null,
-               onMenu: (() -> Unit)? = null, onClick: () -> Unit) {
-    Focusable(onClick = onClick, onFocus = onFocus, onMenu = onMenu, shape = Rnd(12.dp), normal = C.Card, zoom = 1.05f, modifier = modifier.aspectRatio(2f / 3f)) { f ->
+               onMenu: (() -> Unit)? = null, fr: FocusRequester? = null, onClick: () -> Unit) {
+    Focusable(onClick = onClick, onFocus = onFocus, onMenu = onMenu, focusRequester = fr, shape = Rnd(12.dp), normal = C.Card, zoom = 1.05f, modifier = modifier.aspectRatio(2f / 3f)) { f ->
         OnyxImage(image, key, Modifier.fillMaxSize().clip(Rnd(12.dp)))
         Box(Modifier.fillMaxSize().clip(Rnd(12.dp)).background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xE0000000)), startY = 160f)))
         if (f) Box(Modifier.fillMaxSize().border(2.dp, Color.White, Rnd(12.dp)))
@@ -330,6 +311,7 @@ fun onyxMigrate(c: Context) {
         Look.theme = "vece"; Look.layout = 2
         p.edit().putInt("look_v", 7).putString("look_theme", "vece").putInt("look_layout", 2).apply()
     }
+    if (p.getInt("look_v", 0) < 8) { Look.theme = "vece"; p.edit().putInt("look_v", 8).putString("tv_view", "list").putString("look_theme", "vece").apply() }   // 0.8.0: TV opens as the new channel list once
 }
 
 /** The last 10 TV channels you watched, newest first, with the group they were played from. */

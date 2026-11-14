@@ -129,6 +129,7 @@ object SearchIndex {
 
 @Composable
 fun SearchScreen(nav: Nav) {
+    if (Look.age) { OnyxSearch(nav); return }
     val ctx = LocalContext.current
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     var q by remember { mutableStateOf("") }
@@ -226,7 +227,7 @@ fun SearchScreen(nav: Nav) {
 
 /** What you can do with a result: watch, favourites, show in guide, remind, hide, open. */
 @Composable
-private fun HitActions(h: Hit, nav: Nav, onDismiss: () -> Unit) {
+fun HitActions(h: Hit, nav: Nav, onDismiss: () -> Unit) {
     val ctx = LocalContext.current
     var fav by remember { mutableStateOf<Channel?>(null) }
     if (fav != null) { FavPicker(fav!!) { fav = null; onDismiss() }; return }

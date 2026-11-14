@@ -260,7 +260,7 @@ fun PretorianApp() {
                             }
                         }
                 }
-                if (Look.age && !Chrome.driven) Box(Modifier.fillMaxSize().background(C.BgBrush)) {
+                if (Look.age) Box(Modifier.fillMaxSize().background(C.BgBrush)) {
                     DuskBackground()
                     if (top == Screen.Home) key(version) { OnyxHome(nav) }
                     else Column(Modifier.fillMaxSize()) {

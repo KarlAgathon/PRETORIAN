@@ -175,6 +175,7 @@ fun TvScreen(nav: Nav) {
     if (Store.playlists(ctx).isEmpty()) { NoPlaylist(nav); return }
     var guide by remember { mutableStateOf(Prefs.str("tv_view", "list") == "guide") }
     if (guide) TvGuide(nav) { guide = false; Prefs.put("tv_view", "list") }
+    else if (Look.age) OnyxTv(nav) { guide = true; Prefs.put("tv_view", "guide") }
     else TvList(nav) { guide = true; Prefs.put("tv_view", "guide") }
 }
 
@@ -396,16 +397,16 @@ private fun TvList(nav: Nav, onGuide: () -> Unit) {
 
 /** "Recently watched": the last 10 channels at the bottom of TV. OK plays it; Back returns to its group. */
 @Composable
-private fun RecentStrip(nav: Nav) {
+fun RecentStrip(nav: Nav) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val list = remember(Recent.rev) { Recent.list() }
     if (list.isEmpty()) return
     var menu by remember { mutableStateOf<Recent.Item?>(null) }
-    Column(Modifier.fillMaxWidth().padding(start = 40.dp, end = 40.dp, top = 8.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.fillMaxWidth().padding(start = if (Look.age) 0.dp else 40.dp, end = if (Look.age) 0.dp else 40.dp, top = 8.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(Modifier.fillMaxWidth()) {
-            T("ZADNJE GLEDANO", 11.sp, C.Muted, FontWeight.Bold, modifier = Modifier.weight(1f))
-            T(trf("%s KANALA", list.size), 11.sp, C.Muted, FontWeight.Bold)
+            Kicker("Zadnje gledano", modifier = Modifier.weight(1f))
+            Kicker(trf("%s kanala", list.size))
         }
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             items(list, key = { it.ch.url }) { r ->
@@ -418,12 +419,12 @@ private fun RecentStrip(nav: Nav) {
                         else playChannels(nav, listOf(r.ch), 0)
                     }
                 }, onMenu = { menu = r }, shape = Rnd(14.dp), normal = C.Rail, focused = C.Red, zoom = 1.04f,
-                    modifier = Modifier.width(186.dp).height(54.dp).border(1.dp, C.Line, Rnd(14.dp))) { f ->
+                    modifier = Modifier.width(186.dp).height(50.dp).border(1.dp, C.Line, Rnd(14.dp))) { f ->
                     Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         ChannelLogo(r.ch, 32.dp, onLight = f)
                         Column(Modifier.weight(1f)) {
                             T(r.ch.name, 13.sp, if (f) C.OnRed else C.Text, FontWeight.Bold)
-                            T(r.catName, 11.sp, if (f) C.OnRed.copy(alpha = 0.6f) else C.Muted)
+                            T(nowOf(r.ch, 800)?.title ?: r.catName, 11.sp, if (f) C.OnRed.copy(alpha = 0.6f) else C.Muted)
                         }
                     }
                 }
