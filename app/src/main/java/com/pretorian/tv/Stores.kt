@@ -206,6 +206,14 @@ object Notes {
             val a = JSONArray(Prefs.str("notes", "[]"))
             for (i in 0 until a.length()) { val o = a.getJSONObject(i); list.add(Note(o.str("id"), o.str("kind"), o.str("text"), o.optLong("time"), o.optBoolean("read"))) }
         } catch (_: Exception) {}
+        // a note about an update that is already installed (or older) is gone
+        if (list.removeAll { it.kind == "update" && !newer(it.id.removePrefix("update:"), BuildInfo.VERSION) }) save()
+    }
+
+    private fun newer(a: String, b: String): Boolean {
+        val x = a.split('.').map { it.toIntOrNull() ?: 0 }; val y = b.split('.').map { it.toIntOrNull() ?: 0 }
+        for (i in 0 until maxOf(x.size, y.size)) { val d = x.getOrElse(i) { 0 } - y.getOrElse(i) { 0 }; if (d != 0) return d > 0 }
+        return false
     }
 
     private fun save() {
@@ -216,6 +224,7 @@ object Notes {
     fun add(kind: String, text: String, id: String = "$kind:${System.currentTimeMillis()}") {
         load()
         if (list.any { it.id == id }) return
+        if (kind == "update") list.removeAll { it.kind == "update" }   // only the newest version is announced
         list.add(0, Note(id, kind, text, System.currentTimeMillis(), false)); save()
     }
 
