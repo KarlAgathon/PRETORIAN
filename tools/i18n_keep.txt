@@ -180,3 +180,4 @@ staklo
 pijesak
 gemini-flash-lite-latest
 format
+EEEE, d. MMMM

@@ -460,6 +460,9 @@ private fun LookPage() {
         OptionRow("Preuzmi još ikona", R.drawable.lc_download, sub = "Novi setovi s PRETORIAN GitHub stranice", value = dlBusy) {
             scope.launch { remote = try { IconSets.remote() } catch (e: Exception) { Toast.makeText(ctx, tr("Lista setova se nije učitala"), Toast.LENGTH_LONG).show(); null } }
         }
+        OptionRow("Veći tekst", R.drawable.lc_type, sub = "za gledanje s daljeg kauča", value = tr(if (Look.bigText) "Uključeno" else "Isključeno") + "  ▼") {
+            Look.bigText = !Look.bigText; save()
+        }
         var perfMenu by remember { mutableStateOf(false) }
         OptionRow("Mod programa", R.drawable.lc_gauge2, sub = trf("Ovaj uređaj: %s GB RAM · %s", String.format("%.1f", Perf.ramGb), tr(if (Perf.weak) "slabiji" else "jak")),
             value = tr(Perf.MODES[Perf.mode]) + (if (Perf.mode == 0) " (" + tr(if (Perf.weak) "Lite" else "Full") + ")" else "") + "  ▼") { perfMenu = true }

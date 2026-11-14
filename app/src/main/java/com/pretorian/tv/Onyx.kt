@@ -238,7 +238,9 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
         OnyxBackdrop(hero?.image, hero?.key ?: "home")
         Column(Modifier.fillMaxSize()) {
             OnyxTopBar(Screen.Home, nav, simple, first)
+            ProviderBanner()
             Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 40.dp), verticalArrangement = Arrangement.Bottom) {
+                Box(Modifier.padding(bottom = 14.dp)) { ExpiryChip() }
                 if (hero != null) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         if (cont.isEmpty()) Box(Modifier.clip(Rnd(5.dp)).background(C.Text).padding(horizontal = 8.dp, vertical = 2.dp)) { T("NOVO", 10.sp, C.Bg, FontWeight.ExtraBold) }
@@ -282,6 +284,7 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
         }
     }
     LaunchedEffect(Unit) { first.tryFocus() }
+    if (!simple) TipOnce("hold_ok", "Savjet", "Drži OK na bilo čemu za opcije: Moja lista, Favoriti, Sakrij.")
 }
 
 @Composable

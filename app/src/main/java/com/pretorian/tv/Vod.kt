@@ -40,6 +40,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.produceState
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -472,9 +474,16 @@ private fun OnyxPosters(title: String, items: List<Poster>, kind: String, pid: S
     var shown by remember(items) { mutableStateOf(items.firstOrNull()) }
     LaunchedEffect(cur) { delay(450); shown = cur }   // the big picture changes only when you stop on a poster
     var menu by remember { mutableStateOf<Poster?>(null) }
+    val pl = remember(pid) { Store.byId(ctx, pid) }
+    // description, genre and the wide picture of the film you stop on (cached, loaded only after you stop)
+    val info by produceState<VodInfo?>(null, shown) {
+        value = null
+        val h = shown ?: return@produceState
+        if (kind == "vod" && pl != null) value = try { Repo.movieInfo(pl, h.id) } catch (e: Exception) { null }
+    }
     Box(Modifier.fillMaxSize()) {
         val h = shown
-        OnyxBackdrop(h?.image, h?.id ?: title)
+        OnyxBackdrop(info?.backdrop ?: h?.image, h?.id ?: title)
         Column(Modifier.fillMaxSize().padding(start = 28.dp, end = 40.dp, top = 4.dp)) {
             Row(Modifier.fillMaxWidth()) {
                 Spacer(Modifier.weight(1f))
@@ -487,13 +496,26 @@ private fun OnyxPosters(title: String, items: List<Poster>, kind: String, pid: S
                 androidx.compose.material3.Text(name, style = androidx.compose.ui.text.TextStyle(fontFamily = Inter, fontSize = 38.sp, color = C.Text, fontWeight = FontWeight.ExtraBold),
                     maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
                 val pr = h.url?.let { Watch.get(ctx, it) }
-                val meta = listOfNotNull(year, h.rating?.toDoubleOrNull()?.takeIf { it > 0 }?.let { "★ " + String.format("%.1f", it) }, qualityOf(h.name),
-                    if (MyList.has(kind, h.id)) tr("Na mojoj listi") else null).joinToString(" · ")
+                val meta = listOfNotNull(year ?: info?.year?.take(4), info?.duration?.takeIf { it.isNotBlank() },
+                    (h.rating ?: info?.rating)?.toDoubleOrNull()?.takeIf { it > 0 }?.let { "★ " + String.format("%.1f", it) }, qualityOf(h.name)).joinToString(" · ")
                 T(meta.ifBlank { " " }, 13.sp, C.Soft, modifier = Modifier.padding(top = 2.dp))
+                info?.plot?.takeIf { it.isNotBlank() }?.let { T(it, 13.sp, C.Muted, maxLines = 2, modifier = Modifier.padding(top = 4.dp).widthIn(max = 640.dp)) }
                 if (pr != null && pr.started && !pr.watched) Box(Modifier.padding(top = 10.dp).width(240.dp).height(3.dp).clip(Pill).background(C.Line)) {
                     Box(Modifier.fillMaxWidth(pr.fraction).fillMaxHeight().background(C.Text))
                 }
-                T("OK – otvori · drži OK – Moja lista", 11.sp, C.Muted, modifier = Modifier.padding(top = 10.dp))
+                Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Focusable(onClick = h.open, shape = Pill, normal = C.Text, focused = C.Text, zoom = 1.05f, modifier = Modifier.height(38.dp)) { _ ->
+                        Row(Modifier.align(Alignment.Center).padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Ico(R.drawable.lc_play, 14.dp, C.Bg); T(if (pr != null && pr.started && !pr.watched) "Nastavi" else "Gledaj", 14.sp, C.Bg, FontWeight.Bold)
+                        }
+                    }
+                    val onList = remember(MyList.rev, h.id) { MyList.has(kind, h.id) }
+                    Focusable(onClick = { MyList.toggle(kind, h.id, h.name, h.image, h.url, pid) }, shape = Pill, normal = C.Card, focused = C.Red, zoom = 1.05f,
+                        modifier = Modifier.height(38.dp).border(1.dp, C.Line, Pill)) { f ->
+                        T(if (onList) "✓ Na mojoj listi" else "+ Moja lista", 14.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold,
+                            modifier = Modifier.align(Alignment.Center).padding(horizontal = 16.dp))
+                    }
+                }
             }
             LazyVerticalGrid(columns = GridCells.Adaptive(120.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(16.dp),
                 contentPadding = PaddingValues(top = 14.dp, bottom = 30.dp), modifier = Modifier.fillMaxSize()) {

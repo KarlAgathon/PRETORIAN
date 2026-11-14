@@ -199,6 +199,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     var digits by remember { mutableStateOf("") }              // channel number typed on the remote
     var digitTick by remember { mutableIntStateOf(0) }
     var prevIndex by remember { mutableIntStateOf(-1) }
+    var saver by remember { mutableStateOf(false) }   // screen saver after a long pause
     var buffering by remember { mutableStateOf(true) }
     var playing by remember { mutableStateOf(true) }
     var position by remember { mutableLongStateOf(0L) }
@@ -355,6 +356,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         Modifier.fillMaxSize().background(Color.Black)
             .focusRequester(focus)
             .onPreviewKeyEvent { e ->
+                if (saver) { if (e.type == KeyEventType.KeyDown) saver = false; return@onPreviewKeyEvent true }
                 if (dialog != null || side != null || resume != null || bar || e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 if (error != null && (e.key == Key.DirectionCenter || e.key == Key.Enter)) { error = null; retried = false; reconnect = 0; retryToken++; return@onPreviewKeyEvent true }
                 // live: numbers on the remote pick a channel; 0 alone goes back to the previous channel
@@ -455,6 +457,9 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             delay((u - System.currentTimeMillis()).coerceAtLeast(0))
             if (Sleep.until == u) { Sleep.until = 0; player.pause(); nav.root(Screen.Home) }
         }
+
+        LaunchedEffect(playing, buffering) { saver = false; if (!playing && !buffering) { delay(10 * 60_000L); saver = true } }
+        if (saver) ScreenSaver(item.title)
 
         error?.let { msg ->
             Column(Modifier.align(Alignment.Center).clip(Rnd(20.dp)).background(Color(0xE6151A23)).padding(28.dp),

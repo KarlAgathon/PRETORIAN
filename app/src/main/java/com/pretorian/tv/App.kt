@@ -83,6 +83,7 @@ class MainActivity : ComponentActivity() {
             .diskCache { coil.disk.DiskCache.Builder().directory(cacheDir.resolve("images")).maxSizeBytes(if (Perf.weak) 150L shl 20 else 400L shl 20).build() }
             .build())
         CrashLog.watch(this)
+        WhatsNew.check(this)
         Lock.load()
         Notes.load()
         setContent { PretorianApp() }
@@ -137,7 +138,7 @@ class Nav(
     val playlistsChanged: () -> Unit,
 )
 
-object BuildInfo { const val VERSION = "0.6.5" }
+object BuildInfo { const val VERSION = "0.6.6" }
 
 @Composable
 fun PretorianApp() {
@@ -193,6 +194,8 @@ fun PretorianApp() {
 
     val scheme = if (C.IsLight) lightColorScheme(primary = C.Red, background = C.Bg, surface = C.Bg)
                  else darkColorScheme(primary = C.Red, background = C.Bg, surface = C.Bg)
+    val dens = androidx.compose.ui.platform.LocalDensity.current
+    CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(dens.density, dens.fontScale * (if (Look.bigText) 1.15f else 1f))) {
     MaterialTheme(colorScheme = scheme) {
         CompositionLocalProvider(LocalLayoutDirection provides if (Look.lang == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr) {
             val top = stack.last()
@@ -274,7 +277,9 @@ fun PretorianApp() {
             if (Profiles.panel) ProfilePanel(nav)
             DriveDialogs()
             CrashDialog()
+            WhatsNewDialog()
         }
+    }
     }
 }
 
