@@ -1,5 +1,10 @@
 package com.pretorian.tv
 
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.horizontalScroll
@@ -65,8 +70,14 @@ object Perf {
         val am = c.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
         val mi = android.app.ActivityManager.MemoryInfo(); am.getMemoryInfo(mi)
         ramGb = mi.totalMem / 1_073_741_824.0
-        // under ~3.5 GB of usable RAM (2 GB and 3 GB boxes like the Mi Box) or a "low RAM" device counts as weak
-        weak = am.isLowRamDevice || ramGb < 3.5 || android.os.Build.VERSION.SDK_INT < 28
+        // weak (Lite on its own): under ~3.5 GB of usable RAM (2 GB and 3 GB boxes like the Mi Box), a "low RAM" device,
+        // old Android, a 32-bit-only chip, fewer than 4 cores or a chip slower than 1.6 GHz (Mi Box S: 1.5 GHz; Google TV Streamer is above)
+        val cores = Runtime.getRuntime().availableProcessors()
+        val maxGhz = (0 until cores).maxOfOrNull { i ->
+            try { java.io.File("/sys/devices/system/cpu/cpu$i/cpufreq/cpuinfo_max_freq").readText().trim().toLong() / 1_000_000.0 } catch (e: Exception) { 0.0 }
+        } ?: 0.0
+        weak = am.isLowRamDevice || ramGb < 3.5 || android.os.Build.VERSION.SDK_INT < 28 || android.os.Build.SUPPORTED_64_BIT_ABIS.isEmpty() ||
+            cores < 4 || (maxGhz > 0.1 && maxGhz < 1.6)
         mode = Prefs.long("perf_mode", 0).toInt().coerceIn(0, 2)
     }
     fun set(m: Int) { mode = m; Prefs.put("perf_mode", m.toLong()) }
@@ -294,23 +305,40 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
     if (!simple) TipOnce("hold_ok", "Savjet", "Drži OK na bilo čemu za opcije: Moja lista, Favoriti, Sakrij.")
 }
 
-/** Active playlist, expiry date and days left, as a small glass card on Home. Red at 5 days or less. */
+/** Subscription on Home: one line per active playlist with a big "days left" number. Red at 5 days or less. */
 @Composable
 fun SubscriptionCard() {
     val ctx = LocalContext.current
-    val p = remember { Store.active(ctx) } ?: return
-    val sec = p.exp.toLongOrNull()?.takeIf { it > 0 }
-    val days = sec?.let { (it * 1000 - System.currentTimeMillis()) / 86_400_000L }
-    val warn = days != null && days <= 5
-    Column(Modifier.widthIn(min = 190.dp, max = 260.dp).clip(Rnd(16.dp)).background(if (warn) C.Danger.copy(alpha = 0.14f) else C.Rail)
-        .border(1.dp, if (warn) C.Danger.copy(alpha = 0.6f) else C.Line, Rnd(16.dp)).padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Kicker("Aktivna playlista", size = 10.sp)
-        T(p.name, 17.sp, C.Text, FontWeight.Bold, maxLines = 1)
-        if (sec != null) {
-            T(tr("Ističe") + ": " + SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date(sec * 1000)), 13.sp, C.Soft, maxLines = 1)  // i18n-ignore
-            T(if (days!! < 0) tr("Isteklo") else trf("Preostalo: %s dana", days), 14.sp, if (warn) C.Danger else C.Green, FontWeight.Bold, maxLines = 1)
-        } else T("bez datuma isteka", 13.sp, C.Soft, maxLines = 1)
+    val pls = remember { Store.actives(ctx) }
+    if (pls.isEmpty()) return
+    fun daysOf(p: Playlist) = p.exp.toLongOrNull()?.takeIf { it > 0 }?.let { (it * 1000 - System.currentTimeMillis()) / 86_400_000L }
+    val anyWarn = pls.any { (daysOf(it) ?: 99) <= 5 }
+    val accent = if (anyWarn) C.Danger else C.Green
+    Row(Modifier.width(270.dp).height(IntrinsicSize.Min).clip(Rnd(18.dp)).background(Brush.horizontalGradient(listOf(accent.copy(alpha = 0.16f), C.Rail)))
+        .border(1.dp, accent.copy(alpha = 0.45f), Rnd(18.dp))) {
+        Box(Modifier.width(4.dp).fillMaxHeight().background(accent))   // coloured edge: green fine, red soon
+        Column(Modifier.padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(Modifier.size(7.dp).clip(CircleShape).background(accent))
+                Kicker(if (pls.size > 1) "Aktivne playliste" else "Aktivna playlista", size = 10.sp)
+            }
+            pls.take(3).forEach { p ->
+                val sec = p.exp.toLongOrNull()?.takeIf { it > 0 }
+                val days = daysOf(p)
+                val warn = days != null && days <= 5
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        T(p.name, 17.sp, C.Text, FontWeight.Bold, maxLines = 1)
+                        T(if (sec != null) tr("Ističe") + " " + SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date(sec * 1000)) else tr("bez datuma isteka"),  // i18n-ignore
+                            11.sp, C.Soft, maxLines = 1)
+                    }
+                    if (days != null) Column(horizontalAlignment = Alignment.End) {
+                        T(if (days < 0) "0" else "$days", 26.sp, if (warn) C.Danger else C.Text, FontWeight.ExtraBold)
+                        T(if (days < 0) tr("Isteklo") else tr("dana"), 10.sp, if (warn) C.Danger else C.Soft, FontWeight.SemiBold)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -363,7 +391,8 @@ fun PosterCard(title: String, image: String?, key: String, progress: Float?, mod
 /** 0.6.0/0.6.4: everyone gets the new look and the top menu once; afterwards they can change it. */
 fun onyxMigrate(c: Context) {
     val p = c.getSharedPreferences("pretorian", Context.MODE_PRIVATE)
-    if (p.getInt("look_v", 0) == 0 && !p.contains("look_theme")) p.edit().putBoolean("hide_adult_default", true).apply()  // brand new install
+    // brand new install: hide adult groups and start in simple mode (TV, Movies, Series); "Napredni mod" is one click away
+    if (p.getInt("look_v", 0) == 0 && !p.contains("look_theme")) p.edit().putBoolean("hide_adult_default", true).putBoolean("simple_mode", true).apply()
     if (p.getInt("look_v", 0) < 7) {   // 0.6.4: "Predvečerje" becomes the look for everyone once
         Look.theme = "vece"; Look.layout = 2
         p.edit().putInt("look_v", 7).putString("look_theme", "vece").putInt("look_layout", 2).apply()
@@ -391,6 +420,7 @@ object Recent {
         }
         Prefs.put("recent_ch", a.toString()); rev++
     }
+    fun clear() { Prefs.put("recent_ch", "[]"); rev++ }
     fun remove(url: String) {
         val a = JSONArray(); list().filter { it.ch.url != url }.forEach { i ->
             a.put(JSONObject().put("id", i.ch.id).put("num", i.ch.num).put("n", i.ch.name).put("l", i.ch.logo ?: "").put("g", i.ch.group).put("u", i.ch.url)
@@ -454,41 +484,43 @@ fun OnyxSimpleHome(nav: Nav) {
         }
     }
     LaunchedEffect(Unit) { delay(50); (frs[SimpleMemory.last] ?: frs.values.firstOrNull())?.tryFocus() }
-    AdvancedGate(nav)
 }
 
-/** Simple mode: one pill instead of Settings; OK drops down "Napredni mod" (PIN if one is set). */
+/** Simple mode: one pill; OK opens "Napredni mod" right under it (PIN if one is set). The pill moves up to make room. */
 @Composable
 fun SimpleModePill(nav: Nav) {
+    // the menu opens right under the button (same width, centred); the button moves up to make room. Back or ▲ closes it.
     var open by remember { mutableStateOf(false) }
-    Box {
-        Focusable(onClick = { open = true }, shape = Pill, normal = C.CardHi, focused = C.Red, zoom = 1.04f, modifier = Modifier.height(38.dp)) { f ->
-            Row(Modifier.align(Alignment.Center).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    val fr = remember { FocusRequester() }
+    val btnFr = remember { FocusRequester() }
+    BackHandler(enabled = open) { open = false; btnFr.tryFocus() }
+    Column(Modifier.width(260.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Focusable(onClick = { open = !open }, focusRequester = btnFr, shape = Pill, normal = C.CardHi, focused = C.Red, zoom = 1.03f,
+            modifier = Modifier.fillMaxWidth().height(44.dp)) { f ->
+            Row(Modifier.align(Alignment.Center).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Ico(R.drawable.lc_lock, 16.dp, if (f) C.OnRed else C.Text)
                 T("Jednostavni mod", 15.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold)
                 Ico(R.drawable.lc_chevron_down, 14.dp, if (f) C.OnRed else C.Soft)
             }
         }
-        if (open) androidx.compose.ui.window.Popup(alignment = Alignment.TopStart, offset = androidx.compose.ui.unit.IntOffset(0, 120),
-            onDismissRequest = { open = false }, properties = androidx.compose.ui.window.PopupProperties(focusable = true)) {
-            val fr = remember { FocusRequester() }
-            Column(Modifier.width(230.dp).clip(Rnd(14.dp)).background(C.Bg).border(1.dp, C.Line, Rnd(14.dp)).padding(6.dp)) {
-                Focusable(onClick = {
-                    open = false
-                    if (Prefs.bool("pin_simple_exit", true) && Lock.hasPin()) OnyxState.askPin = true else { Lock.switchSimple(false); nav.root(Screen.Settings) }
-                }, focusRequester = fr, shape = Rnd(10.dp), normal = Color.Transparent, focused = C.Red, zoom = 1f, modifier = Modifier.fillMaxWidth().height(46.dp)) { f ->
-                    Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Ico(R.drawable.lc_key_round, 16.dp, if (f) C.OnRed else C.Amber)
-                        T("Napredni mod", 15.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold)
-                    }
+        if (open) {
+            Focusable(onClick = {
+                open = false
+                if (Prefs.bool("pin_simple_exit", true) && Lock.hasPin()) OnyxState.askPin = true else { Lock.switchSimple(false); nav.root(Screen.Home) }
+            }, focusRequester = fr, shape = Pill, normal = C.Rail, focused = C.Red, zoom = 1.03f,
+                modifier = Modifier.fillMaxWidth().height(44.dp).border(1.dp, C.Line, Pill).onPreviewKeyEvent { e ->
+                    if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionUp) { open = false; btnFr.tryFocus(); true } else false
+                }) { f ->
+                Row(Modifier.align(Alignment.Center).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Ico(R.drawable.lc_key_round, 16.dp, if (f) C.OnRed else C.Amber)
+                    T("Napredni mod", 15.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold)
                 }
             }
-            LaunchedEffect(Unit) { delay(60); fr.tryFocus() }
+            LaunchedEffect(Unit) { delay(40); fr.tryFocus() }
         }
     }
 }
 
-/** Simple mode: Settings are behind the PIN, with a warning first. */
 @Composable
 fun AdvancedGate(nav: Nav) {
     var pin by remember { mutableStateOf(false) }
@@ -504,7 +536,7 @@ fun AdvancedGate(nav: Nav) {
     LaunchedEffect(OnyxState.askPin) { if (OnyxState.askPin) { OnyxState.askPin = false; pin = true } }
     if (pin) PinDialog("PIN za napredni mod", onDismiss = { pin = false }) { entered ->
         val err = Lock.check(entered)
-        if (err == null) { pin = false; Lock.switchSimple(false); nav.root(Screen.Settings) }
+        if (err == null) { pin = false; Lock.switchSimple(false); nav.root(Screen.Home) }
         err
     }
 }

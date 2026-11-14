@@ -405,14 +405,20 @@ fun RecentStrip(nav: Nav) {
     val list = remember(Recent.rev) { Recent.list() }
     if (list.isEmpty()) return
     var menu by remember { mutableStateOf<Recent.Item?>(null) }
+    var askClear by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().padding(start = if (Look.age) 0.dp else 40.dp, end = if (Look.age) 0.dp else 40.dp, top = 8.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(Modifier.fillMaxWidth()) {
             Kicker("Zadnje gledano", modifier = Modifier.weight(1f))
             Kicker(trf("%s kanala", list.size))
         }
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(list, key = { it.ch.url }) { r ->
-                Focusable(onClick = {
+        // right from the last card goes to "Obriši historiju", right again back to the first channel; never jumps up to the bell
+        val rState = androidx.compose.foundation.lazy.rememberLazyListState()
+        val firstFr = remember { FocusRequester() }
+        val clearFr = remember { FocusRequester() }
+        fun toFirst() = scope.launch { rState.scrollToItem(0); delay(30); firstFr.tryFocus() }
+        LazyRow(state = rState, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            itemsIndexed(list, key = { _, it -> it.ch.url }) { i, r ->
+                Focusable(focusRequester = if (i == 0) firstFr else null, onClick = {
                     scope.launch {
                         val g = GroupRef(r.pid, Category(r.catId, r.catName))
                         val chs = try { channelsOf(ctx, g) } catch (e: Exception) { emptyList() }
@@ -421,7 +427,9 @@ fun RecentStrip(nav: Nav) {
                         else playChannels(nav, listOf(r.ch), 0)
                     }
                 }, onMenu = { menu = r }, shape = Rnd(14.dp), normal = C.Rail, focused = C.Red, zoom = 1.04f,
-                    modifier = Modifier.width(186.dp).height(50.dp).border(1.dp, C.Line, Rnd(14.dp))) { f ->
+                    modifier = Modifier.width(186.dp).height(50.dp).border(1.dp, C.Line, Rnd(14.dp)).onPreviewKeyEvent { e ->
+                        if (i == list.lastIndex && e.type == KeyEventType.KeyDown && e.key == Key.DirectionRight) { scope.launch { rState.scrollToItem(list.size); delay(30); clearFr.tryFocus() }; true } else false
+                    }) { f ->
                     Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         ChannelLogo(r.ch, 32.dp, onLight = f)
                         Column(Modifier.weight(1f)) {
@@ -431,12 +439,28 @@ fun RecentStrip(nav: Nav) {
                     }
                 }
             }
+            item(key = "clear") {
+                Focusable(focusRequester = clearFr, onClick = { askClear = true }, shape = Rnd(14.dp), normal = C.Rail, focused = C.Danger, zoom = 1.04f,
+                    modifier = Modifier.height(50.dp).border(1.dp, C.Line, Rnd(14.dp)).onPreviewKeyEvent { e ->
+                        if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionRight) { toFirst(); true } else false
+                    }) { f ->
+                    Row(Modifier.fillMaxHeight().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Ico(R.drawable.lc_trash_2, 16.dp, if (f) Color.White else C.Danger)
+                        T("Obriši historiju", 13.sp, if (f) Color.White else C.Text, FontWeight.SemiBold)
+                    }
+                }
+            }
         }
     }
     menu?.let { r ->
         Popup(r.ch.name, onDismiss = { menu = null }) {
             OptionRow("Ukloni iz Zadnje gledano", R.drawable.lc_x) { Recent.remove(r.ch.url); menu = null }
         }
+    }
+    if (askClear) Popup("Obrisati historiju?", onDismiss = { askClear = false }) {
+        T("Svi kanali nestaju iz Zadnje gledano. Traka se ponovo puni kad gledaš kanale.", 14.sp, C.Soft, maxLines = 3)
+        OptionRow("Obriši historiju", R.drawable.lc_trash_2, color = C.Danger) { Recent.clear(); askClear = false }
+        OptionRow("Odustani", R.drawable.lc_x) { askClear = false }
     }
 }
 
