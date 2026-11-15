@@ -241,6 +241,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     var resize by remember { mutableIntStateOf(0) }
     val player = remember { Preview.stop(); buildPlayer(ctx) }
     val playerScope = rememberCoroutineScope()
+    val readyOnce = remember { booleanArrayOf(false) }   // the stream played since it was (re)loaded
     val applied = remember { booleanArrayOf(false) }
     val step = Prefs.seekStep * 1000L
     val focus = remember { FocusRequester() }
@@ -292,6 +293,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         else if (item.subOff || (!Prefs.autoSubs && item.subLang == null && item.subLabel == null)) tb.setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, true)
         player.trackSelectionParameters = tb.build()
         applied[0] = false
+        readyOnce[0] = false
         player.setMediaItem(b.build(), at)
         player.prepare()
         player.playWhenReady = play
@@ -326,7 +328,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             }
             override fun onPlaybackStateChanged(state: Int) {
                 buffering = state == Player.STATE_BUFFERING
-                if (state == Player.STATE_READY) { error = null; reconnect = 0 }
+                if (state == Player.STATE_READY) { error = null; reconnect = 0; readyOnce[0] = true }
                 if (state == Player.STATE_ENDED && !s.live) { saveProgress(done = true); if (index < n - 1 && Prefs.bool("next_ep", true)) index++ }
             }
             override fun onIsPlayingChanged(isPlaying: Boolean) { playing = isPlaying }
@@ -396,7 +398,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         var last = -1L; var stuck = 0L
         while (true) {
             delay(1000)
-            if (!Recover.on || error != null || resume != null || !player.playWhenReady || saver) { stuck = 0; last = -1; continue }
+            if (!Recover.on || error != null || resume != null || !player.playWhenReady || saver || !readyOnce[0]) { stuck = 0; last = -1; continue }
             val pos = player.currentPosition
             if (pos == last && (player.playbackState == Player.STATE_BUFFERING || player.playbackState == Player.STATE_READY)) stuck += 1000 else stuck = 0
             last = pos
