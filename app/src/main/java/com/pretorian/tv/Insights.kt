@@ -124,11 +124,12 @@ fun fmtGb(b: Long): String = if (b >= 1_073_741_824L) String.format(Locale.US, "
 data class Paused(val kind: String, val title: String, val sub: String?, val poster: String?, val desc: String?, val pos: Long, val dur: Long)
 
 object Saver {
-    val delays = listOf(1, 3, 5, 10, 15, 30)
+    /** minutes without the remote: 1, 5, 10, 15, 30, 60 (default 5) */
+    val delays = listOf(1, 5, 10, 15, 30, 60)
     val on get() = Prefs.bool("ss_on", true)
-    val delayMs get() = delays[Prefs.long("ss_delay", 2).toInt().coerceIn(0, delays.size - 1)] * 60_000L
-    /** 0 only when paused, 1 also in the menus */
-    val inMenus get() = Prefs.long("ss_when", 0) == 1L
+    val delayMs get() = delays[Prefs.long("ss_wait", 1).toInt().coerceIn(0, delays.size - 1)] * 60_000L
+    /** 0 only when paused, 1 also in the menus (default: also in menus, settings and lists) */
+    val inMenus get() = Prefs.long("ss_when2", 1) == 1L
     val show get() = Prefs.str("ss_show", "0,1,2,3,4,5").split(',').mapNotNull { it.toIntOrNull() }.toSet()
     val h24 get() = Prefs.bool("ss_24", true)
     /** 0 soft colours, 1 the poster, 2 black */
@@ -215,8 +216,10 @@ fun SaverV2() {
     key(rev) {
         SetPage("Čuvar ekrana", "Sat i datum kad se ništa ne dešava; uz pauzu pokazuje šta je zaustavljeno.") {
             SetSwitch("Čuvar ekrana", "sat preko slike nakon pauze", Saver.on) { Prefs.put("ss_on", it); rev++ }
-            SetDrop("Pokreni nakon", null, Saver.delays.map { trf("%s min", it) }, Prefs.long("ss_delay", 2).toInt()) { Prefs.put("ss_delay", it.toLong()); rev++ }
-            SetDrop("Kada", null, listOf("Samo kad je pauzirano", "I u menijima"), Prefs.long("ss_when", 0).toInt()) { Prefs.put("ss_when", it.toLong()); rev++ }
+            // no remote for this long while nothing plays (menus, settings, lists) or something is paused; "Sada" starts it at once
+            SetDrop("Pokreni nakon", "bez daljinskog, kad ništa ne ide ili je pauzirano", Saver.delays.map { if (it < 60) trf("%s min", it) else "1 h" } + tr("Sada"),  // i18n-ignore
+                Prefs.long("ss_wait", 1).toInt()) { if (it == Saver.delays.size) Saver.preview = true else { Prefs.put("ss_wait", it.toLong()); rev++ } }
+            SetDrop("Kada", null, listOf("Samo kad je pauzirano", "I u menijima"), Prefs.long("ss_when2", 1).toInt()) { Prefs.put("ss_when2", it.toLong()); rev++ }
             SetMulti("Prikaži", "više odjednom", listOf("Sekunde", "Datum", "Pauzirani naslov", "Poster", "Opis", "Napredak i preostalo vrijeme"), Saver.show, all = false) { s ->
                 Prefs.put("ss_show", s.sorted().joinToString(",")); rev++
             }

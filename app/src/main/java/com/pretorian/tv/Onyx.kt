@@ -16,6 +16,8 @@ import androidx.compose.ui.draw.blur
 import android.content.Context
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.foundation.border
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -188,10 +190,18 @@ fun OnyxTopBar(current: Screen, nav: Nav, simple: Boolean = false, firstFocus: F
             Text("PRETORIAN", style = TextStyle(fontFamily = Inter, fontSize = 13.sp, color = C.Text, fontWeight = FontWeight.Light, letterSpacing = 4.sp), maxLines = 1)
             Spacer(Modifier.width(6.dp))
             // the menu takes the free width and scrolls sideways if a big size does not fit; the clock and profile never get covered
-            Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically,
+            Row(Modifier.weight(1f).focusProperties {
+                    @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+                    enter = { d -> if (d == androidx.compose.ui.focus.FocusDirection.Up && firstFocus == null) TopNav.fr else FocusRequester.Default }
+                }.focusGroup().horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(if (simple) 10.dp else 6.dp)) {
                 items.forEachIndexed { i, it ->
-                    NavPill(it, section == it.screen, if (i == 1 && firstFocus != null) firstFocus else if (section == it.screen) TopNav.fr else null, big = simple) { nav.root(it.screen) }
+                    // long OK: Movies / Series clear their "new" notices, Search chooses where it looks
+                    val long: (() -> Unit)? = when (it.screen) {
+                        Screen.Movies -> ({ TopMenus.clearKind = "vod" }); Screen.Series -> ({ TopMenus.clearKind = "series" })
+                        Screen.Search -> ({ TopMenus.searchWhere = true }); else -> null
+                    }
+                    NavPill(it, section == it.screen, if (i == 1 && firstFocus != null) firstFocus else if (section == it.screen) TopNav.fr else null, big = simple, onLong = long) { nav.root(it.screen) }
                 }
                 if (simple) SimpleModePill(nav)
                 else NavPill(NavItem(Screen.Settings, R.drawable.lc_settings, "Postavke",
@@ -211,13 +221,27 @@ fun OnyxTopBar(current: Screen, nav: Nav, simple: Boolean = false, firstFocus: F
             }
     }
     if (notes) NotesPopup({ notes = false }, nav)
+    TopMenus.clearKind?.let { k ->
+        Popup(tr(if (k == "vod") "Filmovi" else "Serije"), { TopMenus.clearKind = null }) {
+            T(trf("%s novih · nestaju i s Početne", NewContent.count(k)), 13.sp, C.Muted)
+            OptionRow("Obriši obavještenja", R.drawable.lc_trash_2, color = C.Danger) { NewContent.clear(k); TopMenus.clearKind = null }
+            OptionRow("Odustani", R.drawable.lc_x) { TopMenus.clearKind = null }
+        }
+    }
+    if (TopMenus.searchWhere) SearchWherePopup { TopMenus.searchWhere = false }
+}
+
+/** Menus opened with a long OK on the top bar (and on "Recently added"). */
+object TopMenus {
+    var clearKind by mutableStateOf<String?>(null)
+    var searchWhere by mutableStateOf(false)
 }
 
 @Composable
-private fun NavPill(it: NavItem, selected: Boolean, fr: FocusRequester?, big: Boolean, onClick: () -> Unit) {
+private fun NavPill(it: NavItem, selected: Boolean, fr: FocusRequester?, big: Boolean, onLong: (() -> Unit)? = null, onClick: () -> Unit) {
     // advanced mode: icons only; the open screen and the focused one show their name next to the icon
     Box {
-        Focusable(onClick = onClick, focusRequester = fr, shape = Pill, normal = if (selected) C.CardHi else Color.Transparent,
+        Focusable(onClick = onClick, onMenu = onLong, focusRequester = fr, shape = Pill, normal = if (selected) C.CardHi else Color.Transparent,
             focused = C.Red, zoom = 1.04f, modifier = Modifier.height(if (big) 38.dp else 36.dp)) { f ->
             Row(Modifier.align(Alignment.Center).padding(horizontal = if (big) 16.dp else 10.dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -356,6 +380,41 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                                     else if (i == 0 && e.key == Key.DirectionLeft) { cScope.launch { cState.scrollToItem(cont.lastIndex); delay(30); cLast.tryFocus() }; true }
                                     else false
                                 }, onClick = playOf(pr))
+                        }
+                    }
+                }
+                        }
+                        "mylist" -> {
+                // films and series you saved with "+ My list"
+                val mine = remember(MyList.rev) { MyList.items("vod").map { "vod" to it } + MyList.items("series").map { "series" to it } }
+                if (mine.isNotEmpty()) {
+                    RowTitle("MOJA LISTA")
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(18.dp), contentPadding = PaddingValues(end = 40.dp, top = 6.dp, bottom = 10.dp)) {
+                        items(mine, key = { "ml" + it.first + it.second.optString("id") }) { (k, o) ->
+                            val name = o.optString("n"); val img = o.optString("i").ifBlank { null }
+                            WideCard(cleanTitle(name).first, tr(if (k == "vod") "Film" else "Serija"), img, "ml_" + o.optString("id"), null, height = cardH) {
+                                if (k == "vod") nav.push(Screen.MovieDetail(Vod(o.optString("id"), name, img, null, o.optString("u"))))
+                                else nav.push(Screen.SeriesDetail(SeriesItem(o.optString("id"), name, img, null, null)))
+                            }
+                        }
+                    }
+                }
+                        }
+                        "today" -> {
+                // today's matches (only the chosen sports): live first, then by start time
+                val today by load("today_sport") {
+                    val en = Prefs.str("sport_enabled", "football").split(',').filter { it.isNotBlank() }
+                    (Sports.lastCombined[0] ?: Sports.day(0)).filter { en.isEmpty() || it.sport in en }.filter { it.state != "post" }
+                        .sortedWith(compareBy({ !it.live }, { it.start })).take(15)
+                }
+                (today as? Load.Ok)?.value?.takeIf { it.isNotEmpty() }?.let { ms ->
+                    RowTitle("UTAKMICE DANAS")
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(18.dp), contentPadding = PaddingValues(end = 40.dp, top = 6.dp, bottom = 10.dp)) {
+                        items(ms, key = { "td" + it.id }) { e ->
+                            val name = if (e.home != null && e.away != null) e.home.name + " – " + e.away.name else e.title
+                            val sub = if (e.live) listOfNotNull(e.clock, e.home?.score?.let { it + ":" + (e.away?.score ?: "") }).joinToString(" · ")  // i18n-ignore
+                                      else java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(e.start)) + " · " + e.league  // i18n-ignore
+                            WideCard(name, sub, e.home?.logo, "td_" + e.id, null, height = cardH) { SportsMemory.evId = e.id; SportsMemory.day = 0; nav.root(Screen.Sports) }
                         }
                     }
                 }
@@ -716,16 +775,19 @@ fun AdvancedGate(nav: Nav) {
 
 /** Settings › Home: which rows the home screen shows and in which order. */
 object HomeRows {
-    val ALL = listOf("fresh" to "Nove epizode", "cont" to "Nastavi gledati", "new" to "Novo dodano", "recent" to "Nedavno gledani kanali")
+    val ALL = listOf("fresh" to "Nove epizode", "cont" to "Nastavi gledati", "mylist" to "Moja lista", "new" to "Novo dodano",
+        "today" to "Utakmice danas", "recent" to "Nedavno gledani kanali")
     var rev by mutableIntStateOf(0)
+    /** "Matches today" starts off (it loads live scores) */
+    private fun offStr() = Prefs.str("home_off", "today")
     fun order(): List<String> {
         val saved = Prefs.str("home_rows", "fresh,cont,new,recent").split(',').filter { s -> ALL.any { it.first == s } }
-        val off = Prefs.str("home_off").split(',').toSet()
+        val off = offStr().split(',').toSet()
         return (saved + ALL.map { it.first }.filter { it !in saved }).filter { it !in off }
     }
     fun all(): List<String> { val saved = Prefs.str("home_rows", "fresh,cont,new,recent").split(',').filter { s -> ALL.any { it.first == s } }; return saved + ALL.map { it.first }.filter { it !in saved } }
-    fun isOn(id: String) = id !in Prefs.str("home_off").split(',')
-    fun toggle(id: String) { val off = Prefs.str("home_off").split(',').filter { it.isNotBlank() }.toMutableSet(); if (!off.add(id)) off.remove(id); Prefs.put("home_off", off.joinToString(",")); rev++ }
+    fun isOn(id: String) = id !in offStr().split(',')
+    fun toggle(id: String) { val off = offStr().split(',').filter { it.isNotBlank() }.toMutableSet(); if (!off.add(id)) off.remove(id); Prefs.put("home_off", off.joinToString(",")); rev++ }
     fun move(id: String, by: Int) {
         val l = all().toMutableList(); val i = l.indexOf(id); val j = (i + by).coerceIn(0, l.lastIndex)
         if (i < 0 || i == j) return

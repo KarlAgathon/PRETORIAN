@@ -189,7 +189,16 @@ object Store {
 }
 
 object Net {
-    const val UA = "Mozilla/5.0 (Linux; Android 10; TV) AppleWebKit/537.36 PRETORIAN/0.1"
+    private const val UA_DEFAULT = "Mozilla/5.0 (Linux; Android 10; TV) AppleWebKit/537.36 PRETORIAN/0.1"  // i18n-ignore
+    /** Settings › General › Network: own User-Agent for providers that only let certain apps in (empty = PRETORIAN's) */
+    val UA get() = Prefs.str("net_ua").trim().ifBlank { UA_DEFAULT }
+    /** udp://@239.1.1.1:1234 → http://proxy/udp/239.1.1.1:1234 (udpxy on the router), when a proxy is set */
+    fun udp(url: String): String {
+        val px = Prefs.str("net_udpxy").trim().removeSuffix("/")
+        if (px.isBlank() || !(url.startsWith("udp://") || url.startsWith("rtp://"))) return url
+        val addr = url.substringAfter("://").removePrefix("@")
+        return (if (px.startsWith("http")) px else "http://$px") + "/" + (if (url.startsWith("rtp")) "rtp" else "udp") + "/" + addr
+    }
 
     fun get(url: String): String = open(url) { it.bufferedReader().use { r -> r.readText() } }
 

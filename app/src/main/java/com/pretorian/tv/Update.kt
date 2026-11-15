@@ -114,11 +114,41 @@ object Updater {
         return if (Build.VERSION.SDK_INT >= 28) pi.longVersionCode else pi.versionCode.toLong()
     }
 
+    /** the newest Stable version (for the gold STABLE shield) */
+    var stableName by mutableStateOf(Prefs.str("upd_stable_name"))
+    /** Settings › Update › long OK on the version: the author's own GitHub key (only on his box) */
+    val canPublish get() = Prefs.str("gh_token").isNotBlank()
+
+    /** Makes the Beta version on this box the Stable one for everybody: main moves to the beta commit, GitHub builds the release. */
+    suspend fun promote(): String? = withContext(Dispatchers.IO) {
+        val tok = Prefs.str("gh_token").trim(); if (tok.isBlank()) return@withContext tr("GitHub ključ nije upisan")
+        fun call(method: String, path: String, body: String? = null): Pair<Int, String> {
+            val c = URL("https://api.github.com/repos/KarlAgathon/PRETORIAN$path").openConnection() as HttpURLConnection  // i18n-ignore
+            c.requestMethod = method   // Android's HttpURLConnection knows PATCH
+            c.setRequestProperty("Authorization", "Bearer $tok"); c.setRequestProperty("Accept", "application/vnd.github+json")  // i18n-ignore
+            c.connectTimeout = 15_000; c.readTimeout = 20_000
+            if (body != null) { c.doOutput = true; c.setRequestProperty("Content-Type", "application/json"); c.outputStream.use { it.write(body.toByteArray()) } }  // i18n-ignore
+            val code = c.responseCode
+            val text = try { (if (code < 400) c.inputStream else c.errorStream)?.bufferedReader()?.readText() ?: "" } catch (e: Exception) { "" }
+            c.disconnect(); return code to text
+        }
+        try {
+            val (c1, t1) = call("GET", "/git/ref/heads/beta")
+            if (c1 != 200) return@withContext trf("GitHub: %s", c1)
+            val sha = JSONObject(t1).getJSONObject("object").getString("sha")
+            val (c2, t2) = call("PATCH", "/git/refs/heads/main", JSONObject().put("sha", sha).put("force", false).toString())
+            if (c2 !in 200..299) return@withContext trf("GitHub: %s", c2) + " " + (try { JSONObject(t2).optString("message") } catch (e: Exception) { "" })
+            UpdLog.add(trf("Označeno kao Stable: %s · GitHub pravi izdanje", BuildInfo.VERSION))
+            null
+        } catch (e: Exception) { e.message ?: tr("nije uspjelo") }
+    }
+
     suspend fun check(ctx: Context): UpdateInfo? = withContext(Dispatchers.IO) {
         Prefs.put("upd_checked_at", System.currentTimeMillis())
         try {
             fun read(u: String) = JSONObject(String(Http.bytes(u, 100_000))).let { o -> UpdateInfo(o.optLong("versionCode"), o.str("versionName"), o.str("apk"), o.str("notes")) }
             val stable = read(JSON_URL)
+            stableName = stable.name; Prefs.put("upd_stable_name", stable.name)
             // Beta gets the test version when it is newer than the stable one
             val info = if (beta) (try { read(BETA_URL) } catch (e: Exception) { null })?.takeIf { it.code > stable.code } ?: stable else stable
             Prefs.put("upd_last", System.currentTimeMillis())
@@ -394,11 +424,18 @@ object Rollback {
 
 /** A new version that keeps crashing: after 3 crashes in 10 minutes the next start offers a way out. */
 object CrashGuard {
+    /** when this start of the app began: a crash within 15 s counts as "right at start" */
+    @Volatile var startedAt = System.currentTimeMillis()
     fun record() {
         val now = System.currentTimeMillis()
         val list = Prefs.str("crash_times").split(',').mapNotNull { it.toLongOrNull() }.filter { now - it < 10 * 60_000L } + now
         Prefs.putNow("crash_times", list.joinToString(","))
+        // crashes right at start, one after another: after 5 the next start goes straight to the way back
+        val quick = if (now - startedAt < 15_000L) Prefs.long("crash_quick") + 1 else 0L
+        Prefs.putNow("crash_quick", quick.toString())
     }
+    fun quick() = (Prefs.str("crash_quick").toLongOrNull() ?: 0L) >= 5
+    fun clearQuick() = Prefs.put("crash_quick", "0")
     fun tooMany() = Prefs.str("crash_times").split(',').mapNotNull { it.toLongOrNull() }.count { System.currentTimeMillis() - it < 10 * 60_000L } >= 3
     fun clear() = Prefs.put("crash_times", "")
 }

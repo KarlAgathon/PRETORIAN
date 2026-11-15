@@ -289,7 +289,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             }
             return
         }
-        val b = MediaItem.Builder().setUri(item.url)
+        val b = MediaItem.Builder().setUri(Net.udp(item.url))
         if (file != null) b.setSubtitleConfigurations(listOf(
             MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(File(file)))
                 .setMimeType(MimeTypes.APPLICATION_SUBRIP)
@@ -616,7 +616,11 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             }
         }
 
-        LaunchedEffect(playing, buffering) { saver = false; if (!playing && !buffering && Saver.on) { delay(Saver.delayMs); saver = true } }
+        // paused and no remote for the chosen time (every key press starts the count again)
+        LaunchedEffect(playing, buffering, saver) {
+            if (saver) { if (playing) saver = false; return@LaunchedEffect }
+            if (!playing && !buffering && Saver.on) while (true) { delay(1000); if (System.currentTimeMillis() - Saver.lastKey > Saver.delayMs) { saver = true; break } }
+        }
         if (saver) ModernScreenSaver(if (s.live) null else Paused(if (item.season != null) "Serija" else "Film", item.search?.let { cleanTitle(it).first } ?: item.title,
             listOfNotNull(item.season?.let { trf("Sezona %s", it) }, item.episode?.let { trf("Epizoda %s", it) }, item.subtitle).joinToString(" · ").ifBlank { null },
             item.logo, null, position, duration))

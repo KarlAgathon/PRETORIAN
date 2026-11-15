@@ -1,5 +1,6 @@
-Roditeljska kontrola: sakriva i 18+, [X], Rated R/X – iz kategorija, Svih kanala, svih filmova, Početne i Pretrage
-Liquid: pravo staklo preko mutne slike
-Classic: tamnija kolona kategorija, svjetlija lista
-Papir: moderna svijetla tema (bijele kartice na svijetlo sivoj)
-Uklonjene teme Glass, Dune, Ocean, Aurora
+Dugi OK na Filmovi/Serije ili „Nedavno dodano“: Obriši obavještenja (nestaju i s Početne)
+Pretraga u 4 kolone (TV, Filmovi, Serije, Sport); dugi OK na Pretragu bira gdje traži
+Čuvar ekrana: 1/5/10/15/30 min/1 h ili Sada; pali se u menijima i na pauzi
+Ažuriranje: zlatni štit STABLE, Označi kao Stable, dugi OK za Vrati odmah, zaštita nakon 5 padova pri pokretanju
+Nova sekcija Opće: start s boxom, zadnji kanal, potvrdi izlaz, User-Agent, UDP proxy
+Početna: redovi Moja lista i Utakmice danas; gore iz bilo kojeg ekrana vodi na njegovu karticu

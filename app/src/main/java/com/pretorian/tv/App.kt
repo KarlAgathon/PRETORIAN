@@ -88,6 +88,7 @@ class MainActivity : ComponentActivity() {
         WhatsNew.check(this)
         Lock.load()
         Notes.load()
+        CrashGuard.startedAt = System.currentTimeMillis()
         try { StreamLog.autoClear() } catch (_: Exception) {}
         setContent { PretorianApp() }
     }
@@ -167,7 +168,7 @@ class Nav(
     val playlistsChanged: () -> Unit,
 )
 
-object BuildInfo { const val VERSION = "0.9.9" }
+object BuildInfo { const val VERSION = "1.0.0" }
 
 @Composable
 fun PretorianApp() {
@@ -194,6 +195,21 @@ fun PretorianApp() {
         )
     }
     BackHandler(enabled = stack.size > 1) { nav.back() }
+    // Settings › General › Confirm exit: Back on Home asks first
+    var askExit by remember { mutableStateOf(false) }
+    BackHandler(enabled = stack.size <= 1 && General.confirmExit) { askExit = true }
+    if (askExit) Popup(tr("Izaći iz PRETORIAN-a?"), { askExit = false }) {
+        OptionRow("Izađi", R.drawable.lc_x, color = C.Danger) { askExit = false; (ctx as? android.app.Activity)?.finish() }
+        OptionRow("Ostani", R.drawable.lc_check) { askExit = false }
+    }
+    // Settings › General › Last channel at start
+    LaunchedEffect(Unit) {
+        if (General.lastChannel && !General.startedOnce) {
+            General.startedOnce = true
+            delay(1500)
+            Recent.list().firstOrNull()?.let { r -> playChannels(nav, listOf(r.ch), 0) }
+        }
+    }
     LaunchedEffect(AppHome.tick) { if (AppHome.tick > 0 && Store.playlists(ctx).isNotEmpty()) { Preview.stop(); stack.clear(); stack.add(Screen.Home) } }
 
     // new version at start and every 6 hours; "new" movies and series once in 12 hours; weekly backup

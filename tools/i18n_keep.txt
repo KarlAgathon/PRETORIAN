@@ -432,3 +432,25 @@ oled
 kino
 papir
 XXX, Adult, 18+, [X], Rated R, Rated X
+ss_wait
+ss_when2
+ml_
+td_
+col
+general
+net_ua
+net_udpxy
+STABLE
+User-Agent
+UDP proxy (udpxy)
+github_pat_…
+upd_stable_name
+/git/ref/heads/beta
+GitHub: %s
+user
+udp://
+udp
+user_info
+user_code
+X-User-Agent
+os_user

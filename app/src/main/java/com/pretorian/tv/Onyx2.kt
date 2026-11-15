@@ -34,6 +34,8 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.sync.Semaphore
@@ -451,7 +453,7 @@ fun OnyxSearch(nav: Nav) {
     val busy = chIdx is Load.Loading || vodIdx is Load.Loading || serIdx is Load.Loading || (wantProgs && progIdx is Load.Loading)
     LaunchedEffect(jump, chHits.isNotEmpty() || vs.isNotEmpty() || progs.isNotEmpty()) { if (jump > 0) firstFr.tryFocus() }
 
-    Column(Modifier.fillMaxSize().padding(horizontal = 28.dp).verticalScroll(androidx.compose.foundation.rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(Modifier.fillMaxSize().padding(horizontal = 28.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         // the big search field, with the microphone
         Row(Modifier.fillMaxWidth().padding(top = 6.dp).height(52.dp).clip(Pill).background(if (C.IsLight) Color.White else Color(0xF2F5F5F7)),
             verticalAlignment = Alignment.CenterVertically) {
@@ -486,54 +488,70 @@ fun OnyxSearch(nav: Nav) {
             SearchRecent { h -> q = h; query = h; jump++ }
             return@Column
         }
-        if (!busy && chHits.isEmpty() && vs.isEmpty() && progs.isEmpty()) { T("Ništa nije pronađeno", 15.sp, C.Soft); return@Column }
-        var first = true
-        fun takeFirst(): FocusRequester? = if (first) { first = false; firstFr } else null
-        if (chHits.isNotEmpty()) {
-            SearchHead("Kanali", chHits.size)
-            val f0 = takeFirst()
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                itemsIndexed(chHits) { i, h ->
-                    val ch = (h as Hit.Ch).ch
-                    Focusable(onClick = { playChannels(nav, listOf(ch), 0) }, onMenu = { pick = h }, focusRequester = if (i == 0) f0 else null,
-                        shape = Rnd(14.dp), normal = Color.Transparent, focused = C.Red, zoom = 1.03f, modifier = Modifier.width(210.dp).height(56.dp).glass(14.dp)) { f ->
-                        Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            ChannelLogo(ch, 34.dp, onLight = f)
-                            Column(Modifier.weight(1f)) {
-                                T(ch.name, 13.sp, if (f) C.OnRed else C.Text, FontWeight.Bold)
-                                T(nowOf(ch, 600)?.title ?: (tr("Kanal") + " ${ch.num}"), 11.sp, if (f) C.OnRed.copy(alpha = 0.65f) else C.Muted)
-                            }
-                        }
-                    }
-                }
+        // sport: matches already loaded in Sport (live scores) and sport broadcasts in the TV guide
+        val sportHits by produceState(emptyList<SportEvent>(), query) {
+            val nq = Sports.norm(query)
+            value = if (!SearchScope.on("sport") || nq.length < 2) emptyList() else withContext(Dispatchers.Default) {
+                Sports.lastCombined.values.flatten().distinctBy { it.id }.filter { e ->
+                    Sports.norm(listOfNotNull(e.home?.name, e.away?.name, e.title, e.league).joinToString(" ")).let { t -> nq.split(' ').all { w -> t.contains(w) } }
+                }.sortedWith(compareBy({ !it.live }, { it.start })).take(30)
             }
         }
-        if (progs.isNotEmpty()) {
-            SearchHead("Emisije u programu", progs.size)
-            val f0 = takeFirst()
-            progs.take(8).forEachIndexed { i, h ->
-                val p = h as Hit.Prog
-                val live = p.e.start <= System.currentTimeMillis() && p.e.end > System.currentTimeMillis()
-                Focusable(onClick = { pick = h }, focusRequester = if (i == 0) f0 else null, shape = Rnd(14.dp), normal = Color.Transparent, focused = C.Red, zoom = 1.01f,
-                    modifier = Modifier.fillMaxWidth(0.72f).height(42.dp).glass(14.dp)) { f ->
-                    Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        T(if (live) tr("UŽIVO") else java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(p.e.start)), 12.sp,  // i18n-ignore
-                            if (f) C.OnRed else C.Text, FontWeight.ExtraBold, modifier = Modifier.width(52.dp))
-                        T(p.e.title, 13.sp, if (f) C.OnRed else C.Text, modifier = Modifier.weight(1f))
-                        T(p.ch.name, 11.sp, if (f) C.OnRed.copy(alpha = 0.65f) else C.Muted)
-                    }
-                }
-            }
+        val tvList = (if (SearchScope.on("tv")) chHits + progs else emptyList())
+        val movies = if (SearchScope.on("vod")) vodHits else emptyList()
+        val shows = if (SearchScope.on("series")) serHits else emptyList()
+        if (!busy && tvList.isEmpty() && movies.isEmpty() && shows.isEmpty() && sportHits.isEmpty()) { T("Ništa nije pronađeno", 15.sp, C.Soft); return@Column }
+        // four columns side by side: the one you are in opens wide, the others get narrow
+        val cols = buildList {
+            if (SearchScope.on("tv")) add("tv"); if (SearchScope.on("vod")) add("vod"); if (SearchScope.on("series")) add("series"); if (SearchScope.on("sport")) add("sport")
         }
-        if (vs.isNotEmpty()) {
-            SearchHead("Filmovi i serije", vs.size)
-            val f0 = takeFirst()
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
-                itemsIndexed(vs) { i, h ->
-                    val (name, img, id) = when (h) { is Hit.Movie -> Triple(h.v.name, h.v.poster, h.v.id); is Hit.Show -> Triple(h.s.name, h.s.cover, h.s.id); else -> Triple("", null, "") }
-                    Box(Modifier.width(96.dp)) {
-                        PosterCard(cleanTitle(name).first, img, id, null, Modifier.fillMaxWidth(), fr = if (i == 0) f0 else null) {
-                            when (h) { is Hit.Movie -> nav.push(Screen.MovieDetail(h.v)); is Hit.Show -> nav.push(Screen.SeriesDetail(h.s)); else -> {} }
+        var open by remember { mutableStateOf<String?>(null) }
+        val firstCol = cols.firstOrNull { c -> when (c) { "tv" -> tvList.isNotEmpty(); "vod" -> movies.isNotEmpty(); "series" -> shows.isNotEmpty(); else -> sportHits.isNotEmpty() } } ?: cols.firstOrNull()
+        val wide = open ?: firstCol
+        Row(Modifier.fillMaxWidth().weight(1f).padding(bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            cols.forEach { c ->
+                val w by androidx.compose.animation.core.animateFloatAsState(if (c == wide) 3.2f else 1f, label = "col")
+                val (title, n) = when (c) { "tv" -> "TV" to tvList.size; "vod" -> "Filmovi" to movies.size; "series" -> "Serije" to shows.size; else -> "Sport" to sportHits.size }
+                val big = c == wide
+                Column(Modifier.weight(w).fillMaxHeight().glass(16.dp).onFocusChanged { if (it.hasFocus) open = c }.padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Kicker(title, if (big) C.Text else C.Soft, size = if (big) 12.sp else 10.sp, modifier = Modifier.weight(1f))
+                        T(n.toString(), if (big) 16.sp else 13.sp, if (big) C.Text else C.Muted, FontWeight.Bold)
+                    }
+                    val f0 = if (c == firstCol) firstFr else null
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxSize()) {
+                        when (c) {
+                            "tv" -> itemsIndexed(tvList) { i, h -> SearchRow(i, f0, big, onMenu = { pick = h }, onClick = {
+                                when (h) { is Hit.Ch -> playChannels(nav, listOf(h.ch), 0); else -> pick = h } }) { f ->
+                                when (h) {
+                                    is Hit.Ch -> { ChannelLogo(h.ch, if (big) 34.dp else 26.dp, onLight = f)
+                                        Column(Modifier.weight(1f)) { T(h.ch.name, 13.sp, if (f) C.OnRed else C.Text, FontWeight.Bold)
+                                            if (big) T(nowOf(h.ch, 600)?.title ?: (tr("Kanal") + " ${h.ch.num}"), 11.sp, if (f) C.OnRed.copy(alpha = 0.65f) else C.Muted) } }
+                                    is Hit.Prog -> { val live = h.e.start <= System.currentTimeMillis() && h.e.end > System.currentTimeMillis()
+                                        T(if (live) tr("UŽIVO") else java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(h.e.start)), 11.sp,  // i18n-ignore
+                                            if (f) C.OnRed else if (live) C.Danger else C.Text, FontWeight.ExtraBold)
+                                        Column(Modifier.weight(1f)) { T(h.e.title, 13.sp, if (f) C.OnRed else C.Text)
+                                            if (big) T(h.ch.name, 11.sp, if (f) C.OnRed.copy(alpha = 0.65f) else C.Muted) } }
+                                    else -> {}
+                                } } }
+                            "vod", "series" -> { val l = if (c == "vod") movies else shows
+                                itemsIndexed(l) { i, h ->
+                                    val (name, img) = when (h) { is Hit.Movie -> h.v.name to h.v.poster; is Hit.Show -> h.s.name to h.s.cover; else -> "" to null }
+                                    SearchRow(i, f0, big, tall = true, onClick = { when (h) { is Hit.Movie -> nav.push(Screen.MovieDetail(h.v)); is Hit.Show -> nav.push(Screen.SeriesDetail(h.s)); else -> {} } }) { f ->
+                                        Box(Modifier.width(if (big) 44.dp else 30.dp).aspectRatio(2f / 3f).clip(Rnd(6.dp)).background(C.Tile)) {
+                                            if (img != null) OnyxImage(img, name, Modifier.fillMaxSize(), maxW = 120) }
+                                        T(cleanTitle(name).first, if (big) 14.sp else 12.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, maxLines = 2, modifier = Modifier.weight(1f))
+                                    } } }
+                            else -> itemsIndexed(sportHits) { i, e ->
+                                SearchRow(i, f0, big, onClick = { val ch = (e.channels + e.ai + e.maybe).firstOrNull(); if (ch != null) playChannels(nav, listOf(ch), 0) else nav.root(Screen.Sports) }) { f ->
+                                    T(if (e.live) (e.clock ?: tr("UŽIVO")) else java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(e.start)), 11.sp,  // i18n-ignore
+                                        if (f) C.OnRed else if (e.live) C.Danger else C.Text, FontWeight.ExtraBold)
+                                    Column(Modifier.weight(1f)) {
+                                        T(if (e.home != null && e.away != null) e.home.name + " – " + e.away.name else e.title, 13.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold)
+                                        if (big) T(e.league + (if (e.home?.score != null) " · " + e.home.score + ":" + (e.away?.score ?: "") else ""), 11.sp, if (f) C.OnRed.copy(alpha = 0.65f) else C.Muted)  // i18n-ignore
+                                    }
+                                } }
                         }
                     }
                 }
@@ -543,6 +561,16 @@ fun OnyxSearch(nav: Nav) {
     }
     pick?.let { h -> HitActions(h, nav) { pick = null } }
     LaunchedEffect(Unit) { fr.tryFocus() }
+}
+
+/** One line in a search column: compact when the column is narrow, more text when it is open. */
+@Composable
+private fun SearchRow(i: Int, first: FocusRequester?, big: Boolean, tall: Boolean = false, onMenu: (() -> Unit)? = null, onClick: () -> Unit,
+                      content: @Composable RowScope.(Boolean) -> Unit) {
+    Focusable(onClick = onClick, onMenu = onMenu, focusRequester = if (i == 0) first else null, shape = Rnd(12.dp), normal = Color.Transparent, focused = C.Red,
+        zoom = 1.01f, modifier = Modifier.fillMaxWidth().height(if (tall) (if (big) 72.dp else 52.dp) else (if (big) 52.dp else 40.dp))) { f ->
+        Row(Modifier.fillMaxSize().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { content(f) }
+    }
 }
 
 @Composable

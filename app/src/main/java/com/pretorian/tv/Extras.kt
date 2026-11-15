@@ -190,12 +190,16 @@ fun UpdateAskDialog(nav: Nav) {
 /** After 3 crashes in 10 minutes: a safe start, going back to an older version, or trying again. */
 @Composable
 fun CrashGuardDialog(nav: Nav) {
-    var open by remember { mutableStateOf(CrashGuard.tooMany()) }
+    val quick = remember { CrashGuard.quick() }
+    var open by remember { mutableStateOf(CrashGuard.tooMany() || quick) }
     val ctx = androidx.compose.ui.platform.LocalContext.current
-    LaunchedEffect(Unit) { kotlinx.coroutines.delay(120_000); CrashGuard.clear() }   // two quiet minutes: all fine again
+    // 5 crashes right at start: a safe start happens by itself so this question can be shown at all
+    LaunchedEffect(Unit) { if (quick) { try { ctx.cacheDir.deleteRecursively() } catch (_: Exception) {}; Perf.set(1); Repo.clear() } }
+    LaunchedEffect(Unit) { kotlinx.coroutines.delay(30_000); CrashGuard.clearQuick(); kotlinx.coroutines.delay(90_000); CrashGuard.clear() }   // quiet minutes: all fine again
     if (!open) return
-    Popup("PRETORIAN se ruši", onDismiss = { open = false; CrashGuard.clear() }, width = 600.dp) {
-        T(trf("Verzija %s se srušila više puta zaredom. Šta želiš?", BuildInfo.VERSION), 14.sp, C.Soft, maxLines = 3)
+    Popup("PRETORIAN se ruši", onDismiss = { open = false; CrashGuard.clear(); CrashGuard.clearQuick() }, width = 600.dp) {
+        T(if (quick) trf("Verzija %s se 5 puta srušila odmah pri pokretanju. Siguran start je već urađen. Vratiti zadnju Stable verziju?", BuildInfo.VERSION)
+          else trf("Verzija %s se srušila više puta zaredom. Šta želiš?", BuildInfo.VERSION), 14.sp, C.Soft, maxLines = 4)
         OptionRow("Siguran start", R.drawable.lc_shield_check, sub = tr("briše keš i uključuje Lite"), color = C.Green) {
             try { ctx.cacheDir.deleteRecursively() } catch (_: Exception) {}
             Perf.set(1); Repo.clear(); CrashGuard.clear(); open = false

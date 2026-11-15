@@ -1018,6 +1018,7 @@ private val SECTIONS2 = listOf(
     Section("playlists", R.drawable.lc_list, "Playliste", "Dodaj, EPG izvori, grupe i kanali"),
     Section("profile", R.drawable.lc_users, "Profili", "Ko gleda, Google Drive"),
     Section("home", R.drawable.lc_house, "Početna", "Redovi i redoslijed"),
+    Section("general", R.drawable.lc_settings, "Opće", "Pokretanje, izlaz, mreža"),
     Section("look", R.drawable.lc_palette, "Izgled", "Tema, boja, veličina"),
     Section("language", R.drawable.lc_languages, "Jezik", "Meniji, opisi filmova"),
     Section("media", R.drawable.lc_play, "Plejer", "Titlovi, zvuk, stream, kontrole"),
@@ -1133,6 +1134,7 @@ fun SettingsScreen2(nav: Nav) {
                         "reminders" -> RemindersV2(nav)
                         "backup" -> BackupV2(nav)
                         "home" -> HomeV2()
+                        "general" -> GeneralV2()
                         "update" -> UpdateV2()
                         "diag" -> DiagnosticsV2()
                         "saver" -> SaverV2()
@@ -1151,6 +1153,7 @@ private val SEARCH_INDEX = listOf(
     "playlists" to "Playliste, dodaj playlistu, Xtream, M3U, Stalker, EPG izvori, grupe i kanali, osvježi playlistu",
     "profile" to "Profili, ko gleda, profil za djecu, Google Drive, sinhronizacija",
     "home" to "Početna, redovi, nove epizode, nastavi gledati, novo dodano, nedavni kanali",
+    "general" to "Opće, start s boxom, zadnji kanal, potvrdi izlaz, User-Agent, UDP proxy",
     "kids" to "Roditeljska kontrola, sakrij kategorije, odrasli, XXX, LGBT, trans, PIN",
     "look" to "Izgled, tema, boja, veličina, ikone, mod programa, Lite, Full, oblik ivica",
     "language" to "Jezik, meniji, opisi filmova, prevod",
@@ -1264,11 +1267,11 @@ fun SetSection(t: String) {
 /** One settings row: title and a short line under it, the value on the right in a pill. */
 @Composable
 fun SetRow(title: String, sub: String? = null, value: String? = null, arrow: String = "›", valueColor: Color? = null, new: Boolean = false,
-           focusRequester: FocusRequester? = null, onClick: () -> Unit) {
+           focusRequester: FocusRequester? = null, onLong: (() -> Unit)? = null, onClick: () -> Unit) {
     val id = "row:$title"
     val fr = setFocusFr(id, focusRequester)
     Focusable(modifier = Modifier.fillMaxWidth().heightIn(min = if (sub != null) 56.dp else 48.dp).border(1.dp, C.Line, Rnd(12.dp)),
-        onClick = { SetFocus.last = id; SetFocus.pending = true; onClick() }, onFocus = { SetFocus.last = id },
+        onClick = { SetFocus.last = id; SetFocus.pending = true; onClick() }, onMenu = onLong, onFocus = { SetFocus.last = id },
         focusRequester = fr, shape = Rnd(12.dp), normal = C.Rail, focused = C.Red, zoom = 1.01f) { f ->
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 10.dp, top = 7.dp, bottom = 7.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f)) {
@@ -1985,6 +1988,35 @@ private fun SimpleV2(nav: Nav) {
     }
 }
 
+/* ---------------------------------------------------------------- Opće */
+
+/** Start, exit and network – everything off or empty by default. */
+@Composable
+private fun GeneralV2() {
+    var rev by remember { mutableIntStateOf(0) }
+    var edit by remember { mutableStateOf<String?>(null) }
+    key(rev) {
+        SetPage("Opće", "Sve je isključeno dok ga ne uključiš.") {
+            SetSection("Pokretanje")
+            SetSwitch("Pokreni s boxom", "PRETORIAN se otvori kad se box upali", General.boot) { Prefs.put("gen_boot", it); rev++ }
+            SetSwitch("Zadnji kanal pri pokretanju", "odmah pusti kanal koji si zadnji gledao", General.lastChannel) { Prefs.put("gen_lastch", it); rev++ }
+            SetSection("Izlaz")
+            SetSwitch("Potvrdi izlaz", "Nazad na Početnoj prvo pita", General.confirmExit) { Prefs.put("gen_exit", it); rev++ }
+            SetSection("Mreža")
+            SetRow("User-Agent", "za providere koji puštaju samo određene aplikacije", Prefs.str("net_ua").ifBlank { tr("zadani") }) { edit = "net_ua" }
+            SetRow("UDP proxy (udpxy)", "za multicast IPTV od operatera, npr. 192.168.178.1:4022", Prefs.str("net_udpxy").ifBlank { tr("isključen") }) { edit = "net_udpxy" }
+        }
+    }
+    edit?.let { k ->
+        var v by remember(k) { mutableStateOf(Prefs.str(k)) }
+        Popup(tr(if (k == "net_ua") "User-Agent" else "UDP proxy (udpxy)"), { edit = null }, width = 640.dp) {  // i18n-ignore
+            Field(if (k == "net_ua") "npr. VLC/3.0.20 LibVLC/3.0.20" else "adresa:port", v, { v = it }, Modifier.fillMaxWidth())  // i18n-ignore
+            OptionRow("Spremi", R.drawable.lc_check, color = C.Green) { Prefs.put(k, v.trim()); edit = null; rev++ }
+            OptionRow("Obriši (zadano)", R.drawable.lc_x) { Prefs.put(k, ""); edit = null; rev++ }
+        }
+    }
+}
+
 /* ---------------------------------------------------------------- Roditeljska kontrola */
 
 /** Hidden categories, behind the PIN: the page opens only with the PIN. */
@@ -2190,13 +2222,23 @@ private fun ModeV2() {
 /* ---------------------------------------------------------------- Ažuriranje */
 
 @Composable
-private fun VerBox(modifier: Modifier, label: String, value: String, color: Color, icon: Int) {
-    Row(modifier.clip(Rnd(16.dp)).background(color.copy(alpha = 0.14f)).border(1.dp, color.copy(alpha = 0.55f), Rnd(16.dp)).padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Box(Modifier.size(38.dp).clip(Rnd(12.dp)).background(color), contentAlignment = Alignment.Center) { Ico(icon, 18.dp, Color(0xFF0F172A)) }
-        Column(Modifier.weight(1f)) {
-            T(label, 11.sp, color, FontWeight.Bold, maxLines = 1)
-            FitText(value, 20.sp, C.Text, FontWeight.Bold)
+private fun VerBox(modifier: Modifier, label: String, value: String, color: Color, icon: Int, stable: Boolean = false, onLong: (() -> Unit)? = null) {
+    Box(modifier.padding(top = 8.dp)) {
+        Focusable(onClick = {}, onMenu = onLong, shape = Rnd(16.dp), normal = color.copy(alpha = 0.14f), focused = color.copy(alpha = 0.3f), zoom = 1.01f,
+            modifier = Modifier.fillMaxWidth().border(1.dp, color.copy(alpha = 0.55f), Rnd(16.dp))) { _ ->
+            Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(Modifier.size(38.dp).clip(Rnd(12.dp)).background(color), contentAlignment = Alignment.Center) { Ico(icon, 18.dp, Color(0xFF0F172A)) }
+                Column(Modifier.weight(1f)) {
+                    T(label, 11.sp, color, FontWeight.Bold, maxLines = 1)
+                    FitText(value, 20.sp, C.Text, FontWeight.Bold)
+                }
+            }
+        }
+        // gold shield: this version is the Stable one
+        if (stable) Row(Modifier.align(Alignment.TopEnd).offset(x = (-12).dp, y = (-9).dp).clip(Pill)
+            .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFFFFE08A), Color(0xFFD4A537)))).padding(start = 6.dp, end = 10.dp, top = 3.dp, bottom = 3.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Ico(R.drawable.lc_shield_check, 13.dp, Color(0xFF5A3D00)); T("STABLE", 10.sp, Color(0xFF3A2700), FontWeight.ExtraBold)  // i18n-ignore
         }
     }
 }
@@ -2213,6 +2255,9 @@ private fun UpdateV2() {
     var backDone by remember { mutableStateOf(false) }
     var backErr by remember { mutableStateOf<String?>(null) }
     var showAll by remember { mutableStateOf<Release?>(null) }
+    var verMenu by remember { mutableStateOf(false) }
+    var tokenAsk by remember { mutableStateOf(0) }   // 0 no, 1 PIN, 2 key field
+    var promoting by remember { mutableStateOf(false) }
     val rels by load(rev / 1000) { Updater.releases() }
     val releases = (rels as? Load.Ok)?.value ?: emptyList()
     val u = Updater.available
@@ -2220,7 +2265,8 @@ private fun UpdateV2() {
         SetPage("Ažuriranje") {
             // ---- on top: the version you have (green) and, next to it, the new one (yellow)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                VerBox(Modifier.weight(1f), "Trenutna verzija", BuildInfo.VERSION + if (Updater.beta) " · Beta" else "", C.Green, R.drawable.lc_check)
+                VerBox(Modifier.weight(1f), "Trenutna verzija", BuildInfo.VERSION + if (Updater.beta && Updater.stableName != BuildInfo.VERSION) " · Beta" else "", C.Green, R.drawable.lc_check,
+                    stable = Updater.stableName == BuildInfo.VERSION, onLong = { verMenu = true })
                 if (u != null) VerBox(Modifier.weight(1f), "Nova verzija", u.name + (releases.firstOrNull { it.name == u.name }?.date?.let { " · $it" } ?: ""), C.Amber, R.drawable.lc_download)
             }
             val pr = Updater.progress
@@ -2271,9 +2317,35 @@ private fun UpdateV2() {
             val stable = releases.firstOrNull()
             SetSection("Vrati verziju")
             val p0 = prev.firstOrNull()
-            SetRow("Prethodna verzija", p0?.let { it.name + " · " + it.date } ?: if (rels is Load.Loading) tr("Učitavam verzije…") else tr("Nema starijih verzija za vraćanje."), if (p0 != null) "›" else "") { p0?.let { back = it } }
+            SetRow("Prethodna verzija", p0?.let { it.name + " · " + it.date + " · " + tr("drži OK: Vrati odmah") } ?: if (rels is Load.Loading) tr("Učitavam verzije…") else tr("Nema starijih verzija za vraćanje."),
+                if (p0 != null) "›" else "", onLong = { p0?.let { back = it } }) { p0?.let { back = it } }
             SetRow("Zadnja Stable", stable?.let { it.name + " · " + it.date + if (it.name == BuildInfo.VERSION) " · " + tr("instalirana") else "" } ?: "",
                 if (stable != null && stable.name != BuildInfo.VERSION) "›" else "") { stable?.takeIf { it.name != BuildInfo.VERSION }?.let { back = it } }
+        }
+    }
+    // long OK on the version: make it the Stable one for everybody (author only, with his GitHub key)
+    if (verMenu) Popup(BuildInfo.VERSION + if (Updater.beta) " · Beta" else "", { verMenu = false }, width = 520.dp) {
+        if (Updater.stableName == BuildInfo.VERSION) T("Ova verzija je već Stable.", 13.sp, C.Green)
+        else OptionRow(if (promoting) "Objavljujem…" else "Označi kao Stable · pošalji svima", R.drawable.lc_shield_check, color = C.Amber) {
+            if (promoting) return@OptionRow
+            if (!Updater.canPublish) { verMenu = false; tokenAsk = 1; return@OptionRow }
+            promoting = true
+            scope.launch {
+                val err = Updater.promote(); promoting = false; verMenu = false
+                Toast.makeText(ctx, err ?: tr("Poslano: GitHub pravi Stable izdanje (oko 5 min)"), Toast.LENGTH_LONG).show()
+            }
+        }
+        if (Updater.canPublish) OptionRow("Promijeni GitHub ključ", R.drawable.lc_key_round) { verMenu = false; tokenAsk = 1 }
+        OptionRow("Odustani", R.drawable.lc_x) { verMenu = false }
+    }
+    if (tokenAsk == 1) PinDialog(tr("GitHub ključ"), tr("Unesi PIN"), onDismiss = { tokenAsk = 0 }) { pin -> val e = Lock.check(pin); if (e == null) tokenAsk = 2; e }
+    if (tokenAsk == 2) {
+        var t by remember { mutableStateOf("") }
+        Popup(tr("GitHub ključ (samo za autora)"), { tokenAsk = 0 }, width = 640.dp) {
+            T("Ključ ostaje samo na ovom boxu i služi samo za „Označi kao Stable“.", 12.sp, C.Muted, maxLines = 2)
+            Field("github_pat_…", t, { t = it }, Modifier.fillMaxWidth())  // i18n-ignore
+            OptionRow("Spremi", R.drawable.lc_check, color = C.Green) { Prefs.put("gh_token", t.trim()); tokenAsk = 0; verMenu = true }
+            OptionRow("Obriši ključ", R.drawable.lc_x) { Prefs.put("gh_token", ""); tokenAsk = 0 }
         }
     }
     if (later && u != null) Popup("Podsjeti me", { later = false }, width = 460.dp) {

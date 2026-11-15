@@ -311,3 +311,37 @@ fun SearchRecent(onPick: (String) -> Unit) {
         }
     }
 }
+
+
+/** Where search looks (long OK on Search in the top bar): TV, Movies, Series, Sport. */
+object SearchScope {
+    val KINDS = listOf("tv" to "TV", "vod" to "Filmovi", "series" to "Serije", "sport" to "Sport")
+    var rev by androidx.compose.runtime.mutableIntStateOf(0)
+    fun on(k: String): Boolean { rev; return k in Prefs.str("search_in", "tv,vod,series,sport").split(',') }
+    fun set(k: String, v: Boolean) {
+        val cur = Prefs.str("search_in", "tv,vod,series,sport").split(',').filter { it.isNotBlank() }.toMutableSet()
+        if (v) cur.add(k) else cur.remove(k)
+        if (cur.isEmpty()) cur.add(k)   // never nothing
+        Prefs.put("search_in", KINDS.map { it.first }.filter { it in cur }.joinToString(",")); rev++
+    }
+}
+
+/** One under the other, each with our switch: All, TV, Movies, Series, Sport. */
+@Composable
+fun SearchWherePopup(onDismiss: () -> Unit) {
+    Popup(tr("Pretraga traži u"), onDismiss, width = 440.dp) {
+        val all = SearchScope.KINDS.all { SearchScope.on(it.first) }
+        ToggleRow(tr("Sve"), all) { v -> SearchScope.KINDS.forEach { SearchScope.set(it.first, v) }; if (!v) SearchScope.set("tv", true) }
+        SearchScope.KINDS.forEach { (k, l) -> ToggleRow(tr(l), SearchScope.on(k)) { v -> SearchScope.set(k, v) } }
+    }
+}
+
+@Composable
+fun ToggleRow(label: String, on: Boolean, onChange: (Boolean) -> Unit) {
+    Focusable(onClick = { onChange(!on) }, shape = Rnd(12.dp), normal = Color.Transparent, focused = C.Red, zoom = 1f, modifier = Modifier.fillMaxWidth().height(48.dp)) { f ->
+        Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            T(label, 15.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Toggle(on, f, height = 24.dp)
+        }
+    }
+}

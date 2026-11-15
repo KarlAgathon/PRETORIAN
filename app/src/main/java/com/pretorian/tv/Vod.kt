@@ -176,7 +176,7 @@ private fun WaveBrowser(nav: Nav, series: Boolean) {
                         val sel = group?.id == c.id
                         val locked = ovr.isLocked(kind, c.id)
                         Focusable(onClick = { gate.run("$kind:${c.id}", locked) { group = c } },
-                            onMenu = if (Lock.simple || c.id == G_CONTINUE || c.id == G_NEW) null else ({ groupMenu = c }),
+                            onMenu = if (c.id == G_NEW) ({ TopMenus.clearKind = kind }) else if (Lock.simple || c.id == G_CONTINUE) null else ({ groupMenu = c }),
                             focusRequester = if (!Look.age && i == 0) firstChip else null, shape = Pill,
                             normal = if (sel) C.Red else C.Card, focused = if (sel) C.Red else C.CardHi, zoom = 1.04f, modifier = Modifier.height(36.dp)) { _ ->
                             Row(Modifier.align(Alignment.Center).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -350,7 +350,7 @@ private fun VodClassic(nav: Nav, series: Boolean) {
                                         shape = shape,
                                         onClick = { gate.run("$kind:${g.id}", locked) { if (group?.id != g.id) VodMemory.item.remove(kind); group = g } },
                                         onFocus = { focusedGroup = g; onPosters = false },
-                                        onMenu = if (Lock.simple || special) null else ({ groupMenu = g }),
+                                        onMenu = if (g.id == G_NEW) ({ TopMenus.clearKind = kind }) else if (Lock.simple || special) null else ({ groupMenu = g }),
                                         focusRequester = fr,
                                         normal = if (selected) (if (Look.age) C.CardHi else C.Red.copy(alpha = 0.28f)) else Color.Transparent,
                                         focused = if (Look.age) C.Red else null,
