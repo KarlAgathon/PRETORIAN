@@ -474,7 +474,7 @@ object Repo {
 
     suspend fun channels(p: Playlist, groupId: String): List<Channel> = cached("ch_${p.id}_$groupId") {
         if (p.type == SourceType.XTREAM) Xtream(p).channels(groupId)
-        else if (p.type == SourceType.STALKER) allChannels(p).filter { it.group == groupId }
+        else if (p.type == SourceType.STALKER) ((cache["all_${p.id}"] as? List<*>)?.filterIsInstance<Channel>() ?: Stalker(p).allChannels().also { cache["all_${p.id}"] = it }).filter { it.group == groupId }
         else m3uChannels(p).filter { it.group == groupId }
     }
 

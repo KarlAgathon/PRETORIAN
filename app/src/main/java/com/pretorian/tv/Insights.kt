@@ -472,9 +472,10 @@ fun DeviceV2() {
             }
         }
         when (val st = cards) {
-            is Load.Ok -> CardGrid(3, st.value.map { c -> { m: Modifier ->
-                InfoCard(c.label, c.title, c.sub, c.icon, Color(c.color), m, bar = c.bar) { open = c }
-            } })
+            is Load.Ok -> {
+                val list: List<@Composable (Modifier) -> Unit> = st.value.map { c -> { m -> InfoCard(c.label, c.title, c.sub, c.icon, Color(c.color), m, bar = c.bar) { open = c } } }
+                CardGrid(3, list)
+            }
             is Load.Err -> Message("Greška", st.message)
             else -> Box(Modifier.fillMaxWidth().height(120.dp)) { Loading("") }
         }
