@@ -139,6 +139,13 @@ object Dusk {
 
 @Composable
 fun DuskBackground() {
+    if (Look.theme == "liquid") {
+        // Liquid: a soft blurred picture behind see-through glass menus
+        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.fallback_bd1), null, contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            modifier = Modifier.fillMaxSize().blur(28.dp))
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0x80061018), Color(0x99061018), Color(0xCC03070C)))))
+        return
+    }
     if (Look.theme != "vece") return   // the evening blue belongs to Predvečerje only; other themes have their own background
     // "evening in New York": deep navy, a soft blue light at the top right, darker towards the bottom. No picture at all.
     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF0A0F1F), Color(0xFF0C1428), Color(0xFF080B14)))))

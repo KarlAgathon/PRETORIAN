@@ -42,9 +42,16 @@ import kotlinx.coroutines.sync.withPermit
 /* ============================================================== small pieces of the new look */
 
 /** Glass panel: a see-through box with a thin line around it. */
-fun Modifier.glass(r: Dp = 18.dp): Modifier = this.clip(Rnd(r))
-    .background(if (C.IsLight) Color(0x0F000000) else Color(0x14FFFFFF))
-    .border(1.dp, C.Line, Rnd(r))
+fun Modifier.glass(r: Dp = 18.dp): Modifier = when (Look.theme) {
+    "liquid" -> this.clip(Rnd(r)).background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0x33FFFFFF), Color(0x14FFFFFF))))
+        .border(1.dp, androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0x66FFFFFF), Color(0x1AFFFFFF))), Rnd(r))
+    "classic" -> this.clip(Rnd(r)).background(C.Tile)
+    "papir" -> this.clip(Rnd(r)).background(Color.White).border(1.dp, C.Line, Rnd(r))
+    else -> this.clip(Rnd(r)).background(if (C.IsLight) Color(0x0F000000) else Color(0x14FFFFFF)).border(1.dp, C.Line, Rnd(r))
+}
+
+/** The side column (groups, categories): darker than the list next to it in Classic. */
+fun Modifier.glassSide(r: Dp = 18.dp): Modifier = if (Look.theme == "classic") this.clip(Rnd(r)).background(C.Rail) else glass(r)
 
 /** Small spaced capitals above a block ("MOJE", "KATEGORIJE PROVIDERA"). */
 @Composable
@@ -163,7 +170,7 @@ fun OnyxTv(nav: Nav, onGuide: () -> Unit) {
             val focusables = (rows as? Load.Ok)?.value?.filter { it !is TRow.Title } ?: emptyList()
             var upJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
             val wrapScope = rememberCoroutineScope()
-            Column(Modifier.width(196.dp).fillMaxHeight().glass().padding(vertical = 8.dp).onPreviewKeyEvent { e ->
+            Column(Modifier.width(196.dp).fillMaxHeight().glassSide().padding(vertical = 8.dp).onPreviewKeyEvent { e ->
                 if (e.type != KeyEventType.KeyDown || focusables.size < 2) return@onPreviewKeyEvent false
                 val all = (rows as? Load.Ok)?.value ?: return@onPreviewKeyEvent false
                 val first = focusables.first().id; val last = focusables.last().id

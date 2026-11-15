@@ -508,10 +508,11 @@ object Repo {
         if (p.type == SourceType.XTREAM) Xtream(p).channels(groupId)
         else if (p.type == SourceType.STALKER) ((cache["all_${p.id}"] as? List<*>)?.filterIsInstance<Channel>() ?: Stalker(p).allChannels().also { cache["all_${p.id}"] = it }).filter { it.group == groupId }
         else m3uChannels(p).filter { it.group == groupId }
-    }
+    }.let { l -> Parental.channels(p, l) }
 
     /** every live channel of the playlist ("All channels", sports search) */
-    suspend fun allChannels(p: Playlist): List<Channel> = cached("all_${p.id}") {
+    suspend fun allChannels(p: Playlist): List<Channel> = rawAllChannels(p).let { l -> Parental.channels(p, l) }
+    private suspend fun rawAllChannels(p: Playlist): List<Channel> = cached("all_${p.id}") {
         if (p.type == SourceType.XTREAM) Xtream(p).allChannels() else if (p.type == SourceType.STALKER) Stalker(p).allChannels() else m3uChannels(p)
     }
 
@@ -520,7 +521,8 @@ object Repo {
     var diskDir: java.io.File? = null
 
     /** Every movie or series of a playlist. Kept in memory and on the box for 24 hours, so search is instant. */
-    suspend fun catalog(p: Playlist, kind: String): List<JSONObject> =
+    suspend fun catalog(p: Playlist, kind: String): List<JSONObject> = rawCatalog(p, kind).let { l -> Parental.catalog(p, kind, l) }
+    private suspend fun rawCatalog(p: Playlist, kind: String): List<JSONObject> =
         if (p.type != SourceType.XTREAM) emptyList() else withContext(Dispatchers.IO) {
             val key = "cat_${kind}_${p.id}"
             catalogs[key]?.get()?.let { return@withContext it }
@@ -547,7 +549,7 @@ object Repo {
 
     suspend fun movies(p: Playlist, groupId: String): List<Vod> = cached("mv_${p.id}_$groupId") {
         if (p.type == SourceType.STALKER) Stalker(p).movies(groupId) else Xtream(p).movies(groupId)
-    }
+    }.let { l -> if (!Parental.active) l else if (groupId in Parental.blocked(p, "vod")) emptyList() else l.filter { !Parental.hides(it.name) } }
 
     suspend fun movieInfo(p: Playlist, id: String): VodInfo = cached("mi_${p.id}_$id") {
         if (p.type == SourceType.STALKER) VodInfo(null, null, null, null, null, null, null, null) else Xtream(p).movieInfo(id)
@@ -559,7 +561,7 @@ object Repo {
 
     suspend fun series(p: Playlist, groupId: String): List<SeriesItem> = cached("se_${p.id}_$groupId") {
         if (p.type == SourceType.STALKER) Stalker(p).series(groupId) else Xtream(p).series(groupId)
-    }
+    }.let { l -> if (!Parental.active) l else if (groupId in Parental.blocked(p, "series")) emptyList() else l.filter { !Parental.hides(it.name) } }
 
     suspend fun episodes(p: Playlist, id: String): List<Episode> = cached("ep_${p.id}_$id") {
         if (p.type == SourceType.STALKER) Stalker(p).episodes(id) else Xtream(p).episodes(id)

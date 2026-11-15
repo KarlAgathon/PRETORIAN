@@ -40,15 +40,14 @@ object Look {
         "Narandžasta" to Color(0xFFEA580C), "Ljubičasta" to Color(0xFF9333EA), "Tirkizna" to Color(0xFF0891B2),
         "Roza" to Color(0xFFDB2777), "Zlatna" to Color(0xFFCA8A04),
     )
-    val THEMES = listOf("vece" to "Predvečerje", "bw" to "Crno-bijela", "pijesak" to "Pijesak", "glass" to "Glass",
-        "liquid" to "Liquid", "classic" to "Classic", "dune" to "Dune", "oled" to "OLED crna", "ocean" to "Ocean",
-        "kino" to "Kino", "aurora" to "Aurora", "papir" to "Papir")
+    val THEMES = listOf("vece" to "Predvečerje", "bw" to "Crno-bijela", "pijesak" to "Pijesak",
+        "liquid" to "Liquid", "classic" to "Classic", "oled" to "OLED crna", "kino" to "Kino", "papir" to "Papir")
     /** themes with their own focus colour: accent and the text on it */
     val FIXED = mapOf(
         "liquid" to (Color(0xFF22D3EE) to Color(0xFF02141A)), "classic" to (Color(0xFFF1F5F9) to Color(0xFF1E293B)),
-        "dune" to (Color(0xFFFF8A1F) to Color(0xFF140A00)), "oled" to (Color(0xFFD4A537) to Color(0xFF120D00)),
-        "ocean" to (Color(0xFF22D3EE) to Color(0xFF02141A)), "kino" to (Color(0xFFE11D2A) to Color.White),
-        "aurora" to (Color(0xFFA78BFA) to Color(0xFF14082E)), "papir" to (Color(0xFF1E3A8A) to Color.White),
+        "oled" to (Color(0xFFD4A537) to Color(0xFF120D00)),
+        "kino" to (Color(0xFFE11D2A) to Color.White),
+        "papir" to (Color(0xFF111827) to Color.White),
     )
     /** size of everything together, 0–100 (Settings › Look › Size): 100 is about 35 % bigger */
     var uiScale by mutableIntStateOf(0)
@@ -120,24 +119,17 @@ private fun palette(): Palette {
         "glass" -> Palette(Color(0xFF16202B), alpha(Color(0xFF26323F), o), Color(0x1AFFFFFF), Color(0x24FFFFFF),
             Color(0xFFF4F6F8), Color(0xFFA9B3BE), Color(0xFFD5DBE1), alpha(Color(0xFF2E3C4A), o), false)
         // Liquid: see-through menus over the picture, cyan focus
-        "liquid" -> Palette(Color(0xFF07131C), alpha(Color(0xFF0B1A26), (o * 0.45f).toInt().coerceIn(20, 60)), Color(0x1AFFFFFF), Color(0x2EFFFFFF),
-            Color(0xFFF8FAFC), Color(0xFFA5B4C3), Color(0xFFD9E2EC), Color(0x26FFFFFF), false)
+        "liquid" -> Palette(Color(0xFF07131C), Color(0x2EFFFFFF), Color(0x24FFFFFF), Color(0x47FFFFFF),
+            Color(0xFFFFFFFF), Color(0xFFD0DAE4), Color(0xFFEDF2F7), Color(0x2BFFFFFF), false)
         // Classic: flat slate blue
-        "classic" -> Palette(Color(0xFF2B3A4E), alpha(Color(0xFF243245), o.coerceAtLeast(85)), Color(0x1FFFFFFF), Color(0x29FFFFFF),
-            Color(0xFFF1F5F9), Color(0xFFA9B6C6), Color(0xFFD5DEE8), Color(0xFF34465C), false)
-        // Dune: black with dark grey blocks, orange focus
-        "dune" -> Palette(Color(0xFF000000), alpha(Color(0xFF0B0B0D), o.coerceAtLeast(85)), Color(0xFF1C1C20), Color(0x22FFFFFF),
-            Color(0xFFF5F5F5), Color(0xFF9A9AA2), Color(0xFFD0D0D6), Color(0xFF232328), false)
+        "classic" -> Palette(Color(0xFF2A3A4F), Color(0xFF1C2735), Color(0x1FFFFFFF), Color(0x29FFFFFF),
+            Color(0xFFF1F5F9), Color(0xFFA9B6C6), Color(0xFFD5DEE8), Color(0xFF3B4E66), false)
         "oled" -> Palette(Color(0xFF000000), alpha(Color(0xFF000000), 100), Color(0x14FFFFFF), Color(0x1FFFFFFF),
             Color(0xFFF5F5F5), Color(0xFF8C8C8C), Color(0xFFCFCFCF), Color(0xFF0F0F0F), false)
-        "ocean" -> Palette(Color(0xFF041822), alpha(Color(0xFF07222F), (o * 0.7f).toInt().coerceIn(35, 95)), Color(0x1A7DD3FC), Color(0x2A7DD3FC),
-            Color(0xFFF0FBFF), Color(0xFF8FB4C4), Color(0xFFCDE6F0), Color(0xFF0A2C3B), false)
         "kino" -> Palette(Color(0xFF111214), alpha(Color(0xFF17181B), o.coerceAtLeast(70)), Color(0x14FFFFFF), Color(0x1FFFFFFF),
             Color(0xFFF5F5F5), Color(0xFF9C9CA3), Color(0xFFD4D4D8), Color(0xFF1D1E22), false)
-        "aurora" -> Palette(Color(0xFF0B1030), alpha(Color(0xFF141A3D), (o * 0.55f).toInt().coerceIn(25, 85)), Color(0x1CFFFFFF), Color(0x2EFFFFFF),
-            Color(0xFFF7F5FF), Color(0xFFB3AED0), Color(0xFFE0DCF5), Color(0x26FFFFFF), false)
-        "papir" -> Palette(Color(0xFFF4F1EA), alpha(Color(0xFFFFFFFF), o.coerceAtLeast(80)), Color(0x0F000000), Color(0x1F000000),
-            Color(0xFF16181D), Color(0xFF5B5F68), Color(0xFF2E3138), Color(0xFFFFFFFF), true)
+        "papir" -> Palette(Color(0xFFEEF0F3), Color(0xFFFFFFFF), Color(0xFFFFFFFF), Color(0xFFD5D9DF),
+            Color(0xFF111827), Color(0xFF6B7280), Color(0xFF374151), Color(0xFFFFFFFF), true)
         "dew" -> Palette(Color(0xFF221B36), alpha(Color(0xFF2A2340), (o * 0.55f).toInt().coerceAtLeast(25)), Color(0x1CFFFFFF), Color(0x2EFFFFFF),
             Color(0xFFF7F4FA), Color(0xFFB9B0C8), Color(0xFFE2DCEA), Color(0x26FFFFFF), false)
         else -> Palette(Color(0xFF0B0D12), alpha(Color(0xFF0E1117), o.coerceAtLeast(60)), Color(0x0FFFFFFF), Color(0x14FFFFFF),
@@ -165,15 +157,7 @@ object C {
         else if (Look.theme == "glass") androidx.compose.ui.graphics.Brush.linearGradient(
             listOf(Color(0xFF0E1A26), Color(0xFF1B3346), Color(0xFF2B4A5E)),
             start = androidx.compose.ui.geometry.Offset(0f, 0f), end = androidx.compose.ui.geometry.Offset(2400f, 1400f))
-        else if (Look.theme == "liquid") androidx.compose.ui.graphics.Brush.linearGradient(
-            listOf(Color(0xFF041019), Color(0xFF0B2233), Color(0xFF123247)),
-            start = androidx.compose.ui.geometry.Offset(0f, 0f), end = androidx.compose.ui.geometry.Offset(2400f, 1400f))
-        else if (Look.theme == "ocean") androidx.compose.ui.graphics.Brush.linearGradient(
-            listOf(Color(0xFF02121A), Color(0xFF05293A), Color(0xFF0A3D52)),
-            start = androidx.compose.ui.geometry.Offset(0f, 0f), end = androidx.compose.ui.geometry.Offset(2400f, 1400f))
-        else if (Look.theme == "aurora") androidx.compose.ui.graphics.Brush.linearGradient(
-            listOf(Color(0xFF0A0F2C), Color(0xFF231A4F), Color(0xFF123F3A)),
-            start = androidx.compose.ui.geometry.Offset(0f, 0f), end = androidx.compose.ui.geometry.Offset(2400f, 1400f))
+        else if (Look.theme == "liquid") androidx.compose.ui.graphics.SolidColor(Color.Transparent)
         else if (Look.theme == "dew") androidx.compose.ui.graphics.Brush.linearGradient(
             listOf(Color(0xFF1C2140), Color(0xFF2E2347), Color(0xFF4A2A48), Color(0xFF5C3045)),
             start = androidx.compose.ui.geometry.Offset(0f, 0f), end = androidx.compose.ui.geometry.Offset(2400f, 1400f))
@@ -201,7 +185,7 @@ object C {
     val Amber get() = if (IsLight) Color(0xFFB45309) else Color(0xFFFBBF24)
     val Danger = Color(0xFFEF4444)
     /** background of menus and popups: see-through glass or solid black */
-    val Overlay get() = if (Look.theme == "liquid") Color(0xFF0B1A26).copy(alpha = 0.55f) else if (Look.overlay == 1) (if (IsLight) Color.White else Color(0xFF07090D))
+    val Overlay get() = if (Look.theme == "liquid") Color(0xFF16222E).copy(alpha = 0.62f) else if (Look.theme == "papir") Color.White else if (Look.overlay == 1) (if (IsLight) Color.White else Color(0xFF07090D))
                         else (if (IsLight) Color.White else Color(0xFF151A23)).copy(alpha = Look.menuOpacity.coerceIn(60, 100) / 100f)
     /** player info bar background */
     val OverlayBar get() = if (Look.theme == "liquid") Color(0x66000000) else if (Look.overlay == 1) Color(0xF2000000) else Color(0x99000000)

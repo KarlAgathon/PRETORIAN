@@ -1,6 +1,5 @@
-8 novih tema: Liquid, Classic, Dune, OLED crna, Ocean, Kino, Aurora, Papir
-Jedan zeleni prekidač za uključeno/isključeno u cijeloj aplikaciji
-Playliste: klik na playlistu otvara Uredi, Osvježi, Aktivna i Obriši
-Dijagnostika: Zapis streama – koliko i na kojim kanalima zastaje, s automatskim brisanjem
-Postavke: ulaz u sekciju počinje na vrhu, lijevo vraća tačno na tu sekciju
-TV: lista grupa ide ukrug, dva brza klika gore vode u gornju traku
+Roditeljska kontrola: sakriva i 18+, [X], Rated R/X – iz kategorija, Svih kanala, svih filmova, Početne i Pretrage
+Liquid: pravo staklo preko mutne slike
+Classic: tamnija kolona kategorija, svjetlija lista
+Papir: moderna svijetla tema (bijele kartice na svijetlo sivoj)
+Uklonjene teme Glass, Dune, Ocean, Aurora

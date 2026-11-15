@@ -218,13 +218,14 @@ class Ovr(private val ctx: Context, private val pid: String) {
 }
 
 /** group names that are for adults only */
-val ADULT = Regex("(?i)\\b(xxx|adult|adults|18\\+|porn\\w*|erotic\\w*|for adults|za odrasle|\\+18)\\b|xxx")
+// "18+ - Title", "[X] Title", "RATED R", "Rated X", "NC-17" … (no word boundary after "+" or "]": "18+ -" used to slip through)
+val ADULT = Regex("(?i)\\b(xxx|adults?|porn\\w*|erotic\\w*|for adults|za odrasle|nc-?17|rated[ _-]*[rx])\\b|xxx|(^|[^0-9])18\\s*\\+|\\+\\s*18\\b|\\[\\s*x\\s*]|\\(\\s*x\\s*\\)")
 
 
 /** Settings › Parental controls: whole kinds of categories hidden by their names (adult, LGBT, trans), opened only with the PIN. */
 object Parental {
     val KINDS = listOf(
-        Triple("adult", "Filmovi i kanali za odrasle", "XXX, Adult, 18+, porno"),
+        Triple("adult", "Filmovi i kanali za odrasle", "XXX, Adult, 18+, [X], Rated R, Rated X"),
         Triple("lgbt", "LGBT kategorije", "LGBT, LGBTQ, gay, queer"),
         Triple("trans", "Trans kategorije", "trans, transgender"),
     )
@@ -238,4 +239,21 @@ object Parental {
     fun on(k: String) = Prefs.bool("par_$k", k == "adult")
     fun set(k: String, v: Boolean) { Prefs.put("par_$k", v); Repo.clear(); SearchIndex.reset() }
     fun hides(name: String): Boolean = !unlocked && KINDS.any { (k, _, _) -> on(k) && RX[k]!!.containsMatchIn(name) }
+    val active get() = !unlocked && KINDS.any { on(it.first) }
+    /** ids of the provider categories that are hidden (TV "live", "vod", "series") */
+    suspend fun blocked(p: Playlist, kind: String): Set<String> = try {
+        when (kind) { "live" -> Repo.liveGroups(p); "vod" -> Repo.vodGroups(p); else -> Repo.seriesGroups(p) }.filter { hides(it.name) }.map { it.id }.toSet()
+    } catch (e: Exception) { emptySet() }
+    /** channels of hidden categories or with hidden names go away everywhere, "All channels" included */
+    suspend fun channels(p: Playlist, l: List<Channel>): List<Channel> {
+        if (!active) return l
+        val b = blocked(p, "live")
+        return l.filter { it.group !in b && !hides(it.name) && !hides(it.group) }
+    }
+    /** the whole movie / series list (search, "new", home rows) without hidden categories and titles */
+    suspend fun catalog(p: Playlist, kind: String, l: List<org.json.JSONObject>): List<org.json.JSONObject> {
+        if (!active) return l
+        val b = blocked(p, kind)
+        return l.filter { it.optString("c") !in b && !hides(it.optString("n")) }
+    }
 }
