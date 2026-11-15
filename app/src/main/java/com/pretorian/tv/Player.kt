@@ -67,6 +67,8 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import java.io.File
 import androidx.media3.common.C as MC
 
@@ -126,7 +128,8 @@ fun iso2(raw: String?): String? {
 
 /** Audio and subtitle tracks of a stream, read before playing (opens the stream for a moment). */
 @OptIn(UnstableApi::class)
-suspend fun probeTracks(ctx: Context, url: String): Pair<List<androidx.media3.common.Format>, List<androidx.media3.common.Format>>? {
+suspend fun probeTracks(ctx: Context, link: String): Pair<List<androidx.media3.common.Format>, List<androidx.media3.common.Format>>? {
+    val url = try { Stalker.resolve(ctx, link) } catch (e: Exception) { return null }
     val player = buildPlayer(ctx)
     return try {
         kotlinx.coroutines.withTimeoutOrNull(20_000) {
@@ -237,6 +240,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     var subFile by remember { mutableStateOf(s.items.getOrNull(index)?.subFile) }
     var resize by remember { mutableIntStateOf(0) }
     val player = remember { Preview.stop(); buildPlayer(ctx) }
+    val playerScope = rememberCoroutineScope()
     val applied = remember { booleanArrayOf(false) }
     val step = Prefs.seekStep * 1000L
     val focus = remember { FocusRequester() }
@@ -268,6 +272,14 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     }
 
     fun loadMedia(item: PlayItem, file: String?, at: Long, play: Boolean = true) {
+        // Stalker portal: the real address is asked for right before playing
+        if (Stalker.isLink(item.url)) {
+            playerScope.launch {
+                try { loadMedia(item.copy(url = Stalker.resolve(ctx, item.url)), file, at, play) }
+                catch (e: Exception) { error = e.message ?: tr("Portal nije dao link") }
+            }
+            return
+        }
         val b = MediaItem.Builder().setUri(item.url)
         if (file != null) b.setSubtitleConfigurations(listOf(
             MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(File(file)))
@@ -291,6 +303,9 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         val it = items.getOrNull(index) ?: return
         val dur = player.duration.takeIf { d -> d > 0 } ?: return
         val pos = if (done) dur else player.currentPosition
+        if ((done || pos >= dur * 0.9) && Watch.get(ctx, it.url)?.watched != true) {
+            if (it.season != null) Stats.episode(it.search ?: it.title, it.season) else Stats.film()
+        }
         Watch.save(ctx, Progress(it.url, it.title, it.logo, pos, dur, System.currentTimeMillis(), it.search.takeIf { _ -> it.season != null },
             it.season, it.episode, next = false, done = done || pos >= dur * 0.9, pid = p?.id ?: ""))
         // finished an episode: the next one shows up in "Continue watching"
@@ -303,8 +318,10 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     DisposableEffect(Unit) {
         val l = object : Player.Listener {
             override fun onPlayerError(e: PlaybackException) {
-                if (s.live && reconnect < 3) { reconnect++; retryToken++ }
-                else if (!s.live && !retried) { retried = true; retryToken++ }
+                // automatic recovery: up to 3 quiet tries (live and films), keeping the position of a film
+                if (Recover.on && reconnect < 3) { reconnect++; Stats.recovery(); retryToken++ }
+                else if (!Recover.on && s.live && reconnect < 3) { reconnect++; retryToken++ }
+                else if (!Recover.on && !s.live && !retried) { retried = true; retryToken++ }
                 else { reconnect = 0; error = errorText(e, s.live) }
             }
             override fun onPlaybackStateChanged(state: Int) {
@@ -325,6 +342,11 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         val a = object : androidx.media3.exoplayer.analytics.AnalyticsListener {
             override fun onBandwidthEstimate(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime, totalLoadTimeMs: Int, totalBytesLoaded: Long, bitrateEstimate: Long) {
                 bitrate = bitrateEstimate
+            }
+            override fun onLoadCompleted(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                                         loadEventInfo: androidx.media3.exoplayer.source.LoadEventInfo, mediaLoadData: androidx.media3.exoplayer.source.MediaLoadData) {
+                val it = items.getOrNull(index)
+                Stats.bytes(if (s.live) "tv" else if (it?.season != null) "ser" else "mov", loadEventInfo.bytesLoaded)
             }
         }
         player.addListener(l); player.addAnalyticsListener(a)
@@ -355,11 +377,32 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     }
     LaunchedEffect(retryToken) {
         if (retryToken == 0) return@LaunchedEffect
-        delay(if (s.live) when (reconnect) { 2 -> 5000L; 3 -> 10_000L; else -> 2000L } else 2000L)
+        delay(if (Recover.on) when (reconnect) { 1 -> 300L; 2 -> 1500L; else -> 3000L }
+              else if (s.live) when (reconnect) { 2 -> 5000L; 3 -> 10_000L; else -> 2000L } else 2000L)
         loadMedia(items[index], subFile, if (s.live) 0L else player.currentPosition)
     }
     LaunchedEffect(showInfo, index, playing, bar) { if (showInfo && !bar && (s.live || playing)) { delay(5000); showInfo = false } }
     LaunchedEffect(Unit) { while (true) { position = player.currentPosition; duration = player.duration.coerceAtLeast(0); delay(500) } }
+    // time watched for Settings › Diagnostics
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(10_000)
+            if (player.isPlaying) { val it = items.getOrNull(index); Stats.watch(if (s.live) "tv" else if (it?.season != null) "ser" else "mov", 10_000, if (s.live) it?.title else null) }
+            if (buffering && player.playWhenReady) Stats.stall(10_000)
+        }
+    }
+    // a stream that freezes (no progress for a few seconds) is quietly connected again, like switching away and back
+    LaunchedEffect(index) {
+        var last = -1L; var stuck = 0L
+        while (true) {
+            delay(1000)
+            if (!Recover.on || error != null || resume != null || !player.playWhenReady || saver) { stuck = 0; last = -1; continue }
+            val pos = player.currentPosition
+            if (pos == last && (player.playbackState == Player.STATE_BUFFERING || player.playbackState == Player.STATE_READY)) stuck += 1000 else stuck = 0
+            last = pos
+            if (stuck >= Recover.waitMs && reconnect < 3) { stuck = 0; reconnect++; Stats.recovery(); retryToken++ }
+        }
+    }
     LaunchedEffect(index) { if (!s.live) while (true) { delay(15_000); if (player.isPlaying) saveProgress() } }
 
     BackHandler(enabled = dialog != null || side != null || resume != null || bar) {
@@ -437,6 +480,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                         isFocusable = false
                         descendantFocusability = android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
                         setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
+                        setKeepContentOnPlayerReset(true)   // a silent reconnect keeps the last picture on screen
                         // subtitle size and look from Settings › Player
                         subtitleView?.let { sv ->
                             val size = listOf(0.8f, 1f, 1.25f, 1.5f).getOrElse(Prefs.str("sub_size", "1").toIntOrNull() ?: 1) { 1f }
@@ -486,7 +530,14 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             }
         }
         // live stream dropped: trying again by itself
-        if (reconnect > 0 && error == null && s.live) {
+        if (Recover.on && reconnect >= 3 && error == null) {
+            Row(Modifier.align(Alignment.TopEnd).padding(24.dp).clip(Pill).background(Color(0xCC0E101A)).padding(horizontal = 14.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.size(8.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Color(0xFFFFC53D)))
+                T("Ponovo spajam…", 13.sp, Color.White, FontWeight.SemiBold)
+            }
+        }
+        if (!Recover.on && reconnect > 0 && error == null && s.live) {
             Column(Modifier.align(Alignment.Center).clip(Rnd(22.dp)).background(Color(0xE60E101A)).border(1.dp, Color(0x1FFFFFFF), Rnd(22.dp)).padding(horizontal = 30.dp, vertical = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 T("Spajam ponovo…", 20.sp, Color.White, FontWeight.Bold)
@@ -530,8 +581,10 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             }
         }
 
-        LaunchedEffect(playing, buffering) { saver = false; if (!playing && !buffering) { delay(10 * 60_000L); saver = true } }
-        if (saver) ScreenSaver(item.title)
+        LaunchedEffect(playing, buffering) { saver = false; if (!playing && !buffering && Saver.on) { delay(Saver.delayMs); saver = true } }
+        if (saver) ModernScreenSaver(if (s.live) null else Paused(if (item.season != null) "Serija" else "Film", item.search?.let { cleanTitle(it).first } ?: item.title,
+            listOfNotNull(item.season?.let { trf("Sezona %s", it) }, item.episode?.let { trf("Epizoda %s", it) }, item.subtitle).joinToString(" · ").ifBlank { null },
+            item.logo, null, position, duration))
 
         error?.let { msg ->
             Column(Modifier.align(Alignment.Center).clip(Rnd(20.dp)).background(Color(0xE6151A23)).padding(28.dp),

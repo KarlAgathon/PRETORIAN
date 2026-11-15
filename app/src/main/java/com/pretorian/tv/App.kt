@@ -86,10 +86,18 @@ class MainActivity : ComponentActivity() {
         WhatsNew.check(this)
         Lock.load()
         Notes.load()
+        Stats.onStart()
         setContent { PretorianApp() }
     }
 
     private var stoppedAt = 0L
+
+    // any key wakes the screen saver (and is used up for that)
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        if (Saver.touch() && event.action == android.view.KeyEvent.ACTION_DOWN) return true
+        if (Saver.showing || Saver.preview) return true
+        return super.dispatchKeyEvent(event)
+    }
 
     override fun onResume() {
         super.onResume()
@@ -112,6 +120,7 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         stoppedAt = System.currentTimeMillis()
+        Stats.saveIfDirty()
         val app = applicationContext
         @Suppress("OPT_IN_USAGE")
         kotlinx.coroutines.GlobalScope.launch { try { Drive.autoSync(app) } catch (_: Exception) {} }
@@ -223,6 +232,8 @@ fun PretorianApp() {
         }
     }
     LaunchedEffect(Reminders.rev) { ReminderReceiver.schedule(ctx) }
+    // time the app is open, and the counters written down once a minute
+    LaunchedEffect(Unit) { while (true) { delay(60_000); Stats.uptime(60_000); Stats.saveIfDirty() } }
 
     val scheme = if (C.IsLight) lightColorScheme(primary = C.Red, background = C.Bg, surface = C.Bg)
                  else darkColorScheme(primary = C.Red, background = C.Bg, surface = C.Bg)
@@ -313,6 +324,7 @@ fun PretorianApp() {
             WhatsNewDialog()
             UpdateAskDialog(nav)
             CrashGuardDialog(nav)
+            MenuSaver(inPlayer = top is Screen.Player)
         }
     }
     }

@@ -124,7 +124,7 @@ private fun WaveBrowser(nav: Nav, series: Boolean) {
     var rev by remember { mutableIntStateOf(0) }
     val p = remember(rev) { Store.active(ctx) } ?: run { NoPlaylist(nav); return }
     val pls = remember(rev) { Store.actives(ctx) }
-    if (p.type != SourceType.XTREAM) { Message(if (series) "Serije nisu dostupne" else "Filmovi nisu dostupni", "Filmovi i serije rade s Xtream Codes playlistom."); return }
+    if (p.type == SourceType.M3U) { Message(if (series) "Serije nisu dostupne" else "Filmovi nisu dostupni", "Filmovi i serije rade s Xtream Codes i Stalker playlistom."); return }
     val kind = if (series) "series" else "vod"
     val ovr = remember(p.id) { Ovr(ctx, p.id) }
     val cats by load(p.id, series, rev, NewContent.rev, Watch.rev, keep = true) {
@@ -285,7 +285,7 @@ private fun VodClassic(nav: Nav, series: Boolean) {
         if (cont.isNotEmpty()) out.add(VRow.Group(Category(G_CONTINUE, tr("Nastavi gledati")), cont.size))
         val my = MyList.items(kind).size
         if (Look.age && my > 0) out.add(VRow.Group(Category(G_MYLIST, tr("Moja lista")), my))   // shown only when something is on it
-        if (p.type == SourceType.XTREAM) ovr.groups(kind, if (series) Repo.seriesGroups(p) else Repo.vodGroups(p))
+        if (p.type != SourceType.M3U) ovr.groups(kind, if (series) Repo.seriesGroups(p) else Repo.vodGroups(p))
             .forEach { out.add(VRow.Group(it, NewContent.countCat(p.id, kind, it.id))) }
         pls.drop(1).forEach { out.add(VRow.Header(it, false)) }
         out

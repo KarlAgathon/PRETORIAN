@@ -11,14 +11,14 @@ import java.io.File
 object DeviceInfo {
     private fun gb(b: Long) = String.format("%.1f GB", b / 1_073_741_824.0)  // i18n-ignore
 
-    private fun maxGhz(): String? = try {
+    fun maxGhz(): String? = try {
         val f = File("/sys/devices/system/cpu").listFiles { x -> x.name.matches(Regex("cpu[0-9]+")) }
             ?.mapNotNull { File(it, "cpufreq/cpuinfo_max_freq").takeIf { f -> f.exists() }?.readText()?.trim()?.toLongOrNull() }?.maxOrNull()
         f?.let { String.format("%.2f GHz", it / 1_000_000.0) }  // i18n-ignore
     } catch (e: Exception) { null }
 
     /** The graphics chip, asked from a tiny hidden OpenGL context. */
-    private fun gpu(): String? = try {
+    fun gpu(): String? = try {
         val dpy = android.opengl.EGL14.eglGetDisplay(android.opengl.EGL14.EGL_DEFAULT_DISPLAY)
         val v = IntArray(2); android.opengl.EGL14.eglInitialize(dpy, v, 0, v, 1)
         val cfg = arrayOfNulls<android.opengl.EGLConfig>(1); val n = IntArray(1)
@@ -34,6 +34,21 @@ object DeviceInfo {
         android.opengl.EGL14.eglDestroySurface(dpy, surf); android.opengl.EGL14.eglDestroyContext(dpy, ctx); android.opengl.EGL14.eglTerminate(dpy)
         listOfNotNull(r, ver?.substringBefore(" build")).joinToString(" · ").ifBlank { null }
     } catch (e: Exception) { null }
+
+    /** name, "model · manufacturer", badges for the top card */
+    fun head(ctx: Context): Triple<String, String, List<String>> {
+        val name = try { android.provider.Settings.Global.getString(ctx.contentResolver, "device_name") } catch (e: Exception) { null }
+        val badges = ArrayList<String>()
+        badges += "Android " + Build.VERSION.RELEASE  // i18n-ignore
+        try {
+            val d = (ctx.getSystemService(Context.DISPLAY_SERVICE) as android.hardware.display.DisplayManager).getDisplay(android.view.Display.DEFAULT_DISPLAY)
+            val h = d.mode.physicalHeight
+            val hdr = Build.VERSION.SDK_INT >= 24 && (d.hdrCapabilities?.supportedHdrTypes?.isNotEmpty() == true)
+            badges += (if (h >= 2160) "4K" else if (h >= 1080) "Full HD" else "HD") + if (hdr) " HDR" else ""  // i18n-ignore
+        } catch (_: Exception) {}
+        badges += if (Perf.lite) "Lite" else "Full"  // i18n-ignore
+        return Triple(name ?: Build.MODEL, Build.MANUFACTURER.replaceFirstChar { it.uppercase() } + " " + Build.MODEL + " · " + Build.DEVICE, badges)
+    }
 
     fun read(ctx: Context): List<Pair<String, String>> {
         val out = ArrayList<Pair<String, String>>()

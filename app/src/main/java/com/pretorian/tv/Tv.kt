@@ -1065,7 +1065,8 @@ fun PreviewBox(ch: Channel?, modifier: Modifier) {
         player.stop()
         delay(250)   // while you move quickly over channels, only the one you stop on starts
         Preview.player = player
-        player.setMediaItem(androidx.media3.common.MediaItem.fromUri(c.url)); player.prepare(); player.playWhenReady = true
+        val real = try { Stalker.resolve(ctx, c.url) } catch (e: Exception) { failed = true; return@LaunchedEffect }
+        player.setMediaItem(androidx.media3.common.MediaItem.fromUri(real)); player.prepare(); player.playWhenReady = true
     }
     Box(modifier.aspectRatio(16f / 9f).clip(Rnd(14.dp)).background(Color.Black)) {
         androidx.compose.ui.viewinterop.AndroidView(factory = { v ->

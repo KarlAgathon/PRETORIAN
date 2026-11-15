@@ -559,19 +559,32 @@ fun WelcomeScreen(nav: Nav) {
                 T("Dodaj svoju playlistu i za minut gledaš.", 15.sp, C.Soft)
                 Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    WelcomeCard("Xtream prijava", "Server, korisničko ime, lozinka", R.drawable.lc_server, first) { Welcome.tab = 0 }
-                    WelcomeCard("M3U link", "Zalijepi ili ukucaj link", R.drawable.lc_link, null) { Welcome.tab = 1 }
-                    WelcomeCard("Fajl s USB-a", ".m3u ili .m3u8", R.drawable.lc_usb, null) { pick = "m3u" }
+                    WelcomeCard("Xtream Codes", "Server, korisničko ime, lozinka", R.drawable.lc_server, first) { Welcome.tab = 0 }
+                    WelcomeCard("M3U playlista", "Link ili fajl s diska / USB-a", R.drawable.lc_link, null) { pick = "m3uask" }
+                    WelcomeCard("Stalker portal", "Portal i MAC adresa", R.drawable.lc_tv, null) { Welcome.tab = 2 }
                 }
-                Spacer(Modifier.height(6.dp))
-                Focusable(onClick = { pick = "json" }, shape = Pill, normal = Color.Transparent, focused = C.CardHi, zoom = 1.02f, modifier = Modifier.height(32.dp)) { _ ->
-                    T("Imaš backup? Vrati postavke s USB-a", 12.sp, C.Muted, modifier = Modifier.align(Alignment.Center).padding(horizontal = 12.dp))
+                Spacer(Modifier.height(8.dp))
+                // a separate box: bring everything back from a backup
+                Focusable(onClick = { pick = "json" }, shape = Rnd(18.dp), normal = Color.Transparent, focused = C.Red, zoom = 1.02f,
+                    modifier = Modifier.width(722.dp).height(68.dp).glass(18.dp)) { f ->
+                    Row(Modifier.fillMaxSize().padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Box(Modifier.size(38.dp).clip(Rnd(11.dp)).background(if (f) Color(0x1A000000) else C.CardHi), contentAlignment = Alignment.Center) { Ico(R.drawable.lc_archive, 18.dp, if (f) C.OnRed else C.Text) }
+                        Column(Modifier.weight(1f)) {
+                            T("VRATI POSTAVKE", 15.sp, if (f) C.OnRed else C.Text, FontWeight.Bold)
+                            T("Imaš backup? Playliste, favoriti, profili i postavke s USB-a ili diska", 11.sp, if (f) C.OnRed.copy(alpha = 0.7f) else C.Muted)
+                        }
+                        T("›", 20.sp, if (f) C.OnRed else C.Muted)  // i18n-ignore
+                    }
                 }
             }
         }
     }
     if (langMenu) Popup("Jezik", { langMenu = false }) {
         Langs.APP.forEach { l -> OptionRow(l.native, if (l.code == Look.lang) R.drawable.lc_check else null) { setAppLang(ctx, l.code); langMenu = false; rev++ } }
+    }
+    if (pick == "m3uask") Popup("M3U playlista", { pick = null }) {
+        OptionRow("Link", R.drawable.lc_link, sub = "zalijepi ili ukucaj adresu") { pick = null; Welcome.tab = 1 }
+        OptionRow("Fajl s diska / USB-a", R.drawable.lc_usb, sub = ".m3u ili .m3u8") { pick = "m3u" }
     }
     when (pick) {
         "m3u" -> FilePicker("Izaberi playlistu", setOf("m3u", "m3u8"), onDismiss = { pick = null }) { bytes, name ->

@@ -47,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -69,8 +70,8 @@ private val SECTIONS = listOf(
     Section("reminders", R.drawable.lc_bell, "Podsjetnici", "Emisije, utakmice, obavještenja"),
     Section("parental", R.drawable.lc_shield_check, "Roditelji i jednostavni mod", "PIN, jednostavni mod"),
     Section("backup", R.drawable.lc_archive, "Backup i vraćanje", "Spasi sve postavke u fajl"),
-    Section("about", R.drawable.lc_info, "O aplikaciji", "Verzija i licence"),
     Section("update", R.drawable.lc_download, "Ažuriranje", "Provjeri i instaliraj novu verziju"),
+    Section("about", R.drawable.lc_info, "O aplikaciji", "Verzija i licence"),
 )
 
 @Composable
@@ -376,7 +377,11 @@ fun AddPlaylistScreen(nav: Nav) {
     val scope = rememberCoroutineScope()
     val old = remember { EditPlaylist.target }
     if (Look.age && old == null && Store.playlists(ctx).isEmpty() && Welcome.tab < 0) { WelcomeScreen(nav); return }
-    var tab by remember { mutableIntStateOf(if (old?.type == SourceType.M3U || (old == null && Welcome.tab == 1)) 1 else 0) }
+    var tab by remember { mutableIntStateOf(when { old?.type == SourceType.M3U -> 1; old?.type == SourceType.STALKER -> 2; old == null && Welcome.tab in 1..2 -> Welcome.tab; else -> 0 }) }
+    var mac by remember { mutableStateOf(old?.mac ?: Stalker.suggestMac(ctx)) }
+    var serial by remember { mutableStateOf(old?.serial ?: "") }
+    var devId by remember { mutableStateOf(old?.deviceId ?: "") }
+    var devId2 by remember { mutableStateOf(old?.deviceId2 ?: "") }
     var name by remember { mutableStateOf(old?.name ?: "") }
     var server by remember { mutableStateOf(old?.server ?: "") }
     var user by remember { mutableStateOf(old?.user ?: "") }
@@ -391,17 +396,26 @@ fun AddPlaylistScreen(nav: Nav) {
     Column(Modifier.fillMaxSize()) {
         Header(if (old != null) "Uredi playlistu" else "Dodaj playlistu")
         Column(Modifier.fillMaxSize().padding(horizontal = 36.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Segmented(listOf("Xtream Codes", "M3U playlista", "Stalker portal"), tab) {
-                if (it == 2) Toast.makeText(ctx, tr("Stalker portal dolazi u sljedećoj verziji"), Toast.LENGTH_SHORT).show() else tab = it
-            }
+            Segmented(listOf("Xtream Codes", "M3U playlista", "Stalker portal"), tab) { tab = it }
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Field("Naziv playliste", name, { name = it }, Modifier.weight(1f))
-                if (tab == 0) Field("Server adresa (http://server:port)", server, { server = it }, Modifier.weight(1f), KeyboardType.Uri)
-                else Field("M3U link", url, { url = it }, Modifier.weight(1f), KeyboardType.Uri)
+                when (tab) {
+                    0 -> Field("Server adresa (http://server:port)", server, { server = it }, Modifier.weight(1f), KeyboardType.Uri)
+                    2 -> Field("Portal (http://server:port/c/)", server, { server = it }, Modifier.weight(1f), KeyboardType.Uri)
+                    else -> Field("M3U link", url, { url = it }, Modifier.weight(1f), KeyboardType.Uri)
+                }
             }
-            if (tab == 0) Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Field("Korisničko ime", user, { user = it }, Modifier.weight(1f))
-                Field("Lozinka", pass, { pass = it }, Modifier.weight(1f), password = true)
+            if (tab == 2) Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Field("MAC adresa (00:1A:79:…)", mac, { mac = it }, Modifier.weight(1f))
+                Field("Serijski broj (nije obavezno)", serial, { serial = it }, Modifier.weight(1f))
+            }
+            if (tab == 2) Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Field("Device ID 1 (nije obavezno)", devId, { devId = it }, Modifier.weight(1f))
+                Field("Device ID 2 (nije obavezno)", devId2, { devId2 = it }, Modifier.weight(1f))
+            }
+            if (tab == 0 || tab == 2) Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Field(if (tab == 2) "Korisničko ime (nije obavezno)" else "Korisničko ime", user, { user = it }, Modifier.weight(1f))
+                Field(if (tab == 2) "Lozinka (nije obavezno)" else "Lozinka", pass, { pass = it }, Modifier.weight(1f), password = true)
             }
             if (tab == 0) Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Box(Modifier.weight(1f)) { ToggleRow("TV kanali", live) { live = it } }
@@ -415,25 +429,27 @@ fun AddPlaylistScreen(nav: Nav) {
                     if (busy) return@Button
                     val base = Playlist(
                         id = old?.id ?: System.currentTimeMillis().toString(),
-                        name = name.trim().ifBlank { if (tab == 0) "Xtream" else "M3U" },
-                        type = if (tab == 0) SourceType.XTREAM else SourceType.M3U,
+                        name = name.trim().ifBlank { when (tab) { 0 -> "Xtream"; 2 -> "Stalker"; else -> "M3U" } },  // i18n-ignore
+                        type = when (tab) { 0 -> SourceType.XTREAM; 2 -> SourceType.STALKER; else -> SourceType.M3U },
                         server = server.trim(), user = user.trim(), pass = pass.trim(), url = url.trim(), active = old?.active ?: true,
                         live = live, vod = vod, series = series,
+                        mac = if (tab == 2) mac.trim().uppercase() else "", serial = serial.trim(), deviceId = devId.trim(), deviceId2 = devId2.trim(),
                     )
                     if (tab == 0 && (base.server.isBlank() || base.user.isBlank() || base.pass.isBlank())) { error = "Unesi server, korisničko ime i lozinku"; return@Button }
                     if (tab == 1 && base.url.isBlank()) { error = "Unesi M3U link"; return@Button }
+                    if (tab == 2 && (base.server.isBlank() || !Regex("([0-9A-F]{2}:){5}[0-9A-F]{2}").matches(base.mac))) { error = "Unesi portal i MAC adresu (00:1A:79:XX:XX:XX)"; return@Button }
                     busy = true; error = null
                     scope.launch {
                         try {
                             val info = Repo.test(base)
-                            val pl = if (base.type == SourceType.XTREAM) base.copy(exp = info) else base
+                            val pl = if (base.type != SourceType.M3U) base.copy(exp = info) else base
                             if (old != null) {
                                 Store.savePlaylists(ctx, Store.playlists(ctx).map { if (it.id == old.id) pl else it })
                                 Toast.makeText(ctx, tr("Spremljeno"), Toast.LENGTH_SHORT).show()
                                 EditPlaylist.target = null; Repo.clear(); Repo.dropCatalogs(); nav.playlistsChanged(); nav.back()
                             } else {
                                 Store.savePlaylists(ctx, Store.playlists(ctx).map { it.copy(active = false) } + pl)
-                                Toast.makeText(ctx, if (pl.type == SourceType.XTREAM) tr("Povezano ✓") else trf("Učitano: %s", info), Toast.LENGTH_LONG).show()
+                                Toast.makeText(ctx, if (pl.type != SourceType.M3U) tr("Povezano ✓") else trf("Učitano: %s", info), Toast.LENGTH_LONG).show()
                                 nav.playlistsChanged(); nav.root(Screen.Home)
                             }
                         } catch (e: Exception) {
@@ -1009,11 +1025,14 @@ private val SECTIONS2 = listOf(
     Section("reminders", R.drawable.lc_bell, "Podsjetnici", "Emisije i utakmice"),
     Section("parental", R.drawable.lc_shield_check, "Jednostavni mod i PIN", "Samo TV, Filmovi, Serije"),
     Section("backup", R.drawable.lc_archive, "Backup i vraćanje", "U fajl ili na USB"),
-    Section("about", R.drawable.lc_info, "O aplikaciji", "Verzija, dijagnostika, kontakt"),
     Section("mode", R.drawable.lc_settings, "Način rada", "Osnovno ili Napredno"),
+    Section("saver", R.drawable.lc_moon, "Čuvar ekrana", "Sat, datum, pauzirano"),
+    Section("diag", R.drawable.lc_gauge2, "Dijagnostika", "Gledano, protok, brzina, stabilnost"),
+    // always: Update second to last, About last
     Section("update", R.drawable.lc_download, "Ažuriranje", "Nova verzija"),
+    Section("about", R.drawable.lc_info, "O aplikaciji", "Uređaj, kontakt, licence"),
 )
-private val BASIC = setOf("playlists", "language", "parental", "mode", "update")
+private val BASIC = setOf("playlists", "language", "parental", "mode", "update", "about")
 
 /** Settings screen of the new look: sections on the left, the page on the right, sub-pages open inside. */
 @Composable
@@ -1073,6 +1092,7 @@ fun SettingsScreen2(nav: Nav) {
                     "plists" -> PlaylistsListV2(nav)
                     "lookmore" -> LookPage()
                     "player" -> MediaPage()
+                    "device" -> DeviceV2()
                     else -> when (section) {
                         "playlists" -> PlaylistsV2(nav) { sub = it }
                         "profile" -> ProfilesV2()
@@ -1085,7 +1105,9 @@ fun SettingsScreen2(nav: Nav) {
                         "backup" -> BackupV2(nav)
                         "mode" -> ModeV2()
                         "update" -> UpdateV2()
-                        else -> AboutV2()
+                        "diag" -> DiagnosticsV2()
+                        "saver" -> SaverV2()
+                        else -> AboutV2(onSub = { sub = it }, onSection = { section = it })
                     }
                 }
             }
@@ -1342,7 +1364,7 @@ private fun PlaylistsV2(nav: Nav, openSub: (String) -> Unit) {
         T("OK otvara playlistu · drži OK za brzi meni", 11.sp, C.Muted)
         list.forEach { pl ->
             val sec = pl.exp.toLongOrNull()
-            SetRow(pl.name, (if (pl.type == SourceType.XTREAM) "Xtream" else "M3U") +
+            SetRow(pl.name, (when (pl.type) { SourceType.XTREAM -> "Xtream"; SourceType.STALKER -> "Stalker"; else -> "M3U" }) +
                 (if (sec != null && sec > 0) " · " + trf("ističe %s", java.text.SimpleDateFormat("dd.MM.yy", java.util.Locale.getDefault()).format(java.util.Date(sec * 1000))) else ""),
                 if (pl.active) "● " + tr("Aktivna") else "○ " + tr("Isključena"), arrow = "", valueColor = if (pl.active) C.Green else C.Muted) { openSub("plists") }
         }
@@ -1378,7 +1400,7 @@ private fun PlaylistsListV2(nav: Nav) {
     SetPage("Uredi playliste", "OK na playlisti: meni s opcijama.") {
         list.forEach { pl ->
             val sec = pl.exp.toLongOrNull()
-            SetRow(pl.name, (if (pl.type == SourceType.XTREAM) "Xtream" else "M3U") +
+            SetRow(pl.name, (when (pl.type) { SourceType.XTREAM -> "Xtream"; SourceType.STALKER -> "Stalker"; else -> "M3U" }) +
                 (if (sec != null && sec > 0) " · " + trf("ističe %s", java.text.SimpleDateFormat("dd.MM.yy", java.util.Locale.getDefault()).format(java.util.Date(sec * 1000))) else ""),
                 if (pl.active) "● " + tr("Aktivna") else "○ " + tr("Isključena"), valueColor = if (pl.active) C.Green else C.Muted) { menu = pl }
         }
@@ -1550,6 +1572,9 @@ private fun PlayerV2(openSub: (String) -> Unit) {
             }
             SetDrop("Veličina titla", null, listOf("Mala", "Srednja", "Velika", "Vrlo velika"), Prefs.str("sub_size", "1").toIntOrNull() ?: 1, new = true) { Prefs.put("sub_size", it.toString()); rev++ }
             SetDrop("Izgled titla", null, listOf("Sjena", "Okvir", "Tamna pozadina"), Prefs.str("sub_style", "0").toIntOrNull() ?: 0, new = true) { Prefs.put("sub_style", it.toString()); rev++ }
+            SetSection("Prekid streama")
+            SetSwitch("Automatski oporavak", "zamrznut ili prekinut stream se tiho ponovo spoji", Recover.on, new = true) { Prefs.put("recover_on", it); rev++ }
+            if (Recover.on) SetDrop("Reaguj nakon", "bez slike ili napretka", listOf("3 s", "5 s", "10 s"), Prefs.long("recover_wait", 1).toInt(), new = true) { Prefs.put("recover_wait", it.toLong()); rev++ }
             SetSection("Zvuk")
             val audOn = if (Prefs.bool("audio_default")) emptyList() else Prefs.audioLangs.split(',').filter { it.isNotBlank() && it in langs }
             SetMulti("Jezik zvuka", "više odjednom · ništa = od providera", langs.map { Langs.label(it) }, audOn.map { langs.indexOf(it) }.toSet(), all = false) { s2 ->
@@ -2110,77 +2135,58 @@ private fun UpdateV2() {
 /* ---------------------------------------------------------------- O aplikaciji */
 
 @Composable
-private fun AboutV2() {
+private fun AboutV2(onSub: (String) -> Unit, onSection: (String) -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var dlg by remember { mutableStateOf<String?>(null) }
-    // diagnostics run only while this page is open, one after another, each with a time limit
-    var step by remember { mutableIntStateOf(0) }
-    var net by remember { mutableStateOf<String?>(null) }
-    var server by remember { mutableStateOf<Boolean?>(null) }
     var cacheMb by remember { mutableStateOf(0L) }
     val crash = remember { try { java.io.File(ctx.filesDir, "last_crash.txt").takeIf { it.exists() }?.readText() } catch (e: Exception) { null } }
-    val freeGb = remember { try { val s = android.os.StatFs(ctx.filesDir.path); s.availableBytes / 1_073_741_824.0 } catch (e: Exception) { 0.0 } }
-    LaunchedEffect(step) {
-        if (step != 0) return@LaunchedEffect
-        net = null; server = null
-        cacheMb = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { (ctx.cacheDir.walkTopDown().filter { it.isFile }.sumOf { it.length() }) / 1_048_576 }
-        net = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            try {
-                val t0 = System.currentTimeMillis()
-                val c = java.net.URL("https://speed.cloudflare.com/__down?bytes=3000000").openConnection() as java.net.HttpURLConnection
-                c.connectTimeout = 4000; c.readTimeout = 4000
-                var n = 0L; val buf = ByteArray(16384); val ping = System.currentTimeMillis()
-                c.inputStream.use { ins -> val first = System.currentTimeMillis(); while (System.currentTimeMillis() - first < 3000) { val r = ins.read(buf); if (r < 0) break; n += r } }
-                c.disconnect()
-                val ms = (System.currentTimeMillis() - t0).coerceAtLeast(1)
-                trf("%s Mbit/s", (n * 8 / 1000 / ms).toString()) + " · " + (ping - t0) + " ms"
-            } catch (e: Exception) { tr("Nije uspjelo") }
-        }
-        val p = Store.active(ctx)
-        server = if (p == null) null else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { try { Repo.test(p); true } catch (e: Exception) { false } }
-        step = 1
-    }
-    SetPage("O aplikaciji") {
-        Row(Modifier.fillMaxWidth().clip(Rnd(16.dp)).background(C.CardHi).border(1.dp, C.Line, Rnd(16.dp)).padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.logo_full), null, Modifier.size(48.dp))
-            Column(Modifier.weight(1f)) {
-                T("PRETORIAN", 18.sp, C.Text, FontWeight.ExtraBold)
-                T(trf("Verzija %s", BuildInfo.VERSION), 11.sp, C.Soft)
+    val first = remember { FocusRequester() }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // ---- hero: logo, name, version, badges and the help QR
+        Row(Modifier.fillMaxWidth().clip(Rnd(20.dp)).background(C.CardHi).border(1.dp, C.Line, Rnd(20.dp)).padding(18.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+            Box(Modifier.size(80.dp).clip(Rnd(20.dp)).background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(Color(0xFFE11D2E), Color(0xFF8E0E1A)))),
+                contentAlignment = Alignment.Center) {
+                androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.logo_full), null, Modifier.size(52.dp))
             }
-            val u = Updater.available
-            T(if (u != null) trf("Dostupna %s", u.name) else tr("Najnovija"), 11.sp, if (u != null) C.Amber else C.Green, FontWeight.Bold)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Column(Modifier.weight(1f).clip(Rnd(12.dp)).background(C.Rail).border(1.dp, C.Line, Rnd(12.dp)).padding(10.dp)) { T("Autor", 10.sp, C.Muted); T("Svi3e", 14.sp, C.Text, FontWeight.Bold) }
-            Column(Modifier.weight(1f).clip(Rnd(12.dp)).background(C.Rail).border(1.dp, C.Line, Rnd(12.dp)).padding(10.dp)) { T("Kontakt", 10.sp, C.Muted); T("t3smo@aol.com", 14.sp, C.Text, FontWeight.Bold) }  // i18n-ignore
-        }
-        SetRow("Šta je novo", "promjene u ovoj verziji", BuildInfo.VERSION) { WhatsNew.show = true }
-        SetRow("O uređaju", remember { android.os.Build.MANUFACTURER.replaceFirstChar { it.uppercase() } + " " + android.os.Build.MODEL }, tr("Pogledaj")) { dlg = "dev" }
-        SetRow("Licence", "biblioteke otvorenog koda") { dlg = "lic" }
-        SetRow("Privatnost", "šta aplikacija čuva i gdje", tr("Pogledaj")) { dlg = "priv" }
-        // help page as a QR code: open it with the phone
-        Row(Modifier.fillMaxWidth().clip(Rnd(14.dp)).background(C.Rail).border(1.dp, C.Line, Rnd(14.dp)).padding(10.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            val qr = remember { qrBitmap("https://github.com/KarlAgathon/PRETORIAN/issues", 240) }  // i18n-ignore
-            if (qr != null) androidx.compose.foundation.Image(qr, null, Modifier.size(64.dp).clip(Rnd(6.dp)))
-            Column(Modifier.weight(1f)) {
-                T("Pomoć i prijava greške", 13.sp, C.Text, FontWeight.Bold)
-                T("Skeniraj telefonom – otvara stranicu projekta", 10.sp, C.Muted, maxLines = 2)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Kicker("O aplikaciji", C.Muted, size = 10.sp)
+                T("PRETORIAN", 30.sp, C.Text, FontWeight.ExtraBold)  // i18n-ignore
+                T(trf("Verzija %s", BuildInfo.VERSION) + " · " + tr("IPTV plejer za Android TV"), 13.sp, C.Soft)
+                Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    val u = Updater.available
+                    Box(Modifier.clip(Pill).background((if (u != null) C.Amber else C.Green).copy(alpha = 0.16f)).padding(horizontal = 9.dp, vertical = 3.dp)) {
+                        T(if (u != null) trf("Dostupna %s", u.name) else tr("● Najnovija verzija"), 11.sp, if (u != null) C.Amber else C.Green, FontWeight.Bold)
+                    }
+                    listOf(if (Perf.lite) "Lite" else "Full", tr("10 jezika")).forEach { b ->  // i18n-ignore
+                        Box(Modifier.clip(Pill).background(Color.White.copy(alpha = 0.08f)).padding(horizontal = 9.dp, vertical = 3.dp)) { T(b, 11.sp, C.Text, FontWeight.Bold) }
+                    }
+                }
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                val qr = remember { qrBitmap("https://github.com/KarlAgathon/PRETORIAN/issues", 240) }  // i18n-ignore
+                if (qr != null) androidx.compose.foundation.Image(qr, null, Modifier.size(80.dp).clip(Rnd(8.dp)))
+                T("Pomoć na telefonu", 10.sp, C.Muted)
             }
         }
-        SetSection(if (step == 0) tr("Dijagnostika") + " · " + tr("provjera u toku…") else tr("Dijagnostika") + " · " + tr("gotovo"))
-        SetRow("Test interneta", "brzina i ping", net ?: tr("Provjeravam…"), "↻", valueColor = if (net != null) C.Green else C.Muted) { step = 0 }
-        SetRow("Server playliste", Store.active(ctx)?.name, when (server) { true -> tr("Online"); false -> tr("Ne odgovara"); null -> tr("Provjeravam…") },
-            valueColor = when (server) { true -> C.Green; false -> C.Danger; null -> C.Muted }) { step = 0 }
-        SetRow("Izvještaj o greškama", "zadnji pad aplikacije", if (crash == null) tr("Nema grešaka") else tr("Pogledaj"), valueColor = if (crash == null) C.Green else C.Amber) { if (crash != null) dlg = "crash" }
-        SetRow("Memorija", "slobodno na uređaju", String.format("%.1f GB", freeGb), valueColor = C.Green) {}
-        SetSection("Uređaj")
-        SetRow("Model", "i Android verzija", android.os.Build.MODEL + " · Android " + android.os.Build.VERSION.RELEASE) {}
-        SetRow("Keš memorija", "slike, EPG, privremeni podaci", "$cacheMb MB", "▼") { dlg = "cache" }
-        SetRow("Log za podršku", "sačuvaj na USB ili u folder", tr("Izvezi"), "▼") { dlg = "log" }
+        val dev = remember { DeviceInfo.head(ctx) }
+        val lastCheck = Prefs.long("upd_checked_at", 0L)
+        CardGrid(3, listOf(
+            { m -> Box(m.focusRequester(first)) { InfoCard("O uređaju", dev.first, tr("procesor, RAM, ekran, mreža"), R.drawable.lc_monitor, Color(0xFF3B82F6), Modifier.fillMaxSize()) { onSub("device") } } },
+            { m -> InfoCard("Šta je novo", trf("Verzija %s", BuildInfo.VERSION), tr("promjene u ovoj verziji"), R.drawable.lc_star, Color(0xFFF59E0B), m) { WhatsNew.show = true } },
+            { m -> InfoCard("Autor", "Svi3e", tr("PRETORIAN tim"), R.drawable.lc_user, Color(0xFF8B5CF6), m) { dlg = "author" } },  // i18n-ignore
+            { m -> InfoCard("Kontakt", "t3smo@aol.com", tr("prijedlozi i greške"), R.drawable.lc_file_text, Color(0xFF06B6D4), m) { dlg = "contact" } },  // i18n-ignore
+            { m -> InfoCard("Izvještaj o grešci", if (crash == null) tr("Nema grešaka") else tr("Ima zapis"), tr("pogledaj ili izvezi zapis"), R.drawable.lc_file, Color(0xFFEF4444), m,
+                titleColor = if (crash == null) C.Text else C.Amber) { dlg = "crash" } },
+            { m -> InfoCard("Privatnost", tr("Šta se čuva i gdje"), tr("sve ostaje na uređaju"), R.drawable.lc_shield_check, Color(0xFF22C55E), m) { dlg = "priv" } },
+            { m -> InfoCard("Licence", tr("Otvoreni kod"), "Media3, Coil, OkHttp, zxing", R.drawable.lc_list, Color(0xFF64748B), m) { dlg = "lic" } },  // i18n-ignore
+            { m -> InfoCard("Ažuriranje", tr("Provjeri sada"), if (lastCheck > 0) tr("zadnja provjera") + ": " + java.text.SimpleDateFormat("dd.MM. HH:mm", java.util.Locale.US).format(java.util.Date(lastCheck)) else null,  // i18n-ignore
+                R.drawable.lc_refresh_cw, Color(0xFFEC4899), m) { onSection("update") } },
+            { m -> InfoCard("Pomoć", tr("Kratko uputstvo"), tr("prvi koraci, daljinski, prečice"), R.drawable.lc_info, Color(0xFF9CA3AF), m) { dlg = "help" } },
+        ))
     }
+    LaunchedEffect(Unit) { delay(80); try { first.requestFocus() } catch (_: Exception) {} }
     when (dlg) {
         "dev" -> Popup("O uređaju", { dlg = null }, width = 640.dp) {
             val rows = remember { DeviceInfo.read(ctx) }
@@ -2191,6 +2197,29 @@ private fun AboutV2() {
                 }
             }
         }
+        "author" -> Popup("Autor", { dlg = null }) {
+            T("Svi3e", 22.sp, C.Text, FontWeight.ExtraBold)  // i18n-ignore
+            T("PRETORIAN je napravljen za porodični TV: brz, jednostavan i bez reklama.", 14.sp, C.Soft, maxLines = 4)
+            T("github.com/KarlAgathon/PRETORIAN", 13.sp, C.Muted)  // i18n-ignore
+        }
+        "contact" -> Popup("Kontakt", { dlg = null }) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                val qr = remember { qrBitmap("mailto:t3smo@aol.com?subject=PRETORIAN%20" + BuildInfo.VERSION, 240) }  // i18n-ignore
+                if (qr != null) androidx.compose.foundation.Image(qr, null, Modifier.size(110.dp).clip(Rnd(8.dp)))
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    T("t3smo@aol.com", 18.sp, C.Text, FontWeight.Bold)  // i18n-ignore
+                    T("Skeniraj telefonom i napiši e-mail. Navedi model uređaja i verziju.", 13.sp, C.Soft, maxLines = 3)
+                }
+            }
+        }
+        "help" -> Popup("Kratko uputstvo", { dlg = null }, width = 640.dp) {
+            listOf("OK otvara, dugi OK otvara meni (označi, dodaj na listu, sakrij).",
+                "Nazad uvijek ide jedan korak nazad i ostaje u istoj sekciji.",
+                "U plejeru: ▲ ▼ mijenja kanal, ◀ ▶ premotava, OK pauza.",
+                "Brojevi na daljinskom biraju kanal; 0 vraća na prethodni.",
+                "Postavke › Jednostavni mod: samo TV, Filmovi i Serije, izlaz s PIN-om.",
+                "Zadani PIN je 0000 – promijeni ga u Postavkama.").forEach { T("• " + tr(it), 14.sp, C.Soft, maxLines = 3) }
+        }
         "lic" -> Popup("Licence", { dlg = null }) {
             listOf("Jetpack Compose · Apache 2.0", "Media3 / ExoPlayer · Apache 2.0", "Coil · Apache 2.0", "OkHttp · Apache 2.0", "Lucide ikone · ISC", "Inter font · OFL",
                 "TMDB · This product uses the TMDB API but is not endorsed or certified by TMDB.", "PRETORIAN · MIT · github.com/KarlAgathon/PRETORIAN").forEach { T(it, 13.sp, C.Soft, maxLines = 2) }  // i18n-ignore
@@ -2199,8 +2228,9 @@ private fun AboutV2() {
             T("Playliste, lozinke, PIN, favoriti i gledano čuvaju se samo na ovom uređaju. Na internet idu samo zahtjevi prema tvom provideru, slike filmova (TMDB) i, ako ih uključiš, Google Drive i AI pretraga.", 13.sp, C.Soft, maxLines = 8)
         }
         "crash" -> Popup("Izvještaj o greškama", { dlg = null }, width = 760.dp) {
-            T((crash ?: "").take(1500), 11.sp, C.Soft, maxLines = 24)
-            OptionRow("Obriši izvještaj", R.drawable.lc_trash_2) { java.io.File(ctx.filesDir, "last_crash.txt").delete(); dlg = null }
+            T((crash ?: tr("Nema grešaka")).take(1500), 11.sp, C.Soft, maxLines = 24)
+            OptionRow("Izvezi log za podršku", R.drawable.lc_download, sub = "na USB ili u folder") { dlg = "log" }
+            if (crash != null) OptionRow("Obriši izvještaj", R.drawable.lc_trash_2) { java.io.File(ctx.filesDir, "last_crash.txt").delete(); dlg = null }
         }
         "log" -> FileBrowser("Izaberi folder", emptySet(), pickDir = true, onDismiss = { dlg = null }) { dir ->
             try {

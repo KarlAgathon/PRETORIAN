@@ -93,6 +93,7 @@ object Updater {
     }
 
     suspend fun check(ctx: Context): UpdateInfo? = withContext(Dispatchers.IO) {
+        Prefs.put("upd_checked_at", System.currentTimeMillis())
         try {
             val o = JSONObject(String(Http.bytes(JSON_URL, 100_000)))
             val info = UpdateInfo(o.optLong("versionCode"), o.str("versionName"), o.str("apk"), o.str("notes"))

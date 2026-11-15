@@ -306,3 +306,49 @@ WOW
 MagentaTV
 pin_default
 .srt · .ass · .vtt · .sub
+h:mm
+ min
+12 h
+24 h
+3 s
+5 s
+10 s
+Build
+Kernel
+STALKER
+Stalker
+a
+diag
+github.com/KarlAgathon/PRETORIAN
+recover_wait
+saver
+ss
+ss_bright
+ss_delay
+ss_when
+stalker://
+stalker_portal
+stalker_portal/server/load.php
+xmltv_id
+EEEE, d. MMMM yyyy
+● TV 
+recover_on
+ss_on
+ss_show
+ss_24
+ss_bg
+ss_shift
+speed_vpn
+speed_norm
+stats
+stats_ver
+stats_upd_at
+upd_checked_at
+?cmd=
+/
+stream_id
+stream_icon
+VPN
+poster_path
+poster
+look_poster

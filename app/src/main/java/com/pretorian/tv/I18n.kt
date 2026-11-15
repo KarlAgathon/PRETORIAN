@@ -481,8 +481,8 @@ Ne radi na svim uređajima. Ako je box potpuno ugašen, podsjetnik ne može doć
 Tvoji podsjetnici|Your reminders|Deine Erinnerungen|Tvoji podsjetnici|Твоји подсетници|Твоите напомняния|Mementourile tale|Hatırlatıcıların|I tuoi promemoria|تذكيراتك
 Nema podsjetnika.|No reminders.|Keine Erinnerungen.|Nema podsjetnika.|Нема подсетника.|Няма напомняния.|Niciun memento.|Hatırlatıcı yok.|Nessun promemoria.|لا توجد تذكيرات.
 Obriši|Delete|Löschen|Obriši|Обриши|Изтрий|Șterge|Sil|Elimina|حذف
-Backup je spremljen|Backup saved|Backup gespeichert|Sigurnosna kopija je spremljenaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|Бекап је сачуван|Копието е запазено|Backup salvat|Yedek kaydedildi|Backup salvato|تم حفظ النسخة
-Backup nije spremljen|Backup not saved|Backup nicht gespeichert|Sigurnosna kopija nije spremljenaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|Бекап није сачуван|Копието не е запазено|Backup nesalvat|Yedek kaydedilmedi|Backup non salvato|لم تُحفظ النسخة
+Backup je spremljen|Backup saved|Backup gespeichert|Sigurnosna kopija je spremljenaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|Бекап је сачуван|Копието е запазено|Backup salvat|Yedek kaydedildi|Backup salvato|تم حفظ النسخة
+Backup nije spremljen|Backup not saved|Backup nicht gespeichert|Sigurnosna kopija nije spremljenaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|Бекап није сачуван|Копието не е запазено|Backup nesalvat|Yedek kaydedilmedi|Backup non salvato|لم تُحفظ النسخة
 Sve je vraćeno. PRETORIAN se ponovo pokreće.|Everything restored. PRETORIAN restarts.|Alles wiederhergestellt. PRETORIAN startet neu.|Sve je vraćeno. PRETORIAN se ponovo pokreće.|Све је враћено. PRETORIAN се поново покреће.|Всичко е възстановено. PRETORIAN се рестартира.|Totul a fost restaurat. PRETORIAN repornește.|Her şey geri yüklendi. PRETORIAN yeniden başlıyor.|Tutto ripristinato. PRETORIAN si riavvia.|تمت الاستعادة. يُعاد تشغيل PRETORIAN.
 Vraćanje nije uspjelo|Restore failed|Wiederherstellung fehlgeschlagen|Vraćanje nije uspjelo|Враћање није успело|Възстановяването не успя|Restaurarea a eșuat|Geri yükleme başarısız|Ripristino non riuscito|فشلت الاستعادة
 Backup i vraćanje|Backup and restore|Sichern und wiederherstellen|Sigurnosna kopija i vraćanje|Бекап и враћање|Резервно копие|Backup și restaurare|Yedekle ve geri yükle|Backup e ripristino|النسخ والاستعادة
@@ -1500,6 +1500,159 @@ Učitaj s diska / USB-a|Load from disk / USB|Von Speicher / USB laden|Učitaj s 
 PIN je zadani 0000, promijeni ga|PIN is the default 0000, change it|PIN ist der Standard 0000, bitte ändern|PIN je zadani 0000, promijeni ga|ПИН је подразумевани 0000, промени га|ПИН е по подразбиране 0000, сменете го|PIN-ul este implicit 0000, schimbă-l|PIN varsayılan 0000, değiştirin|Il PIN è quello predefinito 0000, cambialo|رمز PIN هو الافتراضي 0000، غيّره
 zadani PIN je 0000|default PIN is 0000|Standard-PIN ist 0000|zadani PIN je 0000|подразумевани ПИН је 0000|ПИН по подразбиране е 0000|PIN implicit este 0000|varsayılan PIN 0000|PIN predefinito 0000|رمز PIN الافتراضي 0000
 Nedavno dodano|Recently added|Kürzlich hinzugefügt|Nedavno dodano|Недавно додато|Наскоро добавени|Adăugate recent|Son eklenenler|Aggiunti di recente|أضيف مؤخرًا
+Pauzirano|Paused|Pausiert|Pauzirano|Паузирано|На пауза|În pauză|Duraklatıldı|In pausa|متوقف مؤقتًا
+Pritisni bilo koje dugme za nastavak|Press any button to continue|Beliebige Taste zum Fortfahren|Pritisni bilo koje gumb za nastavak|Притисни било које дугме за наставак|Натиснете бутон, за да продължите|Apasă orice buton pentru a continua|Devam etmek için bir tuşa basın|Premi un tasto qualsiasi per continuare|اضغط أي زر للمتابعة
+Čuvar ekrana|Screen saver|Bildschirmschoner|Čuvar zaslona|Чувар екрана|Скрийнсейвър|Economizor de ecran|Ekran koruyucu|Salvaschermo|شاشة التوقف
+Sat i datum kad se ništa ne dešava; uz pauzu pokazuje šta je zaustavljeno.|Clock and date when nothing happens; when paused it shows what was stopped.|Uhr und Datum, wenn nichts passiert; bei Pause zeigt er, was angehalten wurde.|Sat i datum kad se ništa ne dešava; uz pauzu pokazuje što je zaustavljeno.|Сат и датум кад се ништа не дешава; уз паузу показује шта је заустављено.|Часовник и дата, когато нищо не се случва; при пауза показва какво е спряно.|Ceas și dată când nu se întâmplă nimic; la pauză arată ce a fost oprit.|Hiçbir şey olmadığında saat ve tarih; duraklatıldığında neyin durduğunu gösterir.|Ora e data quando non succede nulla; in pausa mostra cosa è fermo.|الساعة والتاريخ عند عدم وجود نشاط؛ عند الإيقاف يعرض ما تم إيقافه.
+sat preko slike nakon pauze|clock over the picture after a pause|Uhr über dem Bild nach einer Pause|sat preko slike nakon pauze|сат преко слике након паузе|часовник върху картината след пауза|ceas peste imagine după o pauză|duraklatmadan sonra görüntü üzerinde saat|orologio sull'immagine dopo una pausa|ساعة فوق الصورة بعد الإيقاف
+Pokreni nakon|Start after|Starten nach|Pokreni nakon|Покрени након|Стартирай след|Pornește după|Şu süreden sonra başlat|Avvia dopo|ابدأ بعد
+Kada|When|Wann|Kada|Када|Кога|Când|Ne zaman|Quando|متى
+Samo kad je pauzirano|Only when paused|Nur bei Pause|Samo kad je pauzirano|Само кад је паузирано|Само при пауза|Doar în pauză|Yalnızca duraklatıldığında|Solo in pausa|فقط عند الإيقاف المؤقت
+I u menijima|Also in menus|Auch in Menüs|I u menijima|И у менијима|И в менютата|Și în meniuri|Menülerde de|Anche nei menu|في القوائم أيضًا
+Sekunde|Seconds|Sekunden|Sekunde|Секунде|Секунди|Secunde|Saniyeler|Secondi|الثواني
+Datum|Date|Datum|Datum|Датум|Дата|Data|Tarih|Data|التاريخ
+Pauzirani naslov|Paused title|Pausierter Titel|Pauzirani naslov|Паузирани наслов|Заглавие на пауза|Titlul în pauză|Duraklatılan başlık|Titolo in pausa|العنوان المتوقف
+Poster|Poster|Poster|Poster|Постер|Постер|Afiș|Afiş|Locandina|الملصق
+Opis|Description|Beschreibung|Opis|Опис|Описание|Descriere|Açıklama|Descrizione|الوصف
+Napredak i preostalo vrijeme|Progress and time left|Fortschritt und Restzeit|Napredak i preostalo vrijeme|Напредак и преостало време|Напредък и оставащо време|Progres și timp rămas|İlerleme ve kalan süre|Avanzamento e tempo rimanente|التقدم والوقت المتبقي
+Format sata|Clock format|Uhrformat|Format sata|Формат сата|Формат на часа|Format oră|Saat biçimi|Formato orario|تنسيق الساعة
+Pozadina|Background|Hintergrund|Pozadina|Позадина|Фон|Fundal|Arka plan|Sfondo|الخلفية
+Meke boje|Soft colours|Sanfte Farben|Meke boje|Меке боје|Меки цветове|Culori blânde|Yumuşak renkler|Colori tenui|ألوان هادئة
+Poster pauziranog|Poster of the paused title|Poster des pausierten Titels|Poster pauziranog|Постер паузираног|Постер на спряното|Afișul titlului în pauză|Duraklatılanın afişi|Locandina del titolo in pausa|ملصق العنوان المتوقف
+Crna|Black|Schwarz|Crna|Црна|Черен|Negru|Siyah|Nero|أسود
+Svjetlina|Brightness|Helligkeit|Svjetlina|Свјетлина|Яркост|Luminozitate|Parlaklık|Luminosità|السطوع
+Lagano pomjeranje|Gentle shift|Sanftes Verschieben|Lagano pomjeranje|Лагано померање|Леко изместване|Deplasare ușoară|Hafif kaydırma|Spostamento lieve|إزاحة خفيفة
+štiti ekran od urezivanja slike|protects the screen from burn-in|schützt den Bildschirm vor Einbrennen|štiti zaslon od urezivanja slike|штити екран од урезивања слике|пази екрана от прогаряне|protejează ecranul de imagini arse|ekranı iz kalmasına karşı korur|protegge lo schermo dal burn-in|يحمي الشاشة من احتراق الصورة
+Pregled|Preview|Vorschau|Pregled|Преглед|Преглед|Previzualizare|Önizleme|Anteprima|معاينة
+pokaži čuvar ekrana sada|show the screen saver now|Bildschirmschoner jetzt zeigen|pokaži čuvar zaslona sada|покажи чувар екрана сада|покажи скрийнсейвъра сега|arată economizorul acum|ekran koruyucuyu şimdi göster|mostra ora il salvaschermo|اعرض شاشة التوقف الآن
+Pokaži|Show|Zeigen|Pokaži|Покажи|Покажи|Arată|Göster|Mostra|اعرض
+↺ Resetuj sve|↺ Reset all|↺ Alles zurücksetzen|↺ Resetuj sve|↺ Ресетуј све|↺ Нулирай всичко|↺ Resetează tot|↺ Tümünü sıfırla|↺ Azzera tutto|↺ إعادة تعيين الكل
+ukupno · %s|total · %s|gesamt · %s|ukupno · %s|укупно · %s|общо · %s|total · %s|toplam · %s|totale · %s|الإجمالي · %s
+↺ Reset|↺ Reset|↺ Zurücksetzen|↺ Reset|↺ Ресет|↺ Нулирай|↺ Resetează|↺ Sıfırla|↺ Azzera|↺ إعادة تعيين
+Najviše|Most|Am meisten|Najviše|Највише|Най-много|Cel mai mult|En çok|Di più|الأكثر
+Ukupno|Total|Gesamt|Ukupno|Укупно|Общо|Total|Toplam|Totale|الإجمالي
+Rušenja (10 min)|Crashes (10 min)|Abstürze (10 Min.)|Rušenja (10 min)|Рушења (10 мин)|Сривове (10 мин)|Blocări (10 min)|Çökmeler (10 dk)|Arresti (10 min)|الأعطال (10 دقائق)
+Mjerim…|Measuring…|Messe…|Mjerim…|Мјерим…|Измервам…|Măsor…|Ölçülüyor…|Misuro…|جارٍ القياس…
+kroz VPN|through VPN|über VPN|kroz VPN|кроз ВПН|през VPN|prin VPN|VPN üzerinden|tramite VPN|عبر VPN
+normalno|normal|normal|normalno|нормално|нормално|normal|normal|normale|عادي
+▶ Testiraj|▶ Test|▶ Testen|▶ Testiraj|▶ Тестирај|▶ Тествай|▶ Testează|▶ Test et|▶ Prova|▶ اختبار
+Normalno|Normal|Normal|Normalno|Нормално|Нормално|Normal|Normal|Normale|عادي
+VPN nije aktivan|VPN is not active|VPN ist nicht aktiv|VPN nije aktivan|ВПН није активан|VPN не е активен|VPN nu este activ|VPN etkin değil|VPN non attiva|VPN غير نشط
+%s ovaj mjesec|%s this month|%s diesen Monat|%s ovaj mjesec|%s овај мјесец|%s този месец|%s luna aceasta|bu ay %s|%s questo mese|%s هذا الشهر
+Sedmica|Week|Woche|Tjedan|Седмица|Седмица|Săptămână|Hafta|Settimana|الأسبوع
+Godina|Year|Jahr|Godina|Година|Година|An|Yıl|Anno|السنة
+Zadnje|Last|Zuletzt|Zadnje|Задње|Последно|Ultima|Son|Ultimo|الأخير
+Radi|Working|Funktioniert|Radi|Ради|Работи|Funcționează|Çalışıyor|Funziona|يعمل
+odziv %s ms|response %s ms|Antwort %s ms|odziv %s ms|одзив %s мс|отговор %s ms|răspuns %s ms|yanıt %s ms|risposta %s ms|استجابة %s مللي ث
+Prekidi streama|Stream drops|Stream-Abbrüche|Prekidi streama|Прекиди стреама|Прекъсвания на потока|Întreruperi stream|Yayın kesintileri|Interruzioni dello stream|انقطاعات البث
+Baferovanje|Buffering|Puffern|Baferovanje|Баферовање|Буфериране|Încărcare tampon|Arabelleğe alma|Buffering|التخزين المؤقت
+✕ Očisti|✕ Clear|✕ Leeren|✕ Očisti|✕ Очисти|✕ Изчисти|✕ Golește|✕ Temizle|✕ Svuota|✕ مسح
+RAM aplikacije|App RAM|App-RAM|RAM aplikacije|РАМ апликације|RAM на приложението|RAM aplicație|Uygulama RAM'i|RAM dell'app|ذاكرة التطبيق
+Odlično|Excellent|Ausgezeichnet|Odlično|Одлично|Отлично|Excelent|Mükemmel|Ottimo|ممتاز
+Bilo je rušenja|There were crashes|Es gab Abstürze|Bilo je rušenja|Било је рушења|Имаше сривове|Au fost blocări|Çökmeler oldu|Ci sono stati arresti|حدثت أعطال
+bez rušenja|no crashes|keine Abstürze|bez rušenja|без рушења|без сривове|fără blocări|çökme yok|nessun arresto|بلا أعطال
+bez rušenja %s dana|no crashes for %s days|seit %s Tagen keine Abstürze|bez rušenja %s dana|без рушења %s дана|без сривове от %s дни|fără blocări de %s zile|%s gündür çökme yok|nessun arresto da %s giorni|بلا أعطال منذ %s أيام
+Izvještaj o grešci|Error report|Fehlerbericht|Izvještaj o grešci|Извјештај о грешци|Доклад за грешка|Raport de eroare|Hata raporu|Rapporto errori|تقرير الخطأ
+nema|none|keiner|nema|нема|няма|niciunul|yok|nessuno|لا يوجد
+postoji|exists|vorhanden|postoji|постоји|има|există|var|presente|موجود
+Automatski oporavak|Automatic recovery|Automatische Wiederherstellung|Automatski oporavak|Аутоматски опоравак|Автоматично възстановяване|Recuperare automată|Otomatik kurtarma|Ripristino automatico|الاسترداد التلقائي
+uključen|on|an|uključen|укључен|включено|activat|açık|attivo|مفعّل
+isključen|off|aus|isključen|искључен|изключено|dezactivat|kapalı|disattivo|معطّل
+Resetuj sve brojače?|Reset all counters?|Alle Zähler zurücksetzen?|Resetuj sve brojače?|Ресетуј све бројаче?|Нулиране на всички броячи?|Resetezi toate contoarele?|Tüm sayaçlar sıfırlansın mı?|Azzerare tutti i contatori?|إعادة تعيين كل العدادات؟
+Da, resetuj sve|Yes, reset all|Ja, alles zurücksetzen|Da, resetuj sve|Да, ресетуј све|Да, нулирай всичко|Da, resetează tot|Evet, tümünü sıfırla|Sì, azzera tutto|نعم، أعد تعيين الكل
+Čip|Chip|Chip|Čip|Чип|Чип|Cip|Yonga|Chip|الشريحة
+Jezgre|Cores|Kerne|Jezgre|Језгре|Ядра|Nuclee|Çekirdekler|Core|الأنوية
+Najveći takt|Max clock|Max. Takt|Najveći takt|Највећи такт|Макс. честота|Frecvență maximă|Maks. hız|Clock massimo|أقصى تردد
+Platforma|Platform|Plattform|Platforma|Платформа|Платформа|Platformă|Platform|Piattaforma|المنصة
+Grafika|Graphics|Grafik|Grafika|Графика|Графика|Grafică|Grafik|Grafica|الرسوميات
+Slobodno|Free|Frei|Slobodno|Слободно|Свободно|Liber|Boş|Libero|متاح
+Aplikacija koristi|App uses|App nutzt|Aplikacija koristi|Апликација користи|Приложението използва|Aplicația folosește|Uygulama kullanıyor|L'app usa|يستخدم التطبيق
+Slaba memorija|Low memory|Wenig Speicher|Slaba memorija|Слаба меморија|Малко памет|Memorie redusă|Düşük bellek|Memoria scarsa|ذاكرة منخفضة
+da|yes|ja|da|да|да|da|evet|sì|نعم
+ne|no|nein|ne|не|не|nu|hayır|no|لا
+PRETORIAN podaci|PRETORIAN data|PRETORIAN-Daten|PRETORIAN podaci|PRETORIAN подаци|Данни на PRETORIAN|Date PRETORIAN|PRETORIAN verileri|Dati PRETORIAN|بيانات PRETORIAN
+bez HDR-a|no HDR|ohne HDR|bez HDR-a|без ХДР-а|без HDR|fără HDR|HDR yok|senza HDR|بدون HDR
+Rezolucija|Resolution|Auflösung|Rezolucija|Резолуција|Резолюция|Rezoluție|Çözünürlük|Risoluzione|الدقة
+Osvježavanje|Refresh rate|Bildwiederholrate|Osvježavanje|Освјежавање|Честота на опресняване|Rată de reîmprospătare|Yenileme hızı|Frequenza di aggiornamento|معدل التحديث
+Gustoća|Density|Dichte|Gustoća|Густоћа|Плътност|Densitate|Yoğunluk|Densità|الكثافة
+Podržani načini|Supported modes|Unterstützte Modi|Podržani načini|Подржани начини|Поддържани режими|Moduri acceptate|Desteklenen modlar|Modalità supportate|الأوضاع المدعومة
+Veza|Connection|Verbindung|Veza|Веза|Връзка|Conexiune|Bağlantı|Connessione|الاتصال
+IP adresa|IP address|IP-Adresse|IP adresa|ИП адреса|IP адрес|Adresă IP|IP adresi|Indirizzo IP|عنوان IP
+Brzina veze|Link speed|Verbindungsgeschwindigkeit|Brzina veze|Брзина везе|Скорост на връзката|Viteza conexiunii|Bağlantı hızı|Velocità collegamento|سرعة الاتصال
+aktivan|active|aktiv|aktivan|активан|активен|activ|etkin|attiva|نشط
+nije aktivan|not active|nicht aktiv|nije aktivan|није активан|не е активен|inactiv|etkin değil|non attiva|غير نشط
+Sistem|System|System|Sistem|Систем|Система|Sistem|Sistem|Sistema|النظام
+Verzija|Version|Version|Verzija|Верзија|Версия|Versiune|Sürüm|Versione|الإصدار
+Slabiji uređaj|Weaker device|Schwächeres Gerät|Slabiji uređaj|Слабији уређај|По-слабо устройство|Dispozitiv mai slab|Daha zayıf cihaz|Dispositivo meno potente|جهاز أضعف
+epizoda|episodes|Folgen|epizoda|епизода|епизода|episoade|bölüm|episodi|حلقات
+sezona|seasons|Staffeln|sezona|сезона|сезона|sezoane|sezon|stagioni|مواسم
+filmova|films|Filme|filmova|филмова|филма|filme|film|film|أفلام
+Link ili fajl s diska / USB-a|Link or file from disk / USB|Link oder Datei von Speicher / USB|Link ili datoteka s diska / USB-a|Линк или фајл с диска / USB-а|Връзка или файл от диск / USB|Link sau fișier de pe disc / USB|Bağlantı veya disk / USB dosyası|Link o file da disco / USB|رابط أو ملف من القرص / USB
+Portal i MAC adresa|Portal and MAC address|Portal und MAC-Adresse|Portal i MAC adresa|Портал и МАЦ адреса|Портал и MAC адрес|Portal și adresă MAC|Portal ve MAC adresi|Portale e indirizzo MAC|البوابة وعنوان MAC
+VRATI POSTAVKE|RESTORE SETTINGS|EINSTELLUNGEN WIEDERHERSTELLEN|VRATI POSTAVKE|ВРАТИ ПОДЕШАВАЊА|ВЪЗСТАНОВИ НАСТРОЙКИТЕ|RESTAUREAZĂ SETĂRILE|AYARLARI GERİ YÜKLE|RIPRISTINA IMPOSTAZIONI|استعادة الإعدادات
+Imaš backup? Playliste, favoriti, profili i postavke s USB-a ili diska|Have a backup? Playlists, favourites, profiles and settings from USB or disk|Backup vorhanden? Playlists, Favoriten, Profile und Einstellungen von USB oder Speicher|Imaš sigurnosna kopija? Playliste, favoriti, profili i postavke s USB-a ili diska|Имаш бекап? Плејлисте, фаворити, профили и подешавања с USB-а или диска|Имате резервно копие? Плейлисти, любими, профили и настройки от USB или диск|Ai un backup? Playlisturi, favorite, profiluri și setări de pe USB sau disc|Yedeğiniz var mı? USB veya diskten çalma listeleri, favoriler, profiller ve ayarlar|Hai un backup? Playlist, preferiti, profili e impostazioni da USB o disco|لديك نسخة احتياطية؟ القوائم والمفضلة والملفات الشخصية والإعدادات من USB أو القرص
+Link|Link|Link|Link|Линк|Връзка|Link|Bağlantı|Link|رابط
+zalijepi ili ukucaj adresu|paste or type the address|Adresse einfügen oder eingeben|zalijepi ili upiši adresu|залепи или укуцај адресу|поставете или въведете адреса|lipește sau tastează adresa|adresi yapıştırın veya yazın|incolla o digita l'indirizzo|الصق العنوان أو اكتبه
+Fajl s diska / USB-a|File from disk / USB|Datei von Speicher / USB|Datoteka s diska / USB-a|Фајл с диска / USB-а|Файл от диск / USB|Fișier de pe disc / USB|Disk / USB dosyası|File da disco / USB|ملف من القرص / USB
+Portal nije dao link|The portal gave no link|Das Portal lieferte keinen Link|Portal nije dao link|Портал није дао линк|Порталът не даде връзка|Portalul nu a oferit un link|Portal bağlantı vermedi|Il portale non ha fornito un link|لم تقدم البوابة رابطًا
+Ponovo spajam…|Reconnecting…|Verbinde erneut…|Ponovo spajam…|Поново спајам…|Свързвам отново…|Reconectez…|Yeniden bağlanılıyor…|Riconnessione…|جارٍ إعادة الاتصال…
+Portal (http://server:port/c/)|Portal (http://server:port/c/)|Portal (http://server:port/c/)|Portal (http://server:port/c/)|Портал (http://server:port/ц/)|Портал (http://server:port/c/)|Portal (http://server:port/c/)|Portal (http://server:port/c/)|Portale (http://server:port/c/)|البوابة (http://server:port/c/)
+MAC adresa (00:1A:79:…)|MAC address (00:1A:79:…)|MAC-Adresse (00:1A:79:…)|MAC adresa (00:1A:79:…)|МАЦ адреса (00:1А:79:…)|MAC адрес (00:1A:79:…)|Adresă MAC (00:1A:79:…)|MAC adresi (00:1A:79:…)|Indirizzo MAC (00:1A:79:…)|عنوان MAC (00:1A:79:…)
+Serijski broj (nije obavezno)|Serial number (optional)|Seriennummer (optional)|Serijski broj (nije obavezno)|Серијски број (није обавезно)|Сериен номер (по избор)|Număr de serie (opțional)|Seri numarası (isteğe bağlı)|Numero di serie (facoltativo)|الرقم التسلسلي (اختياري)
+Device ID 1 (nije obavezno)|Device ID 1 (optional)|Geräte-ID 1 (optional)|Device ID 1 (nije obavezno)|Девице ID 1 (није обавезно)|Device ID 1 (по избор)|Device ID 1 (opțional)|Cihaz kimliği 1 (isteğe bağlı)|Device ID 1 (facoltativo)|معرّف الجهاز 1 (اختياري)
+Device ID 2 (nije obavezno)|Device ID 2 (optional)|Geräte-ID 2 (optional)|Device ID 2 (nije obavezno)|Девице ID 2 (није обавезно)|Device ID 2 (по избор)|Device ID 2 (opțional)|Cihaz kimliği 2 (isteğe bağlı)|Device ID 2 (facoltativo)|معرّف الجهاز 2 (اختياري)
+Korisničko ime (nije obavezno)|Username (optional)|Benutzername (optional)|Korisničko ime (nije obavezno)|Корисничко име (није обавезно)|Потребителско име (по избор)|Nume utilizator (opțional)|Kullanıcı adı (isteğe bağlı)|Nome utente (facoltativo)|اسم المستخدم (اختياري)
+Lozinka (nije obavezno)|Password (optional)|Passwort (optional)|Lozinka (nije obavezno)|Лозинка (није обавезно)|Парола (по избор)|Parolă (opțional)|Şifre (isteğe bağlı)|Password (facoltativa)|كلمة المرور (اختياري)
+Sat, datum, pauzirano|Clock, date, paused|Uhr, Datum, pausiert|Sat, datum, pauzirano|Сат, датум, паузирано|Часовник, дата, пауза|Ceas, dată, pauză|Saat, tarih, duraklatılan|Ora, data, in pausa|الساعة، التاريخ، المتوقف
+Gledano, protok, brzina, stabilnost|Watched, data, speed, stability|Geschaut, Daten, Tempo, Stabilität|Gledano, protok, brzina, stabilnost|Гледано, проток, брзина, стабилност|Гледано, данни, скорост, стабилност|Vizionat, date, viteză, stabilitate|İzlenen, veri, hız, kararlılık|Visto, dati, velocità, stabilità|المشاهدة، البيانات، السرعة، الثبات
+Uređaj, kontakt, licence|Device, contact, licences|Gerät, Kontakt, Lizenzen|Uređaj, kontakt, licence|Уређај, контакт, лиценце|Устройство, контакт, лицензи|Dispozitiv, contact, licențe|Cihaz, iletişim, lisanslar|Dispositivo, contatto, licenze|الجهاز، التواصل، التراخيص
+Prekid streama|Stream drop|Stream-Abbruch|Prekid streama|Прекид стреама|Прекъсване на потока|Întrerupere stream|Yayın kesintisi|Interruzione stream|انقطاع البث
+zamrznut ili prekinut stream se tiho ponovo spoji|a frozen or broken stream quietly reconnects|ein eingefrorener oder abgebrochener Stream verbindet sich still neu|zamrznut ili prekinut stream se tiho ponovo spoji|замрзнут или прекинут стреам се тихо поново споји|замръзнал или прекъснат поток се свързва тихо отново|un stream blocat sau întrerupt se reconectează discret|donan veya kesilen yayın sessizce yeniden bağlanır|uno stream bloccato o interrotto si riconnette in silenzio|يُعاد توصيل البث المتجمد أو المنقطع بهدوء
+Reaguj nakon|React after|Reagieren nach|Reaguj nakon|Реагуј након|Реагирай след|Reacționează după|Şu süreden sonra tepki ver|Reagisci dopo|تفاعل بعد
+bez slike ili napretka|no picture or progress|kein Bild oder Fortschritt|bez slike ili napretka|без слике или напретка|без картина или напредък|fără imagine sau progres|görüntü veya ilerleme yok|nessuna immagine o avanzamento|بلا صورة أو تقدم
+IPTV plejer za Android TV|IPTV player for Android TV|IPTV-Player für Android TV|IPTV player za Android TV|IPTV плејер за Android TV|IPTV плейър за Android TV|Player IPTV pentru Android TV|Android TV için IPTV oynatıcı|Lettore IPTV per Android TV|مشغل IPTV لأجهزة Android TV
+● Najnovija verzija|● Latest version|● Neueste Version|● Najnovija verzija|● Најновија верзија|● Най-нова версия|● Cea mai nouă versiune|● En yeni sürüm|● Ultima versione|● أحدث إصدار
+10 jezika|10 languages|10 Sprachen|10 jezika|10 језика|10 езика|10 limbi|10 dil|10 lingue|10 لغات
+Pomoć na telefonu|Help on your phone|Hilfe am Handy|Pomoć na telefonu|Помоћ на телефону|Помощ на телефона|Ajutor pe telefon|Telefonda yardım|Aiuto sul telefono|المساعدة على الهاتف
+procesor, RAM, ekran, mreža|processor, RAM, screen, network|Prozessor, RAM, Bildschirm, Netzwerk|procesor, RAM, zaslon, mreža|процесор, РАМ, екран, мрежа|процесор, RAM, екран, мрежа|procesor, RAM, ecran, rețea|işlemci, RAM, ekran, ağ|processore, RAM, schermo, rete|المعالج، الذاكرة، الشاشة، الشبكة
+PRETORIAN tim|PRETORIAN team|PRETORIAN-Team|PRETORIAN tim|PRETORIAN тим|Екипът на PRETORIAN|Echipa PRETORIAN|PRETORIAN ekibi|Team PRETORIAN|فريق PRETORIAN
+prijedlozi i greške|ideas and bugs|Vorschläge und Fehler|prijedlozi i greške|приједлози и грешке|предложения и грешки|sugestii și erori|öneriler ve hatalar|suggerimenti ed errori|اقتراحات وأخطاء
+Ima zapis|There is a report|Bericht vorhanden|Ima zapis|Има запис|Има доклад|Există un raport|Rapor var|C'è un rapporto|يوجد تقرير
+pogledaj ili izvezi zapis|view or export the report|Bericht ansehen oder exportieren|pogledaj ili izvezi zapis|погледај или извези запис|виж или експортирай доклада|vezi sau exportă raportul|raporu görüntüle veya dışa aktar|visualizza o esporta il rapporto|اعرض التقرير أو صدّره
+Šta se čuva i gdje|What is kept and where|Was wo gespeichert wird|Što se čuva i gdje|Шта се чува и где|Какво се пази и къде|Ce se păstrează și unde|Ne nerede saklanır|Cosa viene salvato e dove|ما الذي يُحفظ وأين
+sve ostaje na uređaju|everything stays on the device|alles bleibt auf dem Gerät|sve ostaje na uređaju|све остаје на уређају|всичко остава на устройството|totul rămâne pe dispozitiv|her şey cihazda kalır|tutto resta sul dispositivo|يبقى كل شيء على الجهاز
+Otvoreni kod|Open source|Open Source|Otvoreni kod|Отворени код|Отворен код|Cod deschis|Açık kaynak|Codice aperto|مفتوح المصدر
+zadnja provjera|last check|letzte Prüfung|zadnja provjera|задња провера|последна проверка|ultima verificare|son kontrol|ultimo controllo|آخر فحص
+Kratko uputstvo|Quick guide|Kurzanleitung|Kratko uputstvo|Кратко упутство|Кратко ръководство|Ghid rapid|Hızlı kılavuz|Guida rapida|دليل سريع
+prvi koraci, daljinski, prečice|first steps, remote, shortcuts|erste Schritte, Fernbedienung, Kürzel|prvi koraci, daljinski, prečice|први кораци, даљински, пречице|първи стъпки, дистанционно, преки пътища|primii pași, telecomandă, scurtături|ilk adımlar, kumanda, kısayollar|primi passi, telecomando, scorciatoie|الخطوات الأولى، جهاز التحكم، الاختصارات
+PRETORIAN je napravljen za porodični TV: brz, jednostavan i bez reklama.|PRETORIAN is made for the family TV: fast, simple and without ads.|PRETORIAN ist für den Familien-TV gemacht: schnell, einfach und ohne Werbung.|PRETORIAN je napravljen za porodični TV: brz, jednostavan i bez reklama.|PRETORIAN је направљен за породични TV: брз, једноставан и без реклама.|PRETORIAN е създаден за семейния телевизор: бърз, прост и без реклами.|PRETORIAN este făcut pentru televizorul familiei: rapid, simplu și fără reclame.|PRETORIAN aile televizyonu için yapıldı: hızlı, basit ve reklamsız.|PRETORIAN è fatto per la TV di famiglia: veloce, semplice e senza pubblicità.|صُمم PRETORIAN لتلفاز العائلة: سريع وبسيط وبلا إعلانات.
+Skeniraj telefonom i napiši e-mail. Navedi model uređaja i verziju.|Scan with your phone and write an e-mail. Mention the device model and version.|Mit dem Handy scannen und eine E-Mail schreiben. Gerätemodell und Version angeben.|Skeniraj telefonom i napiši e-mail. Navedi model uređaja i verziju.|Скенирај телефоном и напиши е-маил. Наведи модел уређаја и верзију.|Сканирайте с телефона и напишете имейл. Посочете модела и версията.|Scanează cu telefonul și scrie un e-mail. Menționează modelul și versiunea.|Telefonla tarayın ve e-posta yazın. Cihaz modelini ve sürümü belirtin.|Scansiona con il telefono e scrivi un'e-mail. Indica modello e versione.|امسح بالهاتف واكتب بريدًا إلكترونيًا. اذكر طراز الجهاز والإصدار.
+Izvezi log za podršku|Export support log|Support-Log exportieren|Izvezi log za podršku|Извези лог за подршку|Експортирай лог за поддръжка|Exportă jurnalul pentru asistență|Destek günlüğünü dışa aktar|Esporta log per il supporto|تصدير سجل الدعم
+na USB ili u folder|to USB or a folder|auf USB oder in einen Ordner|na USB ili u mapa|на USB или у фолдер|на USB или в папка|pe USB sau într-un folder|USB'ye veya klasöre|su USB o in una cartella|إلى USB أو مجلد
+Portal je odbio pristup (%s)|The portal refused access (%s)|Das Portal hat den Zugriff verweigert (%s)|Portal je odbio pristup (%s)|Портал је одбио приступ (%s)|Порталът отказа достъп (%s)|Portalul a refuzat accesul (%s)|Portal erişimi reddetti (%s)|Il portale ha rifiutato l'accesso (%s)|رفضت البوابة الوصول (%s)
+Portal nije vratio podatke|The portal returned no data|Das Portal lieferte keine Daten|Portal nije vratio podatke|Портал није вратио податке|Порталът не върна данни|Portalul nu a returnat date|Portal veri döndürmedi|Il portale non ha restituito dati|لم تُرجع البوابة بيانات
+Unesi MAC adresu (00:1A:79:…)|Enter the MAC address (00:1A:79:…)|MAC-Adresse eingeben (00:1A:79:…)|Unesi MAC adresu (00:1A:79:…)|Унеси МАЦ адресу (00:1А:79:…)|Въведете MAC адреса (00:1A:79:…)|Introdu adresa MAC (00:1A:79:…)|MAC adresini girin (00:1A:79:…)|Inserisci l'indirizzo MAC (00:1A:79:…)|أدخل عنوان MAC (00:1A:79:…)
+Portal nije prihvatio MAC adresu|The portal did not accept the MAC address|Das Portal hat die MAC-Adresse nicht akzeptiert|Portal nije prihvatio MAC adresu|Портал није прихватио МАЦ адресу|Порталът не прие MAC адреса|Portalul nu a acceptat adresa MAC|Portal MAC adresini kabul etmedi|Il portale non ha accettato l'indirizzo MAC|لم تقبل البوابة عنوان MAC
+Filmovi i serije rade s Xtream Codes i Stalker playlistom.|Films and series work with an Xtream Codes or Stalker playlist.|Filme und Serien funktionieren mit Xtream Codes oder Stalker.|Filmovi i serije rade s Xtream Codes i Stalker playlistom.|Филмови и серије раде с Xtream Codes и Сталкер плејлистом.|Филмите и сериалите работят с Xtream Codes или Stalker.|Filmele și serialele funcționează cu Xtream Codes sau Stalker.|Filmler ve diziler Xtream Codes veya Stalker ile çalışır.|Film e serie funzionano con Xtream Codes o Stalker.|تعمل الأفلام والمسلسلات مع قوائم Xtream Codes أو Stalker.
+7 dana|7 days|7 Tage|7 dana|7 дана|7 дни|7 zile|7 gün|7 giorni|7 أيام
+danas|today|heute|danas|данас|днес|azi|bugün|oggi|اليوم
+ovaj mjesec|this month|diesen Monat|ovaj mjesec|овај мјесец|този месец|luna aceasta|bu ay|questo mese|هذا الشهر
+ova godina|this year|dieses Jahr|ova godina|ова година|тази година|anul acesta|bu yıl|quest'anno|هذه السنة
+Protok podataka|Data used|Datenverbrauch|Protok podataka|Проток података|Пренесени данни|Date consumate|Veri kullanımı|Dati usati|البيانات المستهلكة
+Brzina interneta|Internet speed|Internetgeschwindigkeit|Brzina interneta|Брзина интернета|Скорост на интернета|Viteza internetului|İnternet hızı|Velocità internet|سرعة الإنترنت
+Ažuriranja|Updates|Updates|Ažuriranja|Ажурирања|Актуализации|Actualizări|Güncellemeler|Aggiornamenti|التحديثات
+Server providera|Provider server|Anbieter-Server|Server providera|Сервер провајдера|Сървър на доставчика|Serverul furnizorului|Sağlayıcı sunucusu|Server del provider|خادم المزود
+Keš i memorija|Cache and memory|Cache und Speicher|Keš i memorija|Кеш и меморија|Кеш и памет|Cache și memorie|Önbellek ve bellek|Cache e memoria|ذاكرة التخزين المؤقت والذاكرة
+slike, EPG, liste|pictures, EPG, lists|Bilder, EPG, Listen|slike, EPG, liste|слике, EPG, листе|изображения, EPG, списъци|imagini, EPG, liste|resimler, EPG, listeler|immagini, EPG, liste|الصور، الدليل، القوائم
+Pomoć|Help|Hilfe|Pomoć|Помоћ|Помощ|Ajutor|Yardım|Aiuto|المساعدة
+OK otvara, dugi OK otvara meni (označi, dodaj na listu, sakrij).|OK opens, a long OK opens the menu (mark, add to list, hide).|OK öffnet, langes OK öffnet das Menü (markieren, zur Liste, ausblenden).|OK otvara, dugi OK otvara izbornik (označi, dodaj na listu, sakrij).|OK отвара, дуги OK отвара мени (означи, додај на листу, сакриј).|OK отваря, дълго OK отваря менюто (маркирай, добави, скрий).|OK deschide, OK lung deschide meniul (marchează, adaugă, ascunde).|OK açar, uzun OK menüyü açar (işaretle, listeye ekle, gizle).|OK apre, OK lungo apre il menu (segna, aggiungi, nascondi).|OK يفتح، والضغط المطوّل يفتح القائمة (تحديد، إضافة، إخفاء).
+Nazad uvijek ide jedan korak nazad i ostaje u istoj sekciji.|Back always goes one step back and stays in the same section.|Zurück geht immer einen Schritt zurück und bleibt im selben Bereich.|Natrag uvijek ide jedan korak natrag i ostaje u istoj sekciji.|Назад увек иде један корак назад и остаје у истој секцији.|Назад винаги връща една стъпка и остава в същия раздел.|Înapoi merge mereu un pas înapoi și rămâne în aceeași secțiune.|Geri her zaman bir adım geri gider ve aynı bölümde kalır.|Indietro torna sempre di un passo e resta nella stessa sezione.|زر الرجوع يعود خطوة واحدة دائمًا ويبقى في القسم نفسه.
+U plejeru: ▲ ▼ mijenja kanal, ◀ ▶ premotava, OK pauza.|In the player: ▲ ▼ change channel, ◀ ▶ seek, OK pause.|Im Player: ▲ ▼ Kanal wechseln, ◀ ▶ spulen, OK Pause.|U plejeru: ▲ ▼ mijenja kanal, ◀ ▶ premotava, OK pauza.|У плејеру: ▲ ▼ мења канал, ◀ ▶ премотава, OK пауза.|В плейъра: ▲ ▼ сменя канала, ◀ ▶ превърта, OK пауза.|În player: ▲ ▼ schimbă canalul, ◀ ▶ derulează, OK pauză.|Oynatıcıda: ▲ ▼ kanal değiştirir, ◀ ▶ sarar, OK duraklatır.|Nel lettore: ▲ ▼ cambia canale, ◀ ▶ scorre, OK pausa.|في المشغل: ▲ ▼ لتغيير القناة، ◀ ▶ للتقديم، OK للإيقاف.
+Brojevi na daljinskom biraju kanal; 0 vraća na prethodni.|Numbers on the remote pick a channel; 0 goes back to the previous one.|Zahlen auf der Fernbedienung wählen den Kanal; 0 geht zum vorherigen.|Brojevi na daljinskom biraju kanal; 0 vraća na prethodni.|Бројеви на даљинском бирају канал; 0 враћа на претходни.|Цифрите избират канал; 0 връща към предишния.|Cifrele aleg canalul; 0 revine la cel anterior.|Kumandadaki rakamlar kanal seçer; 0 öncekine döner.|I numeri scelgono il canale; 0 torna al precedente.|الأرقام تختار القناة؛ 0 يعود إلى السابقة.
+Postavke › Jednostavni mod: samo TV, Filmovi i Serije, izlaz s PIN-om.|Settings › Simple mode: only TV, Films and Series, exit with the PIN.|Einstellungen › Einfacher Modus: nur TV, Filme und Serien, Verlassen mit PIN.|Postavke › Jednostavni način: samo TV, Filmovi i Serije, izlaz s PIN-om.|Подешавања › Једноставни мод: само TV, Филмови и Серије, излаз с PIN-ом.|Настройки › Опростен режим: само ТВ, Филми и Сериали, изход с ПИН.|Setări › Mod simplu: doar TV, Filme și Seriale, ieșire cu PIN.|Ayarlar › Basit mod: yalnızca TV, Filmler ve Diziler, PIN ile çıkış.|Impostazioni › Modalità semplice: solo TV, Film e Serie, uscita con PIN.|الإعدادات › الوضع البسيط: التلفاز والأفلام والمسلسلات فقط، والخروج برمز PIN.
+Zadani PIN je 0000 – promijeni ga u Postavkama.|The default PIN is 0000 – change it in Settings.|Die Standard-PIN ist 0000 – ändere sie in den Einstellungen.|Zadani PIN je 0000 – promijeni ga u Postavkama.|Задани PIN је 0000 – промени га у Подешавањима.|ПИН по подразбиране е 0000 – сменете го в Настройки.|PIN-ul implicit este 0000 – schimbă-l în Setări.|Varsayılan PIN 0000 – Ayarlar'dan değiştirin.|Il PIN predefinito è 0000 – cambialo nelle Impostazioni.|رمز PIN الافتراضي 0000 – غيّره في الإعدادات.
+Mjesec|Month|Monat|Mjesec|Месец|Месец|Lună|Ay|Mese|الشهر
+Stabilnost|Stability|Stabilität|Stabilnost|Стабилност|Стабилност|Stabilitate|Kararlılık|Stabilità|الثبات
 Nepoznat jezik|Unknown language|Unbekannte Sprache|Nepoznat jezik|Непознат језик|Неизвестен език|Limbă necunoscută|Bilinmeyen dil|Lingua sconosciuta|لغة غير معروفة
 """.trimIndent()
 

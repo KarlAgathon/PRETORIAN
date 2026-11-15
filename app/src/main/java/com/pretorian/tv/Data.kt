@@ -10,7 +10,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 
-enum class SourceType { XTREAM, M3U }
+enum class SourceType { XTREAM, M3U, STALKER }
 
 data class Playlist(
     val id: String,
@@ -26,22 +26,29 @@ data class Playlist(
     val series: Boolean = true,
     /** subscription end as unix seconds, "" = unknown, "0" = never */
     val exp: String = "",
+    /** Stalker portal: MAC address and the optional box identity */
+    val mac: String = "",
+    val serial: String = "",
+    val deviceId: String = "",
+    val deviceId2: String = "",
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id); put("name", name); put("type", type.name)
         put("server", server); put("user", user); put("pass", pass); put("url", url)
         put("active", active); put("live", live); put("vod", vod); put("series", series); put("exp", exp)
+        put("mac", mac); put("serial", serial); put("devid", deviceId); put("devid2", deviceId2)
     }
 
     companion object {
         fun from(o: JSONObject) = Playlist(
             id = o.str("id"),
             name = o.str("name"),
-            type = if (o.str("type") == "M3U") SourceType.M3U else SourceType.XTREAM,
+            type = when (o.str("type")) { "M3U" -> SourceType.M3U; "STALKER" -> SourceType.STALKER; else -> SourceType.XTREAM },
             server = o.str("server"), user = o.str("user"), pass = o.str("pass"), url = o.str("url"),
             active = o.optBoolean("active", false),
             live = o.optBoolean("live", true), vod = o.optBoolean("vod", true), series = o.optBoolean("series", true),
             exp = o.str("exp"),
+            mac = o.str("mac"), serial = o.str("serial"), deviceId = o.str("devid"), deviceId2 = o.str("devid2"),
         )
     }
 }
@@ -461,17 +468,19 @@ object Repo {
 
     suspend fun liveGroups(p: Playlist): List<Category> = cached("lg_${p.id}") {
         if (p.type == SourceType.XTREAM) Xtream(p).liveCategories()
+        else if (p.type == SourceType.STALKER) Stalker(p).liveCategories()
         else m3uChannels(p).map { it.group }.distinct().map { Category(it, it) }
     }
 
     suspend fun channels(p: Playlist, groupId: String): List<Channel> = cached("ch_${p.id}_$groupId") {
         if (p.type == SourceType.XTREAM) Xtream(p).channels(groupId)
+        else if (p.type == SourceType.STALKER) allChannels(p).filter { it.group == groupId }
         else m3uChannels(p).filter { it.group == groupId }
     }
 
     /** every live channel of the playlist ("All channels", sports search) */
     suspend fun allChannels(p: Playlist): List<Channel> = cached("all_${p.id}") {
-        if (p.type == SourceType.XTREAM) Xtream(p).allChannels() else m3uChannels(p)
+        if (p.type == SourceType.XTREAM) Xtream(p).allChannels() else if (p.type == SourceType.STALKER) Stalker(p).allChannels() else m3uChannels(p)
     }
 
     /** every movie / series of the playlist (search) */
@@ -497,11 +506,16 @@ object Repo {
     fun dropCatalogs() { diskDir?.listFiles()?.filter { it.name.startsWith("catalog_") }?.forEach { it.delete() } }
 
     suspend fun vodGroups(p: Playlist): List<Category> =
-        if (p.type == SourceType.XTREAM) cached("vg_${p.id}") { Xtream(p).vodCategories() } else emptyList()
+        if (p.type == SourceType.XTREAM) cached("vg_${p.id}") { Xtream(p).vodCategories() }
+        else if (p.type == SourceType.STALKER) cached("vg_${p.id}") { Stalker(p).vodCategories() } else emptyList()
 
-    suspend fun movies(p: Playlist, groupId: String): List<Vod> = cached("mv_${p.id}_$groupId") { Xtream(p).movies(groupId) }
+    suspend fun movies(p: Playlist, groupId: String): List<Vod> = cached("mv_${p.id}_$groupId") {
+        if (p.type == SourceType.STALKER) Stalker(p).movies(groupId) else Xtream(p).movies(groupId)
+    }
 
-    suspend fun movieInfo(p: Playlist, id: String): VodInfo = cached("mi_${p.id}_$id") { Xtream(p).movieInfo(id) }
+    suspend fun movieInfo(p: Playlist, id: String): VodInfo = cached("mi_${p.id}_$id") {
+        if (p.type == SourceType.STALKER) VodInfo(null, null, null, null, null, null, null, null) else Xtream(p).movieInfo(id)
+    }
 
     suspend fun seriesGroups(p: Playlist): List<Category> =
         if (p.type == SourceType.XTREAM) cached("sg_${p.id}") { Xtream(p).seriesCategories() } else emptyList()
@@ -522,6 +536,7 @@ object Repo {
 
     suspend fun test(p: Playlist): String = withContext(Dispatchers.IO) {
         if (p.type == SourceType.XTREAM) Xtream(p).login()
+        else if (p.type == SourceType.STALKER) Stalker(p).login()
         else { val n = M3u.parse(m3uText(p.url.trim())).size; trf("%s kanala", n) }
     }
 }
