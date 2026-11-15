@@ -1,4 +1,2 @@
-Nova stranica filma: veliki plakat, studio, glumci, zvuk i titl s izvorom
-Nova stranica serije: sezone, epizode s lampicama, dugi OK za označavanje
-Nove epizode na Početnoj, nadolazeće epizode s datumom
-Ažuriranje: Kasnije, Preskoči, historija, USB, vraćanje verzije · O uređaju
+Ažuriranje u aplikaciji više ne prekida samo sebe
+Sve iz 0.9.0: nove stranice filma i serije, nove epizode, Ažuriranje, O uređaju

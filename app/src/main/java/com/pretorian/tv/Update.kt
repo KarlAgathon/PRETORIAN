@@ -39,6 +39,7 @@ object Updater {
     var totalBytes by mutableStateOf(0L)
     var speed by mutableStateOf(0L)       // bytes per second
     @Volatile var cancel = false
+    @Volatile var installStarted = 0L
     /** shown once per version when you come back from the player */
     var askAfterPlayer by mutableStateOf(false)
 
@@ -76,8 +77,8 @@ object Updater {
     /** An APK picked from a USB stick. */
     suspend fun installBytes(ctx: Context, bytes: ByteArray) {
         val f = File(ctx.cacheDir, "usb.apk"); withContext(Dispatchers.IO) { f.writeBytes(bytes) }
-        progress = 101
-        try { withContext(Dispatchers.IO) { abandonOld(ctx); commit(ctx, f) } } catch (e: Exception) { progress = -1; status = trf("Ažuriranje nije uspjelo: %s", e.message ?: "") }
+        progress = 101; installStarted = System.currentTimeMillis()
+        try { withContext(Dispatchers.IO) { commit(ctx, f) } } catch (e: Exception) { progress = -1; status = trf("Ažuriranje nije uspjelo: %s", e.message ?: "") }
     }
 
     /** Settings into Download/PRETORIAN before the new version goes in (when chosen). */
@@ -107,9 +108,11 @@ object Updater {
     }
 
     suspend fun install(ctx: Context, info: UpdateInfo) {
-        // only a download in progress blocks a new click; a confirm screen that was closed without an answer does not
+        // a download or an install that is still running blocks a new click: a second click used to throw away the running install
         if (progress in 0..100) return
-        withContext(Dispatchers.IO) { abandonOld(ctx) }
+        if (progress == 101 && System.currentTimeMillis() - installStarted < 180_000L) return
+        // only installs older than 3 minutes (a confirm screen closed with Back) are thrown away
+        if (System.currentTimeMillis() - installStarted > 180_000L) withContext(Dispatchers.IO) { abandonOld(ctx) }
         progress = -1
         status = null
         cancel = false
@@ -118,6 +121,7 @@ object Updater {
             val file = if (ready(ctx, info)) readyFile(ctx) else withContext(Dispatchers.IO) { download(ctx, info.apk) }
             Prefs.put("upd_file", info.name)
             progress = 101
+            installStarted = System.currentTimeMillis()
             withContext(Dispatchers.IO) { commit(ctx, file) }
         } catch (e: Exception) {
             progress = -1
@@ -165,7 +169,10 @@ object Updater {
     }
 
     /** back in the app while "installing": the confirm screen was closed, so the button works again */
-    fun onResume() { if (progress == 101) { progress = -1; status = tr("Instalacija nije završena: otkazano") } }
+    fun onResume() {
+        // Android may still be installing in the background: the button comes back only after 3 minutes without an answer
+        if (progress == 101 && System.currentTimeMillis() - installStarted > 180_000L) { progress = -1; status = tr("Instalacija nije završena: otkazano") }
+    }
 
     fun commit(ctx: Context, apk: File) {
         val pi = ctx.packageManager.packageInstaller
@@ -193,7 +200,7 @@ class UpdateResultReceiver : BroadcastReceiver() {
             }
             PackageInstaller.STATUS_SUCCESS -> { Updater.progress = -1 }
             else -> {
-                Updater.progress = -1
+                Updater.progress = -1; Updater.installStarted = 0L
                 val msg = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "otkazano"
                 Updater.status = trf("Instalacija nije završena: %s", msg)
                 Toast.makeText(ctx, tr("Ažuriranje nije završeno"), Toast.LENGTH_LONG).show()

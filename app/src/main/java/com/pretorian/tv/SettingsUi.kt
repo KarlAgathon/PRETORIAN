@@ -2029,7 +2029,7 @@ private fun UpdateV2() {
                         Button("Otkaži", R.drawable.lc_x) { Updater.cancel = true }
                         T("Možeš gledati dalje: instalacija pita tek kad je gotovo.", 11.sp, C.Muted, modifier = Modifier.align(Alignment.CenterVertically))
                     }
-                } else if (pr == 101) T("Instaliram…", 12.sp, C.Text)
+                } else if (pr == 101) T("Instaliram… Ne klikaj ponovo, Android sam završava i PRETORIAN se ponovo pokrene.", 12.sp, C.Text, maxLines = 2)
                 if (u != null && pr !in 0..101) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(if (Updater.ready(ctx, u)) "Instaliraj sada" else "Preuzmi i instaliraj", R.drawable.lc_download, primary = true) { scope.launch { Updater.install(ctx, u) } }
                     Button("Kasnije ▾", R.drawable.lc_clock) { later = true }
