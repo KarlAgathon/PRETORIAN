@@ -154,7 +154,8 @@ class Ovr(private val ctx: Context, private val pid: String) {
         val merged = customGroups(kind) + raw
         val order = list("gOrder_$kind")
         val sorted = merged.withIndex().sortedBy { (i, g) -> order.indexOf(g.id).let { if (it < 0) 100_000 + i else it } }.map { it.value }
-        return sorted.filter { all || !isHidden(kind, it.id) }.map { Category(it.id, groupName(kind, it)) }
+        // Settings › Parental controls: those categories are gone everywhere until the PIN opens them
+        return sorted.filter { (all || !isHidden(kind, it.id)) && !Parental.hides(it.name) }.map { Category(it.id, groupName(kind, it)) }
     }
 
     fun moveGroup(kind: String, current: List<Category>, id: String, delta: Int) {
@@ -218,3 +219,23 @@ class Ovr(private val ctx: Context, private val pid: String) {
 
 /** group names that are for adults only */
 val ADULT = Regex("(?i)\\b(xxx|adult|adults|18\\+|porn\\w*|erotic\\w*|for adults|za odrasle|\\+18)\\b|xxx")
+
+
+/** Settings › Parental controls: whole kinds of categories hidden by their names (adult, LGBT, trans), opened only with the PIN. */
+object Parental {
+    val KINDS = listOf(
+        Triple("adult", "Filmovi i kanali za odrasle", "XXX, Adult, 18+, porno"),
+        Triple("lgbt", "LGBT kategorije", "LGBT, LGBTQ, gay, queer"),
+        Triple("trans", "Trans kategorije", "trans, transgender"),
+    )
+    private val RX = mapOf(  // i18n-ignore
+        "adult" to ADULT,
+        "lgbt" to Regex("(?i)\\b(lgbt\\w*|gay|lesbian\\w*|lezb\\w*|queer)\\b"),
+        "trans" to Regex("(?i)\\b(trans|transgender\\w*|transsexual\\w*|transseksual\\w*|tgirl\\w*|shemale\\w*)\\b"),
+    )
+    /** shown again until PRETORIAN is closed (after the PIN) */
+    var unlocked by androidx.compose.runtime.mutableStateOf(false)
+    fun on(k: String) = Prefs.bool("par_$k", k == "adult")
+    fun set(k: String, v: Boolean) { Prefs.put("par_$k", v); Repo.clear(); SearchIndex.reset() }
+    fun hides(name: String): Boolean = !unlocked && KINDS.any { (k, _, _) -> on(k) && RX[k]!!.containsMatchIn(name) }
+}

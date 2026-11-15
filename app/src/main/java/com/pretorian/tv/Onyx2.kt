@@ -399,8 +399,11 @@ fun OnyxSearch(nav: Nav) {
     var jump by remember { mutableIntStateOf(0) }
     LaunchedEffect(q) { delay(600); query = q.trim() }
     val voice = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { r ->
-        r.data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.let { q = it; query = it.trim(); jump++ }
+        r.data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.let { q = it; query = it.trim(); SearchHistory.add(it); jump++ }
     }
+    // what you searched for stays in "Recent searches" (also when you leave with a result open)
+    val lastQuery = androidx.compose.runtime.rememberUpdatedState(query)
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { SearchHistory.add(lastQuery.value) } }
     val chIdx by load(Unit) { SearchIndex.channels(ctx) }
     val vodIdx by load(Unit) { SearchIndex.movies(ctx) }
     val serIdx by load(Unit) { SearchIndex.shows(ctx) }
@@ -428,9 +431,16 @@ fun OnyxSearch(nav: Nav) {
                 textStyle = TextStyle(fontFamily = Inter, fontSize = 18.sp, color = Color(0xFF0A0A0A), fontWeight = FontWeight.SemiBold),
                 cursorBrush = androidx.compose.ui.graphics.SolidColor(Color(0xFF0A0A0A)),
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search, autoCorrectEnabled = false),
-                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { query = q.trim(); keyboard?.hide(); jump++ }),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { query = q.trim(); SearchHistory.add(q); keyboard?.hide(); jump++ }),
                 modifier = Modifier.weight(1f).padding(horizontal = 14.dp).focusRequesterSafe(fr),
                 decorationBox = { inner -> Box { if (q.isEmpty()) T("Kanal, film, serija, emisija ili broj", 16.sp, Color(0xFF6B7280)); inner() } })
+            // clear the search
+            if (q.isNotEmpty()) Focusable(onClick = { SearchHistory.add(q); q = ""; query = ""; fr.tryFocus() }, shape = Pill, normal = Color.Transparent, focused = Color(0x1F000000),
+                zoom = 1f, modifier = Modifier.height(40.dp)) { _ ->
+                Row(Modifier.align(Alignment.Center).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Ico(R.drawable.lc_x, 16.dp, Color(0xFF374151)); T("Obriši", 13.sp, Color(0xFF374151))
+                }
+            }
             Focusable(onClick = {
                 try { voice.launch(android.content.Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
                     .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -442,7 +452,11 @@ fun OnyxSearch(nav: Nav) {
                 }
             }
         }
-        if (query.length < 2) { T("Upiši bar 2 slova ili klikni „glasom”", 13.sp, C.Muted); return@Column }
+        if (query.length < 2) {
+            T("Upiši bar 2 slova ili klikni „glasom”", 13.sp, C.Muted)
+            SearchRecent { h -> q = h; query = h; jump++ }
+            return@Column
+        }
         if (!busy && chHits.isEmpty() && vs.isEmpty() && progs.isEmpty()) { T("Ništa nije pronađeno", 15.sp, C.Soft); return@Column }
         var first = true
         fun takeFirst(): FocusRequester? = if (first) { first = false; firstFr } else null

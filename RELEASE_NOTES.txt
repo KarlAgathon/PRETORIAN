@@ -1,1 +1,6 @@
-Probna Beta verzija: test ažuriranja preko aplikacije (bez novih funkcija)
+Ažuriranje popravljeno: samo jedna instalacija u isto vrijeme, novi meni (Ažuriraj sada, Provjeri verziju, Stable/Beta, Vrati verziju)
+Klik na obavijest otvara Ažuriranje
+Roditeljska kontrola s PIN-om: sakrij odrasle, LGBT i trans kategorije
+Pretraga: dugme Obriši i Nedavne pretrage
+Početna: lijevo vraća u listu, ▲ ▼ za redoslijed, niži redovi
+Trailer: YouTube, SmartTube, TizenTube; serije pokazuju platformu; brzina mimo VPN-a; nova IPTV ikona

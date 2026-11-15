@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -91,22 +93,24 @@ object SearchIndex {
 
     suspend fun channels(ctx: android.content.Context) = part(ctx, "ch") { pls ->
         // hidden groups and hidden channels stay hidden in search too
-        pls.flatMap { p -> val o = Ovr(ctx, p.id); try { Repo.allChannels(p).filter { !o.isHidden("live", it.group) && !o.isChHidden(it) } } catch (e: Exception) { emptyList() } }.distinctBy { it.url }
+        pls.flatMap { p -> val o = Ovr(ctx, p.id); try { Repo.allChannels(p).filter { !o.isHidden("live", it.group) && !o.isChHidden(it) && !Parental.hides(it.name) && !Parental.hides(it.group) } } catch (e: Exception) { emptyList() } }.distinctBy { it.url }
             .map { Item(norm(it.name), Hit.Ch(it), it.num.toString()) }
     }
     suspend fun movies(ctx: android.content.Context) = part(ctx, "vod") { pls ->
-        pls.flatMap { p -> val o = Ovr(ctx, p.id); try { Repo.catalog(p, "vod").filter { !o.isHidden("vod", it.str("c")) } } catch (e: Throwable) { emptyList() } }.map {
+        pls.flatMap { p -> val o = Ovr(ctx, p.id); try { Repo.catalog(p, "vod").filter { !o.isHidden("vod", it.str("c")) && !Parental.hides(it.str("n")) } } catch (e: Throwable) { emptyList() } }.map {
             Item(norm(it.str("n")), Hit.Movie(Vod(it.str("id"), it.str("n"), it.str("i").orNullIfBlank(), it.str("r").orNullIfBlank(), it.str("u"))))
         }
     }
     suspend fun shows(ctx: android.content.Context) = part(ctx, "series") { pls ->
-        pls.flatMap { p -> val o = Ovr(ctx, p.id); try { Repo.catalog(p, "series").filter { !o.isHidden("series", it.str("c")) } } catch (e: Throwable) { emptyList() } }.map {
+        pls.flatMap { p -> val o = Ovr(ctx, p.id); try { Repo.catalog(p, "series").filter { !o.isHidden("series", it.str("c")) && !Parental.hides(it.str("n")) } } catch (e: Throwable) { emptyList() } }.map {
             Item(norm(it.str("n")), Hit.Show(SeriesItem(it.str("id"), it.str("n"), it.str("i").orNullIfBlank(), null, it.str("r").orNullIfBlank())))
         }
     }
     suspend fun progs(ctx: android.content.Context) = part(ctx, "prog") { _ ->
         ProgIndex.get(ctx).map { (ch, e) -> Item(norm(e.title), Hit.Prog(ch, e)) }
     }
+    /** built again next time (Parental controls changed) */
+    fun reset() = parts.clear()
     /** prepare everything quietly (called once after start) */
     suspend fun get(ctx: android.content.Context) { channels(ctx); movies(ctx); shows(ctx) }
 
@@ -170,7 +174,7 @@ fun SearchScreen(nav: Nav) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             T("Pretraga", 26.sp, C.Text, FontWeight.Bold)
             Field("Traži kanal, film, seriju, emisiju ili broj", q, { q = it }, Modifier.weight(1f).focusRequester(fr), onDone = {
-                query = q.trim(); keyboard?.hide(); jump++
+                query = q.trim(); SearchHistory.add(q); keyboard?.hide(); jump++
             })
         }
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -187,7 +191,7 @@ fun SearchScreen(nav: Nav) {
         }
         val busy = loadingOf.values.any { it }
         if (busy && nq.length >= 2) T(loadingOf.filter { it.value }.keys.joinToString(" · ") { tr(mapOf("ch" to "Kanali", "vod" to "Filmovi", "series" to "Serije", "prog" to "Emisije")[it]!!) } + " · " + tr("učitavam…"), 12.sp, C.Muted)
-        if (nq.length < 2) Message("Upiši bar 2 slova", "Tastatura daljinskog ili Google TV aplikacija na telefonu")
+        if (nq.length < 2) { SearchRecent { h -> q = h; query = h; jump++ }; Message("Upiši bar 2 slova", "Tastatura daljinskog ili Google TV aplikacija na telefonu") }
         else if (shown.isEmpty() && !busy) Message("Ništa nije pronađeno")
         else if (shown.isEmpty()) Loading("Tražim…")
         else LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(bottom = 30.dp)) {
@@ -262,5 +266,48 @@ fun HitActions(h: Hit, nav: Nav, onDismiss: () -> Unit) {
         }
         is Hit.Movie -> Popup(h.v.name, onDismiss) { OptionRow("Otvori", R.drawable.lc_info) { onDismiss(); nav.push(Screen.MovieDetail(h.v)) } }
         is Hit.Show -> Popup(h.s.name, onDismiss) { OptionRow("Otvori", R.drawable.lc_info) { onDismiss(); nav.push(Screen.SeriesDetail(h.s)) } }
+    }
+}
+
+
+/** The last searches (newest first, at most 12): shown under an empty search field. */
+object SearchHistory {
+    var rev by androidx.compose.runtime.mutableIntStateOf(0)
+    fun list() = Prefs.str("search_hist").split('\n').filter { it.isNotBlank() }
+    fun add(text: String) {
+        val t = text.trim(); if (t.length < 2) return
+        Prefs.put("search_hist", (listOf(t) + list().filter { !it.equals(t, true) }).take(12).joinToString("\n")); rev++
+    }
+    fun remove(text: String) { Prefs.put("search_hist", list().filter { it != text }.joinToString("\n")); rev++ }
+    fun clear() { Prefs.put("search_hist", ""); rev++ }
+}
+
+/** "Recent searches": OK searches again, long OK removes one, "Clear all" at the end. */
+@Composable
+fun SearchRecent(onPick: (String) -> Unit) {
+    val items = remember(SearchHistory.rev) { SearchHistory.list() }
+    if (items.isEmpty()) return
+    Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        T("Nedavne pretrage", 15.sp, C.Text, FontWeight.Bold, modifier = Modifier.weight(1f))
+        T("OK traži ponovo · dugi OK briše", 11.sp, C.Muted, maxLines = 1)
+    }
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
+        items(items.size) { i ->
+            val h = items[i]
+            Focusable(onClick = { SearchHistory.add(h); onPick(h) }, onMenu = { SearchHistory.remove(h) }, shape = Pill, normal = C.Card, focused = C.Red,
+                zoom = 1.04f, modifier = Modifier.height(40.dp).widthIn(max = 260.dp)) { f ->
+                Row(Modifier.align(Alignment.Center).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Ico(R.drawable.lc_clock, 14.dp, if (f) C.OnRed else C.Muted)
+                    T(h, 14.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, maxLines = 1)
+                }
+            }
+        }
+        item {
+            Focusable(onClick = { SearchHistory.clear() }, shape = Pill, normal = Color.Transparent, focused = C.Red, zoom = 1.04f, modifier = Modifier.height(40.dp)) { f ->
+                Row(Modifier.align(Alignment.Center).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Ico(R.drawable.lc_trash_2, 14.dp, if (f) C.OnRed else C.Muted); T("Obriši sve", 13.sp, if (f) C.OnRed else C.Soft)
+                }
+            }
+        }
     }
 }

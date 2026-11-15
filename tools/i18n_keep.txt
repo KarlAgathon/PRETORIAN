@@ -406,3 +406,13 @@ red star belgrade
 _sync
 https://github.com/KarlAgathon/PRETORIAN/releases/download/beta/update.json
 com.liskovsoft.smarttubetv.beta
+kids
+upd_every
+adult
+ · Beta
+Stable
+Beta
+lgbt
+LGBT, LGBTQ, gay, queer
+trans
+trans, transgender

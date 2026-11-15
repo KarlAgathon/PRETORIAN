@@ -53,6 +53,10 @@ object Updater {
     @Volatile var installStarted = 0L
     /** the system install screen was already tried for this install */
     @Volatile var fellBack = false
+    /** the one install session that counts: answers from older sessions are ignored (they used to start a second install) */
+    @Volatile var session = -1
+    /** when Android's confirm screen was opened (0 = not opened) */
+    @Volatile var confirmAt = 0L
     /** Android's "install this update?" screen, opened by the visible activity */
     var confirm by androidx.compose.runtime.mutableStateOf<Intent?>(null)
     /** shown once per version when you come back from the player */
@@ -136,9 +140,10 @@ object Updater {
             // the background download is still running: install as soon as it finishes (the click is never lost)
             installWhenDone = true; status = tr("Preuzimam… instalacija kreće čim završi"); UpdLog.add(tr("Instaliraj kliknuto dok traje preuzimanje: instaliram čim završi")); return
         }
-        if (progress == 101 && System.currentTimeMillis() - installStarted < 180_000L) return
-        // only installs older than 3 minutes (a confirm screen closed with Back) are thrown away
-        if (System.currentTimeMillis() - installStarted > 180_000L) withContext(Dispatchers.IO) { abandonOld(ctx) }
+        if (progress == 101 && System.currentTimeMillis() - installStarted < 60_000L) return
+        // leftovers of earlier tries are thrown away quietly: their answers no longer count
+        session = -1; confirmAt = 0L
+        withContext(Dispatchers.IO) { abandonOld(ctx) }
         progress = -1
         status = null
         cancel = false
@@ -258,10 +263,27 @@ object Updater {
         try { pi.mySessions.forEach { s -> try { pi.abandonSession(s.sessionId) } catch (_: Exception) {} } } catch (_: Exception) {}
     }
 
-    /** back in the app while "installing": the confirm screen was closed, so the button works again */
-    fun onResume() {
-        // Android may still be installing in the background: the button comes back only after 3 minutes without an answer
-        if (progress == 101 && System.currentTimeMillis() - installStarted > 180_000L) { progress = -1; status = tr("Instalacija nije završena: otkazano") }
+    /** back in the app while "installing" */
+    fun onResume(ctx: Context) {
+        val now = System.currentTimeMillis()
+        // the confirm screen closed by itself without any answer from Android: one try with Android's normal install screen
+        if (progress == 101 && session != -1 && confirmAt > 0 && now - confirmAt < 15_000L && !fellBack) {
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                if (progress == 101 && session != -1 && !fellBack) systemFallback(ctx, tr("Ekran za potvrdu se zatvorio bez odgovora"))
+            }, 4000)
+            return
+        }
+        if (progress == 101 && now - installStarted > 120_000L) { progress = -1; session = -1; status = tr("Instalacija nije završena: otkazano") }
+    }
+
+    /** the only second way: the running session is dropped first (its answer is ignored), then Android's install screen opens */
+    fun systemFallback(ctx: Context, why: String) {
+        fellBack = true
+        val old = session; session = -1
+        if (old != -1) try { ctx.packageManager.packageInstaller.abandonSession(old) } catch (_: Exception) {}
+        UpdLog.add(why)
+        if (installWithSystemScreen(ctx)) { UpdLog.add(tr("Otvaram Androidov ekran za instalaciju")); status = tr("Potvrdi instalaciju na ekranu Androida") }
+        else { progress = -1; status = tr("Ažuriranje nije završeno") }
     }
 
     /** the last APK handed to Android, for the fallback below */
@@ -288,6 +310,7 @@ object Updater {
         // Android 12+: no confirm screen once PRETORIAN itself installed the current version
         if (Build.VERSION.SDK_INT >= 31) params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
         val id = pi.createSession(params)
+        session = id
         pi.openSession(id).use { s ->
             apk.inputStream().use { input -> s.openWrite("pretorian.apk", 0, apk.length()).use { out -> input.copyTo(out); s.fsync(out) } }
             val flags = PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0)
@@ -300,6 +323,9 @@ object Updater {
 
 class UpdateResultReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
+        // only the install started last counts: an old, thrown-away session must not touch the running one
+        val sid = intent.getIntExtra(PackageInstaller.EXTRA_SESSION_ID, -1)
+        if (sid != Updater.session) return
         when (intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)) {
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
                 @Suppress("DEPRECATION")
@@ -309,17 +335,15 @@ class UpdateResultReceiver : BroadcastReceiver() {
                 Updater.confirm = confirm
                 UpdLog.add(tr("Android traži potvrdu → otvaram ekran za potvrdu"))
             }
-            PackageInstaller.STATUS_SUCCESS -> { Updater.progress = -1; UpdLog.add(tr("Instalirano ✓")) }
+            PackageInstaller.STATUS_SUCCESS -> { Updater.progress = -1; Updater.session = -1; UpdLog.add(tr("Instalirano ✓")) }
             else -> {
-                Updater.progress = -1; Updater.installStarted = 0L
                 val msg = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "otkazano"
-                // the box threw the session away by itself: open Android's normal install screen with the same file
                 val code = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, 0)
                 UpdLog.add(trf("Android odbio (%s): %s", code, msg))
-                if ((code == PackageInstaller.STATUS_FAILURE_ABORTED || msg.contains("abandon", true)) && !Updater.fellBack) {
-                    Updater.fellBack = true
-                    if (Updater.installWithSystemScreen(ctx)) { UpdLog.add(tr("Otvaram Androidov ekran za instalaciju (rezervni put)")); Updater.status = tr("Potvrdi instalaciju na ekranu Androida"); return }
-                }
+                // the box closed its own confirm screen at once (no time to answer): Android's normal install screen, once
+                val quick = Updater.confirmAt > 0 && System.currentTimeMillis() - Updater.confirmAt < 4000L
+                if (code == PackageInstaller.STATUS_FAILURE_ABORTED && quick && !Updater.fellBack) { Updater.systemFallback(ctx, tr("Ekran za potvrdu se odmah zatvorio")); return }
+                Updater.progress = -1; Updater.installStarted = 0L; Updater.session = -1
                 Updater.status = trf("Instalacija nije završena: %s", msg)
                 Toast.makeText(ctx, tr("Ažuriranje nije završeno"), Toast.LENGTH_LONG).show()
             }

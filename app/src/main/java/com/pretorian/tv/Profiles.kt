@@ -428,7 +428,7 @@ fun ProfileButton(size: Dp) {
 }
 
 /** Lets other screens open a settings section (e.g. Backup from the profile panel). */
-object SettingsNav { var section: String? = null; var last: String? = null }
+object SettingsNav { var section by androidx.compose.runtime.mutableStateOf<String?>(null); var last: String? = null }
 
 /** launch that never crashes the app */
 fun kotlinx.coroutines.CoroutineScope.launchSafe(block: suspend () -> Unit) =

@@ -116,7 +116,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         // give the system confirm screen a moment to send its answer first
-        window.decorView.postDelayed({ Updater.onResume() }, 1500)
+        window.decorView.postDelayed({ Updater.onResume(this) }, 1500)
     }
 
     // back in the app after being away (Home button, other app): ask "Who is watching?" again,
@@ -166,7 +166,7 @@ class Nav(
     val playlistsChanged: () -> Unit,
 )
 
-object BuildInfo { const val VERSION = "0.9.6" }
+object BuildInfo { const val VERSION = "0.9.7" }
 
 @Composable
 fun PretorianApp() {
@@ -200,8 +200,9 @@ fun PretorianApp() {
         Backup.auto(ctx)
         var first = true
         while (true) {
-            val um = Prefs.str("upd_mode", "0")
-            if (um == "0" || (um == "1" && System.currentTimeMillis() - Prefs.long("upd_last") > 20 * 3600_000L))
+            // Settings › Update › Check: at start / hourly / daily / monthly
+            val ev = Prefs.str("upd_every", "1"); val since = System.currentTimeMillis() - Prefs.long("upd_last")
+            if ((ev == "0" && first) || ev == "1" || (ev == "2" && since > 20 * 3600_000L) || (ev == "3" && since > 29 * 24 * 3600_000L))
                 Updater.check(ctx)?.let { u ->
                     if (Updater.mayAsk(u)) {
                         if (Updater.notify("bell")) Notes.add("update", trf("Nova verzija %s", u.name), "update:${u.name}")
@@ -258,8 +259,8 @@ fun PretorianApp() {
     LaunchedEffect(Updater.confirm) {
         val c = Updater.confirm ?: return@LaunchedEffect
         Updater.confirm = null
-        try { (ctx as? android.app.Activity)?.startActivity(c) ?: ctx.startActivity(c.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)); UpdLog.add(tr("Ekran za potvrdu otvoren")) }
-        catch (e: Exception) { UpdLog.add(trf("Ekran za potvrdu se nije otvorio: %s", e.message ?: "")); if (!Updater.installWithSystemScreen(ctx)) Updater.status = tr("Ažuriranje nije završeno") }
+        try { Updater.confirmAt = System.currentTimeMillis(); (ctx as? android.app.Activity)?.startActivity(c) ?: ctx.startActivity(c.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)); UpdLog.add(tr("Ekran za potvrdu otvoren")) }
+        catch (e: Exception) { Updater.systemFallback(ctx, trf("Ekran za potvrdu se nije otvorio: %s", e.message ?: "")) }
     }
     // time the app is open, and the counters written down once a minute
     LaunchedEffect(Unit) { while (true) { delay(60_000); Stats.uptime(60_000); Stats.saveIfDirty() } }
@@ -514,7 +515,7 @@ fun NotesPopup(onDismiss: () -> Unit, nav: Nav) {
             val icon = when (n.kind) { "update" -> R.drawable.lc_download; "vod" -> R.drawable.lc_film; "series" -> R.drawable.lc_monitor; else -> R.drawable.lc_bell }
             OptionRow(n.text, icon, sub = SimpleDateFormat("d. M. HH:mm", Locale.getDefault()).format(Date(n.time)), color = if (n.read) null else C.Amber) {
                 onDismiss()
-                when (n.kind) { "update" -> nav.root(Screen.Settings); "vod" -> nav.root(Screen.Movies); "series" -> nav.root(Screen.Series); else -> nav.root(Screen.Tv) }
+                when (n.kind) { "update" -> { SettingsNav.section = "update"; nav.root(Screen.Settings) }; "vod" -> nav.root(Screen.Movies); "series" -> nav.root(Screen.Series); else -> nav.root(Screen.Tv) }
             }
         }
         if (Notes.list.isNotEmpty()) OptionRow("Obriši sva obavještenja", R.drawable.lc_trash_2) { Notes.clear(); onDismiss() }

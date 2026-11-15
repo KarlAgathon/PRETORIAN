@@ -154,7 +154,7 @@ object Tmdb {
         if ((results == null || results.length() == 0) && year != null) results = get("/search/$kind", "query=${Net.enc(title)}&language=$lang").optJSONArray("results")
         val first = results?.optJSONObject(0) ?: run { cache[ck] = null; return@withContext null }
         val id = first.optInt("id")
-        val d = get("/$kind/$id", "language=$lang&append_to_response=credits,videos,external_ids" + if (tv) "" else ",watch/providers")
+        val d = get("/$kind/$id", "language=$lang&append_to_response=credits,videos,external_ids,watch/providers")
         var overview = d.str("overview").orNullIfBlank()
         var overviewLang: String? = lang
         if (overview == null && lang != "en") {
@@ -189,16 +189,15 @@ object Tmdb {
                       else d.optInt("runtime").takeIf { it > 0 }?.let { "${it / 60}h ${it % 60}m" }
         // who made it: the TV network for a series, the studio for a film
         // where it streams: the network for a series; for a film the subscription service in this country, else a studio only when it is a streaming brand
-        val studio = if (tv) (d.optJSONArray("networks")?.let { nw -> (0 until nw.length()).firstNotNullOfOrNull { Platforms.norm(nw.getJSONObject(it).str("name")) } }
+        // where it streams in this country (subscription) first – for films and series alike; then the network or studio
+        val res = d.optJSONObject("watch/providers")?.optJSONObject("results")
+        val cc = java.util.Locale.getDefault().country.ifBlank { "DE" }
+        val flat = (res?.optJSONObject(cc) ?: res?.optJSONObject("DE") ?: res?.optJSONObject("US"))?.optJSONArray("flatrate")
+        val fromFlat = flat?.let { f -> (0 until f.length()).firstNotNullOfOrNull { Platforms.norm(f.getJSONObject(it).str("provider_name")) } }
+        val studio = fromFlat ?: if (tv) (d.optJSONArray("networks")?.let { nw -> (0 until nw.length()).firstNotNullOfOrNull { Platforms.norm(nw.getJSONObject(it).str("name")) } }
                 ?: d.optJSONArray("production_companies")?.let { pc -> (0 until pc.length()).firstNotNullOfOrNull { Platforms.norm(pc.getJSONObject(it).str("name")) } }
                 ?: d.optJSONArray("networks")?.optJSONObject(0)?.str("name")?.orNullIfBlank())
-            else run {
-                val res = d.optJSONObject("watch/providers")?.optJSONObject("results")
-                val cc = java.util.Locale.getDefault().country.ifBlank { "DE" }
-                val flat = (res?.optJSONObject(cc) ?: res?.optJSONObject("DE") ?: res?.optJSONObject("US"))?.optJSONArray("flatrate")
-                val fromFlat = flat?.let { f -> (0 until f.length()).firstNotNullOfOrNull { Platforms.norm(f.getJSONObject(it).str("provider_name")) } }
-                fromFlat ?: d.optJSONArray("production_companies")?.let { pc -> (0 until pc.length()).firstNotNullOfOrNull { Platforms.norm(pc.getJSONObject(it).str("name")) } }
-            }
+            else d.optJSONArray("production_companies")?.let { pc -> (0 until pc.length()).firstNotNullOfOrNull { Platforms.norm(pc.getJSONObject(it).str("name")) } }
         val rtMin = if (tv) d.optJSONArray("episode_run_time")?.optInt(0) ?: 0 else d.optInt("runtime")
         val m = Meta(
             studio = studio, tmdbId = id, runtimeMin = rtMin,

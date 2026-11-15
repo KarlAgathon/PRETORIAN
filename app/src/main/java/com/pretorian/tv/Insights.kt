@@ -326,14 +326,20 @@ fun DiagnosticsV2() {
     var logAll by remember { mutableStateOf(false) }
     var logExport by remember { mutableStateOf(false) }
     val vpn = remember { NetInfo.vpn(ctx) }
-    fun runSpeed() {
+    var testingNorm by remember { mutableStateOf(false) }
+    var bypassErr by remember { mutableStateOf(false) }
+    /** [normal]: the speed without the VPN – while the VPN is on it goes past it over Wi-Fi/cable, if the VPN allows that */
+    fun runSpeed(normal: Boolean) {
         if (testing) return
-        testing = true; speed = null
+        testing = true; testingNorm = normal; speed = null; bypassErr = false
         scope.launch {
-            val r = NetInfo.speedTest()
+            val direct = normal && vpn
+            val r = NetInfo.speedTest(ctx, direct)
             speed = r
-            if (r != null) { Prefs.put(if (vpn) "speed_vpn" else "speed_norm", r)
-                Prefs.put(if (vpn) "speed_vpn_at" else "speed_norm_at", SimpleDateFormat("dd.MM. HH:mm", Locale.US).format(Date())) }  // i18n-ignore
+            val asVpn = vpn && !normal
+            if (r != null) { Prefs.put(if (asVpn) "speed_vpn" else "speed_norm", r)
+                Prefs.put(if (asVpn) "speed_vpn_at" else "speed_norm_at", SimpleDateFormat("dd.MM. HH:mm", Locale.US).format(Date())) }  // i18n-ignore
+            else if (direct) bypassErr = true
             testing = false
         }
     }
@@ -346,11 +352,13 @@ fun DiagnosticsV2() {
             serverOk = withContext(Dispatchers.IO) { try { Repo.test(p); true } catch (e: Exception) { false } }
             server = System.currentTimeMillis() - t0
         }
-        runSpeed()
+        runSpeed(!vpn)
     }
     val periods = listOf("Danas", "7 dana", "Mjesec", "Godina")
     val pw = listOf("danas", "7 dana", "ovaj mjesec", "ova godina")[period]
-    key(rev, Stats.rev) {
+    // the counters change every minute: the page is redrawn in place (not rebuilt), so the focus stays where you are
+    @Suppress("UNUSED_VARIABLE") val statsTick = Stats.rev
+    key(rev) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 T("Dijagnostika", 23.sp, C.Text, FontWeight.Bold, modifier = Modifier.weight(1f))
@@ -408,12 +416,13 @@ fun DiagnosticsV2() {
                 { m -> InfoCard("Brzina interneta", if (vpn) tr("VPN je uključen") else tr("bez VPN-a"), null, R.drawable.lc_gauge2, Color(0xFF06B6D4), m) {
                     // two rows, each with its own test: the VPN row only measures while a VPN is on
                     val norm = Prefs.str("speed_norm"); val vp = Prefs.str("speed_vpn")
-                    SpeedRow("Normalna brzina", if (!vpn && testing) tr("Mjerim…") else norm.ifBlank { "—" },
-                        if (vpn) tr("zadnje mjerenje bez VPN-a · ugasi VPN za novo mjerenje") else (Prefs.str("speed_norm_at").ifBlank { null }?.let { tr("izmjereno") + " " + it } ?: ""),
-                        enabled = !vpn && !testing) { runSpeed() }
-                    SpeedRow("VPN brzina", if (!vpn) tr("VPN nije aktivan") else if (testing) tr("Mjerim…") else vp.ifBlank { "—" },
+                    SpeedRow("Normalna brzina", if (testing && testingNorm) tr("Mjerim…") else norm.ifBlank { "—" },
+                        if (bypassErr) tr("Tvoj VPN ne pušta mjerenje mimo njega · ugasi VPN na tren za novo mjerenje")
+                        else (Prefs.str("speed_norm_at").ifBlank { null }?.let { tr("izmjereno") + " " + it + if (vpn) " · " + tr("mimo VPN-a") else "" } ?: ""),
+                        enabled = !testing) { runSpeed(true) }
+                    SpeedRow("VPN brzina", if (!vpn) tr("VPN nije aktivan") else if (testing && !testingNorm) tr("Mjerim…") else vp.ifBlank { "—" },
                         if (!vpn) tr("uključi VPN na boxu pa testiraj") else (Prefs.str("speed_vpn_at").ifBlank { null }?.let { tr("izmjereno") + " " + it } ?: ""),
-                        enabled = vpn && !testing, dim = !vpn) { runSpeed() }
+                        enabled = vpn && !testing, dim = !vpn) { runSpeed(false) }
                 } },
                 { m -> InfoCard("Ažuriranja", trf("%s ovaj mjesec", updM), null, R.drawable.lc_refresh_cw, Color(0xFF8B5CF6), m,
                     action = { SmallBtn(tr("↺ Reset")) { Stats.reset(listOf("upd")); rev++ } }) {
@@ -504,10 +513,21 @@ object NetInfo {
         } catch (e: Exception) { null }
     }
 
-    suspend fun speedTest(): String? = withContext(Dispatchers.IO) {
+    /** the Wi-Fi or cable network under the VPN (null when there is none) */
+    fun underlying(ctx: Context): android.net.Network? = try {
+        val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        @Suppress("DEPRECATION")
+        cm.allNetworks.firstOrNull { n -> cm.getNetworkCapabilities(n)?.let { c ->
+            c.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_VPN) && c.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) } == true }
+    } catch (e: Exception) { null }
+
+    /** [direct]: past the VPN, straight over Wi-Fi/cable – works only when the VPN app allows it */
+    suspend fun speedTest(ctx: Context? = null, direct: Boolean = false): String? = withContext(Dispatchers.IO) {
         try {
             val t0 = System.currentTimeMillis()
-            val c = java.net.URL("https://speed.cloudflare.com/__down?bytes=8000000").openConnection() as java.net.HttpURLConnection  // i18n-ignore
+            val url = java.net.URL("https://speed.cloudflare.com/__down?bytes=8000000")  // i18n-ignore
+            val net = if (direct && ctx != null) underlying(ctx) ?: return@withContext null else null
+            val c = (net?.openConnection(url) ?: url.openConnection()) as java.net.HttpURLConnection
             c.connectTimeout = 5000; c.readTimeout = 5000
             var n = 0L; val buf = ByteArray(32768); var ping = 0L; var first = 0L
             c.inputStream.use { ins -> first = System.currentTimeMillis(); ping = first - t0; while (System.currentTimeMillis() - first < 4000) { val r = ins.read(buf); if (r < 0) break; n += r } }
