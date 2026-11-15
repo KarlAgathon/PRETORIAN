@@ -4,6 +4,7 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -156,6 +157,8 @@ fun SportMixScreen(nav: Nav) {
     val all = remember(today, other) { (((today as? Load.Ok)?.value ?: emptyList()) + ((other as? Load.Ok)?.value ?: emptyList())).distinctBy { it.id } }
     // your channels for each match: matched once in the background
     val withCh by produceState(all, all, guide) {
+        // matches show at once; channels are added when the TV guide is read (that can take a while)
+        if (value.isEmpty() || value.size != all.size) value = all
         val g = (guide as? Load.Ok)?.value ?: return@produceState
         value = withContext(Dispatchers.Default) { try { Sports.combine(all, g, 0) } catch (e: Exception) { all } }
         Sports.lastCombined[0] = value
@@ -194,7 +197,7 @@ fun SportMixScreen(nav: Nav) {
                     }
                 }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 listOf("live" to "Uživo", "soon" to "Uskoro", "done" to "Završeno").forEach { (id, l) ->
                     val n = withCh.count { e -> (sport.isBlank() || e.sport == sport) && when (id) { "live" -> e.state == "in"; "soon" -> e.state == "pre"; else -> e.state == "post" } }
                     Chip2((if (id == "live") "● " else "") + tr(l) + if (id != "done") " · $n" else "", tab == id) { tab = id }  // i18n-ignore
@@ -202,7 +205,7 @@ fun SportMixScreen(nav: Nav) {
                 Chip2(sportIcon(sport) + " " + tr(sportName(sport)) + " ▾", false) { pick = "sport" }  // i18n-ignore
                 Chip2("🌍 " + (if (country.isBlank()) tr("Država") else country.split(',').joinToString(" ") { flagEmoji(it) }) + " ▾", false) { pick = "country" }  // i18n-ignore
             }
-            if (today is Load.Loading && withCh.isEmpty()) Loading("Učitavam utakmice…")
+            if ((today is Load.Loading || other is Load.Loading) && shown.isEmpty()) Loading("Učitavam utakmice…")
             else if (shown.isEmpty()) Message(when (tab) { "live" -> "Trenutno nema utakmica uživo"; "soon" -> "Nema utakmica uskoro"; else -> "Nema završenih utakmica" })
             else LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
                 var lastLeague = ""

@@ -1,13 +1,2 @@
-Novi Sport: uživo / uskoro / završeno, sport i država, utakmice po ligama sa zastavama, golovi i kartoni, ko prenosi, mala slika tek kad izabereš kanal
-Prati utakmicu i Prati tim (dugi OK): obavijest na Početnoj za gol, crveni karton, produžetke, penale, kraj i „danas igra tvoj tim“
-Moje reprezentacije u Postavke › Sport, automatsko praćenje (može se isključiti)
-Nova epizoda serije koju gledaš: obavijest na Početnoj, OK vodi pravo na sezonu i epizodu, Back na seriju
-Lakša Početna: posteri samo koliko stane na ekran, svi iste 2:3 veličine, „Više ›“ u bojama teme vodi u Nedavno dodano
-Slabiji box (ocjena ispod 50): bez postera na Početnoj, samo kanali i nastavi gledati na mirnoj pozadini teme
-Obrisane obavijesti brišu i Nedavno dodano – novo dolazi tek kad provajder stvarno doda nešto
-Preskoči uvod i Sljedeća epizoda na odjavnoj špici (uči se za svaku seriju), u Postavke › Plejer
-Pretraga čuva rezultate kad se vratiš nazad
-Back iz epizode ili filma pokrenutog s Početne ide na tu seriju (ista sezona i epizoda) ili film
-Ruski jezik sa zastavom
-Nova tema Red Dawn: meka crna, siva, bijela i crvena
-O aplikaciji: logo se prilagođava temi, verzija i oznake se više ne sijeku
+Sport: utakmice se pokažu odmah, kanali koji prenose dođu čim se pročita TV vodič
+Sport: filteri se više ne sijeku (sport i država)
