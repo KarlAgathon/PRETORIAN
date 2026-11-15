@@ -93,6 +93,12 @@ object Profiles {
     fun save(c: Context, l: List<Profile>) { val a = JSONArray(); l.forEach { a.put(it.toJson()) }; sp(c).edit().putString("profiles", a.toString()).apply(); rev++ }
     fun current(c: Context): Profile { val l = list(c); val id = sp(c).getString("profile_cur", null); return l.firstOrNull { it.id == id } ?: l.first() }
     var askAtStart: Boolean get() = Prefs.bool("profile_ask", true); set(v) = Prefs.put("profile_ask", v)
+    /** away shorter than this (ms) = back in without "Who's watching?"; 0 = ask every time */
+    val GRACE = listOf(0L, 15_000L, 30_000L, 60_000L, 600_000L, 900_000L, 1_800_000L, 3_600_000L)
+    val GRACE_NAMES = listOf("Pitaj uvijek", "15 s", "30 s", "1 min", "10 min", "15 min", "30 min", "1 h")  // i18n-ignore
+    var grace: Long get() = Prefs.long("profile_grace", 60_000L); set(v) = Prefs.put("profile_grace", v)
+    /** was the app away (closed or in the background) longer than the grace time? */
+    fun awayLong(awayMs: Long) = awayMs < 0 || awayMs >= grace
 
     fun hash(id: String, pin: String): String =
         MessageDigest.getInstance("SHA-256").digest("pretorian:$id:$pin".toByteArray()).joinToString("") { "%02x".format(it) }
@@ -203,7 +209,9 @@ object Profiles {
     fun onStart(c: Context) {
         val skip = Prefs.bool("profile_skip_ask")
         if (skip) Prefs.put("profile_skip_ask", false)
-        picker = !skip && askAtStart && list(c).isNotEmpty()
+        val last = Prefs.long("last_stop", 0L)
+        val away = if (last > 0) System.currentTimeMillis() - last else -1L
+        picker = !skip && askAtStart && list(c).isNotEmpty() && awayLong(away)
     }
 }
 

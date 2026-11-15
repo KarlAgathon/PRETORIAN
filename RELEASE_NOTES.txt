@@ -1,4 +1,7 @@
-Sport: utakmice se pokažu odmah, kanali koji prenose dođu čim se pročita TV vodič
-Sport: kretanje kroz listu više ne mijenja izabranu utakmicu – mijenja se tek na OK
-Sport: lijevo ili Back s kanala i male slike vraća tačno na izabranu utakmicu
-Sport: filteri se više ne sijeku (sport i država)
+Brža i stabilnija Početna: najnoviji filmovi, serije i kanali se učitaju jednom i pamte – novo tek nakon osvježavanja playliste ili kad provider doda nešto
+Kartica „Pratiš“ na Početnoj: rezultat, minuta, zadnji gol ili karton za sve utakmice koje pratiš (više utakmica, bilo koji sport), odmah po ulasku
+„Ko gleda?“ se ne pita ako te nije bilo kraće od 1 min (biraš 15 s – 1 h ili Pitaj uvijek u Postavke › Profili)
+Sport: kretanje kroz listu ne mijenja izabranu utakmicu (tek OK), lijevo ili Back s kanala vraća na izabranu utakmicu, utakmice se pokažu odmah
+Postavke › Opće › Rad u pozadini: rezultati, nove epizode i kartica Pratiš mogu se ugasiti
+Padovi i zamrzavanja se čuvaju (zadnjih 10) i mogu se izvući s laptopa – komanda je u Dijagnostici
+Ažuriranje: „Provjeri novu verziju“ ostaje na mjestu i kaže da imaš najnoviju; dugmad u Postavkama više ne bacaju fokus u drugi meni

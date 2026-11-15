@@ -328,6 +328,6 @@ object NewContent {
             f.writeText(ids.toString())
         }
         Prefs.put(stamp, System.currentTimeMillis())
-        if (added > 0) save() else rev++
+        if (added > 0) { save(); HomeCache.clear() } else rev++
     }
 }

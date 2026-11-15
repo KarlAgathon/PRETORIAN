@@ -90,9 +90,19 @@ object GoalNote {
         Notes.add("sport", txt, id)
         if (kind != "today") text = txt
     }
+    /** followed matches of today (live first): the "Following" card on Home */
+    val followed = androidx.compose.runtime.mutableStateListOf<SportEvent>()
     fun check(evs: List<SportEvent>) {
         val mine = MyTeams.list(); val ms = MatchFollow.list()
-        if (mine.isEmpty() && ms.isEmpty()) { hot = false; return }
+        if (mine.isEmpty() && ms.isEmpty()) { hot = false; followed.clear(); return }
+        val dayNow = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date())
+        val f = evs.filter { e -> (e.id in ms || mine.any { t -> t.equals(e.home?.name, true) || t.equals(e.away?.name, true) }) &&
+            (e.live || java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date(e.start)) == dayNow) }
+            .sortedWith(compareBy({ it.state != "in" }, { it.state == "post" }, { it.start }))
+        // keep matches the list did not bring this time (another sport tab), refresh the rest
+        val merged = (f + followed.filter { o -> f.none { it.id == o.id } && (o.id in ms || mine.any { t -> t.equals(o.home?.name, true) || t.equals(o.away?.name, true) }) })
+            .sortedWith(compareBy({ it.state != "in" }, { it.state == "post" }, { it.start })).take(6)
+        followed.clear(); followed.addAll(merged)
         val today = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date())
         var anyLive = false
         evs.forEach { e ->
@@ -274,6 +284,7 @@ fun SportMixScreen(nav: Nav) {
                 val fm = MatchFollow.has(e.id)
                 OptionRow(if (fm) "Ne prati utakmicu" else "Prati utakmicu", R.drawable.lc_bell, sub = if (fm) null else tr("gol, crveni karton, produžeci, penali, kraj → obavijest na Početnoj")) {
                     val on = MatchFollow.toggle(e.id); menu = null
+                    GoalNote.check(withCh)
                     Toast.makeText(ctx, tr(if (on) "Pratiš utakmicu" else "Ne pratiš više utakmicu"), Toast.LENGTH_SHORT).show()
                 }
             }
@@ -398,6 +409,40 @@ fun GoalNoteOverlay() {
     Box(Modifier.fillMaxSize().padding(end = 30.dp, bottom = 30.dp), contentAlignment = Alignment.BottomEnd) {
         Row(Modifier.clip(Rnd(14.dp)).background(Color(0xF20F172A)).border(1.dp, Color(0xFF22C55E), Rnd(14.dp)).padding(horizontal = 16.dp, vertical = 10.dp)) {
             T(t, 14.sp, Color.White, FontWeight.Bold, maxLines = 1)
+        }
+    }
+}
+
+
+/** Home, top right: the matches you follow today – live score and minute, last goal or card; upcoming with the start time. OK = watch / open. */
+@Composable
+fun FollowCard(nav: Nav, width: androidx.compose.ui.unit.Dp) {
+    if (!Prefs.bool("home_sport_card", true)) return
+    val list = GoalNote.followed.toList()
+    if (list.isEmpty()) return
+    Column(Modifier.width(width).clip(Rnd(16.dp)).background(C.Rail).border(1.dp, C.Line, Rnd(16.dp)).padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(Modifier.padding(start = 6.dp, top = 2.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(Modifier.size(7.dp).clip(CircleShape).background(if (list.any { it.live }) C.Danger else C.Green))
+            T("PRATIŠ", 10.sp, C.Muted, FontWeight.SemiBold)
+        }
+        list.take(4).forEach { e ->
+            val h = e.home; val a = e.away
+            Focusable(onClick = { GoalNote.open(nav, "sp:" + e.id + ":" + (if (e.state == "pre") "today" else if (e.state == "post") "end" else "live")) },  // i18n-ignore
+                shape = Rnd(10.dp), normal = Color.Transparent, focused = C.CardHi, zoom = 1.02f, modifier = Modifier.fillMaxWidth()) { f ->
+                if (f) Box(Modifier.matchParentSize().border(2.dp, C.Red, Rnd(10.dp)))
+                Column(Modifier.padding(horizontal = 8.dp, vertical = 5.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        val tag = when (e.state) { "in" -> e.clock ?: tr("UŽIVO"); "post" -> tr("KRAJ")
+                            else -> java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(e.start)) }  // i18n-ignore
+                        T(tag, 11.sp, if (e.live) C.Danger else C.Muted, FontWeight.Bold, maxLines = 1)
+                        T(if (h != null && a != null) h.name + (if (e.state != "pre") " " + (h.score ?: "0") + ":" + (a.score ?: "0") + " " else " – ") + a.name else e.title,  // i18n-ignore
+                            13.sp, C.Text, FontWeight.Bold, maxLines = 1, modifier = Modifier.weight(1f))
+                    }
+                    e.details.lastOrNull { it.kind.startsWith("goal") || it.kind.startsWith("red") }?.let { d ->
+                        T((if (d.kind.startsWith("goal")) "⚽ " else "🟥 ") + d.minute + " " + d.player, 11.sp, C.Soft, maxLines = 1)  // i18n-ignore
+                    }
+                }
+            }
         }
     }
 }

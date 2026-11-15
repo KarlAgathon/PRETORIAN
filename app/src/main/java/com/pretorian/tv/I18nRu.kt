@@ -1924,4 +1924,18 @@ Automatski prati timove i reprezentacije|Автоматически следит
 prvi u Sportu + obavijesti na Početnoj|первыми в Спорте + уведомления на главной
 Reprezentacije|Сборные
 Nepoznat jezik|Неизвестный язык
+Rad u pozadini|Работа в фоне
+Rezultati utakmica koje pratiš|Счёт матчей, за которыми вы следите
+svake 3 min, uživo svake minute · kartica na Početnoj i obavijesti|каждые 3 мин, в эфире каждую минуту · карточка на главной и уведомления
+Nove epizode serija koje gledaš|Новые серии сериалов, которые вы смотрите
+provjera jednom na sat|проверка раз в час
+Kartica „Pratiš“ na Početnoj|Карточка «Вы следите» на главной
+rezultat, minuta, gol i karton utakmica koje pratiš|счёт, минута, гол и карточка матчей, за которыми вы следите
+Ne pitaj ako me nije bilo kraće od|Не спрашивать, если меня не было меньше
+kratak izlazak iz aplikacije ne traži profil|короткий выход из приложения не требует выбора профиля
+Pitaj uvijek|Спрашивать всегда
+Provjeri novu verziju|Проверить новую версию
+✓ Imaš najnoviju verziju|✓ У вас последняя версия
+Sa laptopa (zadnjih 10 padova i zamrzavanja):|С ноутбука (последние 10 сбоев и зависаний):
+PRATIŠ|ВЫ СЛЕДИТЕ
 """.trimIndent()

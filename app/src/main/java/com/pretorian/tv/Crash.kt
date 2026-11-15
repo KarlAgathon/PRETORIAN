@@ -21,19 +21,51 @@ import java.io.File
 /** keeps the last crash so it can be shown at the next start (no adb needed) */
 object CrashLog {
     private fun file(c: Context) = File(c.filesDir, "last_crash.txt")
+    /** every crash and freeze is also kept here (last 10), readable from a laptop: adb pull [ADB_DIR] */
+    fun dir(c: Context): File? = c.getExternalFilesDir(null)?.let { File(it, "crash") }
+    const val ADB_DIR = "/sdcard/Android/data/com.pretorian.tv/files/crash"  // i18n-ignore
+    private fun header(c: Context): String {
+        val rt = Runtime.getRuntime()
+        val am = c.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+        val mi = android.app.ActivityManager.MemoryInfo(); am.getMemoryInfo(mi)
+        return "PRETORIAN ${BuildInfo.VERSION} · ${android.os.Build.MODEL} · Android ${android.os.Build.VERSION.RELEASE}\n" +  // i18n-ignore
+            "time ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())} · screen ${screen}\n" +  // i18n-ignore
+            "app heap ${(rt.totalMemory() - rt.freeMemory()) / 1_048_576} / ${rt.maxMemory() / 1_048_576} MB · box free ${mi.availMem / 1_048_576} MB · low ${mi.lowMemory}\n"  // i18n-ignore
+    }
+    /** the screen open right now (written into the report) */
+    @Volatile var screen = ""
+    fun archive(c: Context, kind: String, text: String) {
+        try {
+            val d = dir(c) ?: return; d.mkdirs()
+            File(d, kind + "_" + java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date()) + ".txt").writeText(text)  // i18n-ignore
+            d.listFiles()?.sortedByDescending { it.lastModified() }?.drop(10)?.forEach { it.delete() }
+        } catch (_: Throwable) {}
+    }
+    /** after a crash: the app's own log from just before, next to the report */
+    fun saveLogAfterCrash(c: Context) {
+        Thread {
+            try {
+                val log = Runtime.getRuntime().exec(arrayOf("logcat", "-d", "-t", "2500")).inputStream.bufferedReader().readText()  // i18n-ignore
+                archive(c, "log", log)
+            } catch (_: Throwable) {}
+        }.start()
+    }
 
     fun install(c: Context) {
         val app = c.applicationContext
         val prev = Thread.getDefaultUncaughtExceptionHandler()
         if (prev is Handler) return
         Thread.setDefaultUncaughtExceptionHandler(Handler(app, prev))
+        if (file(app).exists()) saveLogAfterCrash(app)
     }
 
     private class Handler(val app: Context, val prev: Thread.UncaughtExceptionHandler?) : Thread.UncaughtExceptionHandler {
         override fun uncaughtException(t: Thread, e: Throwable) {
             try {
                 val sw = java.io.StringWriter(); e.printStackTrace(java.io.PrintWriter(sw))
-                file(app).writeText("PRETORIAN ${BuildInfo.VERSION} · ${android.os.Build.MODEL} · Android ${android.os.Build.VERSION.RELEASE}\n" + sw.toString().take(6000))
+                val txt = header(app) + sw.toString().take(12000)
+                file(app).writeText(txt)
+                archive(app, "crash", txt)
             } catch (_: Throwable) {}
             try { CrashGuard.record() } catch (_: Throwable) {}
             prev?.uncaughtException(t, e)
@@ -56,8 +88,8 @@ object CrashLog {
                 if (tick != sent) {
                     if (!reported) try {
                         val st = android.os.Looper.getMainLooper().thread.stackTrace.joinToString("\n") { "  at $it" }
-                        file(app).writeText("PRETORIAN ${BuildInfo.VERSION} · ${android.os.Build.MODEL} · Android ${android.os.Build.VERSION.RELEASE}\n" +
-                            "ZAMRZNUTO (ANR) > 6 s\n" + st.take(6000))
+                        val txt = header(app) + "ZAMRZNUTO (ANR) > 6 s\n" + st.take(8000)  // i18n-ignore
+                        file(app).writeText(txt); archive(app, "freeze", txt)
                         reported = true
                     } catch (_: Throwable) {}
                 } else reported = false

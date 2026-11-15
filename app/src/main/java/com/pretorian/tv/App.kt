@@ -127,7 +127,7 @@ class MainActivity : ComponentActivity() {
         super.onRestart()
         val away = System.currentTimeMillis() - stoppedAt
         val fromExternal = ExtPlayer.launchedAt > 0 && ExtPlayer.launchedAt >= stoppedAt - 10_000
-        if (stoppedAt > 0 && away > 15_000 && !fromExternal && Profiles.askAtStart) Profiles.picker = true
+        if (stoppedAt > 0 && away > 15_000 && !fromExternal && Profiles.askAtStart && Profiles.awayLong(away)) Profiles.picker = true
         // every start of the app opens Home (not after the external player or a short trip to the system)
         if (stoppedAt > 0 && away > 15_000 && !fromExternal) AppHome.tick++
     }
@@ -136,6 +136,7 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         stoppedAt = System.currentTimeMillis()
+        Prefs.put("last_stop", stoppedAt)
         Stats.saveIfDirty()
         val app = applicationContext
         @Suppress("OPT_IN_USAGE")
@@ -168,7 +169,7 @@ class Nav(
     val playlistsChanged: () -> Unit,
 )
 
-object BuildInfo { const val VERSION = "1.0.2" }
+object BuildInfo { const val VERSION = "1.0.3" }
 
 @Composable
 fun PretorianApp() {
@@ -204,9 +205,9 @@ fun PretorianApp() {
     }
     // goals of your teams (Sport › long OK › My teams): checked every 3 minutes wherever you are, only when you have teams
     LaunchedEffect(Unit) {
-        delay(20_000)
+        delay(4_000)
         while (true) {
-            if (MyTeams.list().isNotEmpty() || MatchFollow.list().isNotEmpty()) try { GoalNote.check(Sports.day(0)) } catch (_: Exception) {}
+            if (Prefs.bool("bg_sport", true) && (MyTeams.list().isNotEmpty() || MatchFollow.list().isNotEmpty())) try { GoalNote.check(Sports.day(0)) } catch (_: Exception) {}
             delay(if (GoalNote.hot) 60_000 else 180_000)
         }
     }
@@ -239,7 +240,7 @@ fun PretorianApp() {
                 }
             first = false
             Store.actives(ctx).forEach { p -> try { NewContent.scan(ctx, p) } catch (_: Exception) {} }
-            try { Follow.check(ctx) } catch (_: Exception) {}
+            if (Prefs.bool("bg_episodes", true)) try { Follow.check(ctx) } catch (_: Exception) {}
             try { Sports.remindTeams() } catch (_: Exception) {}
             // playlist and EPG refresh by themselves: at night (around 4:00) or every 12 / 24 hours (Settings › Playlists)
             try { if (AutoRefresh.due()) AutoRefresh.run(ctx) { nav.playlistsChanged() } } catch (_: Exception) {}
@@ -299,6 +300,7 @@ fun PretorianApp() {
     MaterialTheme(colorScheme = scheme) {
         CompositionLocalProvider(LocalLayoutDirection provides if (Look.lang == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr) {
             val top = stack.last()
+            CrashLog.screen = top.toString().take(80)
             if (Profiles.picker) {
                 ProfilePicker()
             } else if (top is Screen.Player) {

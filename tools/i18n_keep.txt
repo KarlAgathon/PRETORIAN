@@ -466,3 +466,8 @@ _pen
 _og
  (ag)
 rus
+bg_sport
+bg_episodes
+home_sport_card
+adb pull 
+goal

@@ -2018,6 +2018,10 @@ private fun GeneralV2() {
             SetSwitch("Zadnji kanal pri pokretanju", "odmah pusti kanal koji si zadnji gledao", General.lastChannel) { Prefs.put("gen_lastch", it); rev++ }
             SetSection("Izlaz")
             SetSwitch("Potvrdi izlaz", "Nazad na Početnoj prvo pita", General.confirmExit) { Prefs.put("gen_exit", it); rev++ }
+            SetSection("Rad u pozadini")
+            SetSwitch("Rezultati utakmica koje pratiš", "svake 3 min, uživo svake minute · kartica na Početnoj i obavijesti", Prefs.bool("bg_sport", true)) { Prefs.put("bg_sport", it); rev++ }
+            SetSwitch("Nove epizode serija koje gledaš", "provjera jednom na sat", Prefs.bool("bg_episodes", true)) { Prefs.put("bg_episodes", it); rev++ }
+            SetSwitch("Kartica „Pratiš“ na Početnoj", "rezultat, minuta, gol i karton utakmica koje pratiš", Prefs.bool("home_sport_card", true)) { Prefs.put("home_sport_card", it); rev++ }
             SetSection("Mreža")
             SetRow("User-Agent", "za providere koji puštaju samo određene aplikacije", Prefs.str("net_ua").ifBlank { tr("zadani") }) { edit = "net_ua" }
             SetRow("UDP proxy (udpxy)", "za multicast IPTV od operatera, npr. 192.168.178.1:4022", Prefs.str("net_udpxy").ifBlank { tr("isključen") }) { edit = "net_udpxy" }
@@ -2100,6 +2104,8 @@ private fun ProfilesV2() {
             }
         }
         SetDrop("Pitaj „Ko gleda?” pri pokretanju", null, listOf("Da", "Ne"), if (Profiles.askAtStart) 0 else 1) { Profiles.askAtStart = it == 0; Profiles.rev++ }
+        if (Profiles.askAtStart) SetDrop("Ne pitaj ako me nije bilo kraće od", "kratak izlazak iz aplikacije ne traži profil", Profiles.GRACE_NAMES,
+            Profiles.GRACE.indexOf(Profiles.grace).coerceAtLeast(0)) { Profiles.grace = Profiles.GRACE[it]; Profiles.rev++ }
         val kid = Prefs.str("kids_profile")
         SetDrop("Profil za djecu", "ulazi odmah u jednostavni mod", listOf(tr("Nijedan")) + all.map { it.name },
             (all.indexOfFirst { it.id == kid } + 1).coerceAtLeast(0), new = true) { Prefs.put("kids_profile", if (it == 0) "" else all[it - 1].id); Profiles.rev++ }
@@ -2264,6 +2270,7 @@ private fun UpdateV2() {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var checking by remember { mutableStateOf(false) }
+    var checkedAt by remember { mutableStateOf(0L) }
     var rev by remember { mutableIntStateOf(0) }
     var later by remember { mutableStateOf(false) }
     var usb by remember { mutableStateOf(false) }
@@ -2289,9 +2296,11 @@ private fun UpdateV2() {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 // "Update now": downloads and installs at once, no extra question
                 if (u != null && pr !in 0..101) Button(if (Updater.paused) "Nastavi preuzimanje" else "Ažuriraj sada", R.drawable.lc_download, primary = true) { scope.launch { Updater.install(ctx, u) } }
-                Button(if (checking) "Provjeravam…" else "Provjeri verziju", R.drawable.lc_refresh_cw) {
-                    if (!checking) { checking = true; scope.launch { Prefs.put("upd_skip", ""); Updater.check(ctx); checking = false; rev++ } }
+                // the page is not rebuilt after the check: focus stays on this button, the answer shows next to it
+                Button(if (checking) "Provjeravam…" else "Provjeri novu verziju", R.drawable.lc_refresh_cw) {
+                    if (!checking) { checking = true; scope.launch { Prefs.put("upd_skip", ""); Updater.check(ctx); checking = false; checkedAt = System.currentTimeMillis() } }
                 }
+                if (checkedAt > 0 && !checking && Updater.available == null) T("✓ Imaš najnoviju verziju", 13.sp, C.Green, FontWeight.SemiBold, modifier = Modifier.align(Alignment.CenterVertically))
             }
             if (u != null && pr !in 0..101) {
                 val lines = u.lines.ifEmpty { releases.firstOrNull { it.name == u.name }?.notes?.lines()?.map { it.trim().removePrefix("-").trim() }?.filter { it.isNotBlank() }?.take(4) ?: emptyList() }
@@ -2507,6 +2516,9 @@ private fun AboutV2(onSub: (String) -> Unit, onSection: (String) -> Unit) {
         "crash" -> Popup("Izvještaj o greškama", { dlg = null }, width = 760.dp) {
             T((crash ?: tr("Nema grešaka")).take(1500), 11.sp, C.Soft, maxLines = 24)
             OptionRow("Izvezi log za podršku", R.drawable.lc_download, sub = "na USB ili u folder") { dlg = "log" }
+            // all crashes and freezes (last 10) from a laptop, without touching the box
+            T("Sa laptopa (zadnjih 10 padova i zamrzavanja):", 12.sp, C.Muted)
+            T("adb pull " + CrashLog.ADB_DIR, 13.sp, C.Text, FontWeight.Bold, maxLines = 2)  // i18n-ignore
             if (crash != null) OptionRow("Obriši izvještaj", R.drawable.lc_trash_2) { java.io.File(ctx.filesDir, "last_crash.txt").delete(); dlg = null }
         }
         "log" -> FileBrowser("Izaberi folder", emptySet(), pickDir = true, onDismiss = { dlg = null }) { dir ->

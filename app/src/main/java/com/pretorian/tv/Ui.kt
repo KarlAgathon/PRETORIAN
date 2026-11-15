@@ -181,10 +181,17 @@ fun Chip(text: String, bg: Color = C.Card, fg: Color = C.Text, border: Color? = 
 @Composable
 fun Button(text: String, icon: Int? = null, primary: Boolean = false, modifier: Modifier = Modifier,
            focusRequester: FocusRequester? = null, outline: Color? = null, onClick: () -> Unit) {
+    // after a click the page may be rebuilt: focus comes back to this same button, never jumps to another menu
+    val id = "btn:" + (icon?.toString() ?: text)
+    val fr = setFocusFr(id, focusRequester)
     Focusable(
         modifier = modifier.height(48.dp).then(if (outline != null) Modifier.border(2.dp, outline, Rnd(14.dp)) else Modifier),
-        onClick = onClick,
-        focusRequester = focusRequester,
+        onClick = {
+            SetFocus.last = id; SetFocus.pending = true; onClick()
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ if (SetFocus.last == id) SetFocus.pending = false }, 1500)
+        },
+        onFocus = { SetFocus.last = id },
+        focusRequester = fr,
         normal = if (primary) C.Red else C.Card,
         focused = if (primary) C.Red else C.CardHi,
     ) { _ ->

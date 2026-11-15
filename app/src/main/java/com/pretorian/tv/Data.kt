@@ -486,7 +486,7 @@ object Repo {
     private var m3uFor: String? = null
     private var m3u: List<Channel> = emptyList()
 
-    fun clear() { cache.clear(); m3uFor = null; m3u = emptyList(); catalogs.clear() }
+    fun clear() { cache.clear(); m3uFor = null; m3u = emptyList(); catalogs.clear(); HomeCache.clear() }
 
     /** frees memory: always the big catalogs, and with [hard] also films, series and all-channel lists (groups and the open channels stay) */
     fun trim(hard: Boolean) {

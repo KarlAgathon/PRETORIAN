@@ -361,6 +361,7 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                 }
                 }
                 Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FollowCard(nav, (fullW * 0.34f).coerceIn(250.dp, 380.dp))
                     HomeAlerts(nav, (fullW * 0.34f).coerceIn(250.dp, 380.dp))
                     SubscriptionCard()
                 }
@@ -460,15 +461,16 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                 }
                 if (p != null && cont.isEmpty() && Recent.list().isEmpty()) {
                     // no history at all: the newest films, series and channels at the provider. Gone as soon as you watch something.
-                    val disc by load(p.id) {
+                    // read once, then kept: coming back to Home shows it at once. New only after a playlist refresh or new items from the provider.
+                    val discL by load(p.id, HomeCache.rev) { HomeCache.disc[p.id] ?: run {
                         val mv = Repo.vodGroups(p).take(2).flatMap { g -> try { Repo.movies(p, g.id) } catch (e: Exception) { emptyList() } }
                             .distinctBy { it.id }.sortedByDescending { it.added }.take(60)
                         val se = Repo.seriesGroups(p).take(2).flatMap { g -> try { Repo.series(p, g.id) } catch (e: Exception) { emptyList() } }
                             .distinctBy { it.id }.sortedByDescending { it.added }.take(60)
                         val ch = try { Repo.allChannels(p).sortedByDescending { it.id.toLongOrNull() ?: 0L }.take(30) } catch (e: Exception) { emptyList() }
                         Triple(mv, se, ch)
-                    }
-                    (disc as? Load.Ok)?.value?.let { (mv, se, ch) ->
+                    }.also { HomeCache.disc[p.id] = it } }
+                    (HomeCache.disc[p.id] ?: (discL as? Load.Ok)?.value)?.let { (mv, se, ch) ->
                         posterRow("NAJNOVIJI FILMOVI", minOf(fit, mv.size), mv.size, "filmova", { nav.root(Screen.Movies) }) { i, m, fr ->
                             val v = mv[i]; PosterCard(cleanTitle(v.name).first, v.poster, v.id, null, m, fr = fr, rating = v.rating) { nav.push(Screen.MovieDetail(v)) }
                         }
@@ -854,4 +856,12 @@ fun HomeAlerts(nav: Nav, width: Dp) {
             }
         }
     }
+}
+
+
+/** Home's "newest" rows, read once per playlist and kept until a refresh or new items from the provider. */
+object HomeCache {
+    var rev by mutableIntStateOf(0)
+    val disc = java.util.concurrent.ConcurrentHashMap<String, Triple<List<Vod>, List<SeriesItem>, List<Channel>>>()
+    fun clear() { if (disc.isNotEmpty()) { disc.clear(); rev++ } }
 }
