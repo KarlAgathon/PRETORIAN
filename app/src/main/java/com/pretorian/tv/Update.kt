@@ -40,6 +40,8 @@ object Updater {
     var speed by mutableStateOf(0L)       // bytes per second
     @Volatile var cancel = false
     @Volatile var installStarted = 0L
+    /** the system install screen was already tried for this install */
+    @Volatile var fellBack = false
     /** shown once per version when you come back from the player */
     var askAfterPlayer by mutableStateOf(false)
 
@@ -123,6 +125,7 @@ object Updater {
             Prefs.put("upd_file", info.name)
             progress = 101
             installStarted = System.currentTimeMillis()
+            fellBack = false
             withContext(Dispatchers.IO) { commit(ctx, file) }
         } catch (e: Exception) {
             progress = -1
@@ -175,7 +178,24 @@ object Updater {
         if (progress == 101 && System.currentTimeMillis() - installStarted > 180_000L) { progress = -1; status = tr("Instalacija nije završena: otkazano") }
     }
 
+    /** the last APK handed to Android, for the fallback below */
+    @Volatile var lastApk: File? = null
+
+    /** Fallback when the quiet install is thrown away by the box (seen on Google TV): Android's own install screen. */
+    fun installWithSystemScreen(ctx: Context): Boolean {
+        val f = lastApk?.takeIf { it.exists() } ?: return false
+        return try {
+            val uri = androidx.core.content.FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)
+            @Suppress("DEPRECATION")
+            val i = Intent(Intent.ACTION_INSTALL_PACKAGE).setDataAndType(uri, "application/vnd.android.package-archive")
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                .putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
+            ctx.startActivity(i); true
+        } catch (e: Exception) { false }
+    }
+
     fun commit(ctx: Context, apk: File) {
+        lastApk = apk
         val pi = ctx.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
         params.setAppPackageName(ctx.packageName)
@@ -203,6 +223,12 @@ class UpdateResultReceiver : BroadcastReceiver() {
             else -> {
                 Updater.progress = -1; Updater.installStarted = 0L
                 val msg = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "otkazano"
+                // the box threw the session away by itself: open Android's normal install screen with the same file
+                val code = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, 0)
+                if ((code == PackageInstaller.STATUS_FAILURE_ABORTED || msg.contains("abandon", true)) && !Updater.fellBack) {
+                    Updater.fellBack = true
+                    if (Updater.installWithSystemScreen(ctx)) { Updater.status = tr("Potvrdi instalaciju na ekranu Androida"); return }
+                }
                 Updater.status = trf("Instalacija nije završena: %s", msg)
                 Toast.makeText(ctx, tr("Ažuriranje nije završeno"), Toast.LENGTH_LONG).show()
             }
