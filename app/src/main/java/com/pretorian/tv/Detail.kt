@@ -151,14 +151,22 @@ private fun TrackBar(search: String, season: Int?, episode: Int?, url: String, c
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         BarBox("ZVUK", audioText, R.drawable.lc_volume, null, Modifier.weight(1f)) { showAudio = true }
         BarBox("TITL", subText, R.drawable.lc_captions, src, Modifier.weight(1f)) { showSubs = true }
-        BarBox("NEMA PRAVOG TITLA?", tr("Pronađi titl"), R.drawable.lc_search, "Online · Disk" to null, Modifier.weight(1f)) { showFind = true }
+        BarBox("NEMA PRAVOG TITLA?", tr("Traži titl"), R.drawable.lc_search, "Online · Disk" to null, Modifier.weight(1f)) { showFind = true }
     }
-    if (showSubs || showFind) SubtitlePicker(search, season, episode, probeUrl = url,
-        onProbed = { t -> onChange(choice.copy(sub = t, subFile = null, subOff = false)); showSubs = false; showFind = false },
-        onDismiss = { showSubs = false; showFind = false }) { f ->
+    // "Traži titl": only two ways — search all subtitle sites online, or load a file from the disk / USB
+    var findMode by remember { mutableStateOf<String?>(null) }
+    if (showFind && findMode == null) Popup("Traži titl", { showFind = false }, width = 560.dp) {
+        OptionRow("Traži online", R.drawable.lc_search, sub = "Pretraži sve stranice s titlovima i izaberi") { findMode = "results" }
+        OptionRow("Učitaj s diska / USB-a", R.drawable.lc_folder, sub = ".srt · .ass · .vtt · .sub") { findMode = "disk" }
+    }
+    fun picked(f: java.io.File?) {
         onChange(if (f == null) choice.copy(subFile = null, sub = null, subOff = true) else choice.copy(subFile = f, sub = null, subOff = false))
-        showSubs = false; showFind = false
+        showSubs = false; showFind = false; findMode = null
     }
+    findMode?.let { fm -> key(fm) { SubtitlePicker(search, season, episode, probeUrl = url, startMode = fm, onDismiss = { findMode = null }) { f -> picked(f) } } }
+    if (showSubs) SubtitlePicker(search, season, episode, probeUrl = url,
+        onProbed = { t -> onChange(choice.copy(sub = t, subFile = null, subOff = false)); showSubs = false },
+        onDismiss = { showSubs = false }) { f -> picked(f) }
     if (showAudio) AudioPicker(url, choice.audio?.title, onDismiss = { showAudio = false }) { t -> onChange(choice.copy(audio = t)); showAudio = false }
 }
 
@@ -180,6 +188,17 @@ private fun BarBox(label: String, value: String, icon: Int, src: Pair<String, Co
             }
             T("▾", 12.sp, C.Muted)
         }
+    }
+}
+
+fun platformOf(id: String, m: Meta?) = Platforms.norm(VodMemory.catOf[id]) ?: m?.studio
+
+/** The streaming platform as a coloured chip: from the provider category name, else what TMDB says; nothing when unknown. */
+@Composable
+private fun PlatformChip(id: String, m: Meta?, size: androidx.compose.ui.unit.TextUnit) {
+    val label = platformOf(id, m) ?: return
+    Box(Modifier.clip(Rnd(5.dp)).background(Color(Platforms.color(label))).padding(horizontal = 7.dp, vertical = 2.dp)) {
+        T(label.uppercase(), size, Color.White, FontWeight.ExtraBold)  // i18n-ignore
     }
 }
 
@@ -218,10 +237,9 @@ fun OnyxMovieDetail(v: Vod, nav: Nav) {
                     // year – length – genre – studio
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         val parts = listOfNotNull((m?.year ?: i?.year)?.take(4), fmtMin(mins).ifBlank { null }, translated(m?.genres ?: i?.genre)?.take(40))
-                        T(parts.joinToString(" – ") + " –", 14.sp, C.Soft, FontWeight.SemiBold)
-                        Box(Modifier.clip(Rnd(5.dp)).background(if (m?.studio != null) Color(0xFFE50914) else C.CardHi).padding(horizontal = 7.dp, vertical = 2.dp)) {
-                            T(m?.studio?.uppercase() ?: tr("Nepoznat studio"), 11.sp, Color.White, FontWeight.ExtraBold)
-                        }
+                        val plat = platformOf(v.id, m)
+                        T(parts.joinToString(" – ") + if (plat != null) " –" else "", 14.sp, C.Soft, FontWeight.SemiBold)
+                        PlatformChip(v.id, m, 11.sp)
                     }
                     val plot = translated(m?.overview ?: i?.plot)
                     T(plot ?: if (meta is Load.Loading) "Učitavam opis…" else " ", 14.sp, C.Soft, maxLines = 4)
@@ -323,10 +341,9 @@ fun OnyxSeriesDetail(s: SeriesItem, nav: Nav) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     val parts = listOfNotNull(m?.year?.take(4), if (seasons.isNotEmpty()) trf("%s sezone", seasons.size) + " · " + trf("%s epizoda", all.size) else null,
                         translated(m?.genres)?.take(40))
-                    T(parts.joinToString(" – ") + " –", 13.sp, C.Soft, FontWeight.SemiBold)
-                    Box(Modifier.clip(Rnd(5.dp)).background(if (m?.studio != null) Color(0xFFE50914) else C.CardHi).padding(horizontal = 7.dp, vertical = 2.dp)) {
-                        T(m?.studio?.uppercase() ?: tr("Nepoznat studio"), 10.sp, Color.White, FontWeight.ExtraBold)
-                    }
+                    val plat = platformOf(s.id, m)
+                    T(parts.joinToString(" – ") + if (plat != null) " –" else "", 13.sp, C.Soft, FontWeight.SemiBold)
+                    PlatformChip(s.id, m, 10.sp)
                 }
                 T(translated(m?.overview ?: s.plot) ?: " ", 12.sp, C.Soft, maxLines = 2)
                 Row(Modifier.horizontalScroll(rememberScrollState()).padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -359,7 +376,8 @@ fun OnyxSeriesDetail(s: SeriesItem, nav: Nav) {
                     LazyRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         items(seasons) { n ->
                             val count = all.count { it.season == n }
-                            val done = count > 0 && all.filter { it.season == n }.all { Watch.get(ctx, it.url)?.watched == true }
+                            val seen = all.count { it.season == n && Watch.get(ctx, it.url)?.watched == true }
+                            val done = count > 0 && seen == count
                             val open = n == cur
                             Focusable(onClick = { season = n }, onMenu = { if (count > 0) seasonMenu = n }, shape = Pill,
                                 normal = if (open) Color.White else Color.White.copy(alpha = 0.07f), focused = if (open) Color.White else C.Red, zoom = 1.05f,
@@ -367,21 +385,17 @@ fun OnyxSeriesDetail(s: SeriesItem, nav: Nav) {
                                 Row(Modifier.align(Alignment.Center).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                     val fg = if (open) Color(0xFF1A1210) else if (f) C.OnRed else C.Soft
                                     T(trf("Sezona %s", n), 14.sp, fg, FontWeight.Bold)
-                                    T(if (count > 0) trf("%s ep.", count) + if (done) " ✓" else "" else tr("uskoro"), 11.sp, fg.copy(alpha = 0.7f))
+                                    T(if (count > 0) listOf("· ", seen, "/", count, if (done) " ✓" else "").joinToString("") else "· " + tr("uskoro"), 12.sp,
+                                        if (done) (if (open) Color(0xFF1E9E5A) else LampGreen) else fg.copy(alpha = 0.75f), FontWeight.Bold)
                                 }
                             }
-                        }
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        listOf(LampGreen to "odgledano", LampYellow to "u toku", LampRed to "nije gledano", LampBlue to "čeka se provider", LampGrey to "još nije izašla").forEach { (c, l) ->
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) { Lamp(c, 7.dp); T(l, 10.sp, C.Muted) }
                         }
                     }
                 }
                 // ---- episodes
                 val blurOn = Prefs.bool("blur_eps", true)
                 key(Watch.rev, cur) {
-                    LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState, verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
+                    LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState, verticalArrangement = Arrangement.spacedBy(5.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
                         itemsIndexed(rows, key = { _, r -> "${r.season}_${r.num}_${r.e?.id}" }) { _, r ->
                             val e = r.e
                             val pr = e?.let { Watch.get(ctx, it.url) }
@@ -398,13 +412,13 @@ fun OnyxSeriesDetail(s: SeriesItem, nav: Nav) {
                             val isJump = jump != null && jump.first == r.season && jump.second == r.num
                             Focusable(onClick = { if (e != null) playEp(e) else Toast.makeText(ctx, label, Toast.LENGTH_SHORT).show() },
                                 onMenu = { epDlg = r }, onFocus = { lastFocusNum = r.num }, focusRequester = if (isJump) jumpFr else null,
-                                shape = Rnd(14.dp), normal = if (e == null) Color.White.copy(alpha = 0.03f) else Color.Black.copy(alpha = 0.25f),
+                                shape = Rnd(12.dp), normal = if (e == null) Color.White.copy(alpha = 0.03f) else Color.Black.copy(alpha = 0.25f),
                                 focused = Color.White.copy(alpha = 0.14f), zoom = 1.01f,
-                                modifier = Modifier.fillMaxWidth().height(52.dp).border(1.dp, C.Line, Rnd(14.dp))) { f ->
-                                Row(Modifier.fillMaxSize().then(if (f) Modifier.border(2.dp, Color.White, Rnd(14.dp)) else Modifier).padding(horizontal = 10.dp),
+                                modifier = Modifier.fillMaxWidth().height(40.dp).border(1.dp, C.Line, Rnd(12.dp))) { f ->
+                                Row(Modifier.fillMaxSize().then(if (f) Modifier.border(2.dp, Color.White, Rnd(12.dp)) else Modifier).padding(horizontal = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                                     // picture: blurred until watched (no spoilers), a calendar for the ones not out yet
-                                    Box(Modifier.height(38.dp).aspectRatio(16f / 9f).clip(Rnd(8.dp)).background(C.CardHi), contentAlignment = Alignment.Center) {
+                                    Box(Modifier.height(28.dp).aspectRatio(16f / 9f).clip(Rnd(6.dp)).background(C.CardHi), contentAlignment = Alignment.Center) {
                                         val img = e?.image ?: r.t?.still
                                         if (e == null) Ico(R.drawable.lc_calendar, 16.dp, LampGrey)
                                         else if (img != null) {
@@ -414,8 +428,8 @@ fun OnyxSeriesDetail(s: SeriesItem, nav: Nav) {
                                         if (f && e != null) Ico(R.drawable.lc_play, 14.dp, Color.White)
                                     }
                                     T(epCode(r.season, r.num), 12.sp, if (e == null) C.Muted else C.Soft, FontWeight.ExtraBold, modifier = Modifier.width(62.dp))  // i18n-ignore
-                                    T(name, 15.sp, if (e == null) C.Muted else C.Text, FontWeight.Bold, modifier = Modifier.weight(1f))
-                                    Column(Modifier.width(230.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                    T(name, 14.sp, if (e == null) C.Muted else C.Text, FontWeight.Bold, modifier = Modifier.weight(1f))
+                                    Column(Modifier.width(230.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                         ThinBar(if (pr?.watched == true) 1f else pr?.fraction ?: 0f, lamp, Modifier.fillMaxWidth(), 3.dp)
                                         T(label, 11.sp, if (lamp == LampRed || lamp == LampGreen) C.Soft else lamp, FontWeight.SemiBold)
                                     }

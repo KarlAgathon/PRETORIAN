@@ -34,10 +34,12 @@ data class StreamTrack(val lang: String?, val label: String?, val title: String)
 @Composable
 fun SubtitlePicker(search: String, season: Int?, episode: Int?, embedded: List<String> = emptyList(),
                    onEmbedded: ((Int) -> Unit)? = null, probeUrl: String? = null, onProbed: ((StreamTrack) -> Unit)? = null,
-                   onDismiss: () -> Unit, onPicked: (File?) -> Unit) {
+                   startMode: String = "menu", onDismiss: () -> Unit, onPicked: (File?) -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    var mode by remember { mutableStateOf("menu") }
+    var mode by remember { mutableStateOf(startMode) }
+    // opened straight on the search or the disk: Back closes it (one step), not into the full menu
+    val stepBack = { if (startMode == "menu") mode = "menu" else onDismiss() }
     var results by remember { mutableStateOf<List<SubResult>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
@@ -53,14 +55,16 @@ fun SubtitlePicker(search: String, season: Int?, episode: Int?, embedded: List<S
         }
     }
 
+    LaunchedEffect(Unit) { if (startMode == "results") runSearch() }
+
     when (mode) {
         "url" -> TextDialog("Titl s linka", "Link do .srt ili .zip titla", onDismiss = { mode = "menu" }) { url ->
             scope.launch {
                 try { onPicked(Subs.fromUrl(ctx, url)) } catch (e: Exception) { Toast.makeText(ctx, tr("Titl se nije skinuo") + ": ${e.message}", Toast.LENGTH_LONG).show() }
             }
         }
-        "disk" -> FilePicker("Titl sa diska ili USB-a", setOf("srt", "sub", "ass", "ssa", "vtt", "zip"), onDismiss = { mode = "menu" }) { bytes, _ ->
-            try { onPicked(Subs.fromBytes(ctx, bytes)) } catch (e: Exception) { Toast.makeText(ctx, tr("Fajl se ne može pročitati"), Toast.LENGTH_LONG).show(); mode = "menu" }
+        "disk" -> FilePicker("Titl sa diska ili USB-a", setOf("srt", "sub", "ass", "ssa", "vtt", "zip"), onDismiss = { stepBack() }) { bytes, _ ->
+            try { onPicked(Subs.fromBytes(ctx, bytes)) } catch (e: Exception) { Toast.makeText(ctx, tr("Fajl se ne može pročitati"), Toast.LENGTH_LONG).show(); stepBack() }
         }
         "langs" -> LangOrderPicker("Jezici titla", Prefs.subLangs.split(',').filter { it.isNotBlank() }, onDismiss = { mode = "menu" }) {
             if (it.isNotEmpty()) Prefs.subLangs = it.joinToString(",")
@@ -75,7 +79,7 @@ fun SubtitlePicker(search: String, season: Int?, episode: Int?, embedded: List<S
                 else -> list.forEach { t -> OptionRow(t.title, R.drawable.lc_captions, sub = "Ugrađen u video") { onProbed?.invoke(t) } }
             }
         }
-        "results" -> Popup("Titlovi online", onDismiss = { mode = "menu" }, width = 760.dp) {
+        "results" -> Popup("Titlovi online", onDismiss = { stepBack() }, width = 760.dp) {
             T(cleanTitle(search).first + (season?.let { " · S$it" } ?: "") + (episode?.let { "E$it" } ?: "") + " · " + langList(Prefs.subLangs), 14.sp, C.Muted)
             if (busy) Box(Modifier.fillMaxWidth().height(120.dp)) { Loading("Tražim…") }
             error?.let { T(it, 14.sp, C.Danger, maxLines = 4) }

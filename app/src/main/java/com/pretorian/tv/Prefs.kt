@@ -26,7 +26,8 @@ object Prefs {
     fun put(k: String, v: Long) = sp.edit().putLong(k, v).apply()
     fun remove(vararg k: String) = sp.edit().apply { k.forEach { remove(it) } }.apply()
 
-    var tmdbKey: String get() = str("tmdb_key"); set(v) = put("tmdb_key", v.trim())
+    /** own key from Settings, else the one built into the app */
+    var tmdbKey: String get() = str("tmdb_key").ifBlank { BuildConfig.TMDB_KEY }; set(v) = put("tmdb_key", v.trim())
     var omdbKey: String get() = str("omdb_key"); set(v) = put("omdb_key", v.trim())
     var osKey: String get() = str("os_key"); set(v) = put("os_key", v.trim())
     var osUser: String get() = str("os_user"); set(v) = put("os_user", v.trim())
@@ -51,7 +52,14 @@ object Lock {
     private var fails = 0
     private var blockedUntil = 0L
 
-    fun load() { simple = Prefs.bool("simple_mode") }
+    fun load() {
+        simple = Prefs.bool("simple_mode")
+        // until you choose your own, the PIN for everything is 0000
+        if (!hasPin()) { setPin("0000"); Prefs.put("pin_default", true) }
+    }
+
+    /** true while the PIN is still the factory 0000 */
+    fun isDefault() = Prefs.bool("pin_default")
 
     fun switchSimple(on: Boolean) { simple = on; Prefs.put("simple_mode", on) }
 
@@ -63,7 +71,7 @@ object Lock {
     fun setPin(pin: String) {
         val bytes = ByteArray(16).also { SecureRandom().nextBytes(it) }
         val salt = bytes.joinToString("") { "%02x".format(it) }
-        Prefs.put("pin_salt", salt); Prefs.put("pin_hash", hash(pin, salt))
+        Prefs.put("pin_salt", salt); Prefs.put("pin_hash", hash(pin, salt)); Prefs.put("pin_default", pin == "0000")
         fails = 0
     }
 

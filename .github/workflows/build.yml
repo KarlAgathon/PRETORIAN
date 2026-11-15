@@ -32,6 +32,7 @@ jobs:
         env:
           LEAD_KEY_PASSWORD: ${{ secrets.LEAD_KEY_PASSWORD }}
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          TMDB_KEY: ${{ secrets.TMDB_KEY }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
       - name: Remove signing key
         if: always()

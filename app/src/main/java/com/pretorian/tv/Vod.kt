@@ -68,6 +68,16 @@ fun SeriesScreen(nav: Nav) = VodBrowser(nav, series = true)
 private data class Poster(val id: String, val name: String, val image: String?, val rating: String?, val url: String?, val isNew: Boolean,
                           val open: () -> Unit, val play: (() -> Unit)? = null, val added: Long = 0)
 
+/** Movies/Series remember the open category and the poster you opened, so Back from a film or series lands on it again. */
+object VodMemory {
+    val group = HashMap<String, String>()
+    val item = HashMap<String, String>()
+    /** true right after a poster was opened: on return focus goes to that poster, not to the categories */
+    var returning = false
+    /** the category a title was opened from (a provider category like "NETFLIX SERIJE" tells the platform) */
+    val catOf = HashMap<String, String>()
+}
+
 private const val G_CONTINUE = "__continue__"
 private const val G_NEW = "__new__"
 private const val G_MYLIST = "__mylist__"
@@ -268,12 +278,13 @@ private fun VodClassic(nav: Nav, series: Boolean) {
     val rowsState by load(p.id, series, rev, NewContent.rev, Watch.rev, MyList.rev, keep = true) {
         val out = ArrayList<VRow>()
         if (pls.size > 1) out.add(VRow.Header(p, true))
+        // on top: what arrived lately; the number goes down as you open them
+        val nw = NewContent.items(p.id, kind)
+        if (nw.isNotEmpty()) out.add(VRow.Group(Category(G_NEW, tr("Nedavno dodano")), nw.size))
         val cont = Watch.continueList(ctx).filter { (it.series != null) == series && (it.pid.isBlank() || it.pid == p.id) }
         if (cont.isNotEmpty()) out.add(VRow.Group(Category(G_CONTINUE, tr("Nastavi gledati")), cont.size))
         val my = MyList.items(kind).size
         if (Look.age && my > 0) out.add(VRow.Group(Category(G_MYLIST, tr("Moja lista")), my))   // shown only when something is on it
-        val nw = NewContent.items(p.id, kind)
-        if (nw.isNotEmpty()) out.add(VRow.Group(Category(G_NEW, tr("Novo dodano")), nw.size))
         if (p.type == SourceType.XTREAM) ovr.groups(kind, if (series) Repo.seriesGroups(p) else Repo.vodGroups(p))
             .forEach { out.add(VRow.Group(it, NewContent.countCat(p.id, kind, it.id))) }
         pls.drop(1).forEach { out.add(VRow.Header(it, false)) }
@@ -289,7 +300,16 @@ private fun VodClassic(nav: Nav, series: Boolean) {
     WrapEffect(gWrap, gState)
     // a category opens only with OK; moving over the list keeps the posters of the open one. At start the first one is open.
     LaunchedEffect(rowsState) {
-        if (group == null) ((rowsState as? Load.Ok)?.value?.firstOrNull { it is VRow.Group && !ovr.isLocked(kind, it.cat.id) } as? VRow.Group)?.let { group = it.cat }
+        val groups = (rowsState as? Load.Ok)?.value?.filterIsInstance<VRow.Group>() ?: return@LaunchedEffect
+        if (group == null) (groups.firstOrNull { it.cat.id == VodMemory.group[kind] } ?: groups.firstOrNull { !ovr.isLocked(kind, it.cat.id) })?.let { group = it.cat }
+    }
+    LaunchedEffect(group) { group?.let { VodMemory.group[kind] = it.id } }
+    // Back on the posters goes to the categories first, only then out of Movies/Series
+    var onPosters by remember { mutableStateOf(false) }
+    androidx.activity.compose.BackHandler(enabled = onPosters) {
+        onPosters = false
+        val idx = (rowsState as? Load.Ok)?.value?.indexOfFirst { it is VRow.Group && it.cat.id == group?.id } ?: -1
+        gWrap.target = idx.coerceAtLeast(0)
     }
 
     Row(Modifier.fillMaxSize()) {
@@ -328,8 +348,8 @@ private fun VodClassic(nav: Nav, series: Boolean) {
                                         modifier = m.then(if (Look.groupFrame && !Look.age) Modifier.border(if (selected) 1.5.dp else 1.dp,
                                             C.Red.copy(alpha = if (selected) 0.9f else 0.28f), shape) else Modifier),
                                         shape = shape,
-                                        onClick = { gate.run("$kind:${g.id}", locked) { group = g } },
-                                        onFocus = { focusedGroup = g },
+                                        onClick = { gate.run("$kind:${g.id}", locked) { if (group?.id != g.id) VodMemory.item.remove(kind); group = g } },
+                                        onFocus = { focusedGroup = g; onPosters = false },
                                         onMenu = if (Lock.simple || special) null else ({ groupMenu = g }),
                                         focusRequester = fr,
                                         normal = if (selected) (if (Look.age) C.CardHi else C.Red.copy(alpha = 0.28f)) else Color.Transparent,
@@ -342,8 +362,8 @@ private fun VodClassic(nav: Nav, series: Boolean) {
                                             if (g.id == G_CONTINUE) Ico(R.drawable.lc_history, 15.dp, C.RedText)
                                             if (g.id == G_NEW) Ico(R.drawable.lc_sparkles, 15.dp, C.Amber)
                                             T(g.name, if (Look.age) 15.sp else Rows.font, if (onW) C.OnRed else if (selected) C.Text else C.Soft, if (selected || special) FontWeight.SemiBold else FontWeight.Normal,
-                                                modifier = Modifier.weight(1f).padding(vertical = 3.dp), maxLines = if (Look.age) 2 else 1)
-                                            if (Look.age && r.count > 0 && g.id != G_NEW) T("${r.count}", 12.sp, if (onW) C.OnRed else C.Muted)
+                                                modifier = Modifier.weight(1f).padding(vertical = 3.dp), maxLines = 1)
+                                            if (Look.age && r.count > 0) T("${r.count}", 12.sp, if (onW) C.OnRed else C.Muted)
                                             if (locked) Ico(R.drawable.lc_lock, 15.dp, C.Muted)
                                             if (!Look.age && r.count > 0 && g.id != G_CONTINUE) Box(Modifier.clip(Pill).background(if (g.id == G_NEW) C.Amber else C.Danger).padding(horizontal = 7.dp, vertical = 1.dp)) {
                                                 T(if (g.id == G_NEW) "${r.count}" else trf("%s nova", r.count), 10.sp, Color.White, FontWeight.Bold)
@@ -354,7 +374,11 @@ private fun VodClassic(nav: Nav, series: Boolean) {
                             }
                         }
                     }
-                    LaunchedEffect(Unit) { firstGroup.tryFocus() }
+                    LaunchedEffect(Unit) {
+                        if (VodMemory.returning && VodMemory.item[kind] != null) return@LaunchedEffect
+                        val idx = all.indexOfFirst { it is VRow.Group && it.cat.id == group?.id }
+                        if (idx > firstIdx) gWrap.target = idx else firstGroup.tryFocus()
+                    }
                 }
             }
         }
@@ -390,7 +414,7 @@ private fun VodClassic(nav: Nav, series: Boolean) {
                     is Load.Loading -> Loading()
                     is Load.Err -> Message("Nije se učitalo", s.message)
                     is Load.Ok -> if (s.value.isEmpty()) Message(if (g.id == G_MYLIST) "Lista je prazna" else "Kategorija je prazna", if (g.id == G_MYLIST) "Drži OK na filmu ili seriji i izaberi Dodaj na Moju listu" else null)
-                        else if (Look.age) OnyxPosters(g.name, s.value, kind, p.id)
+                        else if (Look.age) OnyxPosters(g.name, s.value, kind, p.id) { onPosters = true }
                         else PosterGrid(g.name, s.value, g.id == G_NEW, kind, p.id)
                 }
             }
@@ -467,9 +491,17 @@ private fun PosterGrid(title: String, items: List<Poster>, newList: Boolean, kin
 
 /** New look: the focused film as a big title with its picture behind, posters below. */
 @Composable
-private fun OnyxPosters(title: String, items: List<Poster>, kind: String, pid: String) {
+private fun OnyxPosters(title: String, items: List<Poster>, kind: String, pid: String, onFocused: () -> Unit = {}) {
     val ctx = LocalContext.current
     var menu by remember { mutableStateOf<Poster?>(null) }
+    val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+    val backFr = remember { FocusRequester() }
+    val backId = remember { if (VodMemory.returning) VodMemory.item[kind] else null }
+    LaunchedEffect(items) {
+        val i = items.indexOfFirst { it.id == backId }
+        VodMemory.returning = false
+        if (i >= 0) { gridState.scrollToItem(i); delay(80); try { backFr.requestFocus() } catch (_: Exception) {} }
+    }
     // always 4 posters in a row, sized so 2 full rows (8 posters) fit on any screen
     Column(Modifier.fillMaxSize().padding(start = 18.dp, end = 24.dp, top = 6.dp)) {
         Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -481,12 +513,13 @@ private fun OnyxPosters(title: String, items: List<Poster>, kind: String, pid: S
             val byWidth = (maxWidth - 8.dp - gapH * 3) / 4
             val byHeight = ((maxHeight - padV * 2 - gapV) / 2) * (2f / 3f)
             val w = if (byWidth < byHeight) byWidth else byHeight
-            LazyVerticalGrid(columns = GridCells.FixedSize(w), horizontalArrangement = Arrangement.spacedBy(gapH), verticalArrangement = Arrangement.spacedBy(gapV),
+            LazyVerticalGrid(state = gridState, columns = GridCells.FixedSize(w), horizontalArrangement = Arrangement.spacedBy(gapH), verticalArrangement = Arrangement.spacedBy(gapV),
                 contentPadding = PaddingValues(top = padV, bottom = padV, start = 4.dp, end = 4.dp), modifier = Modifier.fillMaxSize()) {
                 items(items, key = { it.id }) { it ->
                     val pr = it.url?.let { u -> Watch.get(ctx, u) }
                     PosterCard(cleanTitle(it.name).first, it.image, it.id, pr?.takeIf { p -> p.started && !p.watched }?.fraction, Modifier.width(w),
-                        onMenu = { menu = it }, rating = it.rating, onClick = it.open)
+                        onMenu = { menu = it }, rating = it.rating, onFocus = onFocused, fr = if (it.id == backId) backFr else null,
+                        onClick = { VodMemory.item[kind] = it.id; VodMemory.returning = true; VodMemory.catOf[it.id] = title; it.open() })
                 }
             }
         }

@@ -154,7 +154,7 @@ object Tmdb {
         if ((results == null || results.length() == 0) && year != null) results = get("/search/$kind", "query=${Net.enc(title)}&language=$lang").optJSONArray("results")
         val first = results?.optJSONObject(0) ?: run { cache[ck] = null; return@withContext null }
         val id = first.optInt("id")
-        val d = get("/$kind/$id", "language=$lang&append_to_response=credits,videos,external_ids")
+        val d = get("/$kind/$id", "language=$lang&append_to_response=credits,videos,external_ids" + if (tv) "" else ",watch/providers")
         var overview = d.str("overview").orNullIfBlank()
         var overviewLang: String? = lang
         if (overview == null && lang != "en") {
@@ -188,7 +188,15 @@ object Tmdb {
         val runtime = if (tv) d.optJSONArray("episode_run_time")?.optInt(0)?.takeIf { it > 0 }?.let { "$it min/ep" }
                       else d.optInt("runtime").takeIf { it > 0 }?.let { "${it / 60}h ${it % 60}m" }
         // who made it: the TV network for a series, the studio for a film
-        val studio = (if (tv) d.optJSONArray("networks") else d.optJSONArray("production_companies"))?.optJSONObject(0)?.str("name")?.orNullIfBlank()
+        // where it streams: the network for a series; for a film the subscription service in this country, else a studio only when it is a streaming brand
+        val studio = if (tv) d.optJSONArray("networks")?.optJSONObject(0)?.str("name")?.orNullIfBlank()?.let { Platforms.norm(it) ?: it }
+            else run {
+                val res = d.optJSONObject("watch/providers")?.optJSONObject("results")
+                val cc = java.util.Locale.getDefault().country.ifBlank { "DE" }
+                val flat = (res?.optJSONObject(cc) ?: res?.optJSONObject("DE") ?: res?.optJSONObject("US"))?.optJSONArray("flatrate")
+                val fromFlat = flat?.let { f -> (0 until f.length()).firstNotNullOfOrNull { Platforms.norm(f.getJSONObject(it).str("provider_name")) } }
+                fromFlat ?: d.optJSONArray("production_companies")?.let { pc -> (0 until pc.length()).firstNotNullOfOrNull { Platforms.norm(pc.getJSONObject(it).str("name")) } }
+            }
         val rtMin = if (tv) d.optJSONArray("episode_run_time")?.optInt(0) ?: 0 else d.optInt("runtime")
         val m = Meta(
             studio = studio, tmdbId = id, runtimeMin = rtMin,
@@ -495,4 +503,25 @@ object AutoTranslate {
 fun translated(s: String?): String? {
     val lang = metaLanguage()
     return androidx.compose.runtime.produceState(s, s, lang) { value = AutoTranslate.text(s, lang) }.value
+}
+
+
+/** Streaming brands: names as they show up in TMDB and provider category names, mapped to one short label. */
+object Platforms {
+    private val brands = listOf(  // i18n-ignore
+        "netflix" to "Netflix", "hbo max" to "HBO Max", "max" to "Max", "hbo" to "HBO", "disney" to "Disney+", "amazon" to "Prime Video",
+        "prime video" to "Prime Video", "apple tv" to "Apple TV+", "hulu" to "Hulu", "paramount" to "Paramount+", "peacock" to "Peacock",
+        "amc" to "AMC", "showtime" to "Showtime", "starz" to "Starz", "skyshowtime" to "SkyShowtime", "sky" to "Sky", "crunchyroll" to "Crunchyroll",
+        "fx" to "FX", "bbc" to "BBC", "itv" to "ITV", "channel 4" to "Channel 4", "zdf" to "ZDF", "ard" to "ARD", "rtl" to "RTL+", "joyn" to "Joyn",
+        "canal+" to "Canal+", "the cw" to "The CW", "nbc" to "NBC", "cbs" to "CBS", "abc" to "ABC", "fox" to "FOX", "wow" to "WOW", "magenta" to "MagentaTV",
+    )
+    /** A known brand in [name] (whole words), or null. */
+    fun norm(name: String?): String? {
+        val n = " " + (name ?: return null).lowercase().replace(Regex("[^a-z0-9+ ]"), " ") + " "
+        return brands.firstOrNull { (k, _) -> n.contains(" $k ") || (k.endsWith("+") && n.contains(" $k")) }?.second
+    }
+    fun color(label: String): Long = when (label) {
+        "Netflix" -> 0xFFE50914; "HBO", "HBO Max", "Max" -> 0xFF5B2BE0; "Disney+" -> 0xFF113CCF; "Prime Video" -> 0xFF00A8E1
+        "Apple TV+" -> 0xFF1C1C1E; "Hulu" -> 0xFF1CE783; "Paramount+" -> 0xFF0064FF; "AMC" -> 0xFF2A2A2A; else -> 0xFF3A3F4B
+    }
 }

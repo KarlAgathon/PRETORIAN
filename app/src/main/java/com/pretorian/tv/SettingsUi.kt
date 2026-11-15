@@ -635,7 +635,7 @@ private fun MediaPage() {
         }
         else -> {
             val pair = when (e) {
-                "tmdb" -> "TMDB API ključ" to Prefs.tmdbKey
+                "tmdb" -> "TMDB API ključ" to Prefs.str("tmdb_key")
                 "omdb" -> "OMDb API ključ" to Prefs.omdbKey
                 "os" -> "OpenSubtitles API ključ" to Prefs.osKey
                 "osuser" -> "OpenSubtitles korisničko ime" to Prefs.osUser
@@ -1786,8 +1786,14 @@ private fun SimpleV2(nav: Nav) {
                 note = tr("Kad vrijeme istekne, plejer stane i traži PIN. Treba postaviti PIN.")) { Prefs.put("watch_limit", lim[it].toString()); rev++ }
             SetDrop("Izlaz iz jednostavnog moda", null, listOf("Traži PIN", "Bez PIN-a"), if (Prefs.bool("pin_simple_exit", true)) 0 else 1) { Prefs.put("pin_simple_exit", it == 0); rev++ }
             SetSection("PIN")
-            SetRow("PIN", if (Lock.hasPin()) "promijeni ili postavi novi" else "4 cifre", tr(if (Lock.hasPin()) "Postavljen ✓" else "Nije postavljen"),
-                valueColor = if (Lock.hasPin()) C.Green else null) { setup = "pin" }
+            if (Lock.isDefault()) Row(Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(Rnd(12.dp)).background(C.Amber.copy(alpha = 0.16f))
+                .border(1.dp, C.Amber.copy(alpha = 0.6f), Rnd(12.dp)).padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Ico(R.drawable.lc_key_round, 18.dp, C.Amber)
+                T("PIN je zadani 0000, promijeni ga", 14.sp, C.Amber, FontWeight.Bold, modifier = Modifier.weight(1f))
+            }
+            SetRow("PIN", if (Lock.isDefault()) "zadani PIN je 0000" else "promijeni ili postavi novi", tr(if (Lock.isDefault()) "0000" else "Postavljen ✓"),
+                valueColor = if (Lock.isDefault()) C.Amber else C.Green) { setup = "pin" }
             if (Lock.hasPin()) SetRow("Zaboravljen PIN?", "upišeš novi, stari ne treba", tr("Resetuj PIN"), new = true) { setup = "pin" }
             val pinFor = listOf("Izlaz iz jednostavnog moda", "Zaključane grupe i kanali", "Postavke", "Brisanje playliste")
             val keys = listOf("pin_simple_exit", "pin_locked", "pin_settings", "pin_delpl")
