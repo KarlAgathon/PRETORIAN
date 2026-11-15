@@ -272,3 +272,37 @@ start
 start_timestamp
 from_start
  MB · 
+Netflix
+HBO Max
+Max
+HBO
+Disney+
+Prime Video
+Apple TV+
+Hulu
+Paramount+
+Peacock
+AMC
+Showtime
+Starz
+SkyShowtime
+Sky
+Crunchyroll
+FX
+BBC
+ITV
+Channel 4
+ZDF
+ARD
+RTL+
+Joyn
+Canal+
+The CW
+NBC
+CBS
+ABC
+FOX
+WOW
+MagentaTV
+pin_default
+.srt · .ass · .vtt · .sub
