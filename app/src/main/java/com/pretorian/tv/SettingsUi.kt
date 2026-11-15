@@ -1742,7 +1742,9 @@ private fun PlayerV2(openSub: (String) -> Unit) {
             SetSwitch("Sljedeća epizoda sama", "odbrojava 10 s na kraju", Prefs.bool("next_ep", true)) { Prefs.put("next_ep", it) }
             SetSwitch("Zamuti neodgledane epizode", "slike epizoda bez spojlera", Prefs.bool("blur_eps", true)) { Prefs.put("blur_eps", it) }
             // learned per series the first time you skip: then at the right second in every episode
-            SetDrop("Preskoči uvod", "aplikacija nauči gdje je uvod u svakoj seriji", listOf("Dugme", "Sam preskoči", "Isključeno"),
+            SetDrop("Preskoči prethodno", "„Previously on…“ na početku epizode, uči se za svaku seriju", listOf("Dugme", "Sam preskoči", "Isključeno"),
+                    Prefs.long("skip_recap", 0).toInt().coerceIn(0, 2)) { Prefs.put("skip_recap", it.toLong()) }
+                SetDrop("Preskoči uvod", "aplikacija nauči gdje je uvod u svakoj seriji", listOf("Dugme", "Sam preskoči", "Isključeno"),
                 Prefs.long("skip_intro", 0).toInt()) { Prefs.put("skip_intro", it.toLong()); rev++ }
             SetSwitch("Sljedeća epizoda kad krene odjavna špica", "⏭ ili OK na kraju zapamti gdje špica počinje", Prefs.bool("skip_credits", true)) { Prefs.put("skip_credits", it) }
             SetSection("Trailer")

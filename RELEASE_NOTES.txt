@@ -5,3 +5,4 @@ Sport: kretanje kroz listu ne mijenja izabranu utakmicu (tek OK), lijevo ili Bac
 Postavke › Opće › Rad u pozadini: rezultati, nove epizode i kartica Pratiš mogu se ugasiti
 Padovi i zamrzavanja se čuvaju (zadnjih 10) i mogu se izvući s laptopa – komanda je u Dijagnostici
 Ažuriranje: „Provjeri novu verziju“ ostaje na mjestu i kaže da imaš najnoviju; dugmad u Postavkama više ne bacaju fokus u drugi meni
+Preskoči prethodno („Previously on…“): dugme, sam preskoči ili isključeno, uči se za svaku seriju (Postavke › Plejer)

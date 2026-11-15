@@ -1938,4 +1938,6 @@ Provjeri novu verziju|Проверить новую версию
 ✓ Imaš najnoviju verziju|✓ У вас последняя версия
 Sa laptopa (zadnjih 10 padova i zamrzavanja):|С ноутбука (последние 10 сбоев и зависаний):
 PRATIŠ|ВЫ СЛЕДИТЕ
+Preskoči prethodno|Пропустить «Ранее»
+„Previously on…“ na početku epizode, uči se za svaku seriju|«Ранее в сериале…» в начале серии, запоминается для каждого сериала
 """.trimIndent()

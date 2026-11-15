@@ -489,7 +489,11 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 val ser = if (item.season != null) item.search else null
                 if (ser != null && skipPill != null && (e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter)) {
                     val pos = player.currentPosition; val dur = player.duration; val mem = SkipMem.of(ser)
-                    if (skipPill == "intro") { if (mem.introEnd > 0) player.seekTo(mem.introEnd) else { SkipMem.learnIntro(ser, pos, pos + 85_000L); player.seekTo(pos + 85_000L) } }
+                    if (skipPill == "recap") {
+                        // to the start of the intro if it is known (the recap is right before it), else 60 s on – remembered for the series
+                        val to = if (mem.introEnd > 0 && mem.introStart > pos + 5_000L) mem.introStart else pos + 60_000L
+                        SkipMem.learnRecap(ser, to); player.seekTo(to)
+                    } else if (skipPill == "intro") { if (mem.introEnd > 0) player.seekTo(mem.introEnd) else { SkipMem.learnIntro(ser, pos, pos + 85_000L); player.seekTo(pos + 85_000L) } }
                     else { if (dur > 0 && mem.creditsLeft == 0L) SkipMem.learnCredits(ser, dur - pos); saveProgress(done = true); if (index < n - 1) index++ }
                     skipPill = null
                     return@onPreviewKeyEvent true
@@ -636,7 +640,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
 
         // series: "Skip intro" and "Next episode" when the end credits start (times learned per series)
         LaunchedEffect(index, s.live) {
-            skipPill = null; var autoDone = false; var creditsAt = 0L
+            skipPill = null; var autoDone = false; var autoRecap = false; var creditsAt = 0L
             val ser = (if (item.season != null) item.search else null) ?: return@LaunchedEffect
             if (s.live) return@LaunchedEffect
             while (true) {
@@ -645,7 +649,14 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 val mem = SkipMem.of(ser)
                 val mode = Prefs.long("skip_intro", 0).toInt()   // 0 button, 1 by itself, 2 off
                 var pill: String? = null
-                if (mode != 2) {
+                // "Previously on…" at the very start: learned per series; a series whose intro starts in the first 20 s has no recap
+                val rMode = Prefs.long("skip_recap", 0).toInt()
+                if (rMode != 2) {
+                    if (mem.recapEnd > 0 && pos in 2_000L until mem.recapEnd - 1500) {
+                        if (rMode == 1 && !autoRecap) { autoRecap = true; player.seekTo(mem.recapEnd) } else pill = "recap"
+                    } else if (mem.recapEnd == 0L && pos in 3_000L..60_000L && !(mem.introEnd > 0 && mem.introStart < 20_000L)) pill = "recap"
+                }
+                if (mode != 2 && pill == null) {
                     if (mem.introEnd > 0 && pos >= mem.introStart && pos < mem.introEnd - 1500) {
                         if (mode == 1 && !autoDone) { autoDone = true; player.seekTo(mem.introEnd) } else pill = "intro"
                     } else if (mem.introEnd == 0L && pos in 5_000L..180_000L) pill = "intro"
@@ -669,7 +680,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             Box(Modifier.fillMaxSize().padding(end = 40.dp, bottom = 90.dp), contentAlignment = Alignment.BottomEnd) {
                 Row(Modifier.clip(Pill).background(Color.White).padding(horizontal = 18.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    T(if (k == "intro") "Preskoči uvod" else trf("Sljedeća epizoda za %s s", creditsLeft10), 15.sp, Color(0xFF0B0F1A), FontWeight.Bold)
+                    T(when (k) { "recap" -> tr("Preskoči prethodno"); "intro" -> tr("Preskoči uvod"); else -> trf("Sljedeća epizoda za %s s", creditsLeft10) }, 15.sp, Color(0xFF0B0F1A), FontWeight.Bold)
                     T("OK", 11.sp, Color(0xFF64748B), FontWeight.Bold)  // i18n-ignore
                 }
             }
@@ -991,14 +1002,16 @@ private fun digitOf(k: Key): Int? = when (k) {
 
 /** Where the intro and the end credits are, learned per series (the first time you skip them). */
 object SkipMem {
-    data class Mem(val introStart: Long, val introEnd: Long, val creditsLeft: Long)
+    data class Mem(val introStart: Long, val introEnd: Long, val creditsLeft: Long, val recapEnd: Long = 0L)
     private fun key(series: String) = "skip_" + series.lowercase().hashCode()
     fun of(series: String): Mem {
         val p = Prefs.str(key(series)).split(',').map { it.toLongOrNull() ?: 0L }
-        return Mem(p.getOrElse(0) { 0L }, p.getOrElse(1) { 0L }, p.getOrElse(2) { 0L })
+        return Mem(p.getOrElse(0) { 0L }, p.getOrElse(1) { 0L }, p.getOrElse(2) { 0L }, p.getOrElse(3) { 0L })
     }
-    private fun save(series: String, m: Mem) = Prefs.put(key(series), listOf(m.introStart, m.introEnd, m.creditsLeft).joinToString(","))
+    private fun save(series: String, m: Mem) = Prefs.put(key(series), listOf(m.introStart, m.introEnd, m.creditsLeft, m.recapEnd).joinToString(","))
     fun learnIntro(series: String, start: Long, end: Long) = save(series, of(series).copy(introStart = (start - 2000).coerceAtLeast(0), introEnd = end))
+    /** "Previously on…": where the recap ends (= where the episode really starts) */
+    fun learnRecap(series: String, end: Long) = save(series, of(series).copy(recapEnd = end))
     fun learnCredits(series: String, left: Long) = save(series, of(series).copy(creditsLeft = left))
     fun forget(series: String) = Prefs.put(key(series), "")
 }

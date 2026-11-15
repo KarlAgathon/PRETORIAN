@@ -471,3 +471,4 @@ bg_episodes
 home_sport_card
 adb pull 
 goal
+skip_recap
