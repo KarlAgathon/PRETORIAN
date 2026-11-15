@@ -435,7 +435,7 @@ fun OnyxSearch(nav: Nav) {
                 modifier = Modifier.weight(1f).padding(horizontal = 14.dp).focusRequesterSafe(fr),
                 decorationBox = { inner -> Box { if (q.isEmpty()) T("Kanal, film, serija, emisija ili broj", 16.sp, Color(0xFF6B7280)); inner() } })
             // clear the search
-            if (q.isNotEmpty()) Focusable(onClick = { SearchHistory.add(q); q = ""; query = ""; fr.tryFocus() }, shape = Pill, normal = Color.Transparent, focused = Color(0x1F000000),
+            if (q.isNotEmpty()) Focusable(onClick = { SearchHistory.add(q); q = ""; query = ""; try { fr.requestFocus() } catch (_: Exception) {} }, shape = Pill, normal = Color.Transparent, focused = Color(0x1F000000),
                 zoom = 1f, modifier = Modifier.height(40.dp)) { _ ->
                 Row(Modifier.align(Alignment.Center).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Ico(R.drawable.lc_x, 16.dp, Color(0xFF374151)); T("Obriši", 13.sp, Color(0xFF374151))
