@@ -20,6 +20,7 @@ object Langs {
         Lang("bg", "Bugarski", "Български", R.drawable.flag_bg),
         Lang("ro", "Rumunski", "Română", R.drawable.flag_ro),
         Lang("ar", "Arapski", "العربية", R.drawable.flag_ar),
+        Lang("ru", "Ruski", "Русский", R.drawable.flag_ru),
     )
     /** languages for subtitles, audio and descriptions */
     val MEDIA = APP + listOf(
@@ -1971,6 +1972,7 @@ private val DICT: Map<String, Map<String, String>> by lazy {
             out.getOrPut(cols[i]) { HashMap() }[bs] = if (v == "=" || v.isEmpty()) bs else v
         }
     }
+    out["ru"] = HashMap<String, String>().also { m -> RU_TABLE.lineSequence().forEach { l -> val i = l.indexOf('|'); if (i > 0) m[l.substring(0, i)] = l.substring(i + 1) } }
     out
 }
 

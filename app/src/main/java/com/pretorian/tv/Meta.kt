@@ -266,7 +266,7 @@ object Subs {
 
     /** 2-letter code to the 3-letter one OpenSubtitles.org uses */
     private val OS3 = mapOf("bs" to "bos", "hr" to "hrv", "sr" to "scc", "en" to "eng", "de" to "ger", "tr" to "tur", "it" to "ita",
-        "bg" to "bul", "ro" to "rum", "ar" to "ara", "fr" to "fre", "es" to "spa", "sl" to "slv", "mk" to "mac")
+        "bg" to "bul", "ro" to "rum", "ar" to "ara", "fr" to "fre", "es" to "spa", "sl" to "slv", "mk" to "mac", "ru" to "rus")
 
     /** the Podnapisi address that answered last (some networks resolve only one of them) */
     @Volatile private var podHost = "https://www.podnapisi.net"
@@ -450,7 +450,7 @@ object Subs {
     fun langName(code: String) = when (code) {
         "bs" -> "Bosanski"; "hr" -> "Hrvatski"; "sr" -> "Srpski"; "en" -> "Engleski"; "de" -> "Njemački"
         "sl" -> "Slovenski"; "mk" -> "Makedonski"; "tr" -> "Turski"; "it" -> "Italijanski"; "ro" -> "Rumunski"
-        "bg" -> "Bugarski"; "ar" -> "Arapski"; "fr" -> "Francuski"; "es" -> "Španski"
+        "bg" -> "Bugarski"; "ar" -> "Arapski"; "fr" -> "Francuski"; "es" -> "Španski"; "ru" -> "Ruski"
         else -> code.uppercase()
     }
 }

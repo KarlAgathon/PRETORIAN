@@ -37,7 +37,7 @@ def args(src, start):
 missing, templated = {}, {}
 LATIN_OK = set(open(os.path.join(os.path.dirname(__file__), 'i18n_latin_ok.txt'), encoding='utf-8').read().split())
 for fn in sorted(os.listdir(SRC)):
-    if not fn.endswith('.kt') or fn == 'I18n.kt': continue
+    if not fn.endswith('.kt') or fn in ('I18n.kt', 'I18nRu.kt'): continue
     src = open(os.path.join(SRC, fn), encoding='utf-8').read()
     texts = []
     for m in re.finditer(CALLS, src):
@@ -60,7 +60,7 @@ for k in known:
         if len(w) >= 3: bswords.add(w)
 bswords -= set(open(os.path.join(os.path.dirname(__file__), 'i18n_shared_words.txt'), encoding='utf-8').read().split())
 for fn in sorted(os.listdir(SRC)):
-    if not fn.endswith('.kt') or fn == 'I18n.kt': continue
+    if not fn.endswith('.kt') or fn in ('I18n.kt', 'I18nRu.kt'): continue
     for ln, line in enumerate(open(os.path.join(SRC, fn), encoding='utf-8'), 1):
         st = line.strip()
         if 'Regex(' in line or st.startswith('//') or st.startswith('*') or st.startswith('/**') or 'i18n-ignore' in line: continue

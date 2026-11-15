@@ -1691,7 +1691,7 @@ private fun LookV2(openSub: (String) -> Unit) {
 private fun PlayerV2(openSub: (String) -> Unit) {
     val ctx = LocalContext.current
     var rev by remember { mutableIntStateOf(0) }
-    val langs = listOf("bs", "hr", "sr", "en", "de", "tr", "it", "ro", "bg", "ar")
+    val langs = listOf("bs", "hr", "sr", "en", "de", "tr", "it", "ro", "bg", "ar", "ru")
     key(rev) {
         SetPage("Plejer") {
             // how a subtitle will look, with the chosen size and style
