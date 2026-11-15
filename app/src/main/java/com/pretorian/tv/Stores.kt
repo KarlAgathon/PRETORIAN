@@ -155,7 +155,11 @@ object Reminders {
     /** the reminder showing on screen now */
     var showing by mutableStateOf<Reminder?>(null)
 
-    var before: Int get() = Prefs.str("rem_before", "5").toIntOrNull() ?: 5; set(v) = Prefs.put("rem_before", v.toString())
+    var before: Int get() = offsets().maxOrNull() ?: 5; set(v) = Prefs.put("rem_before", v.toString())
+    /** minutes before the start, several at once (e.g. 30 and 5); one place for shows and matches */
+    fun offsets(): List<Int> = Prefs.str("rem_offsets").ifBlank { Prefs.str("rem_before", "5") }.split(',').mapNotNull { it.trim().toIntOrNull() }.distinct().sortedDescending().ifEmpty { listOf(5) }
+    fun setOffsets(l: List<Int>) = Prefs.put("rem_offsets", l.ifEmpty { listOf(0) }.joinToString(","))
+    private fun firedSet(): MutableSet<String> = Prefs.str("rem_fired").split(',').filter { it.isNotBlank() }.toMutableSet()
     var popupSec: Int get() = Prefs.str("rem_popup", "20").toIntOrNull() ?: 20; set(v) = Prefs.put("rem_popup", v.toString())
     /** 0 = only remind, 1 = switch to the channel */
     var action: Int get() = Prefs.str("rem_action", "0").toIntOrNull() ?: 0; set(v) = Prefs.put("rem_action", v.toString())
@@ -184,12 +188,20 @@ object Reminders {
     fun add(r: Reminder) = save(all().filter { !(it.title == r.title && it.start == r.start) } + r)
     fun remove(id: String) = save(all().filter { it.id != id })
     fun toggle(r: Reminder): Boolean = if (has(r.title, r.start)) { save(all().filter { !(it.title == r.title && it.start == r.start) }); false } else { add(r); true }
-    fun markFired(id: String) = save(all().map { if (it.id == id) it.copy(fired = true) else it })
+    /** marks every reminder time that has come for [id]; the reminder is done after its last (smallest) time */
+    fun markFired(id: String) {
+        val r = all().firstOrNull { it.id == id } ?: return
+        val now = System.currentTimeMillis()
+        val f = firedSet(); offsets().filter { r.start - it * 60_000L <= now }.forEach { f.add("$id|$it") }
+        Prefs.put("rem_fired", f.filter { k -> all().any { k.startsWith(it.id + "|") } }.joinToString(","))
+        if (offsets().all { "$id|$it" in f }) save(all().map { if (it.id == id) it.copy(fired = true) else it }) else rev++
+    }
 
     /** reminders whose time has come and that were not shown yet */
     fun due(): List<Reminder> {
         val now = System.currentTimeMillis()
-        return all().filter { !it.fired && it.start - before * 60_000L <= now && it.start + 30 * 60_000L > now }
+        val f = firedSet()
+        return all().filter { r -> !r.fired && r.start + 30 * 60_000L > now && offsets().any { o -> r.start - o * 60_000L <= now && "${r.id}|$o" !in f } }
     }
 }
 

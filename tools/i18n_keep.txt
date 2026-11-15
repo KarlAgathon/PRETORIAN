@@ -361,3 +361,48 @@ pretorian_update_log_
 upd_log_seen
 upd_log
 Provider
+ MB
+ h
+ s · 
+%.1f s
++0,1 s
++1 s
+−0,1 s
+−1 s
+OK ›
+adult_lock
+home
+net_test_at
+speed_vpn_at
+standardni_prikaz.json
+stream_log
+✓ SYNC
+speed_norm_at
+auto_refresh
+auto_refresh_at
+epg_shift
+buffer_mb
+recover_wait2
+home_rows
+home_off
+rem_offsets
+rem_fired
+upd_channel
+upd_part
+subfix_
+adult_lock_gen
+std_view_done
+net_mbps
+net_kind
+sync_
+pretorian_sync.json
+sync_hash
+sync
+Uptime
+beta
+stable
+red
+red star belgrade
+_sync
+https://github.com/KarlAgathon/PRETORIAN/releases/download/beta/update.json
+com.liskovsoft.smarttubetv.beta

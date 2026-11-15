@@ -97,16 +97,19 @@ fun buildPlayer(ctx: Context, preview: Boolean = false): ExoPlayer {
     val builder = ExoPlayer.Builder(ctx, renderers)
         .setMediaSourceFactory(DefaultMediaSourceFactory(ctx).setDataSourceFactory(DefaultDataSource.Factory(ctx, http)))
     // the small picture starts as soon as half a second is loaded
-    // memory limits: the buffer lives in the app's memory, so it is capped (Lite 32 MB, Full 64 MB, slow internet 96 MB)
+    // buffer from Settings › Player (automatic: from the box and the internet); it lives in the app's memory, so it is capped
     if (preview) builder.setLoadControl(androidx.media3.exoplayer.DefaultLoadControl.Builder()
         .setBufferDurationsMs(2_000, 15_000, 500, 1_000).setTargetBufferBytes(if (Perf.lite) 6 shl 20 else 12 shl 20).build())
-    // "slow internet": a bigger buffer, starts a little later but stops less often
-    else if (Prefs.bool("slow_net")) builder.setLoadControl(androidx.media3.exoplayer.DefaultLoadControl.Builder()
-        .setBufferDurationsMs(30_000, 120_000, 3_000, 6_000).setTargetBufferBytes(if (Perf.lite) 48 shl 20 else 96 shl 20).build())
-    else if (Perf.lite) builder.setLoadControl(androidx.media3.exoplayer.DefaultLoadControl.Builder()
-        .setBufferDurationsMs(15_000, 20_000, 1_500, 3_000).setTargetBufferBytes(32 shl 20).setPrioritizeTimeOverSizeThresholds(false).build())
-    else builder.setLoadControl(androidx.media3.exoplayer.DefaultLoadControl.Builder()
-        .setTargetBufferBytes(64 shl 20).setPrioritizeTimeOverSizeThresholds(false).build())
+    else {
+        val mb = Buffer.mb
+        val lc = androidx.media3.exoplayer.DefaultLoadControl.Builder().setTargetBufferBytes(mb shl 20).setPrioritizeTimeOverSizeThresholds(false)
+        when {
+            mb <= 32 -> lc.setBufferDurationsMs(15_000, 20_000, 1_500, 3_000)
+            mb >= 96 -> lc.setBufferDurationsMs(30_000, 120_000, 3_000, 6_000)
+            else -> {}
+        }
+        builder.setLoadControl(lc.build())
+    }
     val player = builder.build()
     val audio = Prefs.audioLangs.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toTypedArray()
     val b = player.trackSelectionParameters.buildUpon()
@@ -326,14 +329,14 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         val l = object : Player.Listener {
             override fun onPlayerError(e: PlaybackException) {
                 // automatic recovery: up to 3 quiet tries (live and films), keeping the position of a film
-                if (Recover.on && reconnect < 3) { reconnect++; Stats.recovery(); retryToken++ }
+                if (Recover.on && reconnect < 4) { reconnect++; Stats.recovery(); StreamLog.add(listOf(items.getOrNull(index)?.title ?: "", " · ", e.errorCodeName.removePrefix("ERROR_CODE_"), " · ", trf("spajam ponovo (%s/4)", reconnect)).joinToString("")); retryToken++ }  // i18n-ignore
                 else if (!Recover.on && s.live && reconnect < 3) { reconnect++; retryToken++ }
                 else if (!Recover.on && !s.live && !retried) { retried = true; retryToken++ }
                 else { reconnect = 0; error = errorText(e, s.live) }
             }
             override fun onPlaybackStateChanged(state: Int) {
                 buffering = state == Player.STATE_BUFFERING
-                if (state == Player.STATE_READY) { error = null; reconnect = 0; readyOnce[0] = true }
+                if (state == Player.STATE_READY) { if (reconnect > 0) StreamLog.add(listOf(items.getOrNull(index)?.title ?: "", " · ", tr("radi ponovo ✓")).joinToString("")); error = null; reconnect = 0; readyOnce[0] = true }  // i18n-ignore
                 if (state == Player.STATE_ENDED && !s.live) { saveProgress(done = true); if (index < n - 1 && Prefs.bool("next_ep", true)) index++ }
             }
             override fun onIsPlayingChanged(isPlaying: Boolean) { playing = isPlaying }
@@ -370,7 +373,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         }
         error = null; retried = false; showInfo = true; videoH = 0
         val cur = items[index]
-        subFile = cur.subFile
+        // a subtitle fixed with SYNC earlier for this film comes back by itself
+        subFile = cur.subFile ?: if (!s.live) SubSync.kept(cur.url) else null
         val saved = if (!s.live) Watch.get(ctx, cur.url) else null
         val rm = Prefs.str("resume_mode", "0")
         if (saved != null && saved.started && cur.subFile == null && rm == "0") { resume = saved; loadMedia(cur, subFile, saved.pos, play = false) }
@@ -384,6 +388,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         if (retryToken == 0) return@LaunchedEffect
         delay(if (Recover.on) when (reconnect) { 1 -> 300L; 2 -> 1500L; else -> 3000L }
               else if (s.live) when (reconnect) { 2 -> 5000L; 3 -> 10_000L; else -> 2000L } else 2000L)
+        // the last try is the hand trick: close the stream completely and open it again, like going to another channel and back
+        if (Recover.on && reconnect >= 3) { try { player.stop(); player.clearMediaItems() } catch (_: Exception) {}; delay(400) }
         loadMedia(items[index], subFile, if (s.live) 0L else player.currentPosition)
     }
     LaunchedEffect(showInfo, index, playing, bar) { if (showInfo && !bar && (s.live || playing)) { delay(5000); showInfo = false } }
@@ -397,15 +403,31 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         }
     }
     // a stream that freezes (no progress for a few seconds) is quietly connected again, like switching away and back
+    // three signs of a frozen stream: the time stops, the picture stops (time still running) or no new data comes in
     LaunchedEffect(index) {
-        var last = -1L; var stuck = 0L
+        var last = -1L; var lastFrames = -1; var lastBuf = -1L; var stuck = 0L; var why = ""
         while (true) {
-            delay(1000)
-            if (!Recover.on || error != null || resume != null || !player.playWhenReady || saver || !readyOnce[0]) { stuck = 0; last = -1; continue }
+            delay(500)
+            if (!Recover.on || error != null || resume != null || !player.playWhenReady || saver || !readyOnce[0]) { stuck = 0; last = -1; lastFrames = -1; continue }
             val pos = player.currentPosition
-            if (pos == last && (player.playbackState == Player.STATE_BUFFERING || player.playbackState == Player.STATE_READY)) stuck += 1000 else stuck = 0
-            last = pos
-            if (stuck >= Recover.waitMs && reconnect < 3) { stuck = 0; reconnect++; Stats.recovery(); retryToken++ }
+            val counters = player.videoDecoderCounters?.also { it.ensureUpdated() }
+            val frames = counters?.renderedOutputBufferCount ?: -1
+            val buf = player.bufferedPosition
+            val state = player.playbackState
+            val active = state == Player.STATE_BUFFERING || state == Player.STATE_READY
+            val timeStuck = pos == last
+            val picStuck = videoH > 0 && frames >= 0 && frames == lastFrames && state == Player.STATE_READY
+            val dur = player.duration
+            val dataStuck = buf == lastBuf && player.totalBufferedDuration < 800 && (dur <= 0 || buf < dur - 3000)
+            if (active && (timeStuck || picStuck || dataStuck)) {
+                stuck += 500; why = if (picStuck && !timeStuck) "slika stoji" else if (timeStuck) "vrijeme stoji" else "ne stižu podaci"
+            } else stuck = 0
+            last = pos; lastFrames = frames; lastBuf = buf
+            if (stuck >= Recover.waitMs && reconnect < 4) {
+                stuck = 0; reconnect++; Stats.recovery()
+                StreamLog.add(listOf(items.getOrNull(index)?.title ?: "", " · ", tr(why), " · ", trf("spajam ponovo (%s/4)", reconnect)).joinToString(""))  // i18n-ignore
+                retryToken++
+            }
         }
     }
     LaunchedEffect(index) { if (!s.live) while (true) { delay(15_000); if (player.isPlaying) saveProgress() } }
@@ -699,12 +721,28 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             }
             OptionRow("Audio", R.drawable.lc_volume, value = tracksOf(player, MC.TRACK_TYPE_AUDIO).firstOrNull { it.selected }?.label ?: "—") { dialog = "audio" }
             OptionRow("Titlovi", R.drawable.lc_captions, value = if (subFile != null) tr("Učitan") else tracksOf(player, MC.TRACK_TYPE_TEXT).firstOrNull { it.selected }?.label ?: tr("Isključeni")) { dialog = "subs" }
+            if (!s.live && subFile != null) OptionRow("Podesi vrijeme titla", R.drawable.lc_clock, sub = "ako titl kasni ili žuri · SYNC") { dialog = "subsync" }
             OptionRow("Format slike", R.drawable.lc_monitor, value = tr(listOf("Prilagodi", "Zumiraj", "Rastegni")[resize])) { resize = (resize + 1) % 3 }
             OptionRow("Kvalitet i informacije", R.drawable.lc_info, value = if (videoH > 0) qualityLabel(videoH) else null) { dialog = "info" }
             if (!s.live) OptionRow("Eksterni player", R.drawable.lc_external_link) { player.pause(); saveProgress(); dialog = "ext" }
         }
         "fav" -> item.channel?.let { FavPicker(it) { dialog = null } }
         "ext" -> ExternalPicker(item.url, item.title, player.currentPosition, onDismiss = { dialog = null })
+        "subsync" -> {
+            val base = remember { subFile }
+            if (base == null) dialog = null
+            else SubSyncDialog(File(base).nameWithoutExtension.take(30), onDismiss = { dialog = null },
+                onPreview = { off -> if (off != 0L) try { val f = SubSync.shift(base, off); subFile = f.path; loadMedia(item, f.path, player.currentPosition) } catch (_: Exception) {} },
+                onSync = { off ->
+                    try {
+                        val f = SubSync.sync(item.url, base, player.currentPosition, off)
+                        subFile = f.path; loadMedia(item, f.path, player.currentPosition)
+                        Toast.makeText(ctx, tr("Titl usklađen i snimljen za ovaj film"), Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) { Toast.makeText(ctx, tr("Ovaj titl se ne može uskladiti"), Toast.LENGTH_LONG).show() }
+                    dialog = null
+                },
+                onReset = { subFile = base; loadMedia(item, base, player.currentPosition) })
+        }
         "audio" -> {
             val tracks = tracksOf(player, MC.TRACK_TYPE_AUDIO)
             Popup("Audio", onDismiss = { dialog = null }) {

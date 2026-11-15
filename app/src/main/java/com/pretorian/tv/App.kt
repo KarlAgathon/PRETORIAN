@@ -74,6 +74,7 @@ class MainActivity : ComponentActivity() {
         Profiles.onStart(this)
         SportsAI.dir = cacheDir
         AutoTranslate.dir = filesDir
+        StandardView.onFirstStart(this)   // a new install starts with the built-in standard view
         Look.load(this)
         onyxMigrate(this)
         Perf.init(this)
@@ -165,7 +166,7 @@ class Nav(
     val playlistsChanged: () -> Unit,
 )
 
-object BuildInfo { const val VERSION = "0.9.4" }
+object BuildInfo { const val VERSION = "0.9.5" }
 
 @Composable
 fun PretorianApp() {
@@ -214,6 +215,8 @@ fun PretorianApp() {
             Store.actives(ctx).forEach { p -> try { NewContent.scan(ctx, p) } catch (_: Exception) {} }
             try { Follow.check(ctx) } catch (_: Exception) {}
             try { Sports.remindTeams() } catch (_: Exception) {}
+            // playlist and EPG refresh by themselves: at night (around 4:00) or every 12 / 24 hours (Settings › Playlists)
+            try { if (AutoRefresh.due()) AutoRefresh.run(ctx) { nav.playlistsChanged() } } catch (_: Exception) {}
             delay(3600_000L)
         }
     }
@@ -260,6 +263,8 @@ fun PretorianApp() {
     }
     // time the app is open, and the counters written down once a minute
     LaunchedEffect(Unit) { while (true) { delay(60_000); Stats.uptime(60_000); Stats.saveIfDirty() } }
+    // internet speed for the automatic buffer: first start, a new network, or once a week (a 3-second test, nothing visible)
+    LaunchedEffect(Unit) { delay(20_000); try { NetProfile.refresh(ctx) } catch (_: Exception) {} }
 
     val scheme = if (C.IsLight) lightColorScheme(primary = C.Red, background = C.Bg, surface = C.Bg)
                  else darkColorScheme(primary = C.Red, background = C.Bg, surface = C.Bg)

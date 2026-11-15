@@ -196,8 +196,10 @@ fun platformOf(id: String, m: Meta?) = Platforms.norm(VodMemory.catOf[id]) ?: m?
 
 /** The streaming platform as a coloured chip: from the provider category name, else what TMDB says; nothing when unknown. */
 @Composable
-private fun PlatformChip(id: String, m: Meta?, size: androidx.compose.ui.unit.TextUnit) {
-    val label = platformOf(id, m) ?: return
+private fun PlatformChip(id: String, m: Meta?, size: androidx.compose.ui.unit.TextUnit, name: String = "", tv: Boolean = false) {
+    // TMDB does not know it: ask the AI once (when a key is set); nothing is shown when it is not sure either
+    val ai by load(id, m?.studio, name) { if (platformOf(id, m) == null && m != null && name.isNotBlank()) SportsAI.platform(cleanTitle(name).first, m.year, tv) else null }
+    val label = platformOf(id, m) ?: (ai as? Load.Ok)?.value ?: return
     Box(Modifier.clip(Rnd(5.dp)).background(Color(Platforms.color(label))).padding(horizontal = 7.dp, vertical = 2.dp)) {
         T(label.uppercase(), size, Color.White, FontWeight.ExtraBold)  // i18n-ignore
     }
@@ -231,7 +233,9 @@ fun OnyxMovieDetail(v: Vod, nav: Nav) {
         val pw = ((maxHeight - 110.dp) * (2f / 3f)).coerceIn(150.dp, 280.dp)
         Column(Modifier.fillMaxSize().padding(start = 32.dp, end = 32.dp, top = 6.dp, bottom = 12.dp)) {
             Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                BigPoster(m?.poster ?: v.poster, v.id, rating, listOfNotNull(qualityOf(v.name)), pw)
+                // picture and sound marks: 4K, HDR, 5.1, Dolby Atmos (from the provider's file info, else from the name)
+                val marks = (i?.marks ?: emptyList()).ifEmpty { listOfNotNull(qualityOf(v.name)) }
+                BigPoster(m?.poster ?: v.poster, v.id, rating, marks.filter { it in listOf("4K", "FHD", "HD", "HDR") }, pw)  // i18n-ignore
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Kicker("Film", C.Soft, size = 11.sp)
                     T(title, 32.sp, C.Text, FontWeight.ExtraBold, maxLines = 2)
@@ -240,7 +244,11 @@ fun OnyxMovieDetail(v: Vod, nav: Nav) {
                         val parts = listOfNotNull((m?.year ?: i?.year)?.take(4), fmtMin(mins).ifBlank { null }, translated(m?.genres ?: i?.genre)?.take(40))
                         val plat = platformOf(v.id, m)
                         T(parts.joinToString(" – ") + if (plat != null) " –" else "", 14.sp, C.Soft, FontWeight.SemiBold)
-                        PlatformChip(v.id, m, 11.sp)
+                        PlatformChip(v.id, m, 11.sp, v.name)
+                    }
+                    val sound = (i?.marks ?: emptyList()).filter { it !in listOf("4K", "FHD", "HD") }  // i18n-ignore
+                    if (sound.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        sound.forEach { DBadge(it, bg = Color.White.copy(alpha = 0.12f)) }
                     }
                     val plot = translated(m?.overview ?: i?.plot)
                     T(plot ?: if (meta is Load.Loading) "Učitavam opis…" else " ", 14.sp, C.Soft, maxLines = 4)
@@ -344,7 +352,7 @@ fun OnyxSeriesDetail(s: SeriesItem, nav: Nav) {
                         translated(m?.genres)?.take(40))
                     val plat = platformOf(s.id, m)
                     T(parts.joinToString(" – ") + if (plat != null) " –" else "", 13.sp, C.Soft, FontWeight.SemiBold)
-                    PlatformChip(s.id, m, 10.sp)
+                    PlatformChip(s.id, m, 10.sp, s.name, tv = true)
                 }
                 T(translated(m?.overview ?: s.plot) ?: " ", 12.sp, C.Soft, maxLines = 2)
                 Row(Modifier.horizontalScroll(rememberScrollState()).padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {

@@ -145,6 +145,12 @@ class Ovr(private val ctx: Context, private val pid: String) {
             if (adult.isNotEmpty()) setHidden(kind, adult, true)
             setList("adultDone", list("adultDone") + kind)
         }
+        // adult groups (XXX, Adult, 18+…) are locked with the PIN by themselves, once per playlist and kind; unlock them in the group menu
+        val tag = kind + ":" + Prefs.long("adult_lock_gen", 0)
+        if (raw.isNotEmpty() && Prefs.bool("adult_lock", true) && !list("adultLockDone").contains(tag)) {
+            raw.filter { ADULT.containsMatchIn(it.name) && !isLocked(kind, it.id) }.forEach { toggleLocked(kind, it.id) }
+            setList("adultLockDone", list("adultLockDone") + tag)
+        }
         val merged = customGroups(kind) + raw
         val order = list("gOrder_$kind")
         val sorted = merged.withIndex().sortedBy { (i, g) -> order.indexOf(g.id).let { if (it < 0) 100_000 + i else it } }.map { it.value }

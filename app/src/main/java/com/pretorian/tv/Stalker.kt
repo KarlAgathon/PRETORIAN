@@ -27,9 +27,10 @@ class Stalker(private val p: Playlist) {
             if (!isLink(url)) return@withContext url
             val pid = url.removePrefix("stalker://").substringBefore('/')
             val kind = url.substringAfter("$pid/").substringBefore('?')
-            val cmd = java.net.URLDecoder.decode(url.substringAfter("cmd=", ""), "UTF-8")
+            val cmd = java.net.URLDecoder.decode(url.substringAfter("cmd=", "").substringBefore("&series="), "UTF-8")
+            val series = url.substringAfter("&series=", "").toIntOrNull()
             val p = Store.byId(ctx, pid) ?: Store.active(ctx) ?: throw IllegalStateException("Playlist")  // i18n-ignore
-            Stalker(p).link(kind, cmd)
+            Stalker(p).link(kind, cmd, series)
         }
 
         /** a random-looking but fixed MAC in the MAG range for this box */
@@ -145,9 +146,53 @@ class Stalker(private val p: Playlist) {
         out
     }
 
+    /* ---------------- series: categories, the series of one, then seasons with their episode numbers */
+
+    fun seriesCategories(): List<Category> = withLogin {
+        val a = call("type=series&action=get_categories").optJSONArray("js") ?: JSONArray()
+        (0 until a.length()).mapNotNull { a.optJSONObject(it) }.filter { it.optString("id") != "*" }.map { Category(it.optString("id"), it.optString("title")) }
+    }
+
+    fun series(cat: String): List<SeriesItem> = withLogin {
+        val out = ArrayList<SeriesItem>()
+        var page = 1
+        while (page <= 40) {
+            val js = call("type=series&action=get_ordered_list&category=${enc(cat)}&genre=*&sortby=added&p=$page").optJSONObject("js") ?: break
+            val a = js.optJSONArray("data") ?: break
+            if (a.length() == 0) break
+            for (i in 0 until a.length()) {
+                val o = a.optJSONObject(i) ?: continue
+                out += SeriesItem(o.optString("id"), o.optString("name"), o.optString("screenshot_uri").ifBlank { null }?.let { abs(it) },
+                    o.optString("description").ifBlank { null }, o.optString("rating_imdb").ifBlank { null })
+            }
+            val total = js.optInt("total_items"); val per = js.optInt("max_page_items", 14).coerceAtLeast(1)
+            if (page * per >= total) break
+            page++
+        }
+        out
+    }
+
+    /** seasons come as items with a list of episode numbers; each episode plays with the season's command + its number */
+    fun episodes(seriesId: String): List<Episode> = withLogin {
+        val out = ArrayList<Episode>()
+        val js = call("type=series&action=get_ordered_list&movie_id=${enc(seriesId)}&season_id=0&episode_id=0&p=1").optJSONObject("js") ?: return@withLogin out
+        val a = js.optJSONArray("data") ?: return@withLogin out
+        for (i in 0 until a.length()) {
+            val o = a.optJSONObject(i) ?: continue
+            val season = Regex("\\d+").find(o.optString("name"))?.value?.toIntOrNull() ?: (i + 1)
+            val nums = o.optJSONArray("series") ?: JSONArray()
+            val cmd = o.optString("cmd")
+            for (k in 0 until nums.length()) {
+                val n = nums.optInt(k)
+                out += Episode(o.optString("id") + "_" + n, season, n, "", listOf("stalker://", p.id, "/vod?cmd=", enc(cmd), "&series=", n).joinToString(""), null)
+            }
+        }
+        out.sortedWith(compareBy({ it.season }, { it.num }))
+    }
+
     /** the stream address for a channel or film command */
-    fun link(kind: String, cmd: String): String = withLogin {
-        val r = call("type=$kind&action=create_link&cmd=${enc(cmd)}&series=&forced_storage=0&disable_ad=0&download=0")
+    fun link(kind: String, cmd: String, series: Int? = null): String = withLogin {
+        val r = call("type=$kind&action=create_link&cmd=${enc(cmd)}&series=${series ?: ""}&forced_storage=0&disable_ad=0&download=0")
         val c = r.optJSONObject("js")?.optString("cmd").orEmpty()
         clean(c.ifBlank { cmd }).ifBlank { throw IllegalStateException(tr("Portal nije dao link")) }
     }

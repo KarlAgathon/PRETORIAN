@@ -62,7 +62,29 @@ data class Episode(val id: String, val season: Int, val num: Int, val title: Str
 data class VodInfo(
     val plot: String?, val genre: String?, val year: String?, val duration: String?,
     val cast: String?, val director: String?, val backdrop: String?, val rating: String?,
+    /** picture and sound from the provider's file info: "4K", "HDR", "5.1", "Atmos"… */
+    val marks: List<String> = emptyList(),
 )
+
+/** "4K · HDR · 5.1 · Dolby Atmos" from the video / audio info a provider gives (ffprobe style). */
+fun avMarks(video: JSONObject?, audio: JSONObject?): List<String> {
+    val out = ArrayList<String>()
+    val h = video?.optInt("height") ?: 0
+    if (h >= 2000) out += "4K" else if (h >= 1000) out += "FHD" else if (h >= 700) out += "HD"  // i18n-ignore
+    val tr = (video?.optString("color_transfer") ?: "").lowercase()
+    if (tr.contains("smpte2084") || tr.contains("arib-std-b67")) out += "HDR"  // i18n-ignore
+    val ch = audio?.optInt("channels") ?: 0
+    val codec = (audio?.optString("codec_name") ?: "").lowercase()
+    val prof = (audio?.optString("profile") ?: "").lowercase()
+    if (ch >= 8) out += "7.1" else if (ch >= 6) out += "5.1"  // i18n-ignore
+    when {
+        prof.contains("atmos") || prof.contains("joc") -> out += "Dolby Atmos"  // i18n-ignore
+        codec == "truehd" -> out += "Dolby TrueHD"  // i18n-ignore
+        codec == "eac3" || codec == "ac3" -> out += "Dolby"  // i18n-ignore
+        codec.startsWith("dts") -> out += "DTS"  // i18n-ignore
+    }
+    return out
+}
 data class EpgItem(val title: String, val desc: String?, val start: Long, val end: Long, val server: String? = null, val archived: Boolean = false) {
     fun times(): String {
         val f = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
@@ -379,6 +401,7 @@ class Xtream(private val p: Playlist) {
             director = i.str("director").orNullIfBlank(),
             backdrop = backdrop?.orNullIfBlank() ?: i.str("movie_image").orNullIfBlank(),
             rating = i.str("rating").orNullIfBlank(),
+            marks = avMarks(i.optJSONObject("video"), i.optJSONObject("audio")),
         )
     }
 
@@ -531,18 +554,25 @@ object Repo {
     }
 
     suspend fun seriesGroups(p: Playlist): List<Category> =
-        if (p.type == SourceType.XTREAM) cached("sg_${p.id}") { Xtream(p).seriesCategories() } else emptyList()
+        if (p.type == SourceType.XTREAM) cached("sg_${p.id}") { Xtream(p).seriesCategories() }
+        else if (p.type == SourceType.STALKER) cached("sg_${p.id}") { Stalker(p).seriesCategories() } else emptyList()
 
-    suspend fun series(p: Playlist, groupId: String): List<SeriesItem> = cached("se_${p.id}_$groupId") { Xtream(p).series(groupId) }
+    suspend fun series(p: Playlist, groupId: String): List<SeriesItem> = cached("se_${p.id}_$groupId") {
+        if (p.type == SourceType.STALKER) Stalker(p).series(groupId) else Xtream(p).series(groupId)
+    }
 
-    suspend fun episodes(p: Playlist, id: String): List<Episode> = cached("ep_${p.id}_$id") { Xtream(p).episodes(id) }
+    suspend fun episodes(p: Playlist, id: String): List<Episode> = cached("ep_${p.id}_$id") {
+        if (p.type == SourceType.STALKER) Stalker(p).episodes(id) else Xtream(p).episodes(id)
+    }
 
     suspend fun epg(p: Playlist, ch: Channel, limit: Int = 10): List<EpgItem> {
         val provider = cached("epg_${p.id}_${ch.url}_$limit") {
             if (p.type != SourceType.XTREAM || ch.id.isBlank() || !ch.url.contains("/live/")) emptyList() else try { Xtream(p).epg(ch.id, limit) } catch (e: Exception) { emptyList() }
         }
-        if (provider.isNotEmpty() || !EpgSources.any) return provider
-        return try { OwnGuide.of(ch.epg, ch.name, p.id).take(limit) } catch (e: Exception) { emptyList() }
+        val sh = EpgShift.ms
+        fun List<EpgItem>.shifted() = if (sh == 0L) this else map { it.copy(start = it.start + sh, end = it.end + sh) }
+        if (provider.isNotEmpty() || !EpgSources.any) return provider.shifted()
+        return try { OwnGuide.of(ch.epg, ch.name, p.id).take(limit).shifted() } catch (e: Exception) { emptyList() }
     }
 
     suspend fun nowNext(p: Playlist, ch: Channel): List<Pair<String, String>> = epg(p, ch, 4).take(2).map { it.title to it.times() }

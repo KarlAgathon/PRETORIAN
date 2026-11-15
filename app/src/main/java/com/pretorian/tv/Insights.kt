@@ -253,20 +253,21 @@ fun MenuSaver(inPlayer: Boolean) {
 /* ============================================================== shared card */
 
 @Composable
-fun InfoCard(label: String, title: String, sub: String?, icon: Int, color: Color, modifier: Modifier = Modifier, minH: Dp = 96.dp,
+fun InfoCard(label: String, title: String, sub: String?, icon: Int, color: Color, modifier: Modifier = Modifier, minH: Dp = 80.dp,
              bar: Float? = null, onClick: (() -> Unit)? = null, titleColor: Color = C.Text, action: (@Composable () -> Unit)? = null,
              extra: (@Composable ColumnScope.() -> Unit)? = null) {
     val inner: @Composable (Boolean) -> Unit = { f ->
-        Row(Modifier.fillMaxWidth().then(if (f) Modifier.border(2.dp, Color.White, Rnd(16.dp)) else Modifier).padding(14.dp),
+        Row(Modifier.fillMaxWidth().then(if (f) Modifier.border(2.dp, Color.White, Rnd(16.dp)) else Modifier).padding(horizontal = 14.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(Modifier.size(38.dp).clip(Rnd(11.dp)).background(color), contentAlignment = Alignment.Center) { Ico(icon, 19.dp, Color.White) }
+            Box(Modifier.size(34.dp).clip(Rnd(10.dp)).background(color), contentAlignment = Alignment.Center) { Ico(icon, 17.dp, Color.White) }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Kicker(label, C.Muted, size = 10.sp, modifier = Modifier.weight(1f))
+                    FitText(tr(label).uppercase(), 10.sp, C.Muted, FontWeight.SemiBold, Modifier.weight(1f), spacing = 1.5f)
                     action?.invoke()
                 }
-                T(title, 17.sp, titleColor, FontWeight.ExtraBold, maxLines = 2)
-                sub?.let { T(it, 12.sp, C.Soft, maxLines = 2) }
+                // one line each, the letters get a little smaller instead of breaking into a second line
+                FitText(tr(title), 16.sp, titleColor, FontWeight.ExtraBold)
+                sub?.let { FitText(tr(it), 12.sp, C.Soft) }
                 if (bar != null) ThinBar(bar, color, Modifier.fillMaxWidth().padding(top = 6.dp), 4.dp)
                 extra?.invoke(this)
             }
@@ -293,7 +294,10 @@ private fun KV(k: String, v: String, vc: Color = C.Text) {
 
 /** n cards per row; the last row is filled with empty space. */
 @Composable
-fun CardGrid(n: Int, items: List<@Composable (Modifier) -> Unit>) {
+fun CardGrid(want: Int, items: List<@Composable (Modifier) -> Unit>) {
+    // as many columns as fit: a card is never narrower than about 230 dp, so big text never breaks
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+    val n = (((maxWidth + 12.dp) / (230.dp + 12.dp)).toInt()).coerceIn(1, want)
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         items.chunked(n).forEach { row ->
             Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -301,6 +305,7 @@ fun CardGrid(n: Int, items: List<@Composable (Modifier) -> Unit>) {
                 repeat(n - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
+    }
     }
 }
 
@@ -327,7 +332,8 @@ fun DiagnosticsV2() {
         scope.launch {
             val r = NetInfo.speedTest()
             speed = r
-            if (r != null) Prefs.put(if (vpn) "speed_vpn" else "speed_norm", r)
+            if (r != null) { Prefs.put(if (vpn) "speed_vpn" else "speed_norm", r)
+                Prefs.put(if (vpn) "speed_vpn_at" else "speed_norm_at", SimpleDateFormat("dd.MM. HH:mm", Locale.US).format(Date())) }  // i18n-ignore
             testing = false
         }
     }
@@ -399,10 +405,15 @@ fun DiagnosticsV2() {
                     action = { SmallBtn(tr("↺ Reset")) { Stats.reset(listOf("b_tv", "b_ser", "b_mov")); rev++ } }) {
                     KV("TV", fmtGb(bTv)); KV(tr("Serije"), fmtGb(bSer)); KV(tr("Filmovi"), fmtGb(bMov))
                 } },
-                { m -> InfoCard("Brzina interneta", if (testing) tr("Mjerim…") else (speed ?: tr("Nije uspjelo")), if (vpn) tr("kroz VPN") else tr("normalno"),
-                    R.drawable.lc_gauge2, Color(0xFF06B6D4), m, action = { SmallBtn(tr("▶ Testiraj")) { runSpeed() } }) {
-                    KV(tr("Normalno"), if (vpn) Prefs.str("speed_norm").ifBlank { "—" } else speed ?: "—")
-                    KV("VPN", if (vpn) speed ?: "—" else tr("VPN nije aktivan"), if (vpn) C.Text else C.Muted)
+                { m -> InfoCard("Brzina interneta", if (vpn) tr("VPN je uključen") else tr("bez VPN-a"), null, R.drawable.lc_gauge2, Color(0xFF06B6D4), m) {
+                    // two rows, each with its own test: the VPN row only measures while a VPN is on
+                    val norm = Prefs.str("speed_norm"); val vp = Prefs.str("speed_vpn")
+                    SpeedRow("Normalna brzina", if (!vpn && testing) tr("Mjerim…") else norm.ifBlank { "—" },
+                        if (vpn) tr("zadnje mjerenje bez VPN-a · ugasi VPN za novo mjerenje") else (Prefs.str("speed_norm_at").ifBlank { null }?.let { tr("izmjereno") + " " + it } ?: ""),
+                        enabled = !vpn && !testing) { runSpeed() }
+                    SpeedRow("VPN brzina", if (!vpn) tr("VPN nije aktivan") else if (testing) tr("Mjerim…") else vp.ifBlank { "—" },
+                        if (!vpn) tr("uključi VPN na boxu pa testiraj") else (Prefs.str("speed_vpn_at").ifBlank { null }?.let { tr("izmjereno") + " " + it } ?: ""),
+                        enabled = vpn && !testing, dim = !vpn) { runSpeed() }
                 } },
                 { m -> InfoCard("Ažuriranja", trf("%s ovaj mjesec", updM), null, R.drawable.lc_refresh_cw, Color(0xFF8B5CF6), m,
                     action = { SmallBtn(tr("↺ Reset")) { Stats.reset(listOf("upd")); rev++ } }) {
@@ -475,8 +486,23 @@ fun DiagnosticsV2() {
 object NetInfo {
     fun vpn(ctx: Context): Boolean = try {
         val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
-        cm.getNetworkCapabilities(cm.activeNetwork)?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN) == true
+        val c = cm.getNetworkCapabilities(cm.activeNetwork)
+        c != null && c.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN) && !c.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
     } catch (e: Exception) { false }
+
+    /** Mbit/s and ping in ms, or null */
+    suspend fun measure(): Pair<Long, Long>? = withContext(Dispatchers.IO) {
+        try {
+            val t0 = System.currentTimeMillis()
+            val c = java.net.URL("https://speed.cloudflare.com/__down?bytes=8000000").openConnection() as java.net.HttpURLConnection  // i18n-ignore
+            c.connectTimeout = 5000; c.readTimeout = 5000
+            var n = 0L; val buf = ByteArray(32768); var ping = 0L; var first = 0L
+            c.inputStream.use { ins -> first = System.currentTimeMillis(); ping = first - t0; while (System.currentTimeMillis() - first < 3000) { val r = ins.read(buf); if (r < 0) break; n += r } }
+            c.disconnect()
+            val ms = (System.currentTimeMillis() - first).coerceAtLeast(1)
+            (n * 8 / 1000 / ms) to ping
+        } catch (e: Exception) { null }
+    }
 
     suspend fun speedTest(): String? = withContext(Dispatchers.IO) {
         try {
@@ -497,7 +523,52 @@ object NetInfo {
 /** Settings › Player › Automatic recovery. */
 object Recover {
     val on get() = Prefs.bool("recover_on", true)
-    val waitMs get() = listOf(3000L, 5000L, 10_000L)[Prefs.long("recover_wait", 1).toInt().coerceIn(0, 2)]
+    /** 0 automatic, 1 = 2 s, 2 = 3 s, 3 = 5 s */
+    val choice get() = Prefs.long("recover_wait2", 0).toInt().coerceIn(0, 3)
+    val waitMs get() = when (choice) { 1 -> 2000L; 2 -> 3000L; 3 -> 5000L; else -> NetProfile.autoWait }
+    val OPTIONS = listOf("Automatski", "2 s", "3 s", "5 s")
+}
+
+/** Player buffer: automatic from the box and the internet, or chosen by hand. */
+object Buffer {
+    /** 0 automatic, 1 small 32 MB, 2 medium 64 MB, 3 large 96 MB */
+    val choice get() = Prefs.long("buffer_mb", 0).toInt().coerceIn(0, 3)
+    val mb get() = when (choice) { 1 -> 32; 2 -> 64; 3 -> 96; else -> NetProfile.autoBuffer }
+    val OPTIONS = listOf("Automatski", "Mali · 32 MB", "Srednji · 64 MB", "Veliki · 96 MB")
+}
+
+/** What the app knows about this box's internet: last speed and how often streams stopped. */
+object NetProfile {
+    val mbps get() = Prefs.long("net_mbps", 0)
+    /** share of watching time spent buffering, last 7 days (0..1) */
+    fun stallShare(): Double { val w = Stats.sum("tv", 1) + Stats.sum("ser", 1) + Stats.sum("mov", 1); return if (w < 600_000) 0.0 else Stats.sum("stall", 1).toDouble() / w }
+    private val slow get() = (mbps in 1..9) || stallShare() > 0.05
+    val autoBuffer get() = if (Perf.lite) 32 else if (slow) 96 else 64
+    val autoWait get() = if (Perf.lite) 3000L else if (slow) 5000L else if (mbps >= 30 && stallShare() < 0.02) 2000L else 3000L
+    /** "Full box · 113 Mbit/s · stabilno" */
+    fun why(): String = listOf(if (Perf.lite) "Lite box" else "Full box", if (mbps > 0) listOf(mbps, " Mbit/s").joinToString("") else tr("brzina još nije izmjerena"),  // i18n-ignore
+        tr(if (slow) "nestabilno" else "stabilno")).joinToString(" · ")
+    /** speed test now and then: first start, a new network, or a week later */
+    suspend fun refresh(ctx: Context) {
+        val kind = try { val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+            cm.getNetworkCapabilities(cm.activeNetwork)?.let { c -> listOf(1, 3, 4).filter { c.hasTransport(it) }.joinToString(",") } ?: "" } catch (e: Exception) { "" }
+        val old = System.currentTimeMillis() - Prefs.long("net_test_at") > 7 * 86_400_000L
+        if (!old && kind == Prefs.str("net_kind") && mbps > 0) return
+        val r = NetInfo.measure() ?: return
+        Prefs.put("net_mbps", r.first); Prefs.put("net_test_at", System.currentTimeMillis()); Prefs.put("net_kind", kind)
+    }
+}
+
+/** Every freeze of a stream and what the automatic recovery did, for Settings › Diagnostics (the last 50). */
+object StreamLog {
+    var rev by mutableIntStateOf(0)
+    fun add(text: String) {
+        val t = SimpleDateFormat("dd.MM. HH:mm:ss", Locale.US).format(Date())  // i18n-ignore
+        val lines = (Prefs.str("stream_log").split('\n').filter { it.isNotBlank() } + (t + "  " + text)).takeLast(50)
+        Prefs.put("stream_log", lines.joinToString("\n")); rev++
+    }
+    fun lines() = Prefs.str("stream_log").split('\n').filter { it.isNotBlank() }
+    fun clear() { Prefs.put("stream_log", ""); rev++ }
 }
 
 /* ============================================================== Settings › About › This device */
@@ -612,4 +683,85 @@ private fun deviceCards(ctx: Context): List<DevCard> {
         listOf(tr("Način rada") to (if (Perf.lite) "Lite" else "Full"), tr("Ocjena uređaja") to listOf(Perf.score, "/100").joinToString(""),  // i18n-ignore
             tr("Preporuka") to tr(if (Perf.weak) "Lite (ispod 70 bodova ili manje od 3 GB RAM-a)" else "Full"), tr("Verzija") to BuildInfo.VERSION))
     return out
+}
+
+/** Playlist and EPG refresh by themselves (Settings › Playlists): 0 off, 1 at night around 4:00, 2 every 12 h, 3 every 24 h. */
+object AutoRefresh {
+    val OPTIONS = listOf("Isključeno", "Noću, oko 4:00", "Svakih 12 sati", "Svaka 24 sata")
+    val mode get() = Prefs.long("auto_refresh", 1).toInt().coerceIn(0, 3)
+    fun due(): Boolean {
+        val last = Prefs.long("auto_refresh_at", 0)
+        val now = System.currentTimeMillis()
+        return when (mode) {
+            1 -> java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY) in 3..5 && now - last > 12 * 3600_000L
+            2 -> now - last > 12 * 3600_000L
+            3 -> now - last > 24 * 3600_000L
+            else -> false
+        }
+    }
+    suspend fun run(ctx: Context, changed: () -> Unit) {
+        Prefs.put("auto_refresh_at", System.currentTimeMillis())
+        Repo.clear(); Repo.dropCatalogs()
+        Store.actives(ctx).forEach { p -> try { NewContent.scan(ctx, p, force = true) } catch (_: Exception) {} }
+        EpgSources.list().filter { it.on }.forEach { try { EpgSources.refresh(it) } catch (_: Exception) {} }
+        withContext(Dispatchers.Main) { changed() }
+    }
+}
+
+/** EPG time shift in hours (some providers are an hour early or late). */
+object EpgShift {
+    val hours get() = Prefs.long("epg_shift", 0).toInt().coerceIn(-12, 12)
+    val ms get() = hours * 3600_000L
+}
+
+
+/** Text in one line that shrinks a little (down to 75 %) instead of breaking or being cut. */
+@Composable
+fun FitText(text: String, size: androidx.compose.ui.unit.TextUnit, color: Color, weight: FontWeight = FontWeight.Normal, modifier: Modifier = Modifier, spacing: Float = 0f) {
+    var scale by remember(text, size) { mutableStateOf(1f) }
+    androidx.compose.material3.Text(text, modifier = modifier, maxLines = 1, softWrap = false, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        style = androidx.compose.ui.text.TextStyle(fontFamily = Inter, fontSize = size * scale, color = color, fontWeight = weight,
+            letterSpacing = if (spacing > 0f) (spacing * scale).sp else androidx.compose.ui.unit.TextUnit.Unspecified),
+        onTextLayout = { r -> if (r.hasVisualOverflow && scale > 0.76f) scale -= 0.06f })
+}
+
+
+@Composable
+private fun SpeedRow(label: String, value: String, sub: String, enabled: Boolean, dim: Boolean = false, onTest: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(top = 8.dp).border(1.dp, C.Line, Rnd(12.dp)).padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            FitText(tr(label).uppercase(), 10.sp, C.Muted, FontWeight.Bold, spacing = 1.5f)
+            FitText(value, 20.sp, if (dim) C.Muted else C.Text, FontWeight.ExtraBold)
+            if (sub.isNotBlank()) FitText(sub, 11.sp, C.Muted)
+        }
+        Focusable(onClick = { if (enabled) onTest() }, shape = Pill, normal = if (enabled) Color.White.copy(alpha = 0.1f) else Color.Transparent,
+            focused = if (enabled) Color.White else C.CardHi, zoom = 1.05f, modifier = Modifier.height(32.dp).border(1.dp, C.Line, Pill)) { f ->
+            T(tr("▶ Testiraj"), 12.sp, if (!enabled) C.Muted else if (f) Color.Black else C.Text, FontWeight.Bold, modifier = Modifier.align(Alignment.Center).padding(horizontal = 12.dp))
+        }
+    }
+}
+
+/**
+ * Standard view: the look of films, series and channels set on one TV, saved and built into PRETORIAN, so every new
+ * install and every new profile starts with it. Playlists, passwords, PIN and favourites are never part of it.
+ */
+object StandardView {
+    private val KEYS = Regex("^(look_|tv_view|vod_sort|home_rows|home_off|poster|row_size|ss_|sub_size|sub_style|perf_mode).*")
+    fun snapshot(ctx: Context): String {
+        val o = JSONObject()
+        ctx.getSharedPreferences("pretorian", Context.MODE_PRIVATE).all.forEach { (k, v) -> if (KEYS.matches(k) && v != null) o.put(k, v) }
+        return JSONObject().put("pretorian_view", 1).put("version", BuildInfo.VERSION).put("prefs", o).toString(2)
+    }
+    fun apply(ctx: Context, json: String) {
+        val p = JSONObject(json).optJSONObject("prefs") ?: return
+        val e = ctx.getSharedPreferences("pretorian", Context.MODE_PRIVATE).edit()
+        p.keys().forEach { k -> when (val v = p.get(k)) { is Boolean -> e.putBoolean(k, v); is Int -> e.putInt(k, v); is Long -> e.putLong(k, v); is Double -> e.putFloat(k, v.toFloat()); else -> e.putString(k, v.toString()) } }
+        e.commit()
+    }
+    /** first start: the built-in standard view (assets/standard_view.json), when there is one */
+    fun onFirstStart(ctx: Context) {
+        if (Prefs.bool("std_view_done")) return
+        Prefs.put("std_view_done", true)
+        try { ctx.assets.open("standard_view.json").bufferedReader().use { apply(ctx, it.readText()) } } catch (_: Exception) {}
+    }
 }

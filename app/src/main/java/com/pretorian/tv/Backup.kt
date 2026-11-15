@@ -158,7 +158,8 @@ class ReminderReceiver : BroadcastReceiver() {
                 PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0))
             am.cancel(pi)
             if (!Reminders.wake) return
-            val next = Reminders.all().filter { !it.fired }.minOfOrNull { it.start - Reminders.before * 60_000L } ?: return
+            val now = System.currentTimeMillis()
+            val next = Reminders.all().filter { !it.fired }.flatMap { r -> Reminders.offsets().map { r.start - it * 60_000L } }.filter { it > now }.minOrNull() ?: return
             if (next < System.currentTimeMillis()) return
             try { if (Build.VERSION.SDK_INT >= 23) am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next, pi) else am.set(AlarmManager.RTC_WAKEUP, next, pi) } catch (_: Exception) {}
         }

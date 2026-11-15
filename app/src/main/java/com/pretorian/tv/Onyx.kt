@@ -71,6 +71,8 @@ object Perf {
     val lite get() = if (mode == 0) weak else mode == 1
     /** device score 0–100: below 70 (or under 3 GB RAM) PRETORIAN starts in Lite by itself */
     var score = 100; private set
+    /** where the points come from, for About › Box score */
+    var parts: List<Pair<String, String>> = emptyList(); private set
     fun init(c: Context) {
         val am = c.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
         val mi = android.app.ActivityManager.MemoryInfo(); am.getMemoryInfo(mi)
@@ -98,6 +100,8 @@ object Perf {
         val ms = (System.nanoTime() - t0) / 1_000_000 + (x and 0)
         val speed = when { ms < 12 -> 15; ms < 20 -> 11; ms < 35 -> 7; ms < 60 -> 3; else -> 0 }
         score = (ram + cpu + os + gpu + speed).coerceIn(0, 100)
+        parts = listOf(tr("RAM") to listOf(ram, "/30").joinToString(""), tr("Procesor") to listOf(cpu, "/25").joinToString(""), "Android" to listOf(os, "/15").joinToString(""),  // i18n-ignore
+            tr("Čip i grafika") to listOf(gpu, "/15").joinToString(""), tr("Test brzine") to listOf(speed, "/15").joinToString(""))
         weak = am.isLowRamDevice || ramGb < 2.8 || score < 70
         mode = Prefs.long("perf_mode", 0).toInt().coerceIn(0, 2)
     }
@@ -309,6 +313,10 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                 SubscriptionCard()
                 }
                 Spacer(Modifier.height(12.dp))
+                // rows in the order and with the switches from Settings › Home
+                HomeRows.order().forEach { id ->
+                    when (id) {
+                        "fresh" -> {
                 // series you follow that got a new episode: straight into that season and episode
                 val fresh = remember(Follow.rev) { Follow.fresh() }
                 if (fresh.isNotEmpty()) {
@@ -322,6 +330,8 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                         }
                     }
                 }
+                        }
+                        "cont" -> {
                 if (cont.isNotEmpty()) {
                     RowTitle("NASTAVI GLEDANJE")
                     // round trip: ▶ on the last card goes to the first, ◀ on the first goes to the last
@@ -341,7 +351,10 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                                 }, onClick = playOf(pr))
                         }
                     }
-                } else if (p != null && Recent.list().isEmpty()) {
+                }
+                        }
+                        "new" -> {
+                if (p != null && cont.isEmpty() && Recent.list().isEmpty()) {
                     // no history at all: the newest films, series and channels at the provider. Gone as soon as you watch something.
                     val disc by load(p.id) {
                         val mv = Repo.vodGroups(p).take(2).flatMap { g -> try { Repo.movies(p, g.id) } catch (e: Exception) { emptyList() } }
@@ -389,7 +402,8 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                             }
                         }
                     }
-                } else if (newest.isNotEmpty()) {
+                }
+                else if (newest.isNotEmpty()) {
                     RowTitle("NOVO DODANO")
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(end = 40.dp)) {
                         items(newest, key = { it.first + it.second.optString("id") }) { (kind, o) ->
@@ -397,9 +411,14 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                         }
                     }
                 }
+                        }
+                        "recent" -> {
                 Spacer(Modifier.height(6.dp))
                 // the channels you watched last, next to Continue watching
                 RecentStrip(nav)
+                        }
+                    }
+                }
             }
             }
         }
@@ -684,5 +703,25 @@ fun AdvancedGate(nav: Nav) {
         val err = Lock.check(entered)
         if (err == null) { pin = false; Lock.switchSimple(false); nav.root(Screen.Home) }
         err
+    }
+}
+
+
+/** Settings › Home: which rows the home screen shows and in which order. */
+object HomeRows {
+    val ALL = listOf("fresh" to "Nove epizode", "cont" to "Nastavi gledati", "new" to "Novo dodano", "recent" to "Nedavno gledani kanali")
+    var rev by mutableIntStateOf(0)
+    fun order(): List<String> {
+        val saved = Prefs.str("home_rows", "fresh,cont,new,recent").split(',').filter { s -> ALL.any { it.first == s } }
+        val off = Prefs.str("home_off").split(',').toSet()
+        return (saved + ALL.map { it.first }.filter { it !in saved }).filter { it !in off }
+    }
+    fun all(): List<String> { val saved = Prefs.str("home_rows", "fresh,cont,new,recent").split(',').filter { s -> ALL.any { it.first == s } }; return saved + ALL.map { it.first }.filter { it !in saved } }
+    fun isOn(id: String) = id !in Prefs.str("home_off").split(',')
+    fun toggle(id: String) { val off = Prefs.str("home_off").split(',').filter { it.isNotBlank() }.toMutableSet(); if (!off.add(id)) off.remove(id); Prefs.put("home_off", off.joinToString(",")); rev++ }
+    fun move(id: String, by: Int) {
+        val l = all().toMutableList(); val i = l.indexOf(id); val j = (i + by).coerceIn(0, l.lastIndex)
+        if (i < 0 || i == j) return
+        l.removeAt(i); l.add(j, id); Prefs.put("home_rows", l.joinToString(",")); rev++
     }
 }

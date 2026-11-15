@@ -159,10 +159,12 @@ object Drive {
     private fun device(ctx: Context) = Settings.Secure.getString(ctx.contentResolver, Settings.Secure.ANDROID_ID) ?: "box"
 
     /** what is sent: every setting, every profile (without sign-in tokens) */
-    fun payload(ctx: Context): String = JSONObject(Backup.export(ctx, null)).put("device", device(ctx)).put("device_name", android.os.Build.MODEL).toString()
+    /** the same parts as the backup (Settings › Backup › What to include): one list for both */
+    fun parts(): Set<Int> = Prefs.str("backup_parts", (0 until 10).joinToString(",")).split(',').mapNotNull { it.trim().toIntOrNull() }.toSet()
+    fun payload(ctx: Context): String = JSONObject(Backup.export(ctx, null, parts())).put("device", device(ctx)).put("device_name", android.os.Build.MODEL).toString()
 
     fun hash(ctx: Context): String {
-        val o = JSONObject(Backup.export(ctx, null)).optJSONObject("data") ?: return ""
+        val o = JSONObject(Backup.export(ctx, null, parts())).optJSONObject("data") ?: return ""
         o.optJSONObject("prefs")?.let { p -> listOf("upd_last", "backup_auto_at", "notes", "new_items", "follow_at", "profile_skip_ask").forEach { p.remove(it) } }
         return MessageDigest.getInstance("SHA-1").digest(o.toString().toByteArray()).joinToString("") { "%02x".format(it) }
     }

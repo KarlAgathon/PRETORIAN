@@ -69,7 +69,7 @@ object SportsAI {
     }
 
     /** Asks the chosen AI. With [search] it first tries a web search and falls back to the AI's own knowledge. */
-    private fun ask(prompt: String, search: Boolean): String {
+    fun ask(prompt: String, search: Boolean): String {
         val k = key
         var last: java.io.IOException? = null
         val tries = if (search && prov.search) listOf(true, false) else listOf(false)
@@ -98,7 +98,7 @@ object SportsAI {
         for (m in listOf("gemini-flash-latest", "gemini-2.5-flash", "gemini-flash-lite-latest", "gemini-2.0-flash")) {
             val body = JSONObject().put("contents", JSONArray().put(JSONObject().put("parts", JSONArray().put(JSONObject().put("text", prompt)))))
             if (web) body.put("tools", JSONArray().put(JSONObject().put("google_search", JSONObject())))
-            val r = post("https://generativelanguage.googleapis.com/v1beta/models/$m:generateContent", body, mapOf("x-goog-api-key" to k))
+            val r = post("https://generativelanguage.googleapis.com/v1beta/models/$m:generateContent", body, mapOf("x-goog-api-key" to k))  // i18n-ignore
             if (r.code in 200..299) {
                 val parts = JSONObject(r.text).optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts") ?: return ""
                 return (0 until parts.length()).joinToString("\n") { parts.optJSONObject(it)?.str("text") ?: "" }
@@ -146,6 +146,30 @@ object SportsAI {
     }
 
     /** test the key without a web search: null when it works, else the problem */
+    /** AI fallback for the streaming platform of a film or series; answers once per title, null when unsure */
+    suspend fun platform(title: String, year: String?, tv: Boolean): String? = withContext(Dispatchers.IO) {
+        if (key.isBlank()) return@withContext null
+        val ck = "ai_plat_" + (title + (year ?: "")).lowercase().hashCode()
+        Prefs.str(ck).takeIf { it.isNotBlank() }?.let { return@withContext if (it == "-") null else it }
+        val a = try {
+            ask("On which streaming platform or TV network is the " + (if (tv) "series" else "film") + " \"" + title + "\"" + (year?.let { " ($it)" } ?: "") +  // i18n-ignore
+                " originally available? Answer with only the platform name (e.g. Netflix, HBO, Disney+, Prime Video, Apple TV+, AMC). If you are not sure, answer NONE.", search = true)  // i18n-ignore
+        } catch (e: Exception) { return@withContext null }
+        val p = Platforms.norm(a.lines().firstOrNull()?.trim())
+        Prefs.put(ck, p ?: "-"); p
+    }
+
+    /** AI picks the subtitle release that fits the film best (title, year, length); index into [releases] or null */
+    suspend fun bestSub(title: String, year: String?, minutes: Int, releases: List<String>): Int? = withContext(Dispatchers.IO) {
+        if (key.isBlank() || releases.size < 2) return@withContext null
+        val list = releases.take(25).mapIndexed { i, r -> "$i: $r" }.joinToString("\n")
+        val a = try {
+            ask("Film: \"$title\"" + (year?.let { " ($it)" } ?: "") + (if (minutes > 0) ", length $minutes min" else "") +  // i18n-ignore
+                ". Which subtitle release below most likely matches this exact film (same version, frame rate, cut)? Answer with only the number.\n" + list, search = false)  // i18n-ignore
+        } catch (e: Exception) { return@withContext null }
+        Regex("\\d+").find(a)?.value?.toIntOrNull()?.takeIf { it in releases.indices }
+    }
+
     suspend fun test(): String? = withContext(Dispatchers.IO) {
         try { ask("Reply with the single word OK.", search = false); null } catch (e: Exception) { e.message ?: "?" }
     }

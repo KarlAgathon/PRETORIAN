@@ -29,6 +29,17 @@ data class Release(val tag: String, val name: String, val notes: String, val apk
 /** Checks GitHub for a newer PRETORIAN and installs it with one click (same way as LEAD Launcher). */
 object Updater {
     private const val JSON_URL = "https://github.com/KarlAgathon/PRETORIAN/releases/latest/download/update.json"
+    /** Beta: test versions, published as the release "beta" (only for whoever chose the Beta channel) */
+    private const val BETA_URL = "https://github.com/KarlAgathon/PRETORIAN/releases/download/beta/update.json"
+    /** "stable" or "beta" */
+    val beta get() = Prefs.str("upd_channel", "stable") == "beta"
+    /** the APK's signature against the installed PRETORIAN: true ok, false foreign or broken, null not checked yet */
+    var signature by mutableStateOf<Boolean?>(null)
+    /** download paused by the user: the part already loaded stays and goes on from there */
+    var paused by mutableStateOf(false)
+    @Volatile private var pauseReq = false
+    /** "Install" clicked while the background download runs: install as soon as it is done */
+    @Volatile var installWhenDone = false
     /** only APKs from this repository's releases are accepted */
     private const val APK_PREFIX = "https://github.com/KarlAgathon/PRETORIAN/releases/"
 
@@ -60,8 +71,10 @@ object Updater {
     /** "Download now in the background": fetched quietly, installed when you say so */
     suspend fun predownload(ctx: Context, info: UpdateInfo) {
         if (ready(ctx, info) || progress in 0..101) return
-        try { withContext(Dispatchers.IO) { download(ctx, info.apk) }; Prefs.put("upd_file", info.name); progress = -1 }
-        catch (e: Exception) { progress = -1 }
+        try {
+            withContext(Dispatchers.IO) { download(ctx, info) }; Prefs.put("upd_file", info.name); progress = -1
+            if (installWhenDone) { installWhenDone = false; install(ctx, info) }
+        } catch (e: Exception) { progress = -1; if (!paused) installWhenDone = false }
     }
 
     /** The list of published versions (newest first), straight from GitHub. */
@@ -70,6 +83,7 @@ object Updater {
             val a = org.json.JSONArray(String(Http.bytes("https://api.github.com/repos/KarlAgathon/PRETORIAN/releases?per_page=8", 400_000)))  // i18n-ignore
             (0 until a.length()).mapNotNull { i ->
                 val o = a.getJSONObject(i)
+                if (o.optBoolean("prerelease") || o.str("tag_name") == "beta") return@mapNotNull null
                 val assets = o.optJSONArray("assets") ?: return@mapNotNull null
                 val apk = (0 until assets.length()).map { assets.getJSONObject(it) }.firstOrNull { it.str("name").endsWith(".apk") }?.str("browser_download_url") ?: return@mapNotNull null
                 if (!apk.startsWith(APK_PREFIX)) return@mapNotNull null
@@ -99,8 +113,10 @@ object Updater {
     suspend fun check(ctx: Context): UpdateInfo? = withContext(Dispatchers.IO) {
         Prefs.put("upd_checked_at", System.currentTimeMillis())
         try {
-            val o = JSONObject(String(Http.bytes(JSON_URL, 100_000)))
-            val info = UpdateInfo(o.optLong("versionCode"), o.str("versionName"), o.str("apk"), o.str("notes"))
+            fun read(u: String) = JSONObject(String(Http.bytes(u, 100_000))).let { o -> UpdateInfo(o.optLong("versionCode"), o.str("versionName"), o.str("apk"), o.str("notes")) }
+            val stable = read(JSON_URL)
+            // Beta gets the test version when it is newer than the stable one
+            val info = if (beta) (try { read(BETA_URL) } catch (e: Exception) { null })?.takeIf { it.code > stable.code } ?: stable else stable
             Prefs.put("upd_last", System.currentTimeMillis())
             val newer = if (info.code > installedCode(ctx) && info.apk.startsWith(APK_PREFIX) && Prefs.str("upd_skip") != info.name) info else null
             available = newer
@@ -116,19 +132,32 @@ object Updater {
 
     suspend fun install(ctx: Context, info: UpdateInfo) {
         // a download or an install that is still running blocks a new click: a second click used to throw away the running install
-        if (progress in 0..100) return
+        if (progress in 0..100) {
+            // the background download is still running: install as soon as it finishes (the click is never lost)
+            installWhenDone = true; status = tr("Preuzimam… instalacija kreće čim završi"); UpdLog.add(tr("Instaliraj kliknuto dok traje preuzimanje: instaliram čim završi")); return
+        }
         if (progress == 101 && System.currentTimeMillis() - installStarted < 180_000L) return
         // only installs older than 3 minutes (a confirm screen closed with Back) are thrown away
         if (System.currentTimeMillis() - installStarted > 180_000L) withContext(Dispatchers.IO) { abandonOld(ctx) }
         progress = -1
         status = null
         cancel = false
+        paused = false; pauseReq = false
         try {
             if (Prefs.str("upd_pre", "").split(',').contains("backup")) withContext(Dispatchers.IO) { backupBefore(ctx, "prije-${info.name}") }  // i18n-ignore
             UpdLog.add(trf("Instalacija %s pokrenuta", info.name))
             val wasReady = ready(ctx, info)
-            val file = if (wasReady) readyFile(ctx) else withContext(Dispatchers.IO) { download(ctx, info.apk) }
+            val file = if (wasReady) readyFile(ctx) else withContext(Dispatchers.IO) { download(ctx, info) }
             UpdLog.add(if (wasReady) trf("Fajl već preuzet · %s MB", file.length() / 1_048_576) else trf("Preuzimanje gotovo · %s MB", file.length() / 1_048_576))
+            // the file must carry the same signature as the installed PRETORIAN
+            val sig = withContext(Dispatchers.IO) { signatureOk(ctx, file) }
+            signature = sig
+            if (sig == false) {
+                file.delete(); Prefs.put("upd_file", ""); progress = -1
+                UpdLog.add(tr("Potpis ne odgovara: instalacija zaustavljena, fajl obrisan"))
+                status = tr("Potpis ne odgovara – fajl nije od PRETORIAN-a ili je oštećen"); return
+            }
+            UpdLog.add(if (sig == true) tr("Potpis provjeren ✓") else tr("Potpis se ne može provjeriti na ovom Androidu"))
             Prefs.put("upd_file", info.name)
             progress = 101
             installStarted = System.currentTimeMillis()
@@ -136,39 +165,88 @@ object Updater {
             withContext(Dispatchers.IO) { commit(ctx, file) }
         } catch (e: Exception) {
             progress = -1
+            if (paused) { UpdLog.add(trf("Preuzimanje pauzirano · %s MB", doneBytes / 1_048_576)); status = tr("Pauzirano"); return }
             UpdLog.add(trf("Greška: %s", e.message ?: e.javaClass.simpleName))
             status = trf("Ažuriranje nije uspjelo: %s", e.message ?: "")
         }
     }
 
-    private fun download(ctx: Context, url: String, f: File = File(ctx.cacheDir, "update.apk")): File {
+    fun pause() { pauseReq = true }
+
+    /** same signing certificate as the installed app (Android 9+); null when it cannot be read */
+    fun signatureOk(ctx: Context, apk: File): Boolean? {
+        if (Build.VERSION.SDK_INT < 28) return null
+        return try {
+            val pm = ctx.packageManager
+            val a = pm.getPackageArchiveInfo(apk.path, android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES) ?: return false
+            if (a.packageName != ctx.packageName) return false
+            val si = a.signingInfo ?: return null
+            val mine = pm.getPackageInfo(ctx.packageName, android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES).signingInfo ?: return null
+            fun certs(x: android.content.pm.SigningInfo) = (if (x.hasMultipleSigners()) x.apkContentsSigners else x.signingCertificateHistory)
+                .map { java.security.MessageDigest.getInstance("SHA-256").digest(it.toByteArray()).joinToString("") { b -> "%02x".format(b) } }.toSet()
+            certs(si).intersect(certs(mine)).isNotEmpty()
+        } catch (e: Exception) { null }
+    }
+
+    /**
+     * Downloads the APK piece by piece into "update.apk.part": a stall (20 s without a byte) or a broken connection
+     * goes on by itself from where it stopped (up to 3 times), Pause keeps the part, Cancel throws it away.
+     */
+    private fun download(ctx: Context, info: UpdateInfo, f: File = File(ctx.cacheDir, "update.apk")): File {
+        val part = File(f.path + ".part")
+        if (Prefs.str("upd_part") != info.name) { part.delete(); Prefs.put("upd_part", info.name) }
+        var tries = 0
+        while (true) {
+            try { fetch(info.apk, part); break }
+            catch (e: IOException) {
+                if (paused || cancel) { if (cancel) { cancel = false; part.delete(); progress = -1 }; throw e }
+                tries++
+                if (tries > 3) throw e
+                UpdLog.add(trf("Preuzimanje zastalo (%s), nastavljam od %s MB · pokušaj %s/3", e.message ?: "", part.length() / 1_048_576, tries))
+                Thread.sleep(2000L * tries)
+            }
+        }
+        f.delete(); if (!part.renameTo(f)) { part.copyTo(f, true); part.delete() }
+        Prefs.put("upd_part", "")
+        return f
+    }
+
+    private fun fetch(url: String, part: File) {
         var cur = url
         repeat(6) {
+            val have = part.length()
             val c = URL(cur).openConnection() as HttpURLConnection
-            c.connectTimeout = 15_000; c.readTimeout = 60_000; c.instanceFollowRedirects = false
+            c.connectTimeout = 15_000; c.readTimeout = 20_000; c.instanceFollowRedirects = false
+            if (have > 0) c.setRequestProperty("Range", "bytes=$have-")
             try {
                 val code = c.responseCode
                 if (code in 300..399) { cur = URL(URL(cur), c.getHeaderField("Location") ?: throw IOException("redirect")).toString(); return@repeat }
+                if (code == 416) return   // already complete
                 if (code !in 200..299) throw IOException("HTTP $code")
-                val total = c.contentLengthLong
-                var done = 0L
-                progress = 0; totalBytes = total; doneBytes = 0; speed = 0
+                val append = code == 206 && have > 0
+                val start = if (append) have else 0L
+                val total = start + c.contentLengthLong.coerceAtLeast(0)
+                var done = start
+                progress = if (total > 0) ((done * 100) / total).toInt().coerceIn(0, 100) else 0
+                totalBytes = total; doneBytes = done; speed = 0; paused = false
                 val t0 = System.currentTimeMillis()
                 c.inputStream.use { input ->
-                    f.outputStream().use { out ->
+                    java.io.FileOutputStream(part, append).use { out ->
                         val buf = ByteArray(64 * 1024)
                         while (true) {
-                            if (cancel) { cancel = false; progress = -1; throw IOException(tr("otkazano")) }
+                            if (cancel) throw IOException(tr("otkazano"))
+                            if (pauseReq) { pauseReq = false; paused = true; throw IOException(tr("pauzirano")) }
                             val n = input.read(buf); if (n < 0) break
                             out.write(buf, 0, n); done += n
                             doneBytes = done
                             val ms = (System.currentTimeMillis() - t0).coerceAtLeast(1)
-                            speed = done * 1000 / ms
+                            speed = (done - start) * 1000 / ms
                             if (total > 0) progress = ((done * 100) / total).toInt().coerceIn(0, 100)
                         }
                     }
                 }
-                return f
+                if (total > 0 && done < total) throw IOException(tr("veza prekinuta"))
+                return
             } finally { c.disconnect() }
         }
         throw IOException("Previše preusmjeravanja")

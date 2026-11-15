@@ -1,6 +1,6 @@
-O aplikaciji radi normalno; „Šta je novo“ više ne iskače samo
-Dijagnostika: kartice jedna ispod druge, ispravan protok podataka, Zapis ažuriranja
-„Nastavi gledati“: dugi OK – Nastavi, Od početka, Ukloni
-Titl: samo titlovi providera; „Traži titl“: online ili s diska
-Čuvar ekrana: OK nastavlja gledanje
-Manje memorije; Lite mod se bira sam prema ocjeni uređaja
+Ažuriranje: Pauza, nastavak, kanal Beta/Stable, provjera potpisa, zapelo preuzimanje kreće samo
+Zamrznut stream se sam spoji (slika, vrijeme, podaci) – Automatski 2/3/5 s i bafer
+Titl: Podesi vrijeme + SYNC cijelog fajla
+Postavke: nova Početna, pretraga, novi Plejer, Vrati zadano, osvježavanje noću, pomak EPG-a
+O aplikaciji s ocjenom boxa; sve kartice se prilagođavaju veličini
+5.1/Atmos oznake, AI za titl i platformu, Stalker serije, više podsjetnika
