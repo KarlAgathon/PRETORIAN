@@ -97,7 +97,7 @@ private fun DBtn(text: String, primary: Boolean = false, fr: FocusRequester? = n
 }
 
 @Composable
-private fun Badge(t: String, bg: Color = Color(0xB3000000), fg: Color = Color.White) {
+private fun DBadge(t: String, bg: Color = Color(0xB3000000), fg: Color = Color.White) {
     Box(Modifier.clip(Rnd(6.dp)).background(bg).padding(horizontal = 6.dp, vertical = 2.dp)) { T(t, 10.sp, fg, FontWeight.Bold) }
 }
 
@@ -106,8 +106,8 @@ private fun Badge(t: String, bg: Color = Color(0xB3000000), fg: Color = Color.Wh
 private fun BigPoster(url: String?, key: String, rating: String?, marks: List<String>, w: Dp) {
     Box(Modifier.width(w).aspectRatio(2f / 3f).clip(Rnd(16.dp)).border(1.dp, C.Line, Rnd(16.dp))) {
         OnyxImage(url, key, Modifier.fillMaxSize(), maxW = 420)
-        if (marks.isNotEmpty()) Row(Modifier.align(Alignment.TopStart).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) { marks.forEach { Badge(it) } }
-        rating?.let { Box(Modifier.align(Alignment.TopEnd).padding(8.dp)) { Badge("★ $it", fg = Color(0xFFFFC941)) } }
+        if (marks.isNotEmpty()) Row(Modifier.align(Alignment.TopStart).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) { marks.forEach { DBadge(it) } }
+        rating?.let { Box(Modifier.align(Alignment.TopEnd).padding(8.dp)) { DBadge("★ $it", fg = Color(0xFFFFC941)) } }
     }
 }
 
@@ -484,7 +484,7 @@ private fun EpisodeDialog(r: EpRow, title: String, s: SeriesItem, m: Meta?, fmtD
                         pr?.started == true -> trf("u toku · još %s min", ((pr.dur - pr.pos) / 60_000).toInt().coerceAtLeast(1))
                         else -> tr("Nije gledano")
                     }
-                    Box(Modifier.align(Alignment.TopEnd).padding(12.dp)) { Badge(state, fg = if (pr?.started == true) LampYellow else Color.White) }
+                    Box(Modifier.align(Alignment.TopEnd).padding(12.dp)) { DBadge(state, fg = if (pr?.started == true) LampYellow else Color.White) }
                     Kicker(trf("Sezona %s", r.season) + " · " + trf("Epizoda %s", r.num), C.Soft, size = 11.sp, modifier = Modifier.align(Alignment.BottomStart).padding(start = 22.dp, bottom = 8.dp))
                 }
                 Column(Modifier.padding(start = 22.dp, end = 22.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
