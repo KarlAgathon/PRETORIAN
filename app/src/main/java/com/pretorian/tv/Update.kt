@@ -96,7 +96,7 @@ object Updater {
             val o = JSONObject(String(Http.bytes(JSON_URL, 100_000)))
             val info = UpdateInfo(o.optLong("versionCode"), o.str("versionName"), o.str("apk"), o.str("notes"))
             Prefs.put("upd_last", System.currentTimeMillis())
-            val newer = if (info.code > installedCode(ctx) && info.apk.startsWith(APK_PREFIX)) info else null
+            val newer = if (info.code > installedCode(ctx) && info.apk.startsWith(APK_PREFIX) && Prefs.str("upd_skip") != info.name) info else null
             available = newer
             status = if (newer == null) "Imaš najnoviju verziju" else null
             newer
