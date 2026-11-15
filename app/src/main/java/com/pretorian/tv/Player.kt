@@ -486,7 +486,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                     return@onPreviewKeyEvent true
                 }
                 // series: OK on "Skip intro" / "Next episode" (the app remembers where they are in this series)
-                val ser = item.series
+                val ser = if (item.season != null) item.search else null
                 if (ser != null && skipPill != null && (e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter)) {
                     val pos = player.currentPosition; val dur = player.duration; val mem = SkipMem.of(ser)
                     if (skipPill == "intro") { if (mem.introEnd > 0) player.seekTo(mem.introEnd) else { SkipMem.learnIntro(ser, pos, pos + 85_000L); player.seekTo(pos + 85_000L) } }
@@ -637,7 +637,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         // series: "Skip intro" and "Next episode" when the end credits start (times learned per series)
         LaunchedEffect(index, s.live) {
             skipPill = null; var autoDone = false; var creditsAt = 0L
-            val ser = item.series ?: return@LaunchedEffect
+            val ser = (if (item.season != null) item.search else null) ?: return@LaunchedEffect
             if (s.live) return@LaunchedEffect
             while (true) {
                 delay(500)
