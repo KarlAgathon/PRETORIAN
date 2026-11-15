@@ -352,3 +352,7 @@ VPN
 poster_path
 poster
 look_poster
+netflix
+hbo max
+hbo
+disney

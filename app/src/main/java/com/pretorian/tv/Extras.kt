@@ -28,7 +28,7 @@ import java.util.Locale
 object WhatsNew {
     val VERSION = BuildInfo.VERSION
     val POINTS = listOf(
-        "Serije" to "Sezone „Sezona 1 · 6/22“, odgledana sezona zeleno. Niži redovi epizoda. Platforma (Netflix, HBO, Disney+…) kad je poznata.",
+        "Serije" to "Sezone „Sezona 1 · 6/22“, odgledana sezona zeleno. Niži redovi epizoda. Platforma kad je poznata.",
         "Traži titl" to "Samo dvije opcije: pretraga svih stranica s titlovima online ili učitavanje s diska / USB-a. I za serije.",
         "Filmovi i serije" to "„Nedavno dodano“ na vrhu, kategorije u jednom redu. Nazad vraća na isti plakat, pa na kategorije.",
         "Stalker portal" to "Nova vrsta playliste: portal i MAC adresa. TV kanali i filmovi.",
