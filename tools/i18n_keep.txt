@@ -416,3 +416,18 @@ lgbt
 LGBT, LGBTQ, gay, queer
 trans
 trans, transgender
+freeze
+try
+%s×
+toggle
+stream_clear
+stream_ev
+stream_cleared
+Liquid
+Classic
+Dune
+Ocean
+Aurora
+oled
+kino
+papir

@@ -324,6 +324,7 @@ fun DiagnosticsV2() {
     var cacheMb by remember { mutableLongStateOf(-1L) }
     var confirmAll by remember { mutableStateOf(false) }
     var logAll by remember { mutableStateOf(false) }
+    var streamAll by remember { mutableStateOf(false) }
     var logExport by remember { mutableStateOf(false) }
     val vpn = remember { NetInfo.vpn(ctx) }
     var testingNorm by remember { mutableStateOf(false) }
@@ -470,7 +471,33 @@ fun DiagnosticsV2() {
                     log.takeLast(8).reversed().drop(1).forEach { T(it, 11.sp, C.Muted) }  // i18n-ignore
                 }
             }
+            // how often channels froze, whether the app had to step in, and on which channels
+            key(StreamLog.rev) {
+                val ev = StreamLog.events()
+                val now = System.currentTimeMillis()
+                fun cnt(ms: Long, k: String) = ev.count { it.kind == k && now - it.t < ms }
+                val day = 86_400_000L
+                InfoCard("Zapis streama", trf("%s zastoja danas", cnt(day, "freeze")), trf("7 dana: %s · 30 dana: %s", cnt(7 * day, "freeze"), cnt(30 * day, "freeze")),
+                    R.drawable.lc_tv, Color(0xFFEF4444), Modifier.fillMaxWidth(),
+                    action = { Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        SmallBtn(tr("Prikaži sve")) { streamAll = true }
+                        SmallBtn(tr("Obriši zapis")) { StreamLog.clear() }
+                    } }) {
+                    val fz = ev.count { it.kind == "freeze" }; val ok = ev.count { it.kind == "ok" }
+                    KV(tr("Aplikacija reagovala"), trf("%s puta", ev.count { it.kind == "try" }))
+                    KV(tr("Proradilo samo"), trf("%s od %s", ok.coerceAtMost(fz), fz), C.Green)
+                    KV(tr("Nije proradilo"), (fz - ok).coerceAtLeast(0).toString(), if (fz - ok > 0) C.Danger else C.Muted)
+                    val top = ev.filter { it.kind == "freeze" }.groupingBy { it.ch }.eachCount().entries.sortedByDescending { it.value }.take(5)
+                    if (top.isNotEmpty()) { T("Kanali koji najčešće zastaju", 12.sp, C.Soft, FontWeight.SemiBold); top.forEach { (ch, n) -> KV(ch, trf("%s×", n)) } }
+                    SetDrop("Briši samo", "da zapis ne puni memoriju", StreamLog.CLEAR, StreamLog.clearMode) { Prefs.put("stream_clear", it.toLong()); StreamLog.rev++ }
+                }
+            }
         }
+    }
+    if (streamAll) Popup("Zapis streama", { streamAll = false }, width = 820.dp) {
+        val l = StreamLog.lines()
+        if (l.isEmpty()) T("Još nema zapisa.", 14.sp, C.Muted)
+        l.reversed().forEach { T(it, 12.sp, C.Soft, maxLines = 3) }  // i18n-ignore
     }
     if (logAll) Popup("Zapis ažuriranja", { logAll = false }, width = 820.dp) {
         val l = UpdLog.lines()
@@ -582,13 +609,29 @@ object NetProfile {
 /** Every freeze of a stream and what the automatic recovery did, for Settings › Diagnostics (the last 50). */
 object StreamLog {
     var rev by mutableIntStateOf(0)
+    data class Ev(val t: Long, val kind: String, val ch: String)
+    /** never, every 24 h, monthly, yearly, when the app closes (= at the next start) */
+    val CLEAR = listOf("Nikad", "Svaka 24 sata", "Mjesečno", "Godišnje", "Kad zatvorim aplikaciju")
+    val clearMode get() = Prefs.long("stream_clear", 0).toInt().coerceIn(0, 4)
     fun add(text: String) {
         val t = SimpleDateFormat("dd.MM. HH:mm:ss", Locale.US).format(Date())  // i18n-ignore
-        val lines = (Prefs.str("stream_log").split('\n').filter { it.isNotBlank() } + (t + "  " + text)).takeLast(50)
+        val lines = (Prefs.str("stream_log").split('\n').filter { it.isNotBlank() } + (t + "  " + text)).takeLast(300)
         Prefs.put("stream_log", lines.joinToString("\n")); rev++
     }
+    /** freeze = a stream stopped (first try), try = every reconnect, ok = it played again */
+    fun event(kind: String, ch: String) {
+        val l = (Prefs.str("stream_ev").split('\n').filter { it.isNotBlank() } + listOf(System.currentTimeMillis(), kind, ch.replace('|', '/').replace('\n', ' ')).joinToString("|")).takeLast(500)
+        Prefs.put("stream_ev", l.joinToString("\n")); rev++
+    }
+    fun events() = Prefs.str("stream_ev").split('\n').mapNotNull { l -> l.split('|').takeIf { it.size >= 3 }?.let { p -> p[0].toLongOrNull()?.let { Ev(it, p[1], p[2]) } } }
     fun lines() = Prefs.str("stream_log").split('\n').filter { it.isNotBlank() }
-    fun clear() { Prefs.put("stream_log", ""); rev++ }
+    fun clear() { Prefs.put("stream_log", ""); Prefs.put("stream_ev", ""); Prefs.put("stream_cleared", System.currentTimeMillis()); rev++ }
+    /** at start: clears by itself as chosen in Diagnostics */
+    fun autoClear() {
+        val since = System.currentTimeMillis() - Prefs.long("stream_cleared", System.currentTimeMillis()).also { if (Prefs.long("stream_cleared") == 0L) Prefs.put("stream_cleared", System.currentTimeMillis()) }
+        val day = 86_400_000L
+        if (when (clearMode) { 1 -> since > day; 2 -> since > 30 * day; 3 -> since > 365 * day; 4 -> true; else -> false }) clear()
+    }
 }
 
 /* ============================================================== Settings › About › This device */

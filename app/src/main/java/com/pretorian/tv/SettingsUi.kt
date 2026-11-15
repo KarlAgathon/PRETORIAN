@@ -42,6 +42,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.foundation.focusGroup
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -204,10 +206,7 @@ private fun PlaylistsPage(nav: Nav) {
                 normal = if (pl.active) C.CardFocus else C.Card, zoom = 1.01f,
             ) { _ ->
                 Row(Modifier.fillMaxSize().padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Box(Modifier.width(44.dp).height(24.dp).clip(Rnd(12.dp)).background(if (pl.active) C.Red else C.CardHi)) {
-                        Box(Modifier.align(if (pl.active) Alignment.CenterEnd else Alignment.CenterStart).padding(3.dp).size(18.dp)
-                            .clip(CircleShape).background(if (pl.active) C.OnRed else C.Muted))
-                    }
+                    Toggle(pl.active, height = 24.dp)
                     Column(Modifier.weight(1f)) {
                         T(pl.name, 17.sp, C.Text, FontWeight.SemiBold, maxLines = 1)
                         T(if (pl.type == SourceType.XTREAM) "Xtream Codes · ${pl.server}" else "M3U · ${pl.url}", 12.sp, C.Muted, maxLines = 1)
@@ -1088,9 +1087,7 @@ fun SettingsScreen2(nav: Nav) {
                 normal = Color.Transparent, focused = C.Red, zoom = 1f) { f ->
                 Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     T("Napredne opcije", 13.sp, if (f) C.OnRed else C.Soft, modifier = Modifier.weight(1f))
-                    Box(Modifier.width(34.dp).height(18.dp).clip(Pill).background(if (SetMode.advanced) C.Green else C.Line)) {
-                        Box(Modifier.align(if (SetMode.advanced) Alignment.CenterEnd else Alignment.CenterStart).padding(2.dp).size(14.dp).clip(CircleShape).background(Color.White))
-                    }
+                    Toggle(SetMode.advanced, f, height = 18.dp)
                 }
             }
         }
@@ -1105,7 +1102,17 @@ fun SettingsScreen2(nav: Nav) {
             }
         }
         LaunchedEffect(listFocused) { inPage = false }
-        Box(Modifier.weight(1f).fillMaxHeight().onFocusChanged { if (it.hasFocus) inPage = true }.padding(start = 18.dp, end = 24.dp, top = 4.dp, bottom = 8.dp)) {
+        // into a section: always its first item at the top; out of it with ◀: exactly the section you are in on the left
+        val pageFr = remember { FocusRequester() }
+        Box(Modifier.weight(1f).fillMaxHeight().onFocusChanged { if (it.hasFocus) inPage = true }
+            .focusProperties {
+                @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+                enter = { d -> if (d == androidx.compose.ui.focus.FocusDirection.Right) { scope.launch { delay(10); try { pageFr.requestFocus() } catch (_: Exception) {} }; FocusRequester.Cancel } else FocusRequester.Default }
+                @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+                exit = { d -> if (d == androidx.compose.ui.focus.FocusDirection.Left) first else FocusRequester.Default }
+            }
+            .focusRequester(pageFr).focusGroup()
+            .padding(start = 18.dp, end = 24.dp, top = 4.dp, bottom = 8.dp)) {
             key(section, sub) {
                 when (sub) {
                     "groups" -> GroupManager(nav)
@@ -1192,9 +1199,7 @@ private fun HomeV2() {
                         Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             T((i + 1).toString(), 14.sp, if (f) C.OnRed else C.Muted, FontWeight.Bold)
                             T(label, 15.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
-                            Box(Modifier.width(36.dp).height(20.dp).clip(Pill).background(if (on) C.Green else C.Line)) {
-                                Box(Modifier.align(if (on) Alignment.CenterEnd else Alignment.CenterStart).padding(2.dp).size(16.dp).clip(CircleShape).background(Color.White))
-                            }
+                            Toggle(on, f, height = 22.dp)
                         }
                     }
                     listOf(-1 to "▲", 1 to "▼").forEach { (d, g) ->  // i18n-ignore
@@ -1352,9 +1357,7 @@ fun SetSwitch(title: String, sub: String? = null, on: Boolean, new: Boolean = fa
                 }
                 if (sub != null) T(sub, 12.sp, if (f) C.OnRed.copy(alpha = 0.65f) else C.Muted, maxLines = 2)
             }
-            Box(Modifier.width(40.dp).height(22.dp).clip(Pill).background(if (cur) Color(0xFF2563EB) else (if (f) Color(0x26000000) else C.CardHi))) {
-                Box(Modifier.align(if (cur) Alignment.CenterEnd else Alignment.CenterStart).padding(3.dp).size(16.dp).clip(CircleShape).background(Color.White))
-            }
+            Toggle(cur, f, height = if (sub != null) 24.dp else 22.dp)
         }
     }
 }
@@ -1412,7 +1415,10 @@ fun SetSlider(title: String, sub: String?, value: Int, min: Int, max: Int, step:
 
 private val THEME_SWATCH = mapOf("vece" to (Color(0xFF0C1428) to Color(0xFF1C2A4D)), "bw" to (Color(0xFF050505) to Color(0xFF1A1A1A)),
     "staklo" to (Color(0xFFF7F7F8) to Color.White), "pijesak" to (Color(0xFF1E140A) to Color(0xFF8A6A3A)), "dark" to (Color(0xFF0B0D12) to Color(0xFF1A1F2A)),
-    "light" to (Color(0xFFF2F3F6) to Color.White), "glass" to (Color(0xFF1B3346) to Color(0x66FFFFFF)), "dew" to (Color(0xFF221B36) to Color(0xFF3A2F55)))
+    "light" to (Color(0xFFF2F3F6) to Color.White), "glass" to (Color(0xFF1B3346) to Color(0x66FFFFFF)), "dew" to (Color(0xFF221B36) to Color(0xFF3A2F55)),
+    "liquid" to (Color(0xFF0B2233) to Color(0x5522D3EE)), "classic" to (Color(0xFF2B3A4E) to Color(0xFF4A5D75)), "dune" to (Color(0xFF000000) to Color(0xFFFF8A1F)),
+    "oled" to (Color(0xFF000000) to Color(0xFFD4A537)), "ocean" to (Color(0xFF05293A) to Color(0xFF22D3EE)), "kino" to (Color(0xFF111214) to Color(0xFFE11D2A)),
+    "aurora" to (Color(0xFF231A4F) to Color(0xFFA78BFA)), "papir" to (Color(0xFFF4F1EA) to Color(0xFF1E3A8A)))
 
 /** Themes as small pictures. */
 @Composable
@@ -1479,7 +1485,7 @@ private fun PlaylistsV2(nav: Nav, openSub: (String) -> Unit) {
             val sec = pl.exp.toLongOrNull()
             SetRow(pl.name, (when (pl.type) { SourceType.XTREAM -> "Xtream"; SourceType.STALKER -> "Stalker"; else -> "M3U" }) +
                 (if (sec != null && sec > 0) " · " + trf("ističe %s", java.text.SimpleDateFormat("dd.MM.yy", java.util.Locale.getDefault()).format(java.util.Date(sec * 1000))) else ""),
-                if (pl.active) "● " + tr("Aktivna") else "○ " + tr("Isključena"), arrow = "", valueColor = if (pl.active) C.Green else C.Muted) { openSub("plists") }
+                if (pl.active) "● " + tr("Aktivna") else "○ " + tr("Isključena"), arrow = "", valueColor = if (pl.active) C.Green else C.Muted) { PlMenu.open = pl.id; openSub("plists") }
         }
         SetRow("+  " + tr("Dodaj playlistu"), "Xtream, M3U link ili fajl") { EditPlaylist.target = null; nav.push(Screen.AddPlaylist) }
         if (act != null) {
@@ -1517,6 +1523,8 @@ private fun PlaylistsListV2(nav: Nav) {
     var del by remember { mutableStateOf<Playlist?>(null) }
     var pinDel by remember { mutableStateOf<Playlist?>(null) }
     fun refresh() { list = Store.playlists(ctx); Repo.clear() }
+    // a playlist clicked on the Playlists page opens its menu right away
+    LaunchedEffect(Unit) { PlMenu.open?.let { id -> menu = list.firstOrNull { it.id == id }; PlMenu.open = null } }
     SetPage("Uredi playliste", "OK na playlisti: meni s opcijama.") {
         list.forEach { pl ->
             val sec = pl.exp.toLongOrNull()
@@ -1528,7 +1536,16 @@ private fun PlaylistsListV2(nav: Nav) {
     menu?.let { pl ->
         Popup(pl.name, { menu = null }) {
             OptionRow("Uredi (naziv, link, korisnik, lozinka)", R.drawable.lc_pencil) { menu = null; EditPlaylist.target = pl; nav.push(Screen.AddPlaylist) }
-            OptionRow(if (pl.active) "Isključi playlistu" else "Uključi playlistu", R.drawable.lc_check) { Store.activate(ctx, pl.id); refresh(); menu = null }
+            // on / off with the same switch as everywhere: green = on, grey = off
+            val on = list.firstOrNull { it.id == pl.id }?.active ?: pl.active
+            Focusable(onClick = { Store.activate(ctx, pl.id); refresh() }, shape = Rnd(12.dp), normal = Color.Transparent, focused = C.Red, zoom = 1f,
+                modifier = Modifier.fillMaxWidth().height(52.dp)) { f ->
+                Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Ico(R.drawable.lc_check, 18.dp, if (f) C.OnRed else C.Text)
+                    T(if (on) "Aktivna" else "Isključena", 15.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                    Toggle(on, f, height = 24.dp)
+                }
+            }
             OptionRow("Osvježi kanale, filmove i serije", R.drawable.lc_refresh_cw) {
                 menu = null; Repo.dropCatalogs()
                 scope.launch {
@@ -2435,3 +2452,7 @@ fun qrBitmap(text: String, px: Int): androidx.compose.ui.graphics.ImageBitmap? =
     for (x in 0 until px) for (y in 0 until px) b.setPixel(x, y, if (m.get(x, y)) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
     b.asImageBitmap()
 } catch (e: Exception) { null }
+
+
+/** the playlist whose menu opens on the "Edit playlists" page */
+object PlMenu { var open: String? = null }

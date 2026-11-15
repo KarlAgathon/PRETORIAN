@@ -481,8 +481,8 @@ Ne radi na svim uređajima. Ako je box potpuno ugašen, podsjetnik ne može doć
 Tvoji podsjetnici|Your reminders|Deine Erinnerungen|Tvoji podsjetnici|Твоји подсетници|Твоите напомняния|Mementourile tale|Hatırlatıcıların|I tuoi promemoria|تذكيراتك
 Nema podsjetnika.|No reminders.|Keine Erinnerungen.|Nema podsjetnika.|Нема подсетника.|Няма напомняния.|Niciun memento.|Hatırlatıcı yok.|Nessun promemoria.|لا توجد تذكيرات.
 Obriši|Delete|Löschen|Obriši|Обриши|Изтрий|Șterge|Sil|Elimina|حذف
-Backup je spremljen|Backup saved|Backup gespeichert|Sigurnosna kopija je spremljenaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|Бекап је сачуван|Копието е запазено|Backup salvat|Yedek kaydedildi|Backup salvato|تم حفظ النسخة
-Backup nije spremljen|Backup not saved|Backup nicht gespeichert|Sigurnosna kopija nije spremljenaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|Бекап није сачуван|Копието не е запазено|Backup nesalvat|Yedek kaydedilmedi|Backup non salvato|لم تُحفظ النسخة
+Backup je spremljen|Backup saved|Backup gespeichert|Sigurnosna kopija je spremljenaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|Бекап је сачуван|Копието е запазено|Backup salvat|Yedek kaydedildi|Backup salvato|تم حفظ النسخة
+Backup nije spremljen|Backup not saved|Backup nicht gespeichert|Sigurnosna kopija nije spremljenaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|Бекап није сачуван|Копието не е запазено|Backup nesalvat|Yedek kaydedilmedi|Backup non salvato|لم تُحفظ النسخة
 Sve je vraćeno. PRETORIAN se ponovo pokreće.|Everything restored. PRETORIAN restarts.|Alles wiederhergestellt. PRETORIAN startet neu.|Sve je vraćeno. PRETORIAN se ponovo pokreće.|Све је враћено. PRETORIAN се поново покреће.|Всичко е възстановено. PRETORIAN се рестартира.|Totul a fost restaurat. PRETORIAN repornește.|Her şey geri yüklendi. PRETORIAN yeniden başlıyor.|Tutto ripristinato. PRETORIAN si riavvia.|تمت الاستعادة. يُعاد تشغيل PRETORIAN.
 Vraćanje nije uspjelo|Restore failed|Wiederherstellung fehlgeschlagen|Vraćanje nije uspjelo|Враћање није успело|Възстановяването не успя|Restaurarea a eșuat|Geri yükleme başarısız|Ripristino non riuscito|فشلت الاستعادة
 Backup i vraćanje|Backup and restore|Sichern und wiederherstellen|Sigurnosna kopija i vraćanje|Бекап и враћање|Резервно копие|Backup și restaurare|Yedekle ve geri yükle|Backup e ripristino|النسخ والاستعادة
@@ -1843,6 +1843,22 @@ XXX, Adult, 18+, porno|XXX, Adult, 18+, porn|XXX, Adult, 18+, Porno|XXX, Adult, 
 LGBT kategorije|LGBT categories|LGBT-Kategorien|LGBT kategorije|ЛГБТ категорије|LGBT категории|Categorii LGBT|LGBT kategorileri|Categorie LGBT|فئات LGBT
 Trans kategorije|Trans categories|Trans-Kategorien|Trans kategorije|Транс категорије|Транс категории|Categorii trans|Trans kategorileri|Categorie trans|فئات ترانس
 Trenutna verzija|Current version|Aktuelle Version|Trenutna verzija|Тренутна верзија|Текуща версия|Versiunea curentă|Mevcut sürüm|Versione attuale|الإصدار الحالي
+%s zastoja danas|%s freezes today|%s Aussetzer heute|%s zastoja danas|%s застоја данас|%s замръзвания днес|%s blocaje azi|bugün %s donma|%s blocchi oggi|%s توقف اليوم
+7 dana: %s · 30 dana: %s|7 days: %s · 30 days: %s|7 Tage: %s · 30 Tage: %s|7 dana: %s · 30 dana: %s|7 дана: %s · 30 дана: %s|7 дни: %s · 30 дни: %s|7 zile: %s · 30 zile: %s|7 gün: %s · 30 gün: %s|7 giorni: %s · 30 giorni: %s|7 أيام: %s · 30 يومًا: %s
+Obriši zapis|Clear log|Protokoll löschen|Obriši zapis|Обриши запис|Изчисти дневника|Șterge jurnalul|Günlüğü temizle|Cancella registro|مسح السجل
+Aplikacija reagovala|The app stepped in|Die App griff ein|Aplikacija reagovala|Апликација реаговала|Приложението се намеси|Aplicația a intervenit|Uygulama müdahale etti|L'app è intervenuta|تدخّل التطبيق
+%s puta|%s times|%s Mal|%s puta|%s пута|%s пъти|de %s ori|%s kez|%s volte|%s مرات
+Proradilo samo|Came back by itself|Lief von selbst wieder|Proradilo samo|Прорадило само|Тръгна само|A repornit singur|Kendiliğinden düzeldi|Ripartito da solo|عاد للعمل تلقائيًا
+Nije proradilo|Did not come back|Lief nicht wieder|Nije proradilo|Није прорадило|Не тръгна|Nu a repornit|Düzelmedi|Non ripartito|لم يعد للعمل
+Kanali koji najčešće zastaju|Channels that freeze most|Kanäle mit den meisten Aussetzern|Kanali koji najčešće zastaju|Канали који најчешће застају|Канали, които замръзват най-често|Canalele care se blochează cel mai des|En sık donan kanallar|Canali che si bloccano di più|القنوات الأكثر توقفًا
+Briši samo|Clear by itself|Automatisch löschen|Briši samo|Бриши само|Изчиствай автоматично|Șterge automat|Kendiliğinden temizle|Cancella da solo|المسح التلقائي
+da zapis ne puni memoriju|so the log never fills memory|damit das Protokoll keinen Speicher füllt|da zapis ne puni memoriju|да запис не пуни меморију|за да не пълни паметта|ca jurnalul să nu umple memoria|günlük belleği doldurmasın|così il registro non riempie la memoria|حتى لا يملأ السجل الذاكرة
+Zapis streama|Stream log|Stream-Protokoll|Zapis streama|Запис стреама|Дневник на потока|Jurnal stream|Yayın günlüğü|Registro stream|سجل البث
+OLED crna|OLED black|OLED-Schwarz|OLED crna|ОЛЕД црна|OLED черна|Negru OLED|OLED siyah|Nero OLED|أسود OLED
+Kino|Cinema|Kino|Kino|Кино|Кино|Cinema|Sinema|Cinema|سينما
+Papir|Paper|Papier|Papir|Папир|Хартия|Hârtie|Kâğıt|Carta|ورق
+Godišnje|Yearly|Jährlich|Godišnje|Годишње|Годишно|Anual|Yıllık|Annuale|سنويًا
+Kad zatvorim aplikaciju|When I close the app|Wenn ich die App schließe|Kad zatvorim aplikaciju|Кад затворим апликацију|Когато затворя приложението|Când închid aplicația|Uygulamayı kapattığımda|Quando chiudo l'app|عند إغلاق التطبيق
 Nepoznat jezik|Unknown language|Unbekannte Sprache|Nepoznat jezik|Непознат језик|Неизвестен език|Limbă necunoscută|Bilinmeyen dil|Lingua sconosciuta|لغة غير معروفة
 """.trimIndent()
 

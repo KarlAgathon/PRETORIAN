@@ -329,14 +329,14 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         val l = object : Player.Listener {
             override fun onPlayerError(e: PlaybackException) {
                 // automatic recovery: up to 3 quiet tries (live and films), keeping the position of a film
-                if (Recover.on && reconnect < 4) { reconnect++; Stats.recovery(); StreamLog.add(listOf(items.getOrNull(index)?.title ?: "", " · ", e.errorCodeName.removePrefix("ERROR_CODE_"), " · ", trf("spajam ponovo (%s/4)", reconnect)).joinToString("")); retryToken++ }  // i18n-ignore
+                if (Recover.on && reconnect < 4) { reconnect++; Stats.recovery(); StreamLog.event(if (reconnect == 1) "freeze" else "x", items.getOrNull(index)?.title ?: ""); StreamLog.event("try", items.getOrNull(index)?.title ?: ""); StreamLog.add(listOf(items.getOrNull(index)?.title ?: "", " · ", e.errorCodeName.removePrefix("ERROR_CODE_"), " · ", trf("spajam ponovo (%s/4)", reconnect)).joinToString("")); retryToken++ }  // i18n-ignore
                 else if (!Recover.on && s.live && reconnect < 3) { reconnect++; retryToken++ }
                 else if (!Recover.on && !s.live && !retried) { retried = true; retryToken++ }
                 else { reconnect = 0; error = errorText(e, s.live) }
             }
             override fun onPlaybackStateChanged(state: Int) {
                 buffering = state == Player.STATE_BUFFERING
-                if (state == Player.STATE_READY) { if (reconnect > 0) StreamLog.add(listOf(items.getOrNull(index)?.title ?: "", " · ", tr("radi ponovo ✓")).joinToString("")); error = null; reconnect = 0; readyOnce[0] = true }  // i18n-ignore
+                if (state == Player.STATE_READY) { if (reconnect > 0) StreamLog.event("ok", items.getOrNull(index)?.title ?: ""); if (reconnect > 0) StreamLog.add(listOf(items.getOrNull(index)?.title ?: "", " · ", tr("radi ponovo ✓")).joinToString("")); error = null; reconnect = 0; readyOnce[0] = true }  // i18n-ignore
                 if (state == Player.STATE_ENDED && !s.live) { saveProgress(done = true); if (index < n - 1 && Prefs.bool("next_ep", true)) index++ }
             }
             override fun onIsPlayingChanged(isPlaying: Boolean) { playing = isPlaying }
@@ -425,6 +425,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             last = pos; lastFrames = frames; lastBuf = buf
             if (stuck >= Recover.waitMs && reconnect < 4) {
                 stuck = 0; reconnect++; Stats.recovery()
+                (items.getOrNull(index)?.title ?: "").let { t -> if (reconnect == 1) StreamLog.event("freeze", t); StreamLog.event("try", t) }
                 StreamLog.add(listOf(items.getOrNull(index)?.title ?: "", " · ", tr(why), " · ", trf("spajam ponovo (%s/4)", reconnect)).joinToString(""))  // i18n-ignore
                 retryToken++
             }

@@ -88,6 +88,7 @@ class MainActivity : ComponentActivity() {
         WhatsNew.check(this)
         Lock.load()
         Notes.load()
+        try { StreamLog.autoClear() } catch (_: Exception) {}
         setContent { PretorianApp() }
     }
 
@@ -166,7 +167,7 @@ class Nav(
     val playlistsChanged: () -> Unit,
 )
 
-object BuildInfo { const val VERSION = "0.9.7" }
+object BuildInfo { const val VERSION = "0.9.8" }
 
 @Composable
 fun PretorianApp() {

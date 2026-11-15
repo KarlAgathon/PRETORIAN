@@ -1,6 +1,6 @@
-Ažuriranje popravljeno: samo jedna instalacija u isto vrijeme, novi meni (Ažuriraj sada, Provjeri verziju, Stable/Beta, Vrati verziju)
-Klik na obavijest otvara Ažuriranje
-Roditeljska kontrola s PIN-om: sakrij odrasle, LGBT i trans kategorije
-Pretraga: dugme Obriši i Nedavne pretrage
-Početna: lijevo vraća u listu, ▲ ▼ za redoslijed, niži redovi
-Trailer: YouTube, SmartTube, TizenTube; serije pokazuju platformu; brzina mimo VPN-a; nova IPTV ikona
+8 novih tema: Liquid, Classic, Dune, OLED crna, Ocean, Kino, Aurora, Papir
+Jedan zeleni prekidač za uključeno/isključeno u cijeloj aplikaciji
+Playliste: klik na playlistu otvara Uredi, Osvježi, Aktivna i Obriši
+Dijagnostika: Zapis streama – koliko i na kojim kanalima zastaje, s automatskim brisanjem
+Postavke: ulaz u sekciju počinje na vrhu, lijevo vraća tačno na tu sekciju
+TV: lista grupa ide ukrug, dva brza klika gore vode u gornju traku

@@ -5,6 +5,7 @@ package com.pretorian.tv
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -316,10 +317,7 @@ fun ToggleRow(label: String, checked: Boolean, icon: Int? = null, sub: String? =
                 T(label, 15.sp, C.Text, FontWeight.Medium)
                 if (sub != null) T(sub, 12.sp, C.Muted, maxLines = 2)
             }
-            Box(Modifier.width(44.dp).height(24.dp).clip(Rnd(12.dp)).background(if (checked) C.Red else C.CardHi)) {
-                Box(Modifier.align(if (checked) Alignment.CenterEnd else Alignment.CenterStart).padding(3.dp).size(18.dp)
-                    .clip(CircleShape).background(if (checked) C.OnRed else C.Muted))
-            }
+            Toggle(checked, height = 24.dp)
         }
     }
 }
@@ -489,5 +487,19 @@ fun WrapEffectGrid(w: Wrap, state: androidx.compose.foundation.lazy.grid.LazyGri
         kotlinx.coroutines.delay(80)
         if (!Chrome.inRail) try { w.fr.requestFocus() } catch (_: Exception) {}
         w.target = -1
+    }
+}
+
+
+/** The one on/off switch of the whole app: green with a white knob = on, grey = off; [height] follows the row it sits in. */
+@Composable
+fun Toggle(on: Boolean, focused: Boolean = false, height: androidx.compose.ui.unit.Dp = 22.dp) {
+    val pos by androidx.compose.animation.core.animateFloatAsState(if (on) 1f else 0f, label = "toggle")
+    val w = height * 1.8f; val knob = height - 6.dp
+    val track = androidx.compose.ui.graphics.lerp(if (C.IsLight) Color(0xFFCBD5E1) else Color(0xFF475569), Color(0xFF22C55E), pos)
+    Box(Modifier.width(w).height(height).clip(androidx.compose.foundation.shape.RoundedCornerShape(50)).background(track)
+        .then(if (focused) Modifier.border(1.5.dp, Color(0x55000000), androidx.compose.foundation.shape.RoundedCornerShape(50)) else Modifier)) {
+        Box(Modifier.padding(start = 3.dp + (w - knob - 6.dp) * pos).align(Alignment.CenterStart).size(knob)
+            .shadow(2.dp, CircleShape).clip(CircleShape).background(Color.White))
     }
 }
