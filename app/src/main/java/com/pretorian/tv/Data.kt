@@ -50,7 +50,8 @@ data class Category(val id: String, val name: String)
 data class Channel(val id: String, val num: Int, val name: String, val logo: String?, val group: String, val url: String, val epg: String? = null, val pid: String = "", val archive: Int = 0)
 data class Vod(val id: String, val name: String, val poster: String?, val rating: String?, val url: String, val added: Long = 0)
 data class SeriesItem(val id: String, val name: String, val cover: String?, val plot: String?, val rating: String?, val added: Long = 0)
-data class Episode(val id: String, val season: Int, val num: Int, val title: String, val url: String, val plot: String?)
+data class Episode(val id: String, val season: Int, val num: Int, val title: String, val url: String, val plot: String?,
+                   val image: String? = null, val durSec: Int = 0, val air: String? = null)
 data class VodInfo(
     val plot: String?, val genre: String?, val year: String?, val duration: String?,
     val cast: String?, val director: String?, val backdrop: String?, val rating: String?,
@@ -394,8 +395,11 @@ class Xtream(private val p: Playlist) {
                 val id = e.str("id")
                 val ext = e.str("container_extension").ifBlank { "mp4" }
                 val info = e.optJSONObject("info")
+                val dur = info?.optInt("duration_secs", 0)?.takeIf { it > 0 }
+                    ?: info?.str("duration")?.split(':')?.mapNotNull { it.toIntOrNull() }?.takeIf { it.size == 3 }?.let { it[0] * 3600 + it[1] * 60 + it[2] } ?: 0
                 out.add(Episode(id, key.toIntOrNull() ?: e.optInt("season", 1), e.optInt("episode_num", j + 1),
-                    e.str("title"), "$base/series/${p.user}/${p.pass}/$id.$ext", info?.str("plot")?.orNullIfBlank()))
+                    e.str("title"), "$base/series/${p.user}/${p.pass}/$id.$ext", info?.str("plot")?.orNullIfBlank(),
+                    info?.str("movie_image")?.orNullIfBlank(), dur, (info?.str("releasedate") ?: info?.str("air_date"))?.take(10)?.orNullIfBlank()))
             }
         }
         return out.sortedWith(compareBy({ it.season }, { it.num }))

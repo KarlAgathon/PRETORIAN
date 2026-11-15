@@ -143,7 +143,7 @@ class Nav(
     val playlistsChanged: () -> Unit,
 )
 
-object BuildInfo { const val VERSION = "0.8.7" }
+object BuildInfo { const val VERSION = "0.9.0" }
 
 @Composable
 fun PretorianApp() {
@@ -155,7 +155,16 @@ fun PretorianApp() {
     val nav = remember {
         Nav(
             push = { stack.add(it) },
-            back = { if (stack.size > 1) stack.removeAt(stack.lastIndex) },
+            back = {
+                if (stack.size > 1) {
+                    val left = stack.removeAt(stack.lastIndex)
+                    // a new version waits: once per version, right after the player, Settings › Update opens by itself
+                    val u = Updater.available
+                    if (left is Screen.Player && u != null && Updater.mayAsk(u) && Updater.notify("player") && Prefs.str("upd_asked") != u.name) {
+                        Prefs.put("upd_asked", u.name); SettingsNav.section = "update"; stack.add(Screen.Settings)
+                    }
+                }
+            },
             root = { s -> stack.clear(); stack.add(Screen.Home); if (s != Screen.Home) stack.add(s) },
             playlistsChanged = { Repo.clear(); version++ },
         )
@@ -166,14 +175,24 @@ fun PretorianApp() {
     // new version at start and every 6 hours; "new" movies and series once in 12 hours; weekly backup
     LaunchedEffect(Unit) {
         Backup.auto(ctx)
+        var first = true
         while (true) {
             val um = Prefs.str("upd_mode", "0")
             if (um == "0" || (um == "1" && System.currentTimeMillis() - Prefs.long("upd_last") > 20 * 3600_000L))
-                Updater.check(ctx)?.let { if (Prefs.bool("upd_note", true)) Notes.add("update", trf("Nova verzija %s", it.name), "update:${it.name}") }
+                Updater.check(ctx)?.let { u ->
+                    if (Updater.mayAsk(u)) {
+                        if (Updater.notify("bell")) Notes.add("update", trf("Nova verzija %s", u.name), "update:${u.name}")
+                        if (Prefs.str("upd_dl", "0") == "0") Updater.predownload(ctx, u)
+                        // "install by itself at the next start" / "window at start"
+                        if (first && Prefs.str("upd_inst", "0") == "1" && Updater.ready(ctx, u)) Updater.install(ctx, u)
+                        else if (first && Updater.notify("start")) UpdateAsk.show = true
+                    }
+                }
+            first = false
             Store.actives(ctx).forEach { p -> try { NewContent.scan(ctx, p) } catch (_: Exception) {} }
             try { Follow.check(ctx) } catch (_: Exception) {}
             try { Sports.remindTeams() } catch (_: Exception) {}
-            delay(6 * 3600_000L)
+            delay(3600_000L)
         }
     }
     // Sports Center guide and search list are prepared quietly in the background, so they open at once
@@ -292,6 +311,8 @@ fun PretorianApp() {
             DriveDialogs()
             CrashDialog()
             WhatsNewDialog()
+            UpdateAskDialog(nav)
+            CrashGuardDialog(nav)
         }
     }
     }
@@ -668,27 +689,50 @@ fun SimpleHome(nav: Nav) {
 }
 
 /** Series you follow: a note when a new episode appears. */
+/** "Window at start": the new version asks once when PRETORIAN opens. */
+object UpdateAsk { var show by mutableStateOf(false) }
+
 object Follow {
+    var rev by mutableIntStateOf(0)
     private fun all(): org.json.JSONObject = try { org.json.JSONObject(Prefs.str("follow", "{}")) } catch (e: Exception) { org.json.JSONObject() }
     fun isOn(id: String) = all().has(id)
     fun toggle(pid: String, s: SeriesItem, count: Int): Boolean {
         val o = all()
-        val on = if (o.has(s.id)) { o.remove(s.id); false } else { o.put(s.id, org.json.JSONObject().put("pid", pid).put("name", s.name).put("n", count)); true }
-        Prefs.put("follow", o.toString()); return on
+        val on = if (o.has(s.id)) { o.remove(s.id); false } else { o.put(s.id, org.json.JSONObject().put("pid", pid).put("name", s.name).put("cover", s.cover ?: "").put("n", count)); true }
+        Prefs.put("follow", o.toString()); rev++; return on
     }
+    /** The series page was opened: its "new episode" card on Home goes away. */
+    fun seen(id: String) {
+        val o = all(); val e = o.optJSONObject(id) ?: return
+        if (e.optBoolean("fresh")) { e.put("fresh", false); Prefs.put("follow", o.toString()); rev++ }
+    }
+    data class Fresh(val id: String, val pid: String, val name: String, val cover: String?, val season: Int, val num: Int)
+    /** Series with a new episode not opened yet, newest first. */
+    fun fresh(): List<Fresh> {
+        val o = all()
+        return o.keys().asSequence().mapNotNull { id ->
+            val e = o.getJSONObject(id)
+            if (!e.optBoolean("fresh")) null else Fresh(id, e.str("pid"), e.str("name"), e.str("cover").orNullIfBlank(), e.optInt("s"), e.optInt("e")) to e.optLong("at")
+        }.sortedByDescending { it.second }.map { it.first }.toList()
+    }
+    /** Every hour: did the provider add an episode to a series you follow? */
     suspend fun check(ctx: android.content.Context) {
-        if (System.currentTimeMillis() - Prefs.long("follow_at") < 12 * 3600_000L) return
+        if (System.currentTimeMillis() - Prefs.long("follow_at") < 3600_000L) return
+        Prefs.put("follow_at", System.currentTimeMillis())
         val o = all()
         o.keys().asSequence().toList().forEach { id ->
             val e = o.getJSONObject(id)
             val p = Store.byId(ctx, e.str("pid")) ?: return@forEach
-            val n = try { Repo.episodes(p, id).size } catch (x: Exception) { return@forEach }
+            val list = try { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Xtream(p).episodes(id) } } catch (x: Exception) { return@forEach }
+            val n = list.size
             if (n > e.optInt("n")) {
-                Notes.add("series", trf("Nova epizoda: %s", cleanTitle(e.str("name")).first), "ep:$id:$n")
-                e.put("n", n)
+                val last = list.maxWithOrNull(compareBy({ it.season }, { it.num }))
+                Notes.add("series", trf("Nova epizoda: %s", cleanTitle(e.str("name")).first) + (last?.let { " · S${it.season} E${it.num}" } ?: ""), "ep:$id:$n")
+                e.put("n", n).put("fresh", true).put("at", System.currentTimeMillis())
+                if (last != null) e.put("s", last.season).put("e", last.num)
             }
         }
-        Prefs.put("follow", o.toString()); Prefs.put("follow_at", System.currentTimeMillis())
+        Prefs.put("follow", o.toString()); rev++
     }
 }
 

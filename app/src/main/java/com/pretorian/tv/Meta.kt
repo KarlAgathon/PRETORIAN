@@ -23,7 +23,11 @@ data class Meta(
     val title: String, val overview: String?, val overviewLang: String?, val poster: String?, val backdrop: String?,
     val year: String?, val runtime: String?, val genres: String?, val tmdbRating: Double?, val imdbRating: String?,
     val imdbId: String?, val trailerKey: String?, val people: List<Person>,
+    val studio: String? = null, val tmdbId: Int = 0, val runtimeMin: Int = 0,
 )
+
+/** One episode as TMDB knows it, also the ones not out yet. */
+data class TmdbEp(val season: Int, val num: Int, val name: String, val overview: String?, val air: String?, val still: String?, val runtime: Int)
 
 /** headers of a normal browser: some subtitle sites refuse unknown apps */
 val BROWSER = mapOf("User-Agent" to "Mozilla/5.0 (Linux; Android 12; TV) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36")  // i18n-ignore
@@ -183,7 +187,11 @@ object Tmdb {
         val genres = d.optJSONArray("genres")?.let { g -> (0 until g.length()).joinToString(", ") { g.getJSONObject(it).str("name") } }?.orNullIfBlank()
         val runtime = if (tv) d.optJSONArray("episode_run_time")?.optInt(0)?.takeIf { it > 0 }?.let { "$it min/ep" }
                       else d.optInt("runtime").takeIf { it > 0 }?.let { "${it / 60}h ${it % 60}m" }
+        // who made it: the TV network for a series, the studio for a film
+        val studio = (if (tv) d.optJSONArray("networks") else d.optJSONArray("production_companies"))?.optJSONObject(0)?.str("name")?.orNullIfBlank()
+        val rtMin = if (tv) d.optJSONArray("episode_run_time")?.optInt(0) ?: 0 else d.optInt("runtime")
         val m = Meta(
+            studio = studio, tmdbId = id, runtimeMin = rtMin,
             title = d.str(if (tv) "name" else "title").ifBlank { title },
             overview = overview, overviewLang = overviewLang,
             poster = d.str("poster_path").orNullIfBlank()?.let { IMG + "w500" + it },
@@ -195,6 +203,34 @@ object Tmdb {
         )
         cache[ck] = m
         m
+    }
+
+    private val seasonCache = HashMap<String, List<TmdbEp>>()
+
+    /** All episodes of one season with their air dates; empty without a key or when nothing is found. */
+    suspend fun season(tvId: Int, n: Int): List<TmdbEp> = withContext(Dispatchers.IO) {
+        if (!enabled() || tvId <= 0) return@withContext emptyList()
+        val ck = "$tvId|$n|${metaLanguage()}"
+        seasonCache[ck]?.let { return@withContext it }
+        val out = try {
+            val a = get("/tv/$tvId/season/$n", "language=${metaLanguage()}").optJSONArray("episodes") ?: JSONArray()
+            (0 until a.length()).map { i ->
+                val e = a.getJSONObject(i)
+                TmdbEp(n, e.optInt("episode_number"), e.str("name"), e.str("overview").orNullIfBlank(), e.str("air_date").orNullIfBlank(),
+                    e.str("still_path").orNullIfBlank()?.let { IMG + "w300" + it }, e.optInt("runtime"))
+            }
+        } catch (e: Exception) { emptyList() }
+        seasonCache[ck] = out
+        out
+    }
+
+    /** Season numbers TMDB knows for a series (without the "specials" season 0). */
+    suspend fun seasons(tvId: Int): List<Int> = withContext(Dispatchers.IO) {
+        if (!enabled() || tvId <= 0) return@withContext emptyList()
+        try {
+            val a = get("/tv/$tvId", "language=${metaLanguage()}").optJSONArray("seasons") ?: JSONArray()
+            (0 until a.length()).map { a.getJSONObject(it).optInt("season_number") }.filter { it > 0 }
+        } catch (e: Exception) { emptyList() }
     }
 
     private fun omdb(imdbId: String): String? {

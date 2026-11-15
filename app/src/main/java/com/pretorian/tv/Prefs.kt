@@ -18,6 +18,8 @@ object Prefs {
 
     fun str(k: String, d: String = ""): String = sp.getString(k, d) ?: d
     fun put(k: String, v: String) = sp.edit().putString(k, v).apply()
+    /** written at once: used while the app is crashing */
+    fun putNow(k: String, v: String) { sp.edit().putString(k, v).commit() }
     fun bool(k: String, d: Boolean = false) = sp.getBoolean(k, d)
     fun put(k: String, v: Boolean) = sp.edit().putBoolean(k, v).apply()
     fun long(k: String, d: Long = 0) = sp.getLong(k, d)

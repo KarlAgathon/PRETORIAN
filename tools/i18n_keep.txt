@@ -256,3 +256,19 @@ vs
 top
 audio_passthrough
 dd.MM.yyyy
+fresh_
+blur_eps
+upd_dl
+upd_inst
+upd_later
+upd_pre
+upd_whatsnew
+apk
+vrati.json
+ MB/s
+RAM
+model
+start
+start_timestamp
+from_start
+ MB · 

@@ -549,17 +549,42 @@ fun ExternalWatch(onFailed: () -> Unit) {
     }
 }
 
+/** Apps on this box that can play a YouTube link (YouTube, SmartTube, TizenTube…). */
+object TrailerApps {
+    fun installed(ctx: Context): List<Pair<String, String>> = try {
+        val pm = ctx.packageManager
+        val probe = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=dQw4w9WgXcQ"))
+        val viaLink = pm.queryIntentActivities(probe, 0).map { it.activityInfo.packageName }
+        val known = listOf("com.google.android.youtube.tv", "com.liskovsoft.smarttubetv.beta", "com.liskovsoft.smarttubetv", "com.teamsmart.videomanager.tv",
+            "io.gh.reisxd.tizentube", "com.reisxd.tizentube", "com.google.android.youtube")
+        val have = (viaLink + known.filter { k -> try { pm.getPackageInfo(k, 0); true } catch (e: Exception) { false } })
+            .distinct().filter { it != ctx.packageName && !it.contains("browser") && !it.contains("chrome") }
+        have.map { pkg -> pkg to (try { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() } catch (e: Exception) { pkg }) }
+    } catch (e: Exception) { emptyList() }
+
+    /** The app picked in Settings, or the first installed one: SmartTube, then TizenTube, then YouTube. */
+    fun chosen(ctx: Context): String? {
+        val list = installed(ctx).map { it.first }
+        val pref = Prefs.str("trailer_app")
+        if (pref.isNotBlank() && pref in list) return pref
+        return list.firstOrNull { it.contains("smarttube") || it.contains("videomanager") } ?: list.firstOrNull { it.contains("tizentube") }
+            ?: list.firstOrNull { it == "com.google.android.youtube.tv" } ?: list.firstOrNull()
+    }
+}
+
 fun openTrailer(ctx: Context, title: String, youtubeKey: String?) {
-    if (youtubeKey != null) {
-        try { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("vnd.youtube:$youtubeKey")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); return } catch (_: Exception) {}
-        try { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$youtubeKey"))); return } catch (_: Exception) {}
+    val pkg = TrailerApps.chosen(ctx)
+    val url = if (youtubeKey != null) "https://www.youtube.com/watch?v=$youtubeKey"
+              else "https://www.youtube.com/results?search_query=" + Uri.encode("${cleanTitle(title).first} trailer")
+    // straight into the chosen app, no question
+    if (pkg != null) {
+        try { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); return } catch (_: Exception) {}
+        if (youtubeKey == null) try {
+            ctx.startActivity(Intent(Intent.ACTION_SEARCH).setPackage(pkg).putExtra("query", "${cleanTitle(title).first} trailer").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); return
+        } catch (_: Exception) {}
     }
-    try {
-        ctx.startActivity(Intent(Intent.ACTION_SEARCH).setPackage("com.google.android.youtube.tv").putExtra("query", "${cleanTitle(title).first} trailer"))
-    } catch (e: Exception) {
-        try { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=" + Uri.encode("${cleanTitle(title).first} trailer")))) }
-        catch (e2: Exception) { Toast.makeText(ctx, tr("YouTube nije instaliran"), Toast.LENGTH_LONG).show() }
-    }
+    try { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    catch (e: Exception) { Toast.makeText(ctx, tr("YouTube nije instaliran"), Toast.LENGTH_LONG).show() }
 }
 
 @Composable

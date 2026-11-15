@@ -1557,6 +1557,17 @@ private fun PlayerV2(openSub: (String) -> Unit) {
                 if (s2.isEmpty()) Prefs.put("audio_default", true) else { Prefs.put("audio_default", false); Prefs.audioLangs = (keep + added).joinToString(",") }
                 rev++
             }
+            SetSection("Trailer")
+            // picked once here; the Trailer button then opens straight in this app
+            val apps = remember { TrailerApps.installed(ctx) }
+            val auto = TrailerApps.chosen(ctx)
+            val curPkg = Prefs.str("trailer_app")
+            SetDrop("Trailer otvaraj u", if (apps.isEmpty()) "nijedna YouTube aplikacija nije instalirana" else "bez pitanja, jednim klikom",
+                listOf(tr("Automatski") + (apps.firstOrNull { it.first == auto }?.let { " · " + it.second } ?: "")) + apps.map { it.second },
+                (apps.indexOfFirst { it.first == curPkg } + 1).coerceAtLeast(0)) { k ->
+                Prefs.put("trailer_app", if (k == 0) "" else apps[k - 1].first); rev++
+            }
+            SetSwitch("Zamuti neodgledane epizode", "slike epizoda bez spojlera", Prefs.bool("blur_eps", true)) { Prefs.put("blur_eps", it) }
             SetSection("Kontrole")
             SetDrop("Preskok ◀ ▶", null, listOf("10 s", "20 s", "30 s"), listOf(10, 20, 30).indexOf(Prefs.seekStep).coerceAtLeast(0)) { Prefs.seekStep = listOf(10, 20, 30)[it]; rev++ }
             SetSwitch("▲ ▼ mijenja kanal", "u TV-u, preko cijelog ekrana", Prefs.bool("zap_updown", true), new = true) { Prefs.put("zap_updown", it) }
@@ -1973,39 +1984,119 @@ private fun UpdateV2() {
     val scope = rememberCoroutineScope()
     var checking by remember { mutableStateOf(false) }
     var rev by remember { mutableIntStateOf(0) }
+    var later by remember { mutableStateOf(false) }
+    var usb by remember { mutableStateOf(false) }
+    var back by remember { mutableStateOf<Release?>(null) }
+    var backDone by remember { mutableStateOf(false) }
+    var backErr by remember { mutableStateOf<String?>(null) }
+    var showAll by remember { mutableStateOf<Release?>(null) }
+    val rels by load(rev / 1000) { Updater.releases() }
+    val releases = (rels as? Load.Ok)?.value ?: emptyList()
     val u = Updater.available
     key(rev) {
         SetPage("Ažuriranje") {
+            // ---- the new version: yellow card with what is new, download progress, install / later / skip
             Column(Modifier.fillMaxWidth().clip(Rnd(16.dp)).background(if (u != null) C.Amber.copy(alpha = 0.12f) else C.Rail)
                 .border(1.dp, if (u != null) C.Amber.copy(alpha = 0.5f) else C.Line, Rnd(16.dp)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Box(Modifier.size(38.dp).clip(Rnd(12.dp)).background(if (u != null) C.Amber else C.Green.copy(alpha = 0.2f)), contentAlignment = Alignment.Center) {
-                        Ico(if (u != null) R.drawable.lc_download else R.drawable.lc_check, 18.dp, if (u != null) Color(0xFF1E293B) else C.Green)
+                    Box(Modifier.size(40.dp).clip(Rnd(12.dp)).background(if (u != null) C.Amber else C.Green.copy(alpha = 0.2f)), contentAlignment = Alignment.Center) {
+                        Ico(if (u != null) R.drawable.lc_download else R.drawable.lc_check, 19.dp, if (u != null) Color(0xFF1E293B) else C.Green)
                     }
                     Column(Modifier.weight(1f)) {
-                        T(if (u != null) trf("Nova verzija %s", u.name) else "Imaš najnoviju verziju", 16.sp, C.Text, FontWeight.Bold, maxLines = 1)
-                        T(trf("Imaš %s", BuildInfo.VERSION), 11.sp, C.Soft)
+                        T(if (u != null) trf("Nova verzija %s", u.name) else "Imaš najnoviju verziju", 17.sp, if (u != null) C.Amber else C.Text, FontWeight.Bold, maxLines = 1)
+                        val when0 = releases.firstOrNull()?.date?.let { " · " + it } ?: ""
+                        T(trf("Imaš %s", BuildInfo.VERSION) + (if (u != null) when0 else "") + (if (u != null && Updater.ready(ctx, u)) " · " + tr("već preuzeto") else ""), 11.sp, C.Soft)
+                    }
+                }
+                if (u != null) {
+                    val lines = u.lines.ifEmpty { releases.firstOrNull { it.name == u.name }?.notes?.lines()?.map { it.trim().removePrefix("-").trim() }?.filter { it.isNotBlank() }?.take(4) ?: emptyList() }
+                    lines.forEach { l -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { T("•", 13.sp, C.Amber, FontWeight.Bold); T(l, 13.sp, C.Text, maxLines = 2) } }
+                    if (releases.any { it.name == u.name && it.notes.isNotBlank() }) Focusable(onClick = { showAll = releases.first { it.name == u.name } }, shape = Pill,
+                        normal = Color.Transparent, focused = C.CardHi, zoom = 1.02f, modifier = Modifier.height(26.dp)) { _ ->
+                        T("Pročitaj sve ›", 12.sp, Color(0xFF4AA3FF), FontWeight.SemiBold, modifier = Modifier.align(Alignment.Center).padding(horizontal = 6.dp))
                     }
                 }
                 val pr = Updater.progress
                 if (pr in 0..100) {
-                    T(trf("Preuzimam %s %%", pr), 12.sp, C.Text)
-                    Box(Modifier.fillMaxWidth().height(6.dp).clip(Pill).background(C.Line)) { Box(Modifier.fillMaxWidth(pr / 100f).fillMaxHeight().background(C.Text)) }
+                    val mb = { b: Long -> String.format("%.1f", b / 1_048_576.0) }
+                    val leftS = if (Updater.speed > 0 && Updater.totalBytes > 0) ((Updater.totalBytes - Updater.doneBytes) / Updater.speed).toInt() else -1
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        T(listOf(tr("Preuzimanje"), " · ", mb(Updater.doneBytes), " / ", mb(Updater.totalBytes), " MB · ", pr, " %").joinToString(""), 12.sp, C.Text, modifier = Modifier.weight(1f))  // i18n-ignore
+                        T(mb(Updater.speed) + " MB/s" + if (leftS >= 0) " · " + trf("još %s s", leftS) else "", 12.sp, Color(0xFF4AA3FF))
+                    }
+                    Box(Modifier.fillMaxWidth().height(6.dp).clip(Pill).background(C.Line)) { Box(Modifier.fillMaxWidth(pr / 100f).fillMaxHeight().background(Color(0xFF4AA3FF))) }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button("Otkaži", R.drawable.lc_x) { Updater.cancel = true }
+                        T("Možeš gledati dalje: instalacija pita tek kad je gotovo.", 11.sp, C.Muted, modifier = Modifier.align(Alignment.CenterVertically))
+                    }
                 } else if (pr == 101) T("Instaliram…", 12.sp, C.Text)
-                if (u != null) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button("Preuzmi i instaliraj", R.drawable.lc_download, primary = true) { scope.launch { Updater.install(ctx, u) } }
-                    Button("Šta je novo", R.drawable.lc_sparkles) { WhatsNew.show = true }
+                if (u != null && pr !in 0..101) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(if (Updater.ready(ctx, u)) "Instaliraj sada" else "Preuzmi i instaliraj", R.drawable.lc_download, primary = true) { scope.launch { Updater.install(ctx, u) } }
+                    Button("Kasnije ▾", R.drawable.lc_clock) { later = true }
+                    Button("Preskoči ovu verziju", R.drawable.lc_x) { Updater.skip(u); rev++ }
                 }
             }
-            SetSection("Podešavanja")
-            SetDrop("Provjeri nove verzije", Updater.status ?: "", listOf("Pri pokretanju i svakih 6 sati", "Jednom dnevno", "Isključeno"),
+            // ---- automatic
+            SetSection("Automatski")
+            SetDrop("Provjeri nove verzije", Updater.status ?: "", listOf("Pri pokretanju i svaki sat", "Jednom dnevno", "Isključeno"),
                 Prefs.str("upd_mode", "0").toIntOrNull() ?: 0) { Prefs.put("upd_mode", it.toString()); rev++ }
-            SetDrop("Obavijest", "zvonce gore desno", ON_OFF, onOff(Prefs.bool("upd_note", true))) { Prefs.put("upd_note", it == 0); rev++ }
+            SetDrop("Preuzmi", "kad je nova verzija tu", listOf("Odmah, u pozadini", "Tek kad kliknem"),
+                Prefs.str("upd_dl", "0").toIntOrNull() ?: 0) { Prefs.put("upd_dl", it.toString()); rev++ }
+            SetDrop("Instaliraj", "nakon preuzimanja", listOf("Pitaj prije", "Sam, pri sljedećem pokretanju"),
+                Prefs.str("upd_inst", "0").toIntOrNull() ?: 0) { Prefs.put("upd_inst", it.toString()); rev++ }
+            val nk = listOf("bell", "badge", "start", "player")
+            SetMulti("Javi mi", "gdje se vidi nova verzija", listOf("Zvonce gore desno", "Značka na Postavkama", "Prozor pri pokretanju", "Otvori Ažuriranje kad izađem iz plejera"),
+                nk.indices.filter { Updater.notify(nk[it]) }.toSet(), all = false) { set -> Prefs.put("upd_notify", set.sorted().joinToString(",") { nk[it] }); rev++ }
+            SetDrop("„Kasnije“ znači", "kad te ponovo podsjetiti", listOf("Za 1 sat", "Sutra", "Za 3 dana"),
+                Prefs.str("upd_later", "0").toIntOrNull() ?: 0) { Prefs.put("upd_later", it.toString()); rev++ }
+            val pk = listOf("backup")
+            SetMulti("Prije instalacije", "postavke ostaju sigurne", listOf("Backup postavki u Download/PRETORIAN"),
+                pk.indices.filter { Prefs.str("upd_pre", "backup").split(',').contains(pk[it]) }.toSet(), all = false) { set ->
+                Prefs.put("upd_pre", set.sorted().joinToString(",") { pk[it] }); rev++
+            }
+            SetSwitch("Nakon instalacije pokaži „Šta je novo“", "jednom, pri prvom pokretanju", Prefs.bool("upd_whatsnew", true)) { Prefs.put("upd_whatsnew", it) }
+            // ---- by hand
             SetSection("Ručno")
             SetRow(if (checking) "Provjeravam…" else "Provjeri sada", "traži novu verziju odmah", arrow = "↻") {
-                if (!checking) { checking = true; scope.launch { Updater.check(ctx); checking = false; rev++ } }
+                if (!checking) { checking = true; scope.launch { Prefs.put("upd_skip", ""); Updater.check(ctx); checking = false; rev++ } }
+            }
+            SetRow("Instaliraj sa USB-a", "APK fajl, za TV bez interneta", tr("Izaberi")) { usb = true }
+            val prev = releases.filter { it.name != BuildInfo.VERSION && (it.name.split('.').map { x -> x.toIntOrNull() ?: 0 }.let { a ->
+                val b = BuildInfo.VERSION.split('.').map { x -> x.toIntOrNull() ?: 0 }; (0 until 3).firstOrNull { i -> a.getOrElse(i) { 0 } != b.getOrElse(i) { 0 } }?.let { i -> a.getOrElse(i) { 0 } < b.getOrElse(i) { 0 } } ?: false }) }.take(3)
+            SetSection("Vrati prethodnu verziju")
+            if (prev.isEmpty()) T(if (rels is Load.Loading) "Učitavam verzije…" else "Nema starijih verzija za vraćanje.", 12.sp, C.Muted)
+            prev.forEach { r -> SetRow(trf("Vrati na %s", r.name), r.date + " · " + tr("backup + stara verzija u Download"), "›") { back = r } }
+            // ---- history
+            SetSection("Historija verzija")
+            releases.take(5).forEach { r ->
+                SetRow(r.name + if (r.name == BuildInfo.VERSION) " · " + tr("instalirana") else "", r.notes.lines().firstOrNull { it.isNotBlank() }?.trim()?.removePrefix("-")?.trim() ?: r.date, r.date) { showAll = r }
             }
             T("Prvi put Android može pitati da dozvoliš PRETORIAN-u instaliranje aplikacija. Dozvoli i ponovo klikni.", 11.sp, C.Muted, maxLines = 2)
+        }
+    }
+    if (later && u != null) Popup("Podsjeti me", { later = false }, width = 460.dp) {
+        listOf(1 to "Za 1 sat", 24 to "Sutra", 72 to "Za 3 dana").forEach { (h, l) -> OptionRow(l, R.drawable.lc_clock) { Updater.snooze(h); later = false; rev++ } }
+    }
+    showAll?.let { r -> Popup(trf("Verzija %s", r.name), { showAll = null }) {
+        T(r.date, 12.sp, C.Muted); T(r.notes.ifBlank { tr("Bez opisa.") }, 14.sp, C.Text, maxLines = 40)
+    } }
+    if (usb) FilePicker("Izaberi APK", setOf("apk"), onDismiss = { usb = false }) { bytes, _ -> usb = false; scope.launch { Updater.installBytes(ctx, bytes) } }
+    back?.let { r ->
+        Popup(trf("Vrati na %s", r.name), { back = null; backDone = false; backErr = null }) {
+            if (!backDone) {
+                T("Android ne dozvoljava da se aplikacija sama vrati na stariju verziju. Zato PRETORIAN radi ovo:", 14.sp, C.Text, maxLines = 3)
+                listOf("Sprema tvoje postavke u Download/PRETORIAN", "Skida stariju verziju (APK) u isti folder", "Deinstalira se",
+                    "Instaliraš stari APK (LEAD Launcher ili adb)", "Pri pokretanju vratiš postavke iz backupa").forEachIndexed { k, l -> T("${k + 1}. " + tr(l), 13.sp, C.Soft, maxLines = 2) }
+                backErr?.let { T(trf("Nije uspjelo: %s", it), 12.sp, C.Danger, maxLines = 2) }
+                OptionRow(if (Rollback.busy) "Pripremam…" else "OK, pripremi i deinstaliraj", R.drawable.lc_download, color = C.Amber) {
+                    if (!Rollback.busy) scope.launch { val err = Rollback.prepare(ctx, r); if (err == null) backDone = true else backErr = err }
+                }
+                OptionRow("Odustani", R.drawable.lc_x) { back = null }
+            } else {
+                T(trf("Spremljeno u Download/PRETORIAN: Pretorian-%s.apk i backup.", r.name), 14.sp, C.Green, maxLines = 3)
+                OptionRow("Deinstaliraj PRETORIAN sada", R.drawable.lc_trash_2, color = C.Danger) { Rollback.uninstall(ctx) }
+                OptionRow("Kasnije", R.drawable.lc_x) { back = null; backDone = false }
+            }
         }
     }
 }
@@ -2060,6 +2151,7 @@ private fun AboutV2() {
             Column(Modifier.weight(1f).clip(Rnd(12.dp)).background(C.Rail).border(1.dp, C.Line, Rnd(12.dp)).padding(10.dp)) { T("Kontakt", 10.sp, C.Muted); T("t3smo@aol.com", 14.sp, C.Text, FontWeight.Bold) }  // i18n-ignore
         }
         SetRow("Šta je novo", "promjene u ovoj verziji", BuildInfo.VERSION) { WhatsNew.show = true }
+        SetRow("O uređaju", remember { android.os.Build.MANUFACTURER.replaceFirstChar { it.uppercase() } + " " + android.os.Build.MODEL }, tr("Pogledaj")) { dlg = "dev" }
         SetRow("Licence", "biblioteke otvorenog koda") { dlg = "lic" }
         SetRow("Privatnost", "šta aplikacija čuva i gdje", tr("Pogledaj")) { dlg = "priv" }
         // help page as a QR code: open it with the phone
@@ -2084,6 +2176,15 @@ private fun AboutV2() {
         SetRow("Log za podršku", "sačuvaj na USB ili u folder", tr("Izvezi"), "▼") { dlg = "log" }
     }
     when (dlg) {
+        "dev" -> Popup("O uređaju", { dlg = null }, width = 640.dp) {
+            val rows = remember { DeviceInfo.read(ctx) }
+            rows.forEach { (k, v) ->
+                Row(Modifier.fillMaxWidth().clip(Rnd(10.dp)).background(C.Rail).padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    T(k, 13.sp, C.Muted, modifier = Modifier.width(170.dp))
+                    T(v, 13.sp, C.Text, FontWeight.SemiBold, maxLines = 2, modifier = Modifier.weight(1f))
+                }
+            }
+        }
         "lic" -> Popup("Licence", { dlg = null }) {
             listOf("Jetpack Compose · Apache 2.0", "Media3 / ExoPlayer · Apache 2.0", "Coil · Apache 2.0", "OkHttp · Apache 2.0", "Lucide ikone · ISC", "Inter font · OFL",
                 "TMDB · This product uses the TMDB API but is not endorsed or certified by TMDB.", "PRETORIAN · MIT · github.com/KarlAgathon/PRETORIAN").forEach { T(it, 13.sp, C.Soft, maxLines = 2) }  // i18n-ignore

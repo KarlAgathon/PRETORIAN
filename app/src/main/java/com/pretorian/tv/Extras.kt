@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
@@ -27,16 +28,17 @@ import java.util.Locale
 object WhatsNew {
     val VERSION = BuildInfo.VERSION
     val POINTS = listOf(
-        "TV" to "Grupe, kanali s programom i trakom, desno slika i šta slijedi. Zadnje gledano na dnu.",
-        "Večer u New Yorku" to "Jedna mirna tamnoplava pozadina za cijelu aplikaciju, bez slika iza.",
-        "Filmovi i serije" to "Nove stranice: sezone lijevo, epizode s napretkom. Drži OK na posteru za meni.",
-        "Pretraga" to "Veliko polje, glasovna pretraga, kanali, emisije i filmovi odvojeno.",
-        "Postavke" to "Teme kao sličice, boje, klizači, dnevno vrijeme gledanja, omiljeni timovi, uređivanje više grupa odjednom.",
+        "Stranica filma" to "Veliki plakat s ocjenom, godina – trajanje – žanr – studio, glumci sa slikama. Dole zvuk, titl s izvorom i „Pronađi titl“.",
+        "Stranica serije" to "Sezone kao kartice, epizode s trakom, trajanjem i lampicom: zeleno, žuto, crveno. Dugi OK na sezoni ili epizodi za označavanje.",
+        "Nove epizode" to "Serije koje gledaš prate se same. Nova epizoda se pojavi na Početnoj i vodi pravo na nju. Nadolazeće epizode s datumom.",
+        "Ažuriranje" to "Kasnije, Preskoči, preuzimanje u pozadini, historija verzija, instalacija s USB-a i vraćanje na stariju verziju.",
+        "O uređaju" to "U O aplikaciji: model, Android, procesor, grafika, RAM, prostor i ekran.",
     )
     var show by mutableStateOf(false)
     /** after an update (not on a brand new install, there is nothing "new" yet) */
     fun check(c: Context) {
         if (Prefs.str("whatsnew_seen") == VERSION) return
+        if (!Prefs.bool("upd_whatsnew", true)) { Prefs.put("whatsnew_seen", VERSION); return }
         if (Prefs.str("whatsnew_seen").isNotEmpty() || Store.playlists(c).isNotEmpty()) show = true
         Prefs.put("whatsnew_seen", VERSION)
     }
@@ -158,5 +160,44 @@ fun ScreenSaver(title: String) {
             T(trf("⏸  %s · pauzirano", title), 14.sp, Color(0xFF9AA0AA))
             T("bilo koja tipka – nastavi", 12.sp, Color(0xFF6B7080))
         }
+    }
+}
+
+
+/** The new version asks once when PRETORIAN starts ("window at start"). */
+@Composable
+fun UpdateAskDialog(nav: Nav) {
+    val u = Updater.available
+    if (!UpdateAsk.show || u == null) return
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    Popup(trf("Nova verzija %s", u.name), onDismiss = { UpdateAsk.show = false }, width = 560.dp) {
+        u.lines.forEach { l -> T("• $l", 14.sp, C.Text, maxLines = 2) }
+        OptionRow("Instaliraj sada", R.drawable.lc_download, color = C.Amber) { UpdateAsk.show = false; scope.launch { Updater.install(ctx, u) } }
+        OptionRow("Detalji u Ažuriranju", R.drawable.lc_settings) { UpdateAsk.show = false; SettingsNav.section = "update"; nav.root(Screen.Settings) }
+        OptionRow("Kasnije", R.drawable.lc_clock) {
+            UpdateAsk.show = false; Updater.snooze(listOf(1, 24, 72)[Prefs.str("upd_later", "0").toIntOrNull()?.coerceIn(0, 2) ?: 0])
+        }
+        OptionRow("Preskoči ovu verziju", R.drawable.lc_x) { UpdateAsk.show = false; Updater.skip(u) }
+    }
+}
+
+/** After 3 crashes in 10 minutes: a safe start, going back to an older version, or trying again. */
+@Composable
+fun CrashGuardDialog(nav: Nav) {
+    var open by remember { mutableStateOf(CrashGuard.tooMany()) }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(Unit) { kotlinx.coroutines.delay(120_000); CrashGuard.clear() }   // two quiet minutes: all fine again
+    if (!open) return
+    Popup("PRETORIAN se ruši", onDismiss = { open = false; CrashGuard.clear() }, width = 600.dp) {
+        T(trf("Verzija %s se srušila više puta zaredom. Šta želiš?", BuildInfo.VERSION), 14.sp, C.Soft, maxLines = 3)
+        OptionRow("Siguran start", R.drawable.lc_shield_check, sub = tr("briše keš i uključuje Lite"), color = C.Green) {
+            try { ctx.cacheDir.deleteRecursively() } catch (_: Exception) {}
+            Perf.set(1); Repo.clear(); CrashGuard.clear(); open = false
+        }
+        OptionRow("Vrati prethodnu stabilnu verziju", R.drawable.lc_rotate_ccw, sub = tr("backup i stara verzija u Download/PRETORIAN")) {
+            CrashGuard.clear(); open = false; SettingsNav.section = "update"; nav.root(Screen.Settings)
+        }
+        OptionRow("Pokušaj ponovo", R.drawable.lc_x) { CrashGuard.clear(); open = false }
     }
 }

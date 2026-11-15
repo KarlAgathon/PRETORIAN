@@ -35,6 +35,7 @@ object CrashLog {
                 val sw = java.io.StringWriter(); e.printStackTrace(java.io.PrintWriter(sw))
                 file(app).writeText("PRETORIAN ${BuildInfo.VERSION} · ${android.os.Build.MODEL} · Android ${android.os.Build.VERSION.RELEASE}\n" + sw.toString().take(6000))
             } catch (_: Throwable) {}
+            try { CrashGuard.record() } catch (_: Throwable) {}
             prev?.uncaughtException(t, e)
         }
     }

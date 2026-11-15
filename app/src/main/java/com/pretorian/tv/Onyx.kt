@@ -291,6 +291,19 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                 SubscriptionCard()
                 }
                 Spacer(Modifier.height(12.dp))
+                // series you follow that got a new episode: straight into that season and episode
+                val fresh = remember(Follow.rev) { Follow.fresh() }
+                if (fresh.isNotEmpty()) {
+                    RowTitle("NOVE EPIZODE")
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(18.dp), contentPadding = PaddingValues(end = 40.dp, top = 6.dp, bottom = 10.dp)) {
+                        items(fresh, key = { "f" + it.id }) { f ->
+                            WideCard(f.name, epCode(f.season, f.num) + " · " + tr("nova"), f.cover, "fresh_" + f.id, null, height = cardH) {  // i18n-ignore
+                                SeriesJump.id = f.id; SeriesJump.season = f.season; SeriesJump.num = f.num
+                                nav.root(Screen.Series); nav.push(Screen.SeriesDetail(SeriesItem(f.id, f.name, f.cover, null, null)))
+                            }
+                        }
+                    }
+                }
                 if (cont.isNotEmpty()) {
                     RowTitle("NASTAVI GLEDANJE")
                     // round trip: ▶ on the last card goes to the first, ◀ on the first goes to the last

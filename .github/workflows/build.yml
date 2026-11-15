@@ -61,7 +61,8 @@ jobs:
       - name: Make update.json
         if: steps.v.outputs.exists == 'false' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
         run: |
-          echo "{\"versionCode\": ${{ steps.v.outputs.code }}, \"versionName\": \"${{ steps.v.outputs.name }}\", \"apk\": \"https://github.com/${{ github.repository }}/releases/latest/download/Pretorian.apk\", \"notes\": \"\"}" > update.json
+          NOTES=$(jq -Rs . < RELEASE_NOTES.txt 2>/dev/null || echo '""')
+          echo "{\"versionCode\": ${{ steps.v.outputs.code }}, \"versionName\": \"${{ steps.v.outputs.name }}\", \"apk\": \"https://github.com/${{ github.repository }}/releases/latest/download/Pretorian.apk\", \"notes\": $NOTES}" > update.json
       - uses: softprops/action-gh-release@v2
         if: steps.v.outputs.exists == 'false' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
         with:
@@ -69,6 +70,7 @@ jobs:
           name: PRETORIAN ${{ steps.v.outputs.name }}
           target_commitish: ${{ github.sha }}
           make_latest: "true"
+          body_path: RELEASE_NOTES.txt
           files: |
             Pretorian.apk
             update.json
