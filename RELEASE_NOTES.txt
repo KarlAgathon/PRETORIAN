@@ -1,2 +1,6 @@
-Ažuriranje u aplikaciji više ne prekida samo sebe
-Sve iz 0.9.0: nove stranice filma i serije, nove epizode, Ažuriranje, O uređaju
+Serije: sezone „Sezona 1 · 6/22“, niži redovi epizoda, platforma (Netflix, HBO…) kad je poznata
+„Traži titl“: online pretraga ili s diska / USB-a, i za serije
+Filmovi i serije: „Nedavno dodano“ na vrhu, Nazad vraća na isti plakat
+Stalker portal (TV i filmovi) i novi početni ekran
+Čuvar ekrana, Dijagnostika, novi O uređaju i O aplikaciji
+Prekinut stream se sam tiho ponovo spoji; zadani PIN 0000

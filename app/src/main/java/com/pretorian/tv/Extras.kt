@@ -28,11 +28,12 @@ import java.util.Locale
 object WhatsNew {
     val VERSION = BuildInfo.VERSION
     val POINTS = listOf(
-        "Stranica filma" to "Veliki plakat s ocjenom, godina – trajanje – žanr – studio, glumci sa slikama. Dole zvuk, titl s izvorom i „Pronađi titl“.",
-        "Stranica serije" to "Sezone kao kartice, epizode s trakom, trajanjem i lampicom: zeleno, žuto, crveno. Dugi OK na sezoni ili epizodi za označavanje.",
-        "Nove epizode" to "Serije koje gledaš prate se same. Nova epizoda se pojavi na Početnoj i vodi pravo na nju. Nadolazeće epizode s datumom.",
-        "Ažuriranje" to "Kasnije, Preskoči, preuzimanje u pozadini, historija verzija, instalacija s USB-a i vraćanje na stariju verziju.",
-        "O uređaju" to "U O aplikaciji: model, Android, procesor, grafika, RAM, prostor i ekran.",
+        "Serije" to "Sezone „Sezona 1 · 6/22“, odgledana sezona zeleno. Niži redovi epizoda. Platforma (Netflix, HBO, Disney+…) kad je poznata.",
+        "Traži titl" to "Samo dvije opcije: pretraga svih stranica s titlovima online ili učitavanje s diska / USB-a. I za serije.",
+        "Filmovi i serije" to "„Nedavno dodano“ na vrhu, kategorije u jednom redu. Nazad vraća na isti plakat, pa na kategorije.",
+        "Stalker portal" to "Nova vrsta playliste: portal i MAC adresa. TV kanali i filmovi.",
+        "Čuvar ekrana" to "Veliki sat, datum i pauzirani naslov s preostalim vremenom. Podešavanje u Postavkama.",
+        "Dijagnostika i O aplikaciji" to "Gledano, protok, brzina, stabilnost; novi O uređaju i O aplikaciji. Prekinut stream se sam tiho ponovo spoji.",
     )
     var show by mutableStateOf(false)
     /** after an update (not on a brand new install, there is nothing "new" yet) */

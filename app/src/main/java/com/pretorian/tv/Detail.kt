@@ -440,6 +440,8 @@ fun OnyxSeriesDetail(s: SeriesItem, nav: Nav) {
                         }
                     }
                 }
+                // audio, subtitle and "Traži titl" for the episode you continue with
+                TrackBar(s.name, next?.season ?: cur, next?.num, next?.url ?: "", choice) { choice = it }
             }
         }
     }
