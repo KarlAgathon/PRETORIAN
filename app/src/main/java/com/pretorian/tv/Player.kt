@@ -97,11 +97,16 @@ fun buildPlayer(ctx: Context, preview: Boolean = false): ExoPlayer {
     val builder = ExoPlayer.Builder(ctx, renderers)
         .setMediaSourceFactory(DefaultMediaSourceFactory(ctx).setDataSourceFactory(DefaultDataSource.Factory(ctx, http)))
     // the small picture starts as soon as half a second is loaded
+    // memory limits: the buffer lives in the app's memory, so it is capped (Lite 32 MB, Full 64 MB, slow internet 96 MB)
     if (preview) builder.setLoadControl(androidx.media3.exoplayer.DefaultLoadControl.Builder()
-        .setBufferDurationsMs(2_000, 15_000, 500, 1_000).build())
+        .setBufferDurationsMs(2_000, 15_000, 500, 1_000).setTargetBufferBytes(if (Perf.lite) 6 shl 20 else 12 shl 20).build())
     // "slow internet": a bigger buffer, starts a little later but stops less often
     else if (Prefs.bool("slow_net")) builder.setLoadControl(androidx.media3.exoplayer.DefaultLoadControl.Builder()
-        .setBufferDurationsMs(30_000, 120_000, 3_000, 6_000).build())
+        .setBufferDurationsMs(30_000, 120_000, 3_000, 6_000).setTargetBufferBytes(if (Perf.lite) 48 shl 20 else 96 shl 20).build())
+    else if (Perf.lite) builder.setLoadControl(androidx.media3.exoplayer.DefaultLoadControl.Builder()
+        .setBufferDurationsMs(15_000, 20_000, 1_500, 3_000).setTargetBufferBytes(32 shl 20).setPrioritizeTimeOverSizeThresholds(false).build())
+    else builder.setLoadControl(androidx.media3.exoplayer.DefaultLoadControl.Builder()
+        .setTargetBufferBytes(64 shl 20).setPrioritizeTimeOverSizeThresholds(false).build())
     val player = builder.build()
     val audio = Prefs.audioLangs.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toTypedArray()
     val b = player.trackSelectionParameters.buildUpon()
@@ -344,11 +349,9 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         val a = object : androidx.media3.exoplayer.analytics.AnalyticsListener {
             override fun onBandwidthEstimate(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime, totalLoadTimeMs: Int, totalBytesLoaded: Long, bitrateEstimate: Long) {
                 bitrate = bitrateEstimate
-            }
-            override fun onLoadCompleted(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
-                                         loadEventInfo: androidx.media3.exoplayer.source.LoadEventInfo, mediaLoadData: androidx.media3.exoplayer.source.MediaLoadData) {
+                // data used for Diagnostics: the bytes loaded since the last estimate (works for live TV too)
                 val it = items.getOrNull(index)
-                Stats.bytes(if (s.live) "tv" else if (it?.season != null) "ser" else "mov", loadEventInfo.bytesLoaded)
+                if (totalBytesLoaded > 0) Stats.bytes(if (s.live) "tv" else if (it?.season != null) "ser" else "mov", totalBytesLoaded)
             }
         }
         player.addListener(l); player.addAnalyticsListener(a)
@@ -421,7 +424,14 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         Modifier.fillMaxSize().background(Color.Black)
             .focusRequester(focus)
             .onPreviewKeyEvent { e ->
-                if (saver) { if (e.type == KeyEventType.KeyDown) saver = false; return@onPreviewKeyEvent true }
+                // screen saver: OK goes on watching at once, any other button only closes it
+                if (saver) {
+                    if (e.type == KeyEventType.KeyDown) {
+                        saver = false
+                        if (e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter || e.key == Key.MediaPlay || e.key == Key.MediaPlayPause) player.play()
+                    }
+                    return@onPreviewKeyEvent true
+                }
                 // live TV: short OK pauses / plays, holding OK asks to add the channel to favourites
                 val okKey = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter
                 if (s.live && okKey && dialog == null && side == null && resume == null && !bar && error == null && digits.isEmpty() && favAsk == null) {

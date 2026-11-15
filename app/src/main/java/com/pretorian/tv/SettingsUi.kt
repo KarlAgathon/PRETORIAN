@@ -503,7 +503,7 @@ private fun LookPage() {
             Look.bigText = !Look.bigText; save()
         }
         var perfMenu by remember { mutableStateOf(false) }
-        OptionRow("Mod programa", R.drawable.lc_gauge2, sub = trf("Ovaj uređaj: %s GB RAM · %s", String.format("%.1f", Perf.ramGb), tr(if (Perf.weak) "slabiji" else "jak")),
+        OptionRow("Mod programa", R.drawable.lc_gauge2, sub = trf("Ocjena uređaja %s/100 · %s GB RAM", Perf.score, String.format("%.1f", Perf.ramGb)),
             value = tr(Perf.MODES[Perf.mode]) + (if (Perf.mode == 0) " (" + tr(if (Perf.weak) "Lite" else "Full") + ")" else "") + "  ▼") { perfMenu = true }
         if (perfMenu) Popup("Mod programa", { perfMenu = false }) {
             T("Lite: bez velikih slika u pozadini i bez prelaza, manje slike. Za slabije uređaje. Full: puni izgled sa slikama.", 14.sp, C.Soft, maxLines = 4)
@@ -1525,7 +1525,7 @@ private fun LookV2(openSub: (String) -> Unit) {
             SetDrop("Kad otvoriš TV, prvo vidiš", null, listOf("Lista kanala", "TV vodič"), if (Prefs.str("tv_view", "list") == "guide") 1 else 0) {
                 Prefs.put("tv_view", if (it == 1) "guide" else "list"); rev++
             }
-            SetDrop("Mod programa", trf("Ovaj uređaj: %s GB RAM · %s", String.format("%.1f", Perf.ramGb), tr(if (Perf.weak) "slabiji" else "jak")),
+            SetDrop("Mod programa", trf("Ocjena uređaja %s/100 · %s GB RAM", Perf.score, String.format("%.1f", Perf.ramGb)),
                 listOf(tr("Automatski") + " (" + tr(if (Perf.weak) "Lite" else "Full") + ")", "Lite", "Full"), Perf.mode,
                 note = tr("Lite: bez velikih slika u pozadini i bez prelaza, manje slike. Za slabije uređaje. Full: puni izgled sa slikama.")) { Perf.set(it); rev++ }
             if (SetMode.advanced) {
@@ -2085,7 +2085,6 @@ private fun UpdateV2() {
                 pk.indices.filter { Prefs.str("upd_pre", "").split(',').contains(pk[it]) }.toSet(), all = false) { set ->
                 Prefs.put("upd_pre", set.sorted().joinToString(",") { pk[it] }); rev++
             }
-            SetSwitch("Nakon instalacije pokaži „Šta je novo“", "jednom, pri prvom pokretanju", Prefs.bool("upd_whatsnew", true)) { Prefs.put("upd_whatsnew", it) }
             // ---- by hand
             SetSection("Ručno")
             SetRow(if (checking) "Provjeravam…" else "Provjeri sada", "traži novu verziju odmah", arrow = "↻") {
@@ -2141,7 +2140,6 @@ private fun AboutV2(onSub: (String) -> Unit, onSection: (String) -> Unit) {
     var dlg by remember { mutableStateOf<String?>(null) }
     var cacheMb by remember { mutableStateOf(0L) }
     val crash = remember { try { java.io.File(ctx.filesDir, "last_crash.txt").takeIf { it.exists() }?.readText() } catch (e: Exception) { null } }
-    val first = remember { FocusRequester() }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // ---- hero: logo, name, version, badges and the help QR
         Row(Modifier.fillMaxWidth().clip(Rnd(20.dp)).background(C.CardHi).border(1.dp, C.Line, Rnd(20.dp)).padding(18.dp),
@@ -2173,20 +2171,19 @@ private fun AboutV2(onSub: (String) -> Unit, onSection: (String) -> Unit) {
         val dev = remember { DeviceInfo.head(ctx) }
         val lastCheck = Prefs.long("upd_checked_at", 0L)
         CardGrid(3, listOf(
-            { m -> Box(m.focusRequester(first)) { InfoCard("O uređaju", dev.first, tr("procesor, RAM, ekran, mreža"), R.drawable.lc_monitor, Color(0xFF3B82F6), Modifier.fillMaxSize()) { onSub("device") } } },
-            { m -> InfoCard("Šta je novo", trf("Verzija %s", BuildInfo.VERSION), tr("promjene u ovoj verziji"), R.drawable.lc_star, Color(0xFFF59E0B), m) { WhatsNew.show = true } },
-            { m -> InfoCard("Autor", "Svi3e", tr("PRETORIAN tim"), R.drawable.lc_user, Color(0xFF8B5CF6), m) { dlg = "author" } },  // i18n-ignore
-            { m -> InfoCard("Kontakt", "t3smo@aol.com", tr("prijedlozi i greške"), R.drawable.lc_file_text, Color(0xFF06B6D4), m) { dlg = "contact" } },  // i18n-ignore
+            { m -> InfoCard("O uređaju", dev.first, tr("procesor, RAM, ekran, mreža"), R.drawable.lc_monitor, Color(0xFF3B82F6), m, onClick = { onSub("device") }) },
+            { m -> InfoCard("Šta je novo", trf("Verzija %s", BuildInfo.VERSION), tr("promjene u ovoj verziji"), R.drawable.lc_star, Color(0xFFF59E0B), m, onClick = { WhatsNew.show = true }) },
+            { m -> InfoCard("Autor", "Svi3e", tr("PRETORIAN tim"), R.drawable.lc_user, Color(0xFF8B5CF6), m, onClick = { dlg = "author" }) },  // i18n-ignore
+            { m -> InfoCard("Kontakt", "t3smo@aol.com", tr("prijedlozi i greške"), R.drawable.lc_file_text, Color(0xFF06B6D4), m, onClick = { dlg = "contact" }) },  // i18n-ignore
             { m -> InfoCard("Izvještaj o grešci", if (crash == null) tr("Nema grešaka") else tr("Ima zapis"), tr("pogledaj ili izvezi zapis"), R.drawable.lc_file, Color(0xFFEF4444), m,
-                titleColor = if (crash == null) C.Text else C.Amber) { dlg = "crash" } },
-            { m -> InfoCard("Privatnost", tr("Šta se čuva i gdje"), tr("sve ostaje na uređaju"), R.drawable.lc_shield_check, Color(0xFF22C55E), m) { dlg = "priv" } },
-            { m -> InfoCard("Licence", tr("Otvoreni kod"), "Media3, Coil, OkHttp, zxing", R.drawable.lc_list, Color(0xFF64748B), m) { dlg = "lic" } },  // i18n-ignore
+                titleColor = if (crash == null) C.Text else C.Amber, onClick = { dlg = "crash" }) },
+            { m -> InfoCard("Privatnost", tr("Šta se čuva i gdje"), tr("sve ostaje na uređaju"), R.drawable.lc_shield_check, Color(0xFF22C55E), m, onClick = { dlg = "priv" }) },
+            { m -> InfoCard("Licence", tr("Otvoreni kod"), "Media3, Coil, OkHttp, zxing", R.drawable.lc_list, Color(0xFF64748B), m, onClick = { dlg = "lic" }) },  // i18n-ignore
             { m -> InfoCard("Ažuriranje", tr("Provjeri sada"), if (lastCheck > 0) tr("zadnja provjera") + ": " + java.text.SimpleDateFormat("dd.MM. HH:mm", java.util.Locale.US).format(java.util.Date(lastCheck)) else null,  // i18n-ignore
-                R.drawable.lc_refresh_cw, Color(0xFFEC4899), m) { onSection("update") } },
-            { m -> InfoCard("Pomoć", tr("Kratko uputstvo"), tr("prvi koraci, daljinski, prečice"), R.drawable.lc_info, Color(0xFF9CA3AF), m) { dlg = "help" } },
+                R.drawable.lc_refresh_cw, Color(0xFFEC4899), m, onClick = { onSection("update") }) },
+            { m -> InfoCard("Pomoć", tr("Kratko uputstvo"), tr("prvi koraci, daljinski, prečice"), R.drawable.lc_info, Color(0xFF9CA3AF), m, onClick = { dlg = "help" }) },
         ))
     }
-    LaunchedEffect(Unit) { delay(80); try { first.requestFocus() } catch (_: Exception) {} }
     when (dlg) {
         "dev" -> Popup("O uređaju", { dlg = null }, width = 640.dp) {
             val rows = remember { DeviceInfo.read(ctx) }

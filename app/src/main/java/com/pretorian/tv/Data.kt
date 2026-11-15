@@ -454,11 +454,20 @@ object Repo {
     private var m3uFor: String? = null
     private var m3u: List<Channel> = emptyList()
 
-    fun clear() { cache.clear(); m3uFor = null; m3u = emptyList() }
+    fun clear() { cache.clear(); m3uFor = null; m3u = emptyList(); catalogs.clear() }
+
+    /** frees memory: always the big catalogs, and with [hard] also films, series and all-channel lists (groups and the open channels stay) */
+    fun trim(hard: Boolean) {
+        catalogs.clear()
+        if (hard) synchronized(cache) { cache.keys.removeAll { k -> k.startsWith("all_") || k.startsWith("mv_") || k.startsWith("se_") || k.startsWith("ep_") || k.startsWith("mi_") } }
+    }
+
+    /** the whole film / series catalog is big: it stays on the disk and in memory only as long as Android has room (soft) */
+    private val catalogs = HashMap<String, java.lang.ref.SoftReference<List<JSONObject>>>()
 
     @Suppress("UNCHECKED_CAST")
     private suspend fun <T> cached(key: String, load: () -> T): T = withContext(Dispatchers.IO) {
-        (cache[key] as T?) ?: load().also { cache[key] = it as Any }
+        (synchronized(cache) { cache[key] } as T?) ?: load().also { synchronized(cache) { cache[key] = it as Any } }
     }
 
     private fun m3uChannels(p: Playlist): List<Channel> {
@@ -489,13 +498,17 @@ object Repo {
 
     /** Every movie or series of a playlist. Kept in memory and on the box for 24 hours, so search is instant. */
     suspend fun catalog(p: Playlist, kind: String): List<JSONObject> =
-        if (p.type != SourceType.XTREAM) emptyList() else cached("cat_${kind}_${p.id}") {
+        if (p.type != SourceType.XTREAM) emptyList() else withContext(Dispatchers.IO) {
+            val key = "cat_${kind}_${p.id}"
+            catalogs[key]?.get()?.let { return@withContext it }
             val f = diskDir?.let { java.io.File(it, "catalog_${kind}_${p.id.hashCode()}.json") }
             val fresh = f != null && f.exists() && System.currentTimeMillis() - f.lastModified() < 24 * 3600_000L
             val fromDisk = if (fresh) try { org.json.JSONArray(f!!.readText()).let { a -> (0 until a.length()).map { a.getJSONObject(it) } } } catch (e: Throwable) { null } else null
-            fromDisk ?: Xtream(p).catalog(kind).also { list ->
+            val list = fromDisk ?: Xtream(p).catalog(kind).also { list ->
                 try { f?.writeText(org.json.JSONArray(list).toString()) } catch (_: Exception) {}
             }
+            catalogs[key] = java.lang.ref.SoftReference(list)
+            list
         }
 
     /** how many movies or series a playlist has, counted while reading, nothing kept in memory */

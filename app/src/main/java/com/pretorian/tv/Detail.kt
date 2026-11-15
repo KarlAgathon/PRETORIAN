@@ -151,7 +151,7 @@ private fun TrackBar(search: String, season: Int?, episode: Int?, url: String, c
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         BarBox("ZVUK", audioText, R.drawable.lc_volume, null, Modifier.weight(1f)) { showAudio = true }
         BarBox("TITL", subText, R.drawable.lc_captions, src, Modifier.weight(1f)) { showSubs = true }
-        BarBox("NEMA PRAVOG TITLA?", tr("Traži titl"), R.drawable.lc_search, "Online · Disk" to null, Modifier.weight(1f)) { showFind = true }
+        BarBox("ONLINE · DISK", tr("Traži titl"), R.drawable.lc_search, null, Modifier.weight(1f)) { showFind = true }
     }
     // "Traži titl": only two ways — search all subtitle sites online, or load a file from the disk / USB
     var findMode by remember { mutableStateOf<String?>(null) }
@@ -164,9 +164,10 @@ private fun TrackBar(search: String, season: Int?, episode: Int?, url: String, c
         showSubs = false; showFind = false; findMode = null
     }
     findMode?.let { fm -> key(fm) { SubtitlePicker(search, season, episode, probeUrl = url, startMode = fm, onDismiss = { findMode = null }) { f -> picked(f) } } }
-    if (showSubs) SubtitlePicker(search, season, episode, probeUrl = url,
-        onProbed = { t -> onChange(choice.copy(sub = t, subFile = null, subOff = false)); showSubs = false },
-        onDismiss = { showSubs = false }) { f -> picked(f) }
+    if (showSubs) ProviderSubsPicker(url, choice.sub?.title, choice.subOff, onDismiss = { showSubs = false },
+        onOff = { onChange(choice.copy(sub = null, subFile = null, subOff = true)); showSubs = false }) { t ->
+        onChange(choice.copy(sub = t, subFile = null, subOff = false)); showSubs = false
+    }
     if (showAudio) AudioPicker(url, choice.audio?.title, onDismiss = { showAudio = false }) { t -> onChange(choice.copy(audio = t)); showAudio = false }
 }
 

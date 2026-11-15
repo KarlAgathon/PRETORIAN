@@ -189,7 +189,9 @@ object Tmdb {
                       else d.optInt("runtime").takeIf { it > 0 }?.let { "${it / 60}h ${it % 60}m" }
         // who made it: the TV network for a series, the studio for a film
         // where it streams: the network for a series; for a film the subscription service in this country, else a studio only when it is a streaming brand
-        val studio = if (tv) d.optJSONArray("networks")?.optJSONObject(0)?.str("name")?.orNullIfBlank()?.let { Platforms.norm(it) ?: it }
+        val studio = if (tv) (d.optJSONArray("networks")?.let { nw -> (0 until nw.length()).firstNotNullOfOrNull { Platforms.norm(nw.getJSONObject(it).str("name")) } }
+                ?: d.optJSONArray("production_companies")?.let { pc -> (0 until pc.length()).firstNotNullOfOrNull { Platforms.norm(pc.getJSONObject(it).str("name")) } }
+                ?: d.optJSONArray("networks")?.optJSONObject(0)?.str("name")?.orNullIfBlank())
             else run {
                 val res = d.optJSONObject("watch/providers")?.optJSONObject("results")
                 val cc = java.util.Locale.getDefault().country.ifBlank { "DE" }

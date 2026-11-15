@@ -69,18 +69,36 @@ object Perf {
     var ramGb = 4.0; private set
     var weak = false; private set
     val lite get() = if (mode == 0) weak else mode == 1
+    /** device score 0–100: below 70 (or under 3 GB RAM) PRETORIAN starts in Lite by itself */
+    var score = 100; private set
     fun init(c: Context) {
         val am = c.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
         val mi = android.app.ActivityManager.MemoryInfo(); am.getMemoryInfo(mi)
         ramGb = mi.totalMem / 1_073_741_824.0
-        // weak (Lite on its own): under ~3.5 GB of usable RAM (2 GB and 3 GB boxes like the Mi Box), a "low RAM" device,
-        // old Android, a 32-bit-only chip, fewer than 4 cores or a chip slower than 1.6 GHz (Mi Box S: 1.5 GHz; Google TV Streamer is above)
         val cores = Runtime.getRuntime().availableProcessors()
         val maxGhz = (0 until cores).maxOfOrNull { i ->
             try { java.io.File("/sys/devices/system/cpu/cpu$i/cpufreq/cpuinfo_max_freq").readText().trim().toLong() / 1_000_000.0 } catch (e: Exception) { 0.0 }
         } ?: 0.0
-        weak = am.isLowRamDevice || ramGb < 3.5 || android.os.Build.VERSION.SDK_INT < 28 || android.os.Build.SUPPORTED_64_BIT_ABIS.isEmpty() ||
-            cores < 4 || (maxGhz > 0.1 && maxGhz < 1.6)
+        val sdk = android.os.Build.VERSION.SDK_INT
+        // RAM: 30 points
+        val ram = when { ramGb >= 3.5 -> 30; ramGb >= 2.8 -> 18; ramGb >= 1.8 -> 8; else -> 0 }
+        // processor: 25 points (cores, clock, 64-bit)
+        var cpu = when { cores >= 8 -> 10; cores >= 4 -> 7; else -> 2 }
+        cpu += when { maxGhz >= 2.0 -> 12; maxGhz >= 1.8 -> 9; maxGhz >= 1.6 -> 5; maxGhz > 0.1 -> 1; else -> 6 }
+        if (android.os.Build.SUPPORTED_64_BIT_ABIS.isNotEmpty()) cpu += 3
+        // Android version: 15 points (Android 9 and older = an older box, usually from before 2022)
+        val os = when { sdk >= 33 -> 15; sdk >= 31 -> 12; sdk >= 30 -> 8; sdk >= 29 -> 5; else -> 0 }
+        // performance class (Android 12+, set by the maker) and chip name: 15 points
+        val pc = if (sdk >= 31) android.os.Build.VERSION.MEDIA_PERFORMANCE_CLASS else 0
+        val socOld = (if (sdk >= 31) android.os.Build.SOC_MODEL else android.os.Build.HARDWARE).lowercase().let { h ->
+            listOf("amlogic", "s905x", "s905w", "s905l", "s905y2", "mt8695", "mt8167", "rk3229", "rk3328", "h616", "h313").any { h.contains(it) } }
+        val gpu = when { pc >= 31 -> 15; socOld -> 3; sdk >= 31 -> 12; else -> 7 }
+        // short speed test: 15 points
+        val t0 = System.nanoTime(); var x = 0L; for (i in 0 until 3_000_000) x += (i xor (i shr 3)).toLong()
+        val ms = (System.nanoTime() - t0) / 1_000_000 + (x and 0)
+        val speed = when { ms < 12 -> 15; ms < 20 -> 11; ms < 35 -> 7; ms < 60 -> 3; else -> 0 }
+        score = (ram + cpu + os + gpu + speed).coerceIn(0, 100)
+        weak = am.isLowRamDevice || ramGb < 2.8 || score < 70
         mode = Prefs.long("perf_mode", 0).toInt().coerceIn(0, 2)
     }
     fun set(m: Int) { mode = m; Prefs.put("perf_mode", m.toLong()) }

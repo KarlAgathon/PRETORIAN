@@ -38,6 +38,10 @@ object WhatsNew {
     var show by mutableStateOf(false)
     /** after an update (not on a brand new install, there is nothing "new" yet) */
     fun check(c: Context) {
+        // never opens by itself any more: it is in About › What's new when you want it
+        Prefs.put("whatsnew_seen", VERSION); return
+    }
+    @Suppress("unused") private fun checkOld(c: Context) {
         if (Prefs.str("whatsnew_seen") == VERSION) return
         if (!Prefs.bool("upd_whatsnew", true)) { Prefs.put("whatsnew_seen", VERSION); return }
         if (Prefs.str("whatsnew_seen").isNotEmpty() || Store.playlists(c).isNotEmpty()) show = true

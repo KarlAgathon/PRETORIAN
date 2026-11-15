@@ -73,7 +73,9 @@ object Stats {
     /** called once at start: a new version means an update was installed */
     fun onStart() {
         val last = Prefs.str("stats_ver")
-        if (last.isNotBlank() && last != BuildInfo.VERSION) inc(day(), "upd", 1)
+        // a new version, also the first one that keeps these counters (whatsnew_seen shows it is not a brand new install)
+        if (last != BuildInfo.VERSION && (last.isNotBlank() || Prefs.str("whatsnew_seen").isNotBlank())) inc(day(), "upd", 1)
+        if (last != BuildInfo.VERSION && last.isNotBlank()) UpdLog.add(trf("Pokrenuta nova verzija %s (prije %s)", BuildInfo.VERSION, last))
         if (last != BuildInfo.VERSION) { Prefs.put("stats_ver", BuildInfo.VERSION); Prefs.put("stats_upd_at", System.currentTimeMillis()) }
         // drop days older than a year
         val days = root().optJSONObject("d") ?: return
@@ -137,13 +139,21 @@ object Saver {
     /** last key press anywhere in the app */
     var lastKey = System.currentTimeMillis()
     var showing by mutableStateOf(false)
+    /** OK on the menus' screen saver: play the latest "Continue watching" title */
+    var resume by mutableIntStateOf(0)
     var preview by mutableStateOf(false)
-    fun touch(): Boolean { lastKey = System.currentTimeMillis(); val was = showing || preview; showing = false; preview = false; return was }
+    fun touch(ok: Boolean = false): Boolean {
+        lastKey = System.currentTimeMillis()
+        val wasMenu = showing
+        val was = showing || preview; showing = false; preview = false
+        if (wasMenu && ok) resume++
+        return was
+    }
 }
 
 /** Big clock in the middle, the date under it and — when something is paused — what it is and how much is left. */
 @Composable
-fun ModernScreenSaver(paused: Paused?) {
+fun ModernScreenSaver(paused: Paused?, menus: Boolean = false) {
     var now by remember { mutableStateOf(Date()) }
     LaunchedEffect(Unit) { while (true) { now = Date(); delay(1000) } }
     val show = Saver.show
@@ -172,7 +182,7 @@ fun ModernScreenSaver(paused: Paused?) {
                     horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (3 in show && paused.poster != null) Box(Modifier.width(74.dp).aspectRatio(2f / 3f).clip(Rnd(10.dp))) { OnyxImage(paused.poster, "ssp", Modifier.fillMaxSize(), maxW = 200) }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Kicker(tr("Pauzirano") + " · " + tr(paused.kind), Color(0xFFFFC53D), size = 10.sp)
+                        Kicker(tr(if (menus) "Nastavi gledati" else "Pauzirano") + " · " + tr(paused.kind), Color(0xFFFFC53D), size = 10.sp)
                         T(paused.title, 20.sp, Color.White, FontWeight.ExtraBold)
                         paused.sub?.let { T(it, 13.sp, Color(0xFFC8CBD4)) }
                         if (4 in show) paused.desc?.let { T(it, 12.sp, Color(0xFFA9AEB8), maxLines = 2) }
@@ -186,8 +196,14 @@ fun ModernScreenSaver(paused: Paused?) {
                     }
                 }
             }
+            if (paused != null) Row(Modifier.padding(top = 16.dp).clip(Pill).background(Color.White).padding(horizontal = 22.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Ico(R.drawable.lc_play, 16.dp, Color.Black)
+                T("Nastavi gledati", 16.sp, Color.Black, FontWeight.Bold)
+                T("· OK", 14.sp, Color(0xFF555555), FontWeight.Bold)  // i18n-ignore
+            }
             Spacer(Modifier.weight(0.5f))
-            T("Pritisni bilo koje dugme za nastavak", 12.sp, Color(0x80FFFFFF), modifier = Modifier.padding(bottom = 18.dp))
+            T(if (paused != null) "OK nastavlja · ostala dugmad zatvaraju" else "Pritisni bilo koje dugme za nastavak", 12.sp, Color(0x80FFFFFF), modifier = Modifier.padding(bottom = 18.dp))
         }
     }
 }
@@ -222,7 +238,16 @@ fun MenuSaver(inPlayer: Boolean) {
             if (!inPlayer && Saver.on && Saver.inMenus && !Saver.showing && System.currentTimeMillis() - Saver.lastKey > Saver.delayMs) Saver.showing = true
         }
     }
-    if (Saver.preview || (Saver.showing && !inPlayer)) ModernScreenSaver(null)
+    val ctx = LocalContext.current
+    if (Saver.preview || (Saver.showing && !inPlayer)) {
+        // in the menus: the latest "Continue watching" title, OK plays it
+        val last = remember(Saver.showing) { Watch.continueList(ctx).firstOrNull() }
+        ModernScreenSaver(last?.let { pr ->
+            Paused(if (pr.series != null) "Serija" else "Film", pr.series?.let { cleanTitle(it).first } ?: pr.title,
+                listOfNotNull(pr.season?.let { trf("Sezona %s", it) }, pr.episode?.let { trf("Epizoda %s", it) }).joinToString(" · ").ifBlank { null },
+                pr.poster, null, pr.pos, pr.dur)
+        }, menus = true)
+    }
 }
 
 /* ============================================================== shared card */
@@ -293,6 +318,8 @@ fun DiagnosticsV2() {
     var serverOk by remember { mutableStateOf<Boolean?>(null) }
     var cacheMb by remember { mutableLongStateOf(-1L) }
     var confirmAll by remember { mutableStateOf(false) }
+    var logAll by remember { mutableStateOf(false) }
+    var logExport by remember { mutableStateOf(false) }
     val vpn = remember { NetInfo.vpn(ctx) }
     fun runSpeed() {
         if (testing) return
@@ -333,10 +360,11 @@ fun DiagnosticsV2() {
             val tv = Stats.sum("tv", period); val ser = Stats.sum("ser", period); val mov = Stats.sum("mov", period)
             val total = tv + ser + mov
             // ---- watched (two columns wide) and uptime
-            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                InfoCard("Gledano", fmtDur(total), trf("ukupno · %s", tr(pw)), R.drawable.lc_play, Color(0xFF3B82F6), Modifier.weight(2f).fillMaxHeight(),
+            // every card full width, one under the other, so all the text can be read
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                InfoCard("Gledano", fmtDur(total), trf("ukupno · %s", tr(pw)), R.drawable.lc_play, Color(0xFF3B82F6), Modifier.fillMaxWidth(),
                     action = { SmallBtn(tr("↺ Reset")) { Stats.reset(listOf("tv", "ser", "mov", "eps", "films", "sea", "ch")); rev++ } }) {
-                    Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(36.dp)) {
                         listOf(Stats.sum("eps", period).toString() to "epizoda", Stats.seasons(period).toString() to "sezona",
                             Stats.sum("films", period).toString() to "filmova", fmtDur(tv) to "TV kanali").forEach { (v, l) ->
                             Column { T(v, 16.sp, C.Text, FontWeight.ExtraBold); T(l, 11.sp, C.Muted) }
@@ -355,9 +383,9 @@ fun DiagnosticsV2() {
                         Stats.topChannel(period)?.let { T(tr("Najviše") + ": " + it, 11.sp, C.Text, FontWeight.Bold) }
                     }
                 }
-                InfoCard("Uptime", fmtDur(System.currentTimeMillis() - Stats.appStart), "od zadnjeg pokretanja", R.drawable.lc_clock, Color(0xFF22C55E),
-                    Modifier.weight(1f).fillMaxHeight(), action = { SmallBtn(tr("↺ Reset")) { Stats.reset(listOf("up")); rev++ } }) {
-                    KV(tr("Ukupno"), listOf(Stats.totalUptime() / 3_600_000, " h").joinToString(""))  // i18n-ignore
+                InfoCard("Uptime", fmtDur(System.currentTimeMillis() - Stats.appStart), tr("od zadnjeg pokretanja"), R.drawable.lc_clock, Color(0xFF22C55E),
+                    Modifier.fillMaxWidth(), action = { SmallBtn(tr("↺ Reset")) { Stats.reset(listOf("up")); rev++ } }) {
+                    KV(tr("Ukupno"), fmtDur(Stats.totalUptime()))
                     val crashes = Prefs.str("crash_times").split(',').count { it.isNotBlank() }
                     KV(tr("Rušenja (10 min)"), crashes.toString(), if (crashes == 0) C.Green else C.Danger)
                 }
@@ -366,7 +394,7 @@ fun DiagnosticsV2() {
             val updW = Stats.sum("upd", 1); val updM = Stats.sum("upd", 2); val updY = Stats.sum("upd", 3)
             val recs = Stats.sum("rec", period)
             val stall = Stats.sum("stall", period)
-            CardGrid(3, listOf(
+            CardGrid(1, listOf(
                 { m -> InfoCard("Protok podataka", fmtGb(bTv + bSer + bMov), trf("ukupno · %s", tr(pw)), R.drawable.lc_download, Color(0xFFF59E0B), m,
                     action = { SmallBtn(tr("↺ Reset")) { Stats.reset(listOf("b_tv", "b_ser", "b_mov")); rev++ } }) {
                     KV("TV", fmtGb(bTv)); KV(tr("Serije"), fmtGb(bSer)); KV(tr("Filmovi"), fmtGb(bMov))
@@ -388,7 +416,7 @@ fun DiagnosticsV2() {
                     KV(tr("Prekidi streama"), recs.toString())
                     KV(tr("Baferovanje"), if (total > 0) String.format(Locale.US, "%.1f %%", stall * 100.0 / total) else "0 %")  // i18n-ignore
                 } },
-                { m -> InfoCard("Keš i memorija", if (cacheMb < 0) "…" else "$cacheMb MB", "slike, EPG, liste", R.drawable.lc_hard_drive, Color(0xFF64748B), m,
+                { m -> InfoCard("Keš i memorija", if (cacheMb < 0) "…" else "$cacheMb MB", tr("slike, EPG, liste"), R.drawable.lc_hard_drive, Color(0xFF64748B), m,
                     action = { SmallBtn(tr("✕ Očisti")) {
                         scope.launch(Dispatchers.IO) { ctx.cacheDir.listFiles()?.forEach { it.deleteRecursively() } }
                         cacheMb = 0; Toast.makeText(ctx, tr("Keš je očišćen"), Toast.LENGTH_SHORT).show()
@@ -409,7 +437,33 @@ fun DiagnosticsV2() {
                     }
                 },
             ))
+            // every step of the last updates, with the time: shows exactly where an update stops
+            key(UpdLog.rev) {
+                val log = UpdLog.lines()
+                InfoCard("Zapis ažuriranja", log.lastOrNull()?.substringAfter("  ") ?: tr("Još nema zapisa"), log.lastOrNull()?.substringBefore("  "),
+                    R.drawable.lc_file_text, Color(0xFF0EA5E9), Modifier.fillMaxWidth(),
+                    action = { Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        SmallBtn(tr("Prikaži sve")) { logAll = true }
+                        SmallBtn(tr("Izvezi")) { logExport = true }
+                        SmallBtn(tr("Obriši")) { UpdLog.clear() }
+                    } }) {
+                    log.takeLast(8).reversed().drop(1).forEach { T(it, 11.sp, C.Muted) }  // i18n-ignore
+                }
+            }
         }
+    }
+    if (logAll) Popup("Zapis ažuriranja", { logAll = false }, width = 820.dp) {
+        val l = UpdLog.lines()
+        if (l.isEmpty()) T("Još nema zapisa.", 14.sp, C.Muted)
+        l.reversed().forEach { T(it, 12.sp, C.Soft, maxLines = 3) }  // i18n-ignore
+    }
+    if (logExport) FileBrowser(tr("Izaberi folder"), emptySet(), pickDir = true, onDismiss = { logExport = false }) { dir ->
+        try {
+            val f = java.io.File(dir, "pretorian_update_log_" + System.currentTimeMillis() / 1000 + ".txt")
+            f.writeText("PRETORIAN " + BuildInfo.VERSION + " · " + Build.MODEL + " · Android " + Build.VERSION.RELEASE + "\n\n" + UpdLog.lines().joinToString("\n"))  // i18n-ignore
+            Toast.makeText(ctx, trf("Spremljeno: %s", f.path), Toast.LENGTH_LONG).show()
+        } catch (e: Exception) { Toast.makeText(ctx, tr("U taj folder se ne može pisati. Izaberi drugi ili PRETORIAN folder."), Toast.LENGTH_LONG).show() }
+        logExport = false
     }
     if (confirmAll) Popup("Resetuj sve brojače?", { confirmAll = false }) {
         OptionRow("Da, resetuj sve", R.drawable.lc_trash_2, color = C.Danger) { Stats.resetAll(); confirmAll = false; rev++ }
@@ -473,7 +527,7 @@ fun DeviceV2() {
         }
         when (val st = cards) {
             is Load.Ok -> {
-                val list: List<@Composable (Modifier) -> Unit> = st.value.map { c -> { m -> InfoCard(c.label, c.title, c.sub, c.icon, Color(c.color), m, bar = c.bar) { open = c } } }
+                val list: List<@Composable (Modifier) -> Unit> = st.value.map { c -> { m -> InfoCard(c.label, c.title, c.sub, c.icon, Color(c.color), m, bar = c.bar, onClick = { open = c }) } }
                 CardGrid(3, list)
             }
             is Load.Err -> Message("Greška", st.message)
@@ -554,7 +608,8 @@ private fun deviceCards(ctx: Context): List<DevCard> {
     val patch = Build.VERSION.SECURITY_PATCH
     val patchNice = try { SimpleDateFormat("d. MMMM yyyy", Locale(Look.lang)).format(SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(patch)!!) } catch (e: Exception) { patch }  // i18n-ignore
     out += DevCard(tr("Sigurnosna zakrpa"), patchNice, null, R.drawable.lc_shield_check, 0xFFEF4444, null, listOf(tr("Sigurnosna zakrpa") to patch))
-    out += DevCard(tr("Način rada"), if (Perf.lite) "Lite" else "Full", "PRETORIAN " + BuildInfo.VERSION, R.drawable.lc_sparkle, 0xFF9CA3AF, null,  // i18n-ignore
-        listOf(tr("Način rada") to (if (Perf.lite) "Lite" else "Full"), tr("Verzija") to BuildInfo.VERSION, tr("Slabiji uređaj") to tr(if (Perf.weak) "da" else "ne")))  // i18n-ignore
+    out += DevCard(tr("Način rada"), (if (Perf.lite) "Lite" else "Full") + " · " + trf("ocjena %s/100", Perf.score), "PRETORIAN " + BuildInfo.VERSION, R.drawable.lc_sparkle, 0xFF9CA3AF, Perf.score / 100f,  // i18n-ignore
+        listOf(tr("Način rada") to (if (Perf.lite) "Lite" else "Full"), tr("Ocjena uređaja") to listOf(Perf.score, "/100").joinToString(""),  // i18n-ignore
+            tr("Preporuka") to tr(if (Perf.weak) "Lite (ispod 70 bodova ili manje od 3 GB RAM-a)" else "Full"), tr("Verzija") to BuildInfo.VERSION))
     return out
 }

@@ -414,7 +414,7 @@ private fun VodClassic(nav: Nav, series: Boolean) {
                     is Load.Loading -> Loading()
                     is Load.Err -> Message("Nije se učitalo", s.message)
                     is Load.Ok -> if (s.value.isEmpty()) Message(if (g.id == G_MYLIST) "Lista je prazna" else "Kategorija je prazna", if (g.id == G_MYLIST) "Drži OK na filmu ili seriji i izaberi Dodaj na Moju listu" else null)
-                        else if (Look.age) OnyxPosters(g.name, s.value, kind, p.id) { onPosters = true }
+                        else if (Look.age) OnyxPosters(g.name, s.value, kind, p.id, cont = g.id == G_CONTINUE) { onPosters = true }
                         else PosterGrid(g.name, s.value, g.id == G_NEW, kind, p.id)
                 }
             }
@@ -491,7 +491,7 @@ private fun PosterGrid(title: String, items: List<Poster>, newList: Boolean, kin
 
 /** New look: the focused film as a big title with its picture behind, posters below. */
 @Composable
-private fun OnyxPosters(title: String, items: List<Poster>, kind: String, pid: String, onFocused: () -> Unit = {}) {
+private fun OnyxPosters(title: String, items: List<Poster>, kind: String, pid: String, cont: Boolean = false, onFocused: () -> Unit = {}) {
     val ctx = LocalContext.current
     var menu by remember { mutableStateOf<Poster?>(null) }
     val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
@@ -524,7 +524,22 @@ private fun OnyxPosters(title: String, items: List<Poster>, kind: String, pid: S
             }
         }
     }
-    menu?.let { m -> PosterMenu(m, kind, pid) { menu = null } }
+    menu?.let { m -> if (cont) ContinueMenu(m) { menu = null } else PosterMenu(m, kind, pid) { menu = null } }
+}
+
+/** Long OK on "Continue watching": go on, start again, or take it off the list. */
+@Composable
+private fun ContinueMenu(m: Poster, onDismiss: () -> Unit) {
+    val ctx = LocalContext.current
+    val pr = m.url?.let { Watch.get(ctx, it) }
+    val left = if (pr != null && pr.dur > 0) ((pr.dur - pr.pos) / 60_000).toInt().coerceAtLeast(1) else 0
+    PosterSheet(tr("Nastavi gledati"), cleanTitle(m.name).first, m.image, m.id, onDismiss) {
+        SheetRow(if (left > 0) trf("Nastavi · još %s min", left) else tr("Pokreni"), null, R.drawable.lc_play) { onDismiss(); (m.play ?: m.open)() }
+        SheetRow("Od početka", null, R.drawable.lc_rotate_ccw) {
+            onDismiss(); m.url?.let { Watch.remove(ctx, it) }; (m.play ?: m.open)()
+        }
+        SheetRow("Ukloni iz „Nastavi gledati“", null, R.drawable.lc_x) { onDismiss(); m.url?.let { Watch.remove(ctx, it) } }
+    }
 }
 
 @Composable

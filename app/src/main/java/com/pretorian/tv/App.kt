@@ -79,22 +79,35 @@ class MainActivity : ComponentActivity() {
         Perf.init(this)
         // picture cache: limited so the disk never fills up (150 MB on weaker boxes, 400 MB otherwise)
         coil.Coil.setImageLoader(coil.ImageLoader.Builder(this)
-            .memoryCache { coil.memory.MemoryCache.Builder(this).maxSizePercent(if (Perf.weak) 0.15 else 0.25).build() }
-            .diskCache { coil.disk.DiskCache.Builder().directory(cacheDir.resolve("images")).maxSizeBytes(if (Perf.weak) 150L shl 20 else 400L shl 20).build() }
+            .memoryCache { coil.memory.MemoryCache.Builder(this).maxSizePercent(if (Perf.lite) 0.10 else 0.20).build() }
+            .diskCache { coil.disk.DiskCache.Builder().directory(cacheDir.resolve("images")).maxSizeBytes(if (Perf.lite) 150L shl 20 else 400L shl 20).build() }
             .build())
         CrashLog.watch(this)
+        Stats.onStart()
         WhatsNew.check(this)
         Lock.load()
         Notes.load()
-        Stats.onStart()
         setContent { PretorianApp() }
     }
 
     private var stoppedAt = 0L
 
+    // Android asks for memory back: drop lists that are not on the screen, they load again when needed
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN || level == android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW ||
+            level == android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL) Repo.trim(level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW)
+        if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) try { coil.Coil.imageLoader(this).memoryCache?.clear() } catch (_: Exception) {}
+    }
+
+    private var swallowUp = -1
+
     // any key wakes the screen saver (and is used up for that)
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
-        if (Saver.touch() && event.action == android.view.KeyEvent.ACTION_DOWN) return true
+        val ok = event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == android.view.KeyEvent.KEYCODE_ENTER
+        if (event.action == android.view.KeyEvent.ACTION_DOWN && Saver.touch(ok)) { swallowUp = event.keyCode; return true }
+        // the release of the key that woke the screen saver is used up too (it must not press a button below)
+        if (event.action == android.view.KeyEvent.ACTION_UP && event.keyCode == swallowUp) { swallowUp = -1; return true }
         if (Saver.showing || Saver.preview) return true
         return super.dispatchKeyEvent(event)
     }
@@ -152,7 +165,7 @@ class Nav(
     val playlistsChanged: () -> Unit,
 )
 
-object BuildInfo { const val VERSION = "0.9.3" }
+object BuildInfo { const val VERSION = "0.9.4" }
 
 @Composable
 fun PretorianApp() {
@@ -232,12 +245,18 @@ fun PretorianApp() {
         }
     }
     LaunchedEffect(Reminders.rev) { ReminderReceiver.schedule(ctx) }
+    // OK on the menus' screen saver: the latest "Continue watching" title plays right away
+    LaunchedEffect(Saver.resume) {
+        if (Saver.resume == 0) return@LaunchedEffect
+        val pr = Watch.continueList(ctx).firstOrNull() ?: return@LaunchedEffect
+        nav.push(Screen.Player(listOf(PlayItem(pr.title, pr.url, pr.poster, null, null, pr.series, pr.season, pr.episode)), 0, live = false))
+    }
     // the install confirm screen is opened from here, by the visible app (not from the background)
     LaunchedEffect(Updater.confirm) {
         val c = Updater.confirm ?: return@LaunchedEffect
         Updater.confirm = null
-        try { (ctx as? android.app.Activity)?.startActivity(c) ?: ctx.startActivity(c.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
-        catch (e: Exception) { if (!Updater.installWithSystemScreen(ctx)) Updater.status = tr("Ažuriranje nije završeno") }
+        try { (ctx as? android.app.Activity)?.startActivity(c) ?: ctx.startActivity(c.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)); UpdLog.add(tr("Ekran za potvrdu otvoren")) }
+        catch (e: Exception) { UpdLog.add(trf("Ekran za potvrdu se nije otvorio: %s", e.message ?: "")); if (!Updater.installWithSystemScreen(ctx)) Updater.status = tr("Ažuriranje nije završeno") }
     }
     // time the app is open, and the counters written down once a minute
     LaunchedEffect(Unit) { while (true) { delay(60_000); Stats.uptime(60_000); Stats.saveIfDirty() } }

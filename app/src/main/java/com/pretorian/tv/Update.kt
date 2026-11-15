@@ -105,8 +105,10 @@ object Updater {
             val newer = if (info.code > installedCode(ctx) && info.apk.startsWith(APK_PREFIX) && Prefs.str("upd_skip") != info.name) info else null
             available = newer
             status = if (newer == null) "Imaš najnoviju verziju" else null
+            if (newer != null && Prefs.str("upd_log_seen") != newer.name) { Prefs.put("upd_log_seen", newer.name); UpdLog.add(trf("Provjera: nova verzija %s nađena (imaš %s)", newer.name, BuildInfo.VERSION)) }
             newer
         } catch (e: Exception) {
+            UpdLog.add(trf("Provjera nije uspjela: %s", e.message ?: ""))
             status = trf("Provjera nije uspjela: %s", e.message ?: "")
             null
         }
@@ -123,7 +125,10 @@ object Updater {
         cancel = false
         try {
             if (Prefs.str("upd_pre", "").split(',').contains("backup")) withContext(Dispatchers.IO) { backupBefore(ctx, "prije-${info.name}") }  // i18n-ignore
-            val file = if (ready(ctx, info)) readyFile(ctx) else withContext(Dispatchers.IO) { download(ctx, info.apk) }
+            UpdLog.add(trf("Instalacija %s pokrenuta", info.name))
+            val wasReady = ready(ctx, info)
+            val file = if (wasReady) readyFile(ctx) else withContext(Dispatchers.IO) { download(ctx, info.apk) }
+            UpdLog.add(if (wasReady) trf("Fajl već preuzet · %s MB", file.length() / 1_048_576) else trf("Preuzimanje gotovo · %s MB", file.length() / 1_048_576))
             Prefs.put("upd_file", info.name)
             progress = 101
             installStarted = System.currentTimeMillis()
@@ -131,6 +136,7 @@ object Updater {
             withContext(Dispatchers.IO) { commit(ctx, file) }
         } catch (e: Exception) {
             progress = -1
+            UpdLog.add(trf("Greška: %s", e.message ?: e.javaClass.simpleName))
             status = trf("Ažuriranje nije uspjelo: %s", e.message ?: "")
         }
     }
@@ -210,6 +216,7 @@ object Updater {
             val cb = PendingIntent.getBroadcast(ctx, id, Intent(ctx, UpdateResultReceiver::class.java), flags)
             s.commit(cb.intentSender)
         }
+        UpdLog.add(trf("Predato Androidu za instalaciju (sesija %s)", id))
     }
 }
 
@@ -222,16 +229,18 @@ class UpdateResultReceiver : BroadcastReceiver() {
                 // Android 14 blocks a screen opened from a broadcast in the background, and the box then throws the install away:
                 // the open PRETORIAN screen opens the confirm screen itself
                 Updater.confirm = confirm
+                UpdLog.add(tr("Android traži potvrdu → otvaram ekran za potvrdu"))
             }
-            PackageInstaller.STATUS_SUCCESS -> { Updater.progress = -1 }
+            PackageInstaller.STATUS_SUCCESS -> { Updater.progress = -1; UpdLog.add(tr("Instalirano ✓")) }
             else -> {
                 Updater.progress = -1; Updater.installStarted = 0L
                 val msg = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "otkazano"
                 // the box threw the session away by itself: open Android's normal install screen with the same file
                 val code = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, 0)
+                UpdLog.add(trf("Android odbio (%s): %s", code, msg))
                 if ((code == PackageInstaller.STATUS_FAILURE_ABORTED || msg.contains("abandon", true)) && !Updater.fellBack) {
                     Updater.fellBack = true
-                    if (Updater.installWithSystemScreen(ctx)) { Updater.status = tr("Potvrdi instalaciju na ekranu Androida"); return }
+                    if (Updater.installWithSystemScreen(ctx)) { UpdLog.add(tr("Otvaram Androidov ekran za instalaciju (rezervni put)")); Updater.status = tr("Potvrdi instalaciju na ekranu Androida"); return }
                 }
                 Updater.status = trf("Instalacija nije završena: %s", msg)
                 Toast.makeText(ctx, tr("Ažuriranje nije završeno"), Toast.LENGTH_LONG).show()
@@ -290,4 +299,17 @@ object CrashGuard {
     }
     fun tooMany() = Prefs.str("crash_times").split(',').mapNotNull { it.toLongOrNull() }.count { System.currentTimeMillis() - it < 10 * 60_000L } >= 3
     fun clear() = Prefs.put("crash_times", "")
+}
+
+
+/** Every step of an update with its time, for Settings › Diagnostics › Update log (the last 50). */
+object UpdLog {
+    var rev by androidx.compose.runtime.mutableIntStateOf(0)
+    fun add(text: String) {
+        val t = java.text.SimpleDateFormat("dd.MM. HH:mm:ss", java.util.Locale.US).format(java.util.Date())  // i18n-ignore
+        val lines = (Prefs.str("upd_log").split('\n').filter { it.isNotBlank() } + (t + "  " + text)).takeLast(50)
+        Prefs.putNow("upd_log", lines.joinToString("\n")); rev++
+    }
+    fun lines() = Prefs.str("upd_log").split('\n').filter { it.isNotBlank() }
+    fun clear() { Prefs.put("upd_log", ""); rev++ }
 }

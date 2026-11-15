@@ -147,3 +147,27 @@ fun AudioPicker(url: String, current: String?, onDismiss: () -> Unit, onPick: (S
         }
     }
 }
+
+/** The "Subtitle" box: only the subtitles the provider's stream has, plus Off. Online and disk are in "Traži titl". */
+@Composable
+fun ProviderSubsPicker(url: String, current: String?, off: Boolean, onDismiss: () -> Unit, onOff: () -> Unit, onPick: (StreamTrack) -> Unit) {
+    val ctx = LocalContext.current
+    var tracks by remember { mutableStateOf<List<StreamTrack>?>(null) }
+    LaunchedEffect(url) {
+        tracks = probeTracks(ctx, url)?.second?.map { StreamTrack(iso2(it.language), it.label, trackLabel(it, false)) } ?: emptyList()
+    }
+    Popup("Titl", onDismiss) {
+        val list = tracks
+        when {
+            list == null -> Box(Modifier.fillMaxWidth().height(110.dp)) { Loading("Provjeravam titlove…") }
+            list.isEmpty() -> {
+                T("Provider nema titlova za ovaj naslov. Za online ili s diska koristi „Traži titl“.", 14.sp, C.Muted, maxLines = 3)
+                OptionRow("U redu", R.drawable.lc_check) { onDismiss() }
+            }
+            else -> {
+                OptionRow("Isključeno", R.drawable.lc_x, selected = off) { onOff() }
+                list.forEach { t -> OptionRow(t.title, R.drawable.lc_captions, sub = "Provider", selected = !off && current == t.title) { onPick(t) } }
+            }
+        }
+    }
+}

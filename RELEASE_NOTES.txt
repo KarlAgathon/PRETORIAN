@@ -1,7 +1,6 @@
-Ako ažuriranje u aplikaciji zapne, otvara se Androidov ekran za instalaciju
-Serije: sezone „Sezona 1 · 6/22“, niži redovi epizoda, platforma (Netflix, HBO…) kad je poznata
-„Traži titl“: online pretraga ili s diska / USB-a, i za serije
-Filmovi i serije: „Nedavno dodano“ na vrhu, Nazad vraća na isti plakat
-Stalker portal (TV i filmovi) i novi početni ekran
-Čuvar ekrana, Dijagnostika, novi O uređaju i O aplikaciji
-Prekinut stream se sam tiho ponovo spoji; zadani PIN 0000
+O aplikaciji radi normalno; „Šta je novo“ više ne iskače samo
+Dijagnostika: kartice jedna ispod druge, ispravan protok podataka, Zapis ažuriranja
+„Nastavi gledati“: dugi OK – Nastavi, Od početka, Ukloni
+Titl: samo titlovi providera; „Traži titl“: online ili s diska
+Čuvar ekrana: OK nastavlja gledanje
+Manje memorije; Lite mod se bira sam prema ocjeni uređaja
