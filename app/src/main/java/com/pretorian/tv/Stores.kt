@@ -246,7 +246,9 @@ object Notes {
         for (i in list.indices) if (kind == null || list[i].kind == kind) list[i] = list[i].copy(read = true)
         save()
     }
-    fun clear() { list.clear(); save() }
+    fun markRead(id: String) { val i = list.indexOfFirst { it.id == id }; if (i >= 0 && !list[i].read) { list[i] = list[i].copy(read = true); save() } }
+    /** clearing the bell also clears "Recently added": nothing comes back until the provider really adds something new */
+    fun clear() { list.clear(); save(); NewContent.clear() }
 }
 
 /** Remembers which movies and series a playlist had, so new ones get a "NEW" badge after an update. */
@@ -320,6 +322,7 @@ object NewContent {
                 // the message counts only what you can see: nothing from hidden groups
                 val ovr = Ovr(ctx, p.id)
                 val shown = fresh0.count { o -> o.str("c").let { it.isBlank() || !ovr.isHidden(kind, it) } }
+                if (shown > 0) Notes.list.removeAll { it.kind == kind && !it.id.startsWith("ep:") }
                 if (shown > 0) Notes.add(kind, trf(if (kind == "vod") "Novih filmova: %s" else "Novih serija: %s", shown) + " · " + p.name)
             }
             f.writeText(ids.toString())

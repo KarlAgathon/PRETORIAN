@@ -454,3 +454,14 @@ user_info
 user_code
 X-User-Agent
 os_user
+intro
+skip_intro
+skip_credits
+EEE HH:mm
+soon
+EEE dd.MM. HH:mm
+in
+_pen
+ (pen.)
+_og
+ (ag)

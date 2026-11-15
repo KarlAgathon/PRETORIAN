@@ -48,12 +48,13 @@ fun Modifier.glass(r: Dp = 18.dp): Modifier = when (Look.theme) {
     "liquid" -> this.clip(Rnd(r)).background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0x33FFFFFF), Color(0x14FFFFFF))))
         .border(1.dp, androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0x66FFFFFF), Color(0x1AFFFFFF))), Rnd(r))
     "classic" -> this.clip(Rnd(r)).background(C.Tile)
+    "reddawn" -> this.clip(Rnd(r)).background(C.Tile).border(1.dp, C.Line, Rnd(r))
     "papir" -> this.clip(Rnd(r)).background(Color.White).border(1.dp, C.Line, Rnd(r))
     else -> this.clip(Rnd(r)).background(if (C.IsLight) Color(0x0F000000) else Color(0x14FFFFFF)).border(1.dp, C.Line, Rnd(r))
 }
 
 /** The side column (groups, categories): darker than the list next to it in Classic. */
-fun Modifier.glassSide(r: Dp = 18.dp): Modifier = if (Look.theme == "classic") this.clip(Rnd(r)).background(C.Rail) else glass(r)
+fun Modifier.glassSide(r: Dp = 18.dp): Modifier = if (Look.theme == "classic" || Look.theme == "reddawn") this.clip(Rnd(r)).background(C.Rail).border(1.dp, C.Line, Rnd(r)) else glass(r)
 
 /** Small spaced capitals above a block ("MOJE", "KATEGORIJE PROVIDERA"). */
 @Composable
@@ -422,13 +423,15 @@ fun SheetRow(label: String, sub: String?, icon: Int, onClick: () -> Unit) {
 fun OnyxSearch(nav: Nav) {
     val ctx = LocalContext.current
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
-    var q by remember { mutableStateOf("") }
-    var query by remember { mutableStateOf("") }
+    // back from a film, series or channel: the same search, the same column, the focus on the results
+    val back = remember { SearchMem.q.isNotBlank() }
+    var q by remember { mutableStateOf(SearchMem.q) }
+    var query by remember { mutableStateOf(SearchMem.q.trim()) }
     var pick by remember { mutableStateOf<Hit?>(null) }
     val fr = remember { FocusRequester() }
     val firstFr = remember { FocusRequester() }
-    var jump by remember { mutableIntStateOf(0) }
-    LaunchedEffect(q) { delay(600); query = q.trim() }
+    var jump by remember { mutableIntStateOf(if (back) 1 else 0) }
+    LaunchedEffect(q) { SearchMem.q = q; delay(600); query = q.trim() }
     val voice = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { r ->
         r.data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.let { q = it; query = it.trim(); SearchHistory.add(it); jump++ }
     }
@@ -466,7 +469,7 @@ fun OnyxSearch(nav: Nav) {
                 modifier = Modifier.weight(1f).padding(horizontal = 14.dp).focusRequesterSafe(fr),
                 decorationBox = { inner -> Box { if (q.isEmpty()) T("Kanal, film, serija, emisija ili broj", 16.sp, Color(0xFF6B7280)); inner() } })
             // clear the search
-            if (q.isNotEmpty()) Focusable(onClick = { SearchHistory.add(q); q = ""; query = ""; try { fr.requestFocus() } catch (_: Exception) {} }, shape = Pill, normal = Color.Transparent, focused = Color(0x1F000000),
+            if (q.isNotEmpty()) Focusable(onClick = { SearchHistory.add(q); q = ""; query = ""; SearchMem.clear(); try { fr.requestFocus() } catch (_: Exception) {} }, shape = Pill, normal = Color.Transparent, focused = Color(0x1F000000),
                 zoom = 1f, modifier = Modifier.height(40.dp)) { _ ->
                 Row(Modifier.align(Alignment.Center).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Ico(R.drawable.lc_x, 16.dp, Color(0xFF374151)); T("Obriši", 13.sp, Color(0xFF374151))
@@ -505,8 +508,9 @@ fun OnyxSearch(nav: Nav) {
         val cols = buildList {
             if (SearchScope.on("tv")) add("tv"); if (SearchScope.on("vod")) add("vod"); if (SearchScope.on("series")) add("series"); if (SearchScope.on("sport")) add("sport")
         }
-        var open by remember { mutableStateOf<String?>(null) }
-        val firstCol = cols.firstOrNull { c -> when (c) { "tv" -> tvList.isNotEmpty(); "vod" -> movies.isNotEmpty(); "series" -> shows.isNotEmpty(); else -> sportHits.isNotEmpty() } } ?: cols.firstOrNull()
+        var open by remember { mutableStateOf(SearchMem.open) }
+        LaunchedEffect(open) { SearchMem.open = open }
+        val firstCol = SearchMem.open?.takeIf { it in cols } ?: cols.firstOrNull { c -> when (c) { "tv" -> tvList.isNotEmpty(); "vod" -> movies.isNotEmpty(); "series" -> shows.isNotEmpty(); else -> sportHits.isNotEmpty() } } ?: cols.firstOrNull()
         val wide = open ?: firstCol
         Row(Modifier.fillMaxWidth().weight(1f).padding(bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             cols.forEach { c ->
@@ -560,7 +564,7 @@ fun OnyxSearch(nav: Nav) {
         if (busy) T(tr("učitavam…"), 11.sp, C.Muted)
     }
     pick?.let { h -> HitActions(h, nav) { pick = null } }
-    LaunchedEffect(Unit) { fr.tryFocus() }
+    LaunchedEffect(Unit) { if (!back) fr.tryFocus() }
 }
 
 /** One line in a search column: compact when the column is narrow, more text when it is open. */
@@ -868,4 +872,12 @@ fun BulkEditor(nav: Nav) {
     }
     rename?.let { c -> TextDialog("Preimenuj kanal", "Novi naziv", ovr.chName(c), onDismiss = { rename = null }) { v -> if (v.isNotBlank()) ovr.renameChannel(c, v); rename = null; selC.clear(); done() } }
     menu?.let { g -> GroupOptions(kind, g, ovr, groups, onDismiss = { menu = null }) { close -> done(); if (close) menu = null } }
+}
+
+
+/** The last search, kept while you look at a result (cleared with "Obriši" or when you go to another part of the app). */
+object SearchMem {
+    var q = ""
+    var open: String? = null
+    fun clear() { q = ""; open = null }
 }

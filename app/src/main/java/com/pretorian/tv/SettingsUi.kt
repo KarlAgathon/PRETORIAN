@@ -44,6 +44,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.foundation.focusGroup
+import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -1421,7 +1422,7 @@ private val THEME_SWATCH = mapOf("vece" to (Color(0xFF0C1428) to Color(0xFF1C2A4
     "staklo" to (Color(0xFFF7F7F8) to Color.White), "pijesak" to (Color(0xFF1E140A) to Color(0xFF8A6A3A)), "dark" to (Color(0xFF0B0D12) to Color(0xFF1A1F2A)),
     "light" to (Color(0xFFF2F3F6) to Color.White), "glass" to (Color(0xFF1B3346) to Color(0x66FFFFFF)), "dew" to (Color(0xFF221B36) to Color(0xFF3A2F55)),
     "liquid" to (Color(0xFF243B52) to Color(0x66FFFFFF)), "classic" to (Color(0xFF1C2735) to Color(0xFF3B4E66)),
-    "oled" to (Color(0xFF000000) to Color(0xFFD4A537)), "kino" to (Color(0xFF111214) to Color(0xFFE11D2A)), "papir" to (Color(0xFFEEF0F3) to Color.White))
+    "oled" to (Color(0xFF000000) to Color(0xFFD4A537)), "kino" to (Color(0xFF111214) to Color(0xFFE11D2A)), "papir" to (Color(0xFFEEF0F3) to Color.White), "reddawn" to (Color(0xFF18181B) to Color(0xFFDC2626)))
 
 /** Themes as small pictures. */
 @Composable
@@ -1740,6 +1741,10 @@ private fun PlayerV2(openSub: (String) -> Unit) {
             SetSection("Serije")
             SetSwitch("Sljedeća epizoda sama", "odbrojava 10 s na kraju", Prefs.bool("next_ep", true)) { Prefs.put("next_ep", it) }
             SetSwitch("Zamuti neodgledane epizode", "slike epizoda bez spojlera", Prefs.bool("blur_eps", true)) { Prefs.put("blur_eps", it) }
+            // learned per series the first time you skip: then at the right second in every episode
+            SetDrop("Preskoči uvod", "aplikacija nauči gdje je uvod u svakoj seriji", listOf("Dugme", "Sam preskoči", "Isključeno"),
+                Prefs.long("skip_intro", 0).toInt()) { Prefs.put("skip_intro", it.toLong()); rev++ }
+            SetSwitch("Sljedeća epizoda kad krene odjavna špica", "⏭ ili OK na kraju zapamti gdje špica počinje", Prefs.bool("skip_credits", true)) { Prefs.put("skip_credits", it) }
             SetSection("Trailer")
             // picked once here; the Trailer button then opens straight in this app
             // always the same list: Automatic, YouTube, SmartTube, TizenTube – the ones not installed are grey
@@ -1838,6 +1843,12 @@ private fun SportV2() {
                 }
                 val teams = Prefs.str("sport_teams").split(',').map { it.trim() }.filter { it.isNotBlank() }
                 SetRow("Omiljeni timovi", "njihove utakmice uvijek na vrhu", if (teams.isEmpty()) tr("Nijedan") else trf("%s tima", teams.size)) { teamDlg = true }
+                val nOpts = COUNTRIES.drop(1).filter { it.first in MyTeams.NATIONS }
+                val nOn = Prefs.str("sport_nations").split(',').filter { it.isNotBlank() }.toSet()
+                SetMulti("Moje reprezentacije", "više odjednom · igraju prve u Sportu", nOpts.map { it.second }, nOpts.indices.filter { nOpts[it].first in nOn }.toSet(), all = false) { s2 ->
+                    Prefs.put("sport_nations", s2.sorted().joinToString(",") { nOpts[it].first }); MyTeams.rev++; changed()
+                }
+                SetSwitch("Automatski prati timove i reprezentacije", "prvi u Sportu + obavijesti na Početnoj", MyTeams.auto) { Prefs.put("sa_auto", it); MyTeams.rev++; rev++ }
                 val pv = SportsAI.prov
                 SetRow("AI pretraga prenosa", pv.site, pv.name + " · " + tr(if (SportsAI.key.isNotBlank()) "ključ upisan" else "nema ključa"),
                     valueColor = if (SportsAI.key.isNotBlank()) C.Green else null) { keyDlg = true }
@@ -1846,6 +1857,10 @@ private fun SportV2() {
                 SetSwitch("Podsjeti me na utakmice omiljenih timova", "vrijeme biraš u Podsjetnicima", (Prefs.str("sport_team_remind", "0").toIntOrNull() ?: 0) > 0) {
                     Prefs.put("sport_team_remind", if (it) "5" else "0"); rev++
                 }
+                SetSection("Obavijesti na Početnoj")
+                val ks = GoalNote.KINDS
+                SetMulti("Za timove i utakmice koje pratiš", "dugi OK na utakmicu › Prati utakmicu ili Prati tim", ks.map { it.second },
+                    ks.indices.filter { GoalNote.on(ks[it].first) }.toSet(), all = false) { s2 -> ks.forEachIndexed { i, k -> Prefs.put("sa_" + k.first, i in s2) }; rev++ }
                 SetDrop("Osvježavanje rezultata", null, listOf("Svake minute", "Svake 3 min", "Svakih 5 min"),
                     listOf(1, 3, 5).indexOf(Prefs.str("sport_refresh", "1").toIntOrNull() ?: 1).coerceAtLeast(0)) { Prefs.put("sport_refresh", listOf(1, 3, 5)[it].toString()); rev++ }
                 SetSection("Ko prenosi · izvori")
@@ -2389,20 +2404,16 @@ private fun AboutV2(onSub: (String) -> Unit, onSection: (String) -> Unit) {
         // ---- hero: logo, name, version, badges and the help QR
         Row(Modifier.fillMaxWidth().clip(Rnd(20.dp)).background(C.CardHi).border(1.dp, C.Line, Rnd(20.dp)).padding(18.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-            Box(Modifier.size(80.dp).clip(Rnd(20.dp)).background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(Color(0xFFE11D2E), Color(0xFF8E0E1A)))),
-                contentAlignment = Alignment.Center) {
-                androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.logo_full), null, Modifier.size(52.dp))
-            }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Kicker("O aplikaciji", C.Muted, size = 10.sp)
-                FitText("PRETORIAN", 30.sp, C.Text, FontWeight.ExtraBold)  // i18n-ignore
-                FitText(trf("Verzija %s", BuildInfo.VERSION) + (if (Updater.beta) " · Beta" else ""), 13.sp, C.Soft)  // i18n-ignore
-                Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            // only the logo (no "About / PRETORIAN" next to it): its frame follows the theme so it is always clearly visible
+            LogoTile(96.dp)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                FitText(trf("Verzija %s", BuildInfo.VERSION) + (if (Updater.beta && Updater.stableName != BuildInfo.VERSION) " · Beta" else ""), 17.sp, C.Text, FontWeight.Bold)  // i18n-ignore
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     val u = Updater.available
                     Box(Modifier.clip(Pill).background((if (u != null) C.Amber else C.Green).copy(alpha = 0.16f)).padding(horizontal = 9.dp, vertical = 3.dp)) {
-                        T(if (u != null) trf("Dostupna %s", u.name) else tr("● Najnovija verzija"), 11.sp, if (u != null) C.Amber else C.Green, FontWeight.Bold)
+                        T(if (u != null) trf("Dostupna %s", u.name) else tr("✓ Najnovija verzija"), 11.sp, if (u != null) C.Amber else C.Green, FontWeight.Bold, maxLines = 1)
                     }
-                    listOf(if (Perf.lite) "Lite" else "Full", tr("10 jezika")).forEach { b ->  // i18n-ignore
+                    listOf(if (Perf.lite) "Lite" else "Full", trf("%s jezika", Langs.APP.size)).forEach { b ->  // i18n-ignore
                         Box(Modifier.clip(Pill).background(Color.White.copy(alpha = 0.08f)).padding(horizontal = 9.dp, vertical = 3.dp)) { T(b, 11.sp, C.Text, FontWeight.Bold) }
                     }
                 }
@@ -2528,3 +2539,23 @@ fun qrBitmap(text: String, px: Int): androidx.compose.ui.graphics.ImageBitmap? =
 
 /** the playlist whose menu opens on the "Edit playlists" page */
 object PlMenu { var open: String? = null }
+
+
+/** The PRETORIAN logo on a frame that suits the theme: glass in Liquid, a gold edge in Sand, a white card in Paper… */
+@Composable
+fun LogoTile(size: androidx.compose.ui.unit.Dp) {
+    val shape = Rnd(size * 0.22f)
+    val red = Color(0xFFE5141B)
+    val (bg, edge, glow) = when (Look.theme) {
+        "liquid" -> Triple<androidx.compose.ui.graphics.Brush, Color, Color>(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0x47FFFFFF), Color(0x14FFFFFF))), Color(0x73FFFFFF), red.copy(alpha = 0.35f))
+        "classic" -> Triple(androidx.compose.ui.graphics.SolidColor(Color(0xFF1C2735)), Color(0xFFE2E8F0), Color.Transparent)
+        "pijesak" -> Triple(androidx.compose.ui.graphics.SolidColor(Color(0xFF1D140B)), Color(0xFFE0B25C), Color(0x4DE0B25C))
+        "papir" -> Triple(androidx.compose.ui.graphics.SolidColor(Color.White), Color(0xFFD5D9DF), Color(0x22000000))
+        "reddawn" -> Triple(androidx.compose.ui.graphics.SolidColor(Color(0xFF111113)), Color(0xFF3F3F46), red.copy(alpha = 0.45f))
+        else -> Triple(androidx.compose.ui.graphics.SolidColor(Color(0xFF0A0A0C)), Color(0x1FFFFFFF), red.copy(alpha = 0.5f))
+    }
+    Box(Modifier.size(size).shadow(if (glow.alpha > 0f) 18.dp else 0.dp, shape, ambientColor = glow, spotColor = glow).clip(shape).background(bg).border(1.5.dp, edge, shape),
+        contentAlignment = Alignment.Center) {
+        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.logo_mark), contentDescription = "PRETORIAN", modifier = Modifier.size(size * 0.8f))  // i18n-ignore
+    }
+}

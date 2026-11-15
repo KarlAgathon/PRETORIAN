@@ -46,11 +46,17 @@ data class SportEvent(
     val fromGuide: Boolean = false,
     /** channels the AI (Gemini, with web search) says show it in your country */
     val ai: List<Channel> = emptyList(),
+    /** goals and cards: (side "h"/"a", kind "goal"/"yellow"/"red", minute, player) */
+    val details: List<MatchDetail> = emptyList(),
+    /** the league's country code (flag), e.g. "de", "ba", "eu" */
+    val country: String = "",
 ) {
     val live get() = state == "in"
 }
 
 data class League(val sport: String, val path: String, val name: String, val abbr: String)
+
+data class MatchDetail(val side: String, val kind: String, val minute: String, val player: String)
 
 object Sports {
     /** competitions read from ESPN's public scoreboard (free, no key) */
@@ -193,7 +199,18 @@ object Sports {
             else -> null
         }
         val two = lg.sport != "f1" && home != null && away != null
+        // goals and cards (ESPN gives them for football)
+        val homeId = home?.optJSONObject("team")?.str("id") ?: ""
+        val det = comp.optJSONArray("details")?.let { d -> (0 until d.length()).mapNotNull { d.optJSONObject(it) }.mapNotNull { x ->
+            val t = x.optJSONObject("type")?.str("text")?.lowercase() ?: ""
+            val kind = when { x.optBoolean("redCard") || t.contains("red") -> "red"; x.optBoolean("yellowCard") || t.contains("yellow") -> "yellow"
+                x.optBoolean("scoringPlay") || t.contains("goal") -> "goal"; else -> return@mapNotNull null }
+            val who = x.optJSONArray("athletesInvolved")?.optJSONObject(0)?.str("displayName") ?: ""
+            val min = x.optJSONObject("clock")?.str("displayValue") ?: ""
+            MatchDetail(if (x.optJSONObject("team")?.str("id") == homeId) "h" else "a", kind + (if (x.optBoolean("penaltyKick")) "_pen" else "") + (if (x.optBoolean("ownGoal")) "_og" else ""), min, who)
+        } } ?: emptyList()
         return SportEvent(
+            details = det, country = countryOf(lg.path),
             id = lg.path + "/" + comp.str("id").ifBlank { e.str("id") },
             sport = lg.sport, league = lg.name, leagueAbbr = lg.abbr,
             round = comp.optJSONObject("round")?.str("displayName")?.ifBlank { null }
@@ -627,5 +644,18 @@ object OwnGuide {
                 .map { EpgItem(it.title, it.desc, it.start, it.end) }
         }
         emptyList()
+    }
+}
+
+
+/** The country of a league from its ESPN path ("ger.1" → de, "uefa.champions" → eu), for the flag and the country filter. */
+fun countryOf(path: String): String {
+    val p = path.substringAfter('/').lowercase()
+    return when {
+        p.startsWith("uefa") || p.startsWith("fifa") -> "eu"; p.startsWith("eng") -> "gb"; p.startsWith("ger") -> "de"; p.startsWith("esp") -> "es"
+        p.startsWith("ita") -> "it"; p.startsWith("fra") -> "fr"; p.startsWith("ned") -> "nl"; p.startsWith("por") -> "pt"; p.startsWith("tur") -> "tr"
+        p.startsWith("aut") -> "at"; p.startsWith("sui") -> "ch"; p.startsWith("bih") -> "ba"; p.startsWith("cro") -> "hr"; p.startsWith("srb") -> "rs"
+        p.startsWith("usa") || path.startsWith("basketball/nba") || path.startsWith("football/nfl") -> "us"
+        else -> "int"
     }
 }

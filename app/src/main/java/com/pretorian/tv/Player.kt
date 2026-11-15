@@ -232,6 +232,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     var okLong by remember { mutableStateOf(false) }
     var playing by remember { mutableStateOf(true) }
     var position by remember { mutableLongStateOf(0L) }
+    var skipPill by remember { mutableStateOf<String?>(null) }
+    var creditsLeft10 by remember { mutableIntStateOf(10) }
     var duration by remember { mutableLongStateOf(0L) }
     var videoH by remember { mutableIntStateOf(0) }
     var videoW by remember { mutableIntStateOf(0) }
@@ -483,6 +485,22 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                     if (t >= 0) index = t
                     return@onPreviewKeyEvent true
                 }
+                // series: OK on "Skip intro" / "Next episode" (the app remembers where they are in this series)
+                val ser = item.series
+                if (ser != null && skipPill != null && (e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter)) {
+                    val pos = player.currentPosition; val dur = player.duration; val mem = SkipMem.of(ser)
+                    if (skipPill == "intro") { if (mem.introEnd > 0) player.seekTo(mem.introEnd) else { SkipMem.learnIntro(ser, pos, pos + 85_000L); player.seekTo(pos + 85_000L) } }
+                    else { if (dur > 0 && mem.creditsLeft == 0L) SkipMem.learnCredits(ser, dur - pos); saveProgress(done = true); if (index < n - 1) index++ }
+                    skipPill = null
+                    return@onPreviewKeyEvent true
+                }
+                // ⏭ near the end: from now on the next episode starts at this point of every episode of the series
+                if (ser != null && e.key == Key.MediaNext && index < n - 1) {
+                    val left = player.duration - player.currentPosition
+                    if (left in 15_000L..600_000L) SkipMem.learnCredits(ser, left)
+                    saveProgress(done = true); index++
+                    return@onPreviewKeyEvent true
+                }
                 when (e.key) {
                     Key.Menu, Key.Info -> { dialog = "menu"; true }
                     Key.DirectionUp, Key.ChannelUp -> if (s.live && (e.key == Key.ChannelUp || Prefs.bool("zap_updown", true))) { index = (index - 1 + n) % n; true } else { showInfo = true; true }
@@ -616,10 +634,45 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             }
         }
 
+        // series: "Skip intro" and "Next episode" when the end credits start (times learned per series)
+        LaunchedEffect(index, s.live) {
+            skipPill = null; var autoDone = false; var creditsAt = 0L
+            val ser = item.series ?: return@LaunchedEffect
+            if (s.live) return@LaunchedEffect
+            while (true) {
+                delay(500)
+                val pos = player.currentPosition; val dur = player.duration
+                val mem = SkipMem.of(ser)
+                val mode = Prefs.long("skip_intro", 0).toInt()   // 0 button, 1 by itself, 2 off
+                var pill: String? = null
+                if (mode != 2) {
+                    if (mem.introEnd > 0 && pos >= mem.introStart && pos < mem.introEnd - 1500) {
+                        if (mode == 1 && !autoDone) { autoDone = true; player.seekTo(mem.introEnd) } else pill = "intro"
+                    } else if (mem.introEnd == 0L && pos in 5_000L..180_000L) pill = "intro"
+                }
+                if (Prefs.bool("skip_credits", true) && index < n - 1 && dur > 120_000L) {
+                    val thr = if (mem.creditsLeft > 0) mem.creditsLeft else 40_000L
+                    if (dur - pos in 1..thr) { pill = "credits"; if (creditsAt == 0L) creditsAt = System.currentTimeMillis() }
+                    else creditsAt = 0L
+                    if (creditsAt > 0) { creditsLeft10 = (10 - ((System.currentTimeMillis() - creditsAt) / 1000).toInt()).coerceAtLeast(0); if (creditsLeft10 == 0) { saveProgress(done = true); index++; break } }
+                }
+                skipPill = pill
+            }
+        }
         // paused and no remote for the chosen time (every key press starts the count again)
         LaunchedEffect(playing, buffering, saver) {
             if (saver) { if (playing) saver = false; return@LaunchedEffect }
             if (!playing && !buffering && Saver.on) while (true) { delay(1000); if (System.currentTimeMillis() - Saver.lastKey > Saver.delayMs) { saver = true; break } }
+        }
+        // "Skip intro" / "Next episode in 10 s" in the lower right corner
+        skipPill?.let { k ->
+            Box(Modifier.fillMaxSize().padding(end = 40.dp, bottom = 90.dp), contentAlignment = Alignment.BottomEnd) {
+                Row(Modifier.clip(Pill).background(Color.White).padding(horizontal = 18.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    T(if (k == "intro") "Preskoči uvod" else trf("Sljedeća epizoda za %s s", creditsLeft10), 15.sp, Color(0xFF0B0F1A), FontWeight.Bold)
+                    T("OK", 11.sp, Color(0xFF64748B), FontWeight.Bold)  // i18n-ignore
+                }
+            }
         }
         if (saver) ModernScreenSaver(if (s.live) null else Paused(if (item.season != null) "Serija" else "Film", item.search?.let { cleanTitle(it).first } ?: item.title,
             listOfNotNull(item.season?.let { trf("Sezona %s", it) }, item.episode?.let { trf("Epizoda %s", it) }, item.subtitle).joinToString(" · ").ifBlank { null },
@@ -933,4 +986,19 @@ private fun digitOf(k: Key): Int? = when (k) {
     Key.Zero, Key.NumPad0 -> 0; Key.One, Key.NumPad1 -> 1; Key.Two, Key.NumPad2 -> 2; Key.Three, Key.NumPad3 -> 3; Key.Four, Key.NumPad4 -> 4
     Key.Five, Key.NumPad5 -> 5; Key.Six, Key.NumPad6 -> 6; Key.Seven, Key.NumPad7 -> 7; Key.Eight, Key.NumPad8 -> 8; Key.Nine, Key.NumPad9 -> 9
     else -> null
+}
+
+
+/** Where the intro and the end credits are, learned per series (the first time you skip them). */
+object SkipMem {
+    data class Mem(val introStart: Long, val introEnd: Long, val creditsLeft: Long)
+    private fun key(series: String) = "skip_" + series.lowercase().hashCode()
+    fun of(series: String): Mem {
+        val p = Prefs.str(key(series)).split(',').map { it.toLongOrNull() ?: 0L }
+        return Mem(p.getOrElse(0) { 0L }, p.getOrElse(1) { 0L }, p.getOrElse(2) { 0L })
+    }
+    private fun save(series: String, m: Mem) = Prefs.put(key(series), listOf(m.introStart, m.introEnd, m.creditsLeft).joinToString(","))
+    fun learnIntro(series: String, start: Long, end: Long) = save(series, of(series).copy(introStart = (start - 2000).coerceAtLeast(0), introEnd = end))
+    fun learnCredits(series: String, left: Long) = save(series, of(series).copy(creditsLeft = left))
+    fun forget(series: String) = Prefs.put(key(series), "")
 }

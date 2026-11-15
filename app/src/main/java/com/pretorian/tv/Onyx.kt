@@ -266,7 +266,23 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
     val cont = remember(Watch.rev) { Watch.continueList(ctx) }
     var contMenu by remember { mutableStateOf<Progress?>(null) }
     val p = remember { Store.active(ctx) }
-    fun playOf(pr: Progress): () -> Unit = { nav.push(Screen.Player(listOf(PlayItem(pr.title, pr.url, pr.poster, null, null, pr.series, pr.season, pr.episode)), 0, live = false)) }
+    val homeScope = rememberCoroutineScope()
+    // the film or series page goes under the player, so Back lands on it (same season and episode), a second Back on Home
+    fun playOf(pr: Progress): () -> Unit = {
+        homeScope.launch {
+            val pl = Store.actives(ctx).firstOrNull { it.id == pr.pid } ?: p
+            if (pl != null) try { kotlinx.coroutines.withTimeoutOrNull(2500) {
+                if (pr.series != null) Repo.catalog(pl, "series").firstOrNull { it.str("n") == pr.series }?.let { o ->
+                    SeriesJump.id = o.str("id"); SeriesJump.season = pr.season ?: -1; SeriesJump.num = pr.episode ?: -1
+                    nav.push(Screen.SeriesDetail(SeriesItem(o.str("id"), o.str("n"), o.str("i").orNullIfBlank(), null, o.str("r").orNullIfBlank())))
+                }
+                else Repo.catalog(pl, "vod").firstOrNull { it.str("u") == pr.url }?.let { o ->
+                    nav.push(Screen.MovieDetail(Vod(o.str("id"), o.str("n"), o.str("i").orNullIfBlank(), o.str("r").orNullIfBlank(), o.str("u"))))
+                }
+            } } catch (_: Exception) {}
+            nav.push(Screen.Player(listOf(PlayItem(pr.title, pr.url, pr.poster, null, null, pr.series, pr.season, pr.episode)), 0, live = false))
+        }
+    }
     val newest = remember(NewContent.rev) {
         if (p == null) emptyList() else NewContent.items(p.id, "vod").take(12).map { "vod" to it } + NewContent.items(p.id, "series").take(6).map { "series" to it }
     }
@@ -286,6 +302,9 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
     }
     Box(Modifier.fillMaxSize()) {
         OnyxBackdrop(hero?.image, hero?.key ?: "home")
+        // weak box: no pictures behind, a calm glow in the theme's colour instead
+        if (Perf.score < 50 || Perf.lite) Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(C.Red.copy(alpha = 0.13f), Color.Transparent),
+            center = androidx.compose.ui.geometry.Offset(1600f, 120f), radius = 1300f)))
         Column(Modifier.fillMaxSize()) {
             OnyxTopBar(Screen.Home, nav, simple)
             // everything sits higher and bigger: no empty half screen, nothing cut at the bottom of the TV
@@ -341,7 +360,10 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                     }
                 }
                 }
-                SubscriptionCard()
+                Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    HomeAlerts(nav, (fullW * 0.34f).coerceIn(250.dp, 380.dp))
+                    SubscriptionCard()
+                }
                 }
                 Spacer(Modifier.height(12.dp))
                 // rows in the order and with the switches from Settings › Home
@@ -420,43 +442,45 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                 }
                         }
                         "new" -> {
+                // only as many posters as fit across the screen (all the same 2:3 size), then "More ›" into Recently added.
+                // Fewer pictures at once = no stutter on weaker boxes.
+                val gap = 14.dp
+                val pw = ((fullW - 56.dp - gap * 6) / 7).coerceIn(96.dp, 190.dp)
+                val fit = ((((fullW - 56.dp) + gap) / (pw + gap)).toInt() - 1).coerceIn(3, if (Perf.lite) 5 else 8)
+                val dScope = rememberCoroutineScope()
+                @Composable
+                fun posterRow(title: String, n: Int, total: Int, unit: String, more: () -> Unit, card: @Composable (Int, Modifier, FocusRequester?) -> Unit) {
+                    if (n == 0) return
+                    val w = remember(n) { RowWrap(n + 1) }
+                    RowTitle(title)
+                    LazyRow(state = w.state, horizontalArrangement = Arrangement.spacedBy(gap), contentPadding = PaddingValues(top = 6.dp, bottom = 12.dp, end = 40.dp)) {
+                        items(n) { i -> card(i, Modifier.width(pw).then(w.keys(i, dScope)), w.fr(i)) }
+                        item { MoreCard((total - n).coerceAtLeast(0), unit, pw, pw * 1.5f, w.fr(n), w.keys(n, dScope), more) }
+                    }
+                }
                 if (p != null && cont.isEmpty() && Recent.list().isEmpty()) {
                     // no history at all: the newest films, series and channels at the provider. Gone as soon as you watch something.
                     val disc by load(p.id) {
                         val mv = Repo.vodGroups(p).take(2).flatMap { g -> try { Repo.movies(p, g.id) } catch (e: Exception) { emptyList() } }
-                            .distinctBy { it.id }.sortedByDescending { it.added }.take(40)
+                            .distinctBy { it.id }.sortedByDescending { it.added }.take(60)
                         val se = Repo.seriesGroups(p).take(2).flatMap { g -> try { Repo.series(p, g.id) } catch (e: Exception) { emptyList() } }
-                            .distinctBy { it.id }.sortedByDescending { it.added }.take(40)
+                            .distinctBy { it.id }.sortedByDescending { it.added }.take(60)
                         val ch = try { Repo.allChannels(p).sortedByDescending { it.id.toLongOrNull() ?: 0L }.take(30) } catch (e: Exception) { emptyList() }
                         Triple(mv, se, ch)
                     }
                     (disc as? Load.Ok)?.value?.let { (mv, se, ch) ->
-                        // 5 posters across the screen; each row scrolls sideways and goes round
-                        val pw = ((fullW - 56.dp - 14.dp * 4) / 5).coerceIn(90.dp, 220.dp)
-                        val dScope = rememberCoroutineScope()
-                        if (mv.isNotEmpty()) {
-                            val w = remember(mv.size) { RowWrap(mv.size) }
-                            RowTitle("NAJNOVIJI FILMOVI")
-                            LazyRow(state = w.state, horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(top = 6.dp, bottom = 12.dp)) {
-                                itemsIndexed(mv, key = { _, v -> v.id }) { i, v ->
-                                    PosterCard(cleanTitle(v.name).first, v.poster, v.id, null, Modifier.width(pw).then(w.keys(i, dScope)), fr = w.fr(i), rating = v.rating) { nav.push(Screen.MovieDetail(v)) }
-                                }
-                            }
+                        posterRow("NAJNOVIJI FILMOVI", minOf(fit, mv.size), mv.size, "filmova", { nav.root(Screen.Movies) }) { i, m, fr ->
+                            val v = mv[i]; PosterCard(cleanTitle(v.name).first, v.poster, v.id, null, m, fr = fr, rating = v.rating) { nav.push(Screen.MovieDetail(v)) }
                         }
-                        if (se.isNotEmpty()) {
-                            val w = remember(se.size) { RowWrap(se.size) }
-                            RowTitle("NAJNOVIJE SERIJE")
-                            LazyRow(state = w.state, horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(top = 6.dp, bottom = 12.dp)) {
-                                itemsIndexed(se, key = { _, v -> v.id }) { i, v ->
-                                    PosterCard(cleanTitle(v.name).first, v.cover, v.id, null, Modifier.width(pw).then(w.keys(i, dScope)), fr = w.fr(i), rating = v.rating) { nav.push(Screen.SeriesDetail(v)) }
-                                }
-                            }
+                        posterRow("NAJNOVIJE SERIJE", minOf(fit, se.size), se.size, "serija", { nav.root(Screen.Series) }) { i, m, fr ->
+                            val v = se[i]; PosterCard(cleanTitle(v.name).first, v.cover, v.id, null, m, fr = fr, rating = v.rating) { nav.push(Screen.SeriesDetail(v)) }
                         }
-                        if (ch.isNotEmpty()) {
-                            val w = remember(ch.size) { RowWrap(ch.size) }
+                        val cn = minOf(((fullW - 56.dp) / 232.dp).toInt().coerceAtLeast(2) - 1, ch.size)
+                        if (cn > 0) {
+                            val w = remember(cn) { RowWrap(cn + 1) }
                             RowTitle("NOVI KANALI")
-                            LazyRow(state = w.state, horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(top = 4.dp, bottom = 8.dp)) {
-                                itemsIndexed(ch, key = { _, c -> c.url }) { i, c ->
+                            LazyRow(state = w.state, horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(top = 4.dp, bottom = 8.dp, end = 40.dp)) {
+                                items(cn) { i -> val c = ch[i]
                                     Focusable(onClick = { dScope.launch { playInGroup(ctx, nav, c, p.id) } }, focusRequester = w.fr(i), shape = Rnd(14.dp), normal = C.Rail, focused = C.Red, zoom = 1.04f,
                                         modifier = Modifier.width(220.dp).height(60.dp).border(1.dp, C.Line, Rnd(14.dp)).then(w.keys(i, dScope))) { f ->
                                         Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -465,16 +489,19 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                                         }
                                     }
                                 }
+                                item { MoreCard((ch.size - cn).coerceAtLeast(0), "kanala", 120.dp, 60.dp, w.fr(cn), w.keys(cn, dScope)) { nav.root(Screen.Tv) } }
                             }
                         }
                     }
                 }
-                else if (newest.isNotEmpty()) {
-                    RowTitle("NOVO DODANO")
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(end = 40.dp)) {
-                        items(newest, key = { it.first + it.second.optString("id") }) { (kind, o) ->
-                            PosterCard(cleanTitle(o.optString("n")).first, o.optString("i").ifBlank { null }, o.optString("id"), null, Modifier.width(118.dp)) { openNew(kind, o) }
-                        }
+                else if (p != null) {
+                    val nv = remember(NewContent.rev) { NewContent.items(p.id, "vod") }
+                    val ns = remember(NewContent.rev) { NewContent.items(p.id, "series") }
+                    posterRow("NOVO DODANO · FILMOVI", minOf(fit, nv.size), nv.size, "filmova", { VodMemory.group["vod"] = "__new__"; nav.root(Screen.Movies) }) { i, m, fr ->
+                        val o = nv[i]; PosterCard(cleanTitle(o.optString("n")).first, o.optString("i").ifBlank { null }, o.optString("id"), null, m, fr = fr) { openNew("vod", o) }
+                    }
+                    posterRow("NOVO DODANO · SERIJE", minOf(fit, ns.size), ns.size, "serija", { VodMemory.group["series"] = "__new__"; nav.root(Screen.Series) }) { i, m, fr ->
+                        val o = ns[i]; PosterCard(cleanTitle(o.optString("n")).first, o.optString("i").ifBlank { null }, o.optString("id"), null, m, fr = fr) { openNew("series", o) }
                     }
                 }
                         }
@@ -779,7 +806,8 @@ object HomeRows {
         "today" to "Utakmice danas", "recent" to "Nedavno gledani kanali")
     var rev by mutableIntStateOf(0)
     /** "Matches today" starts off (it loads live scores) */
-    private fun offStr() = Prefs.str("home_off", "today")
+    /** weak box (score under 50): "Recently added" posters also start off; the user can turn them on in Settings › Home */
+    private fun offStr() = Prefs.str("home_off", if (Perf.score < 50) "today,new" else "today")
     fun order(): List<String> {
         val saved = Prefs.str("home_rows", "fresh,cont,new,recent").split(',').filter { s -> ALL.any { it.first == s } }
         val off = offStr().split(',').toSet()
@@ -792,5 +820,38 @@ object HomeRows {
         val l = all().toMutableList(); val i = l.indexOf(id); val j = (i + by).coerceIn(0, l.lastIndex)
         if (i < 0 || i == j) return
         l.removeAt(i); l.add(j, id); Prefs.put("home_rows", l.joinToString(",")); rev++
+    }
+}
+
+
+/** Last card of a Home row: "More ›" in the theme's colours, opens the whole list. */
+@Composable
+private fun MoreCard(rest: Int, unit: String, w: Dp, h: Dp, fr: FocusRequester?, keys: Modifier, onClick: () -> Unit) {
+    Focusable(onClick = onClick, focusRequester = fr, shape = Rnd(12.dp), normal = C.Red.copy(alpha = 0.12f), focused = C.Red.copy(alpha = 0.30f), zoom = 1.05f,
+        modifier = Modifier.width(w).height(h).border(1.dp, C.Red.copy(alpha = 0.35f), Rnd(12.dp)).then(keys)) { f ->
+        if (f) Box(Modifier.fillMaxSize().border(2.dp, C.Red, Rnd(12.dp)))
+        Column(Modifier.align(Alignment.Center).padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            T("Više ›", 15.sp, C.Text, FontWeight.Bold)
+            if (rest > 0 && h > 80.dp) T("+ " + rest + " " + tr(unit), 11.sp, C.Soft, maxLines = 1)  // i18n-ignore
+        }
+    }
+}
+
+/** Top right of Home: new episodes of series you watch and news of your teams / followed matches. OK opens it. */
+@Composable
+fun HomeAlerts(nav: Nav, width: Dp) {
+    val items = Notes.list.filter { !it.read && (it.kind == "sport" || (it.kind == "series" && it.id.startsWith("ep:"))) }.take(3)
+    if (items.isEmpty()) return
+    Column(Modifier.width(width), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        items.forEach { n ->
+            Focusable(onClick = { openNote(nav, n) }, shape = Rnd(14.dp), normal = C.Rail, focused = C.CardHi, zoom = 1.03f,
+                modifier = Modifier.fillMaxWidth().border(1.dp, C.Red.copy(alpha = 0.45f), Rnd(14.dp))) { f ->
+                if (f) Box(Modifier.matchParentSize().border(2.dp, C.Red, Rnd(14.dp)))
+                Column(Modifier.padding(horizontal = 12.dp, vertical = 9.dp)) {
+                    T(if (n.kind == "sport") "SPORT · PRATIŠ" else "NOVA EPIZODA · SERIJA KOJU GLEDAŠ", 10.sp, C.Muted, FontWeight.SemiBold, maxLines = 1)
+                    T(n.text, 14.sp, C.Text, FontWeight.Bold, maxLines = 2)
+                }
+            }
+        }
     }
 }

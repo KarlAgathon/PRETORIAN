@@ -41,13 +41,13 @@ object Look {
         "Roza" to Color(0xFFDB2777), "Zlatna" to Color(0xFFCA8A04),
     )
     val THEMES = listOf("vece" to "Predvečerje", "bw" to "Crno-bijela", "pijesak" to "Pijesak",
-        "liquid" to "Liquid", "classic" to "Classic", "oled" to "OLED crna", "kino" to "Kino", "papir" to "Papir")
+        "liquid" to "Liquid", "classic" to "Classic", "oled" to "OLED crna", "kino" to "Kino", "reddawn" to "Red Dawn", "papir" to "Papir")
     /** themes with their own focus colour: accent and the text on it */
     val FIXED = mapOf(
         "liquid" to (Color(0xFF22D3EE) to Color(0xFF02141A)), "classic" to (Color(0xFFF1F5F9) to Color(0xFF1E293B)),
         "oled" to (Color(0xFFD4A537) to Color(0xFF120D00)),
         "kino" to (Color(0xFFE11D2A) to Color.White),
-        "papir" to (Color(0xFF111827) to Color.White),
+        "papir" to (Color(0xFF111827) to Color.White), "reddawn" to (Color(0xFFDC2626) to Color.White),
     )
     /** size of everything together, 0–100 (Settings › Look › Size): 100 is about 35 % bigger */
     var uiScale by mutableIntStateOf(0)
@@ -130,6 +130,9 @@ private fun palette(): Palette {
             Color(0xFFF5F5F5), Color(0xFF9C9CA3), Color(0xFFD4D4D8), Color(0xFF1D1E22), false)
         "papir" -> Palette(Color(0xFFEEF0F3), Color(0xFFFFFFFF), Color(0xFFFFFFFF), Color(0xFFD5D9DF),
             Color(0xFF111827), Color(0xFF6B7280), Color(0xFF374151), Color(0xFFFFFFFF), true)
+        // Red Dawn: soft black, grey, white and red
+        "reddawn" -> Palette(Color(0xFF18181B), Color(0xFF111113), Color(0xFF2F2F33), Color(0xFF3A3A40),
+            Color(0xFFF4F4F5), Color(0xFFA1A1AA), Color(0xFFD4D4D8), Color(0xFF27272A), false)
         "dew" -> Palette(Color(0xFF221B36), alpha(Color(0xFF2A2340), (o * 0.55f).toInt().coerceAtLeast(25)), Color(0x1CFFFFFF), Color(0x2EFFFFFF),
             Color(0xFFF7F4FA), Color(0xFFB9B0C8), Color(0xFFE2DCEA), Color(0x26FFFFFF), false)
         else -> Palette(Color(0xFF0B0D12), alpha(Color(0xFF0E1117), o.coerceAtLeast(60)), Color(0x0FFFFFFF), Color(0x14FFFFFF),
@@ -158,6 +161,9 @@ object C {
             listOf(Color(0xFF0E1A26), Color(0xFF1B3346), Color(0xFF2B4A5E)),
             start = androidx.compose.ui.geometry.Offset(0f, 0f), end = androidx.compose.ui.geometry.Offset(2400f, 1400f))
         else if (Look.theme == "liquid") androidx.compose.ui.graphics.SolidColor(Color.Transparent)
+        else if (Look.theme == "reddawn") androidx.compose.ui.graphics.Brush.linearGradient(
+            listOf(Color(0xFF18181B), Color(0xFF1F1F23), Color(0xFF2A0D0F)),
+            start = androidx.compose.ui.geometry.Offset(0f, 0f), end = androidx.compose.ui.geometry.Offset(2400f, 1400f))
         else if (Look.theme == "dew") androidx.compose.ui.graphics.Brush.linearGradient(
             listOf(Color(0xFF1C2140), Color(0xFF2E2347), Color(0xFF4A2A48), Color(0xFF5C3045)),
             start = androidx.compose.ui.geometry.Offset(0f, 0f), end = androidx.compose.ui.geometry.Offset(2400f, 1400f))

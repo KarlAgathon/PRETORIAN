@@ -190,7 +190,7 @@ fun PretorianApp() {
                     }
                 }
             },
-            root = { s -> stack.clear(); stack.add(Screen.Home); if (s != Screen.Home) stack.add(s) },
+            root = { s -> if (s != Screen.Search) SearchMem.clear(); stack.clear(); stack.add(Screen.Home); if (s != Screen.Home) stack.add(s) },
             playlistsChanged = { Repo.clear(); version++ },
         )
     }
@@ -201,6 +201,14 @@ fun PretorianApp() {
     if (askExit) Popup(tr("Izaći iz PRETORIAN-a?"), { askExit = false }) {
         OptionRow("Izađi", R.drawable.lc_x, color = C.Danger) { askExit = false; (ctx as? android.app.Activity)?.finish() }
         OptionRow("Ostani", R.drawable.lc_check) { askExit = false }
+    }
+    // goals of your teams (Sport › long OK › My teams): checked every 3 minutes wherever you are, only when you have teams
+    LaunchedEffect(Unit) {
+        delay(20_000)
+        while (true) {
+            if (MyTeams.list().isNotEmpty() || MatchFollow.list().isNotEmpty()) try { GoalNote.check(Sports.day(0)) } catch (_: Exception) {}
+            delay(if (GoalNote.hot) 60_000 else 180_000)
+        }
     }
     // Settings › General › Last channel at start
     LaunchedEffect(Unit) {
@@ -323,7 +331,7 @@ fun PretorianApp() {
                             Screen.Tv -> TvScreen(nav)
                             Screen.Movies -> MoviesScreen(nav)
                             Screen.Series -> SeriesScreen(nav)
-                            Screen.Sports -> SportsScreen(nav)
+                            Screen.Sports -> SportMixScreen(nav)
                             is Screen.MovieDetail -> MovieDetailScreen(top.vod, nav)
                             is Screen.SeriesDetail -> SeriesDetailScreen(top.item, nav)
                             else -> SimpleHome(nav)
@@ -343,7 +351,7 @@ fun PretorianApp() {
                                 Screen.AddPlaylist -> AddPlaylistScreen(nav)
                                 is Screen.MovieDetail -> MovieDetailScreen(top.vod, nav)
                                 is Screen.SeriesDetail -> SeriesDetailScreen(top.item, nav)
-                                Screen.Sports -> SportsScreen(nav)
+                                Screen.Sports -> SportMixScreen(nav)
                                 Screen.Search -> SearchScreen(nav)
                                 Screen.Catchup -> CatchupScreen(nav)
                                 is Screen.Player -> {}
@@ -373,6 +381,7 @@ fun PretorianApp() {
             WhatsNewDialog()
             UpdateAskDialog(nav)
             CrashGuardDialog(nav)
+            GoalNoteOverlay()
             MenuSaver(inPlayer = top is Screen.Player)
         }
     }
@@ -523,6 +532,19 @@ fun UpdateBanner(nav: Nav) {
     }
 }
 
+/** Where OK on a notification leads: the new episode itself, the new films or series, the match, the update. */
+fun openNote(nav: Nav, n: Note) {
+    Notes.markRead(n.id)
+    when {
+        n.kind == "update" -> { SettingsNav.section = "update"; nav.root(Screen.Settings) }
+        n.kind == "sport" -> GoalNote.open(nav, n.id)
+        n.kind == "series" && n.id.startsWith("ep:") -> Follow.open(nav, n.id.split(':').getOrElse(1) { "" })
+        n.kind == "vod" -> { VodMemory.group["vod"] = "__new__"; nav.root(Screen.Movies) }
+        n.kind == "series" -> { VodMemory.group["series"] = "__new__"; nav.root(Screen.Series) }
+        else -> nav.root(Screen.Tv)
+    }
+}
+
 /** Notifications: reminders, new version, new movies and series. */
 @Composable
 fun NotesPopup(onDismiss: () -> Unit, nav: Nav) {
@@ -531,8 +553,7 @@ fun NotesPopup(onDismiss: () -> Unit, nav: Nav) {
         Notes.list.take(30).forEach { n ->
             val icon = when (n.kind) { "update" -> R.drawable.lc_download; "vod" -> R.drawable.lc_film; "series" -> R.drawable.lc_monitor; else -> R.drawable.lc_bell }
             OptionRow(n.text, icon, sub = SimpleDateFormat("d. M. HH:mm", Locale.getDefault()).format(Date(n.time)), color = if (n.read) null else C.Amber) {
-                onDismiss()
-                when (n.kind) { "update" -> { SettingsNav.section = "update"; nav.root(Screen.Settings) }; "vod" -> nav.root(Screen.Movies); "series" -> nav.root(Screen.Series); else -> nav.root(Screen.Tv) }
+                onDismiss(); openNote(nav, n)
             }
         }
         if (Notes.list.isNotEmpty()) OptionRow("Obriši sva obavještenja", R.drawable.lc_trash_2) { Notes.clear(); onDismiss() }
@@ -766,6 +787,12 @@ object Follow {
     fun seen(id: String) {
         val o = all(); val e = o.optJSONObject(id) ?: return
         if (e.optBoolean("fresh")) { e.put("fresh", false); Prefs.put("follow", o.toString()); rev++ }
+    }
+    /** a new-episode note: the series page at that season and episode; Back goes to the series list, then Home */
+    fun open(nav: Nav, id: String) {
+        val e = all().optJSONObject(id) ?: run { nav.root(Screen.Series); return }
+        SeriesJump.id = id; SeriesJump.season = e.optInt("s", -1); SeriesJump.num = e.optInt("e", -1)
+        nav.root(Screen.Series); nav.push(Screen.SeriesDetail(SeriesItem(id, e.str("name"), e.str("cover").orNullIfBlank(), null, null)))
     }
     data class Fresh(val id: String, val pid: String, val name: String, val cover: String?, val season: Int, val num: Int)
     /** Series with a new episode not opened yet, newest first. */
