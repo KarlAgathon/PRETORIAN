@@ -2082,7 +2082,7 @@ private fun UpdateV2() {
                 Prefs.str("upd_later", "0").toIntOrNull() ?: 0) { Prefs.put("upd_later", it.toString()); rev++ }
             val pk = listOf("backup")
             SetMulti("Prije instalacije", "postavke ostaju sigurne", listOf("Backup postavki u Download/PRETORIAN"),
-                pk.indices.filter { Prefs.str("upd_pre", "backup").split(',').contains(pk[it]) }.toSet(), all = false) { set ->
+                pk.indices.filter { Prefs.str("upd_pre", "").split(',').contains(pk[it]) }.toSet(), all = false) { set ->
                 Prefs.put("upd_pre", set.sorted().joinToString(",") { pk[it] }); rev++
             }
             SetSwitch("Nakon instalacije pokaži „Šta je novo“", "jednom, pri prvom pokretanju", Prefs.bool("upd_whatsnew", true)) { Prefs.put("upd_whatsnew", it) }

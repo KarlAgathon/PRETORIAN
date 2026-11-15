@@ -232,6 +232,13 @@ fun PretorianApp() {
         }
     }
     LaunchedEffect(Reminders.rev) { ReminderReceiver.schedule(ctx) }
+    // the install confirm screen is opened from here, by the visible app (not from the background)
+    LaunchedEffect(Updater.confirm) {
+        val c = Updater.confirm ?: return@LaunchedEffect
+        Updater.confirm = null
+        try { (ctx as? android.app.Activity)?.startActivity(c) ?: ctx.startActivity(c.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        catch (e: Exception) { if (!Updater.installWithSystemScreen(ctx)) Updater.status = tr("Ažuriranje nije završeno") }
+    }
     // time the app is open, and the counters written down once a minute
     LaunchedEffect(Unit) { while (true) { delay(60_000); Stats.uptime(60_000); Stats.saveIfDirty() } }
 

@@ -42,6 +42,8 @@ object Updater {
     @Volatile var installStarted = 0L
     /** the system install screen was already tried for this install */
     @Volatile var fellBack = false
+    /** Android's "install this update?" screen, opened by the visible activity */
+    var confirm by androidx.compose.runtime.mutableStateOf<Intent?>(null)
     /** shown once per version when you come back from the player */
     var askAfterPlayer by mutableStateOf(false)
 
@@ -120,7 +122,7 @@ object Updater {
         status = null
         cancel = false
         try {
-            if (Prefs.str("upd_pre", "backup").split(',').contains("backup")) withContext(Dispatchers.IO) { backupBefore(ctx, "prije-${info.name}") }  // i18n-ignore
+            if (Prefs.str("upd_pre", "").split(',').contains("backup")) withContext(Dispatchers.IO) { backupBefore(ctx, "prije-${info.name}") }  // i18n-ignore
             val file = if (ready(ctx, info)) readyFile(ctx) else withContext(Dispatchers.IO) { download(ctx, info.apk) }
             Prefs.put("upd_file", info.name)
             progress = 101
@@ -217,7 +219,9 @@ class UpdateResultReceiver : BroadcastReceiver() {
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
                 @Suppress("DEPRECATION")
                 val confirm = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT) ?: return
-                ctx.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                // Android 14 blocks a screen opened from a broadcast in the background, and the box then throws the install away:
+                // the open PRETORIAN screen opens the confirm screen itself
+                Updater.confirm = confirm
             }
             PackageInstaller.STATUS_SUCCESS -> { Updater.progress = -1 }
             else -> {
