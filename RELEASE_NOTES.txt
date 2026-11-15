@@ -1,2 +1,4 @@
 Sport: utakmice se pokažu odmah, kanali koji prenose dođu čim se pročita TV vodič
+Sport: kretanje kroz listu više ne mijenja izabranu utakmicu – mijenja se tek na OK
+Sport: lijevo ili Back s kanala i male slike vraća tačno na izabranu utakmicu
 Sport: filteri se više ne sijeku (sport i država)

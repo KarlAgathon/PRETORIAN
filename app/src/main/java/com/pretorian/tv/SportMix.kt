@@ -2,6 +2,13 @@ package com.pretorian.tv
 
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -174,7 +181,21 @@ fun SportMixScreen(nav: Nav) {
     val ev = shown.firstOrNull { it.id == sel } ?: shown.firstOrNull()
     LaunchedEffect(ev?.id) { SportsMemory.evId = ev?.id; if (playing != null && ev?.let { e -> (e.channels + e.ai + e.maybe).none { it.url == playing?.url } } == true) playing = null }
     // Back: first the small screen stops, then out of Sport
-    BackHandler(enabled = playing != null) { playing = null }
+    // the match you chose (OK) stays chosen while you move through the list; Left or Back from the right side lands on it again
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val rowFr = remember { HashMap<String, FocusRequester>() }
+    var rightFocus by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    fun focusSel() {
+        val id = ev?.id ?: return
+        scope.launch {
+            var idx = 0; var last = ""
+            for (e in shown) { if (e.league != last) { last = e.league; idx++ }; if (e.id == id) break; idx++ }
+            if (listState.layoutInfo.visibleItemsInfo.none { it.key == id }) listState.scrollToItem((idx - 1).coerceAtLeast(0))
+            delay(40); rowFr[id]?.tryFocus()
+        }
+    }
+    BackHandler(enabled = rightFocus || playing != null) { if (rightFocus) focusSel() else playing = null }
     val mineRev = MyTeams.rev
     val mine = remember(mineRev, withCh) { MyTeams.list().mapNotNull { t -> withCh.filter { e -> e.home?.name.equals(t, true) || e.away?.name.equals(t, true) }
         .sortedWith(compareBy({ it.state != "in" }, { it.state == "post" }, { it.start })).firstOrNull()?.let { t to it } } }
@@ -207,19 +228,21 @@ fun SportMixScreen(nav: Nav) {
             }
             if ((today is Load.Loading || other is Load.Loading) && shown.isEmpty()) Loading("Učitavam utakmice…")
             else if (shown.isEmpty()) Message(when (tab) { "live" -> "Trenutno nema utakmica uživo"; "soon" -> "Nema utakmica uskoro"; else -> "Nema završenih utakmica" })
-            else LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
+            else LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
                 var lastLeague = ""
                 shown.forEachIndexed { i, e ->
                     if (e.league != lastLeague) { lastLeague = e.league
                         item(key = "h" + e.league + i) { Kicker(flagEmoji(e.country) + "  " + e.league, C.Soft, modifier = Modifier.padding(top = 6.dp, start = 4.dp)) }  // i18n-ignore
                     }
-                    item(key = e.id) { MatchRow(e, e.id == ev?.id, if (i == 0) listFr else null, onFocus = { sel = e.id }, onMenu = { menu = e }) { sel = e.id
-                        (e.channels + e.ai + e.maybe).firstOrNull()?.let { playing = it } } }
+                    item(key = e.id) { MatchRow(e, e.id == ev?.id, rowFr.getOrPut(e.id) { FocusRequester() }, onFocus = {}, onMenu = { menu = e }) {
+                        if (sel != e.id) { sel = e.id; playing = null } } }
                 }
             }
         }
         // ------------------------------------------------ right: small screen (only after a channel is chosen) and the match
-        Column(Modifier.width(420.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.width(420.dp).fillMaxHeight().onFocusChanged { rightFocus = it.hasFocus }
+            .onPreviewKeyEvent { k -> if (k.type == KeyEventType.KeyDown && k.key == Key.DirectionLeft) { focusSel(); true } else false },
+            verticalArrangement = Arrangement.spacedBy(10.dp)) {
             val pc = playing
             if (pc != null) Focusable(onClick = {}, onLongClick = null, shape = Rnd(14.dp), normal = Color.Transparent, focused = C.CardHi, zoom = 1f,
                 modifier = Modifier.fillMaxWidth()) { _ -> PreviewBox(pc, Modifier.fillMaxWidth()) }
@@ -272,7 +295,7 @@ fun SportMixScreen(nav: Nav) {
             }
         }
     }
-    LaunchedEffect(shown.isNotEmpty()) { if (shown.isNotEmpty()) { delay(100); listFr.tryFocus() } }
+    LaunchedEffect(shown.isNotEmpty()) { if (shown.isNotEmpty()) { delay(100); focusSel() } }
 }
 
 @Composable
