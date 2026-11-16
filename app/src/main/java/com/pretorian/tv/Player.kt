@@ -957,15 +957,22 @@ private fun SideLists(mode: String, sideGroup: GroupRef?, items: List<PlayItem>,
                 T("Grupe", 20.sp, C.Text, FontWeight.Bold)
                 val rows by load(Favs.rev) { groupRows(ctx).mapNotNull { (it as? GRow.Group)?.ref } }
                 when (val s = rows) {
-                    is Load.Ok -> LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    is Load.Ok -> {
+                        // the current group may be far down the list: scroll to it first, else the focus has nowhere to go (stuck panel)
+                        val gList = rememberLazyListState()
+                        val curKey = (sideGroup ?: TvMemory.group)?.key
+                        val target = s.value.indexOfFirst { it.key == curKey }.coerceAtLeast(0)
+                        LaunchedEffect(Unit) { gList.scrollToItem((target - 3).coerceAtLeast(0)); delay(60); fr.tryFocus() }
+                        LazyColumn(state = gList, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         itemsIndexed(s.value, key = { _, g -> g.key }) { i, g ->
-                            val sel = (sideGroup ?: TvMemory.group)?.key == g.key
+                            val sel = curKey == g.key
                             Focusable(modifier = Modifier.fillMaxWidth().height(Rows.group), onClick = { onGroup(g) },
-                                focusRequester = if (sel || (i == 0 && (sideGroup ?: TvMemory.group) == null)) fr else null,
+                                focusRequester = if (i == target) fr else null,
                                 normal = if (sel) C.CardFocus else Color.Transparent, zoom = 1f) { _ ->
                                 T(g.cat.name, 15.sp, C.Text, if (sel) FontWeight.Bold else FontWeight.Normal,
                                     modifier = Modifier.align(Alignment.CenterStart).padding(horizontal = 12.dp))
                             }
+                        }
                         }
                     }
                     else -> Loading("Učitavam grupe…")

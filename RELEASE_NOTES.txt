@@ -1,2 +1,3 @@
+Plejer: lista grupe (lijevo pa još lijevo) se više ne zaglavi – fokus odmah stoji na tvojoj grupi i možeš ići kroz grupe
 TV lista: kad uđeš u kanale, grupe se sklope ulijevo i kanali dobiju više mjesta; strelica lijevo ih vraća
 TV vodič (mreža): traka DAN/VRIJEME, brojevi za kanal, CH▲▼ stranica, držanje ◀ = Sada, arhiva unazad, grupe se sklapaju
