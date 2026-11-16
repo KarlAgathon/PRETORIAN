@@ -10,6 +10,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -241,7 +242,7 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
         Column(Modifier.fillMaxSize().padding(top = 16.dp, start = 12.dp, end = 4.dp)) {
             // ---------------------------------------------------------------- picture and show
             val cur = current()
-            val tmPic = ListStyle.tivimate && !(Perf.lite && !Prefs.bool("lite_preview")) && (Look.previewMode == 2 || (Look.previewMode == 1 && PreviewSel.ch != null))
+            val tmPic = ListStyle.tivimate
             val noPic = !tmPic && (ListStyle.tivimate || (Perf.lite && !Prefs.bool("lite_preview")) || (Look.previewMode == 1 && PreviewSel.ch == null) || Look.previewMode == 0)
             Row(Modifier.fillMaxWidth().height(if (noPic) 104.dp else if (tmPic) 128.dp else 150.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                 // TiviMate mode: no small picture, the show fills the top
@@ -249,7 +250,7 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
                     2 -> PreviewBox(cur?.first, Modifier.height(146.dp))
                     1 -> PreviewSel.ch?.let { PreviewBox(it, Modifier.height(146.dp)) }
                 }
-                Column(Modifier.weight(1f).padding(top = 4.dp, end = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(Modifier.weight(1f).padding(top = 4.dp, end = 12.dp), verticalArrangement = Arrangement.spacedBy(if (tmPic) 4.dp else 6.dp)) {
                     val pr = cur?.second
                     T(pr?.title ?: cur?.first?.name ?: "", if (noPic) 19.sp else 22.sp, C.Text, FontWeight.Bold, maxLines = if (noPic) 1 else 2)
                     if (pr != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -267,8 +268,11 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
                 }
                 // TiviMate style: the small picture sits in the top right corner
                 if (tmPic) {
-                    val pc = if (Look.previewMode == 2) cur?.first else PreviewSel.ch
+                    val pc = if (Look.previewMode == 2 && !(Perf.lite && !Prefs.bool("lite_preview"))) cur?.first else PreviewSel.ch
                     if (pc != null) PreviewBox(pc, Modifier.height(124.dp).padding(end = 8.dp))
+                    else Box(Modifier.height(124.dp).aspectRatio(16f / 9f).padding(end = 8.dp).clip(Rnd(12.dp)).background(C.Card), contentAlignment = Alignment.Center) {
+                        T("OK = slika ovdje · OK još jednom = cijeli ekran", 11.sp, C.Muted, maxLines = 2, modifier = Modifier.padding(10.dp))
+                    }
                 }
             }
             // ---------------------------------------------------------------- group · day · time
@@ -335,6 +339,9 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
                                 if (p != null) gate.run("c:${ch.url}", Ovr(ctx, ch.pid).isChLocked(ch)) {
                                     Preview.stop(); nav.push(Screen.Player(listOf(PlayItem(pr.title, Xtream(p).timeshiftUrl(ch.id, pr), ch.logo, ch.name, null)), 0, live = false))
                                 }
+                            } else if (ListStyle.tivimate && (pr == null || (pr.start <= t && pr.end > t)) && PreviewSel.ch?.url != ch.url && Look.previewMode != 2) {
+                                // TiviMate style: first OK starts the small picture in the corner, the next OK goes full screen
+                                gate.run("c:${ch.url}", Ovr(ctx, ch.pid).isChLocked(ch)) { PreviewSel.ch = ch }
                             } else if (pr == null || (pr.start <= t && pr.end > t)) {
                                 val i = list.indexOfFirst { it.url == ch.url }.coerceAtLeast(0)
                                 gate.run("c:${ch.url}", Ovr(ctx, ch.pid).isChLocked(ch)) { TvMemory.channel = i; TvMemory.group = g; TvMemory.restore = true; playChannels(nav, list, i) }

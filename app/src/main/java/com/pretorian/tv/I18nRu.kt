@@ -2174,4 +2174,5 @@ Blaga|Мягкий
 Jaka|Яркий
 Jačina boje odabranog|Яркость цвета выбранного
 kanal i emisija na kojoj stojiš · u svakoj temi · manje = blaže za oči · OK pa ◀ ▶|канал и передача, на которых вы стоите · любая тема · меньше = мягче для глаз · OK, затем ◀ ▶
+OK = slika ovdje · OK još jednom = cijeli ekran|OK = картинка здесь · ещё раз OK = весь экран
 """.trimIndent()
