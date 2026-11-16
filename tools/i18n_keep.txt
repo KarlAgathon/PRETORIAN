@@ -497,3 +497,7 @@ S
 A
 football
 football/nfl
+today
+follow
+b_reset_at
+dd.MM. HH:mm

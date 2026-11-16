@@ -1,8 +1,4 @@
-Štednja resursa (Postavke › Opće): manje slika odjednom, manji TV vodič, pretraga tek kad je otvoriš, manji plakati, čišćenje memorije poslije plejera, čuvar ekrana bez sekundi, nove filmove provjerava jednom dnevno – sve uključeno, svako se može isključiti
-Nova instalacija uvijek kreće u Lite modu
-Roditeljska kontrola sama sakrije grupe za odrasle (XXX, porn, 18+…) u cijeloj playlisti; u Grupe i kanali vide se kao sakrivene (štit) i „Prikaži“ ih vraća – tvoj izbor ima prednost
-Sport se učitava brže: lige se pojavljuju čim stignu, najviše 8 upita odjednom, nema čekanja minut kad mreža zakaže
-Jučerašnje utakmice se više ne prikazuju kao Uživo
-Sports Center: polje za API-Football ključ – brži rezultati uživo (radi tek kad upišeš ključ)
-Početna › Utakmice danas: dresovi u bojama timova s grbom, vrijeme ili rezultat uživo; kruženje lijevo/desno; „Ukloni“ na kraju reda
-Plejer: zvjezdica Favorit je žuta kad je kanal u favoritima, i kad je dugme označeno
+Početna: novi red „Pratiš · uživo“ – dresovi, rezultat, kartoni ispod svakog tima i zadnji događaj; uživo prvo, pa one koje uskoro počinju; ima svoj prekidač u Postavke › Početna
+Utakmice danas: „Ukloni“ sada odmah skloni red; vraća se u Postavke › Sports Center ili Početna
+Vrijeme na kartama utakmica jasno vidljivo
+Dijagnostika › Potrošeno: posebno Danas i Ukupno od reseta (TV, Serije, Filmovi)

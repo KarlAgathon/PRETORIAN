@@ -95,6 +95,8 @@ object Stats {
         return days.keys().asSequence().filter { it >= cut }.mapNotNull { days.optJSONObject(it) }.toList()
     }
     fun sum(k: String, period: Int) = daysOf(period).sumOf { it.optLong(k) }
+    /** every kept day: the total since the last Reset of that counter */
+    fun sumAll(k: String): Long { val days = root().optJSONObject("d") ?: return 0; return days.keys().asSequence().mapNotNull { days.optJSONObject(it) }.sumOf { it.optLong(k) } }
     fun seasons(period: Int) = daysOf(period).flatMap { d -> d.optJSONArray("sea")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList() }.distinct().size
     fun topChannel(period: Int): String? {
         val m = HashMap<String, Long>()
@@ -450,9 +452,17 @@ fun DiagnosticsV2() {
             val recs = Stats.sum("rec", period)
             val stall = Stats.sum("stall", period)
             CardGrid(1, listOf(
-                { m -> InfoCard("Protok podataka", fmtGb(bTv + bSer + bMov), trf("ukupno · %s", tr(pw)), R.drawable.lc_download, Color(0xFFF59E0B), m,
-                    action = { SmallBtn(tr("↺ Reset")) { Stats.reset(listOf("b_tv", "b_ser", "b_mov")); rev++ } },
-                    stats = listOf(Triple("TV", fmtGb(bTv), null), Triple("Serije", fmtGb(bSer), null), Triple("Filmovi", fmtGb(bMov), null))) },
+                { m ->
+                    // today on the left (with TV / Series / Movies under it), the total since the last Reset on the right
+                    val dTv = Stats.sum("b_tv", 0); val dSer = Stats.sum("b_ser", 0); val dMov = Stats.sum("b_mov", 0)
+                    val aTv = Stats.sumAll("b_tv"); val aSer = Stats.sumAll("b_ser"); val aMov = Stats.sumAll("b_mov")
+                    val since = Prefs.long("b_reset_at", 0L)
+                    InfoCard("Potrošeno", tr("Danas") + " " + fmtGb(dTv + dSer + dMov), "TV " + fmtGb(dTv) + " · " + tr("Serije") + " " + fmtGb(dSer) + " · " + tr("Filmovi") + " " + fmtGb(dMov),  // i18n-ignore
+                        R.drawable.lc_download, Color(0xFFF59E0B), m,
+                        action = { SmallBtn(tr("↺ Reset")) { Stats.reset(listOf("b_tv", "b_ser", "b_mov")); Prefs.put("b_reset_at", System.currentTimeMillis()); rev++ } },
+                        stats = listOf(Triple(if (since > 0) trf("Ukupno od %s", SimpleDateFormat("dd.MM. HH:mm", Locale.US).format(Date(since))) else tr("Ukupno od reseta"), fmtGb(aTv + aSer + aMov), C.Amber),  // i18n-ignore
+                            Triple("TV", fmtGb(aTv), null), Triple("Serije", fmtGb(aSer), null), Triple("Filmovi", fmtGb(aMov), null)))
+                },
                 { m -> InfoCard("Brzina interneta", if (vpn) tr("VPN je uključen") else tr("bez VPN-a"), null, R.drawable.lc_gauge2, Color(0xFF06B6D4), m) {
                     // two rows, each with its own test: the VPN row only measures while a VPN is on
                     val norm = Prefs.str("speed_norm"); val vp = Prefs.str("speed_vpn")

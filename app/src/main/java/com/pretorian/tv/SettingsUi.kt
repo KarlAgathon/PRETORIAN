@@ -1994,6 +1994,9 @@ private fun SportV2() {
                 val teams = Prefs.str("sport_teams").split(',').map { it.trim() }.filter { it.isNotBlank() }
                 SetRow("Omiljeni timovi", "uvijek na vrhu", if (teams.isEmpty()) tr("Nijedan") else trf("%s tima", teams.size)) { teamDlg = true }
                 SetSwitch("Automatski prati", "timove i reprezentacije", MyTeams.auto) { Prefs.put("sa_auto", it); MyTeams.rev++; rev++ }
+                // the same switches as in Settings › Home ("Remove" on Home switches the first one off)
+                SetSwitch("Utakmice danas na Početnoj", "„Ukloni“ na Početnoj ga isključi", HomeRows.isOn("today")) { HomeRows.setOn("today", it); rev++ }
+                SetSwitch("Pratiš · uživo na Početnoj", "rezultat, kartoni, zadnji događaj", HomeRows.isOn("follow")) { HomeRows.setOn("follow", it); rev++ }
                 SetSection("Obavijesti")
                 val ks = GoalNote.KINDS
                 SetMulti("Obavijesti", "za ono što pratiš", ks.map { it.second },
@@ -2184,7 +2187,6 @@ private fun GeneralV2() {
                 Prefs.bool("bg_sport", true), onLong = { pick = "sport" }) { Prefs.put("bg_sport", it); rev++ }
             SetSwitch("Nove epizode serija koje gledaš", trf("svakih %s", everyStr(General.episodesEvery * 60)),
                 Prefs.bool("bg_episodes", true), onLong = { pick = "ep" }) { Prefs.put("bg_episodes", it); rev++ }
-            SetSwitch("Kartica „Pratiš“ na Početnoj", "rezultat, minuta, gol i karton utakmica koje pratiš", Prefs.bool("home_sport_card", !Perf.lite)) { Prefs.put("home_sport_card", it); rev++ }
             SetSection("Štednja resursa")
             T(tr("Sve je uključeno u Lite i Full modu · isključi ono što ti ne treba"), 12.sp, C.Muted, maxLines = 1)
             Lean.ALL.forEach { (k, t, sub) -> SetSwitch(t, sub, Prefs.bool(k, true)) { Prefs.put(k, it); rev++ } }

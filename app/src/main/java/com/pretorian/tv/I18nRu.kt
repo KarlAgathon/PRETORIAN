@@ -2106,4 +2106,12 @@ umjesto svakih 12 sati|вместо каждых 12 часов
 API-Football ključ|Ключ API-Football
 brži rezultati uživo · besplatno 100 upita dnevno|быстрее счёт онлайн · бесплатно 100 запросов в день
 ključ s dashboard.api-football.com|ключ с dashboard.api-football.com
+Ukupno od %s|Всего с %s
+Ukupno od reseta|Всего со сброса
+⭐ PRATIŠ · UŽIVO|⭐ СЛЕДИШЬ · В ЭФИРЕ
+Pratiš · uživo|Следишь · в эфире
+Utakmice danas na Početnoj|Матчи сегодня на главной
+„Ukloni“ na Početnoj ga isključi|«Убрать» на главной выключает это
+Pratiš · uživo na Početnoj|Следишь · в эфире на главной
+rezultat, kartoni, zadnji događaj|счёт, карточки, последнее событие
 """.trimIndent()
