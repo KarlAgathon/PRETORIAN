@@ -390,7 +390,7 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
                                 val progs = progsOf(ch).filter { it.end > viewStart && it.start < viewEnd }
                                 if (progs.isEmpty()) {
                                     Box(Modifier.fillMaxSize().padding(end = 2.dp).clip(Rnd(8.dp))
-                                        .background(if (sel) C.Red.copy(alpha = 0.35f) else C.Card)
+                                        .background(if (sel) C.Red.copy(alpha = ListStyle.strength * 0.85f) else C.Card)
                                         .then(if (sel) Modifier.border(2.dp, C.Red, Rnd(8.dp)) else Modifier).padding(horizontal = 10.dp),
                                         contentAlignment = Alignment.CenterStart) {
                                         T(if (epg.containsKey(ch.url)) "Bez programa" else "Učitavam…", 13.sp, C.Muted)
@@ -402,7 +402,7 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
                                     val isNow = pr.start <= now && pr.end > now
                                     val isPast = pr.end <= now
                                     Box(Modifier.offset(x = x.dp).width((w - 3).coerceAtLeast(2f).dp).fillMaxHeight().clip(Rnd(8.dp))
-                                        .background(when { isFocus -> C.Red.copy(alpha = 0.45f); isNow -> C.CardHi; isPast -> C.Card.copy(alpha = 0.55f); else -> C.Card })
+                                        .background(when { isFocus -> C.Red.copy(alpha = ListStyle.strength); isNow -> C.CardHi; isPast -> C.Card.copy(alpha = 0.55f); else -> C.Card })
                                         .then(if (isFocus) Modifier.border(2.dp, C.Red, Rnd(8.dp)) else Modifier).padding(horizontal = 8.dp),
                                         contentAlignment = Alignment.CenterStart) {
                                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {

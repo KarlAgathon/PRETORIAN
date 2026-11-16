@@ -1832,6 +1832,8 @@ private fun LookV2(openSub: (String) -> Unit) {
             SetDrop("Odabrani kanal", "kako se ističe red na kojem stojiš", listOf("Okvir (mirno)", "Puna boja"), Prefs.long("tv_focus", 0).toInt().coerceIn(0, 1), new = true) {
                 Prefs.put("tv_focus", it.toLong()); rev++
             }
+            SetSlider("Jačina boje odabranog", "kanal i emisija na kojoj stojiš · u svakoj temi · manje = blaže za oči · OK pa ◀ ▶",
+                Prefs.long("tv_focus_pct", 40).toInt(), 10, 100, 5) { Prefs.put("tv_focus_pct", it.toLong()); rev++ }
             SetSwitch("Emisije široke po trajanju", "kratka epizoda uža, dug film širi", Prefs.bool("tv_prop", true)) { Prefs.put("tv_prop", it); rev++ }
             SetSwitch("Oznaka arhive ↺", "kanali na kojima možeš gledati unazad", Prefs.bool("tv_archmark", true)) { Prefs.put("tv_archmark", it); rev++ }
             SetSwitch("Skok brojem kanala", "ukucaj broj na daljinskom (npr. 7) i odmah si na kanalu", Prefs.bool("tv_digits", true)) { Prefs.put("tv_digits", it); rev++ }

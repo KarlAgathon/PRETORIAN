@@ -419,10 +419,11 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                                 }
                             },
                             onMenu = { menu = ch }, onFocus = { rowFocused = true; onFocusCh(ch) }, focusRequester = cWrap.requester(i),
-                            normal = Color.Transparent, focused = if (solid) C.Red else C.CardHi, zoom = 1.01f) { f ->
-                            // "frame" look (default): a calm light row with a thin theme-colour frame; "full colour" fills the row
-                            val hl = f && solid
-                            if (f && !solid) Box(Modifier.matchParentSize().border(2.dp, C.Red, Rnd(12.dp)))
+                            normal = Color.Transparent, focused = if (solid) C.Red.copy(alpha = ListStyle.strength) else C.Red.copy(alpha = ListStyle.strength * 0.22f), zoom = 1.01f) { f ->
+                            // "frame" look (default): a calm, lightly tinted row with a thin theme-colour frame; "full colour" fills the row.
+                            // How strong the colour is: Settings › Appearance (every theme, 10–100 %)
+                            val hl = f && solid && ListStyle.strength >= 0.65f
+                            if (f && !solid) Box(Modifier.matchParentSize().border(2.dp, C.Red.copy(alpha = 0.45f + 0.55f * ListStyle.strength), Rnd(12.dp)))
                             val now = nowOf(ch)
                             Row(Modifier.fillMaxSize().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 T("${ch.num}", 11.sp, if (hl) C.OnRed.copy(alpha = 0.6f) else C.Muted, modifier = Modifier.width(26.dp), align = androidx.compose.ui.text.style.TextAlign.End)
@@ -451,13 +452,13 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                                                 ((e.end - from) / 1_800_000f).coerceIn(0.7f, 2.6f)
                                             } else if (kk == 0) 1.4f else 1f
                                             Column(Modifier.weight(w).fillMaxHeight().clip(Rnd(8.dp))
-                                                .background(if (isSel && !solid) C.Red else if (isSel) C.Bg.copy(alpha = 0.85f) else if (hl) Color.Black.copy(alpha = if (isNow) 0.18f else 0.1f) else if (isNow) C.CardHi else C.Card)
+                                                .background(if (isSel && !solid) C.Red.copy(alpha = ListStyle.strength) else if (isSel) C.Bg.copy(alpha = 0.85f) else if (hl) Color.Black.copy(alpha = if (isNow) 0.18f else 0.1f) else if (isNow) C.CardHi else C.Card)
                                                 .then(if (isSel && solid) Modifier.border(2.dp, C.Bg, Rnd(8.dp)) else Modifier).padding(horizontal = 9.dp, vertical = 3.dp),
                                                 verticalArrangement = Arrangement.Center) {
                                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                                     if (Reminders.has(e.title, e.start)) Ico(R.drawable.lc_bell, 11.dp, if (isSel) C.Amber else if (hl) C.OnRed else C.Amber)
                                                     T((if (isNow) "" else hm.format(java.util.Date(e.start)) + "  ") + e.title, 12.sp,  // i18n-ignore
-                                                        if (isSel && !solid) C.OnRed else if (isSel) C.Text else if (hl) C.OnRed else if (isNow) C.Text else C.Soft, if (isNow || isSel) FontWeight.SemiBold else FontWeight.Normal)
+                                                        if (isSel && !solid) ListStyle.onPick else if (isSel) C.Text else if (hl) C.OnRed else if (isNow) C.Text else C.Soft, if (isNow || isSel) FontWeight.SemiBold else FontWeight.Normal)
                                                 }
                                                 if (isNow) ThinBar(e.progress(), if (hl) C.OnRed else C.RedText, Modifier.fillMaxWidth().padding(top = 3.dp))
                                             }

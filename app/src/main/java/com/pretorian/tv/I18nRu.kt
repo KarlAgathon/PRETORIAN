@@ -2169,4 +2169,6 @@ Boja odabranog|Цвет выделения
 u svim temama · blaga = ne bliješti|во всех темах · мягкий = не слепит
 Blaga|Мягкий
 Jaka|Яркий
+Jačina boje odabranog|Яркость цвета выбранного
+kanal i emisija na kojoj stojiš · u svakoj temi · manje = blaže za oči · OK pa ◀ ▶|канал и передача, на которых вы стоите · любая тема · меньше = мягче для глаз · OK, затем ◀ ▶
 """.trimIndent()

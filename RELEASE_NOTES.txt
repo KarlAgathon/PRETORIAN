@@ -1,3 +1,16 @@
+PRETORIAN 1.0.23 (beta)
+Čuvar ekrana više se ne pali dok kanal ide (mala slika ili cijeli ekran) – samo na Početnoj kad ništa ne radiš i kad pauziraš film/seriju
+TV lista: odabrani kanal mirniji – blago obojen red s tankim okvirom u boji teme (Postavke › Izgled › Odabrani kanal: Okvir / Puna boja)
+Postavke › Izgled: „Jačina boje odabranog“ 10–100 % za sve teme (manje = blaže za oči), vrijedi i u TV vodiču
+Prikaz liste kanala: Kompaktni (novo, zadano), Normalni, Veliki i TiviMate mod (grupe lijevo, kanali s programom po satima, bez male slike) – i lista kanala u playeru
+Broj kanala na ekranu do 9
+Emisije široke po trajanju (kratka epizoda uža, dug film širi) – može se isključiti
+Oznaka arhive ↺ na kanalima s gledanjem unazad
+Skok brojem kanala: ukucaj broj na daljinskom i odmah si na kanalu
+Upute na ekranu: par sekundi pa nestanu / uvijek / isključene; „OK = podsjeti me“ više nije na svakoj kartici
+Gornja traka: Lite/Full i A/S kao obične ikone (može i stari izgled s kvadratima)
+Plejer: titlovi se pomjeraju u slobodni dio slike kad je otvorena lista kanala ili vodič
+
 Sve teme: odabrano polje je blaže (bijela postaje svijetlo siva, zlatna mirnija) – Postavke › Izgled › „Boja odabranog“ (Blaga / Jaka)
 TV lista: odabrani kanal je miran red s tankim okvirom u boji teme, a samo odabrana emisija je u boji (ili stara „Puna boja“)
 TV lista: „Prikaz liste kanala“ – Kompaktni (novo, kao TiviMate), Normalni, Veliki ili TiviMate mod (grupe lijevo, kanali s programom po satima, bez male slike); vrijedi i za listu u plejeru

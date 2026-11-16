@@ -515,3 +515,4 @@ bar_badges
 sub_shift
 tv_density
 look_focus_soft
+tv_focus_pct

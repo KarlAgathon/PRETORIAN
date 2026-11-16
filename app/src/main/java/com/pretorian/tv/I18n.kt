@@ -2203,6 +2203,8 @@ Boja odabranog|Selected colour|Auswahlfarbe|Boja odabranog|Боја изабра
 u svim temama · blaga = ne bliješti|in every theme · soft = no glare|in allen Designs · sanft = blendet nicht|u svim temama · blaga = ne bliješti|у свим темама · блага = не блешти|във всички теми · мек = не заслепява|în toate temele · blând = nu orbește|tüm temalarda · yumuşak = göz almaz|in tutti i temi · tenue = non abbaglia|في كل السمات · هادئ = بلا وهج
 Blaga|Soft|Sanft|Blaga|Блага|Мек|Blândă|Yumuşak|Tenue|هادئ
 Jaka|Strong|Kräftig|Jaka|Јака|Силен|Puternică|Güçlü|Forte|قوي
+Jačina boje odabranog|Strength of the picked colour|Stärke der Auswahlfarbe|Jačina boje odabranog|Јачина боје изабраног|Сила на цвета на избраното|Intensitatea culorii selecției|Seçili rengin yoğunluğu|Intensità del colore selezionato|شدة لون العنصر المحدد
+kanal i emisija na kojoj stojiš · u svakoj temi · manje = blaže za oči · OK pa ◀ ▶|channel and show you are on · every theme · less = easier on the eyes · OK then ◀ ▶|Sender und Sendung, auf denen du stehst · jedes Theme · weniger = augenschonender · OK dann ◀ ▶|kanal i emisija na kojoj stojiš · u svakoj temi · manje = blaže za oči · OK pa ◀ ▶|канал и емисија на којој стојиш · у свакој теми · мање = блаже за очи · OK па ◀ ▶|канал и предаване, на които си · всяка тема · по-малко = по-леко за очите · OK после ◀ ▶|canalul și emisiunea curentă · orice temă · mai puțin = mai blând pentru ochi · OK apoi ◀ ▶|üzerinde durduğun kanal ve program · her tema · az = gözü yormaz · OK sonra ◀ ▶|canale e programma attuali · ogni tema · meno = più riposante · OK poi ◀ ▶|القناة والبرنامج الحالي · كل سمة · أقل = أريح للعين · OK ثم ◀ ▶
 """.trimIndent()
 
 private val DICT: Map<String, Map<String, String>> by lazy {

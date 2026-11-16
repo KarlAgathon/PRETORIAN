@@ -83,6 +83,10 @@ object ListStyle {
     val mode get() = Prefs.long("tv_density", 0).toInt().coerceIn(0, 3)
     val tivimate get() = mode == 3
     val sideRow get() = when (mode) { 1 -> 52.dp; 2 -> 62.dp; else -> 42.dp }
+    /** how strong the colour of the picked channel / show is, in every theme (Settings › Appearance, 10–100 %, default 40) */
+    val strength get() = Prefs.long("tv_focus_pct", 40).toInt().coerceIn(10, 100) / 100f
+    /** text on the picked colour: the theme's dark text only when the colour is strong, otherwise normal text */
+    val onPick get() = if (strength >= 0.65f) C.OnRed else C.Text
 }
 
 object Rows {
