@@ -526,3 +526,53 @@ object Platforms {
         "Apple TV+" -> 0xFF1C1C1E; "Hulu" -> 0xFF1CE783; "Paramount+" -> 0xFF0064FF; "AMC" -> 0xFF2A2A2A; else -> 0xFF3A3F4B
     }
 }
+
+/**
+ * Descriptions without any key, when neither the provider nor TMDB has one:
+ * TVmaze for series and episodes, Wikipedia for films (and series TVmaze doesn't know). Kept in memory.
+ */
+object FreeMeta {
+    private val cache = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val NONE = "\u0000"
+    private fun strip(html: String) = html.replace(Regex("<[^>]+>"), "").replace("&amp;", "&").replace("&quot;", "\"").replace("&#39;", "'").trim()
+    private fun words(s: String) = s.lowercase().replace(Regex("[^\\p{L}\\p{N} ]"), " ").split(' ').filter { it.length > 2 }.toSet()
+    /** the found name must really be this title (most of its words) */
+    private fun same(a: String, b: String): Boolean { val wa = words(a); val wb = words(b); return wa.isNotEmpty() && wa.count { it in wb } * 3 >= wa.size * 2 }
+
+    private suspend fun memo(key: String, f: () -> String?): String? = withContext(Dispatchers.IO) {
+        cache[key]?.let { return@withContext it.takeIf { v -> v != NONE } }
+        val v = try { f() } catch (e: Exception) { return@withContext null }
+        cache[key] = v ?: NONE; v
+    }
+
+    private fun tvmazeShow(title: String): JSONObject? {
+        val o = JSONObject(Http.request("https://api.tvmaze.com/singlesearch/shows?q=" + Net.enc(title)))  // i18n-ignore
+        return o.takeIf { same(title, it.str("name")) }
+    }
+
+    private fun wiki(title: String, year: String?, kind: String): String? {
+        for (lang in listOf("en")) {
+            val q = Net.enc("$title ${year ?: ""} $kind".trim())
+            val s = JSONObject(Http.request("https://$lang.wikipedia.org/w/api.php?action=query&list=search&format=json&srlimit=3&srsearch=$q"))  // i18n-ignore
+            val hits = s.optJSONObject("query")?.optJSONArray("search") ?: continue
+            for (i in 0 until hits.length()) {
+                val page = hits.optJSONObject(i)?.str("title") ?: continue
+                if (!same(title, page)) continue
+                val sum = JSONObject(Http.request("https://$lang.wikipedia.org/api/rest_v1/page/summary/" + Net.enc(page.replace(' ', '_'))))  // i18n-ignore
+                if (sum.str("type") == "disambiguation") continue
+                sum.str("extract").takeIf { it.length > 40 }?.let { return it }
+            }
+        }
+        return null
+    }
+
+    suspend fun movie(raw: String): String? { val (t, y) = cleanTitle(raw); return memo("m|$t|$y") { wiki(t, y, "film") } }  // i18n-ignore
+    suspend fun series(raw: String): String? { val (t, y) = cleanTitle(raw)
+        return memo("s|$t") { tvmazeShow(t)?.str("summary")?.let(::strip)?.ifBlank { null } ?: wiki(t, y, "TV series") } }
+    suspend fun episode(raw: String, season: Int, num: Int): String? { val (t, _) = cleanTitle(raw)
+        return memo("e|$t|$season|$num") {
+            val id = tvmazeShow(t)?.optInt("id") ?: return@memo null
+            strip(JSONObject(Http.request("https://api.tvmaze.com/shows/$id/episodebynumber?season=$season&number=$num")).str("summary")).ifBlank { null }  // i18n-ignore
+        }
+    }
+}

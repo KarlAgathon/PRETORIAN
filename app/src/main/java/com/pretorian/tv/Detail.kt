@@ -250,8 +250,11 @@ fun OnyxMovieDetail(v: Vod, nav: Nav) {
                     if (sound.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         sound.forEach { DBadge(it, bg = Color.White.copy(alpha = 0.12f)) }
                     }
-                    val plot = translated(m?.overview ?: i?.plot)
-                    T(plot ?: if (meta is Load.Loading) "Učitavam opis…" else " ", 14.sp, C.Soft, maxLines = 4)
+                    // neither TMDB nor the provider has one: a free source (Wikipedia)
+                    val needFree = m?.overview == null && i?.plot == null && meta !is Load.Loading && info !is Load.Loading
+                    val free by load(v.name, needFree) { if (needFree) FreeMeta.movie(v.name) else null }
+                    val plot = translated(m?.overview ?: i?.plot ?: (free as? Load.Ok)?.value)
+                    T(plot ?: if (meta is Load.Loading || info is Load.Loading || free is Load.Loading) "Učitavam opis…" else tr("Opis nije dostupan."), 14.sp, C.Soft, maxLines = 4)
                     val dir = m?.people?.firstOrNull { it.role == "Režija" }?.name ?: i?.director
                     dir?.let { T(tr("Režija") + ": " + it, 12.sp, C.Muted) }
                     Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -354,7 +357,9 @@ fun OnyxSeriesDetail(s: SeriesItem, nav: Nav) {
                     T(parts.joinToString(" – ") + if (plat != null) " –" else "", 13.sp, C.Soft, FontWeight.SemiBold)
                     PlatformChip(s.id, m, 10.sp, s.name, tv = true)
                 }
-                T(translated(m?.overview ?: s.plot) ?: " ", 12.sp, C.Soft, maxLines = 2)
+                val needFree = m?.overview == null && s.plot.isNullOrBlank() && meta !is Load.Loading
+                val free by load(s.name, needFree) { if (needFree) FreeMeta.series(s.name) else null }
+                T(translated(m?.overview ?: s.plot?.ifBlank { null } ?: (free as? Load.Ok)?.value) ?: " ", 12.sp, C.Soft, maxLines = 2)
                 Row(Modifier.horizontalScroll(rememberScrollState()).padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     val np = next?.let { Watch.get(ctx, it.url) }
                     val left = if (np?.started == true && np.dur > 0) ((np.dur - np.pos) / 60_000).toInt().coerceAtLeast(1) else 0
@@ -517,7 +522,9 @@ private fun EpisodeDialog(r: EpRow, title: String, s: SeriesItem, m: Meta?, fmtD
                     val mins = e?.durSec?.takeIf { it > 0 }?.let { it / 60 } ?: r.t?.runtime ?: 0
                     val air = e?.air ?: r.t?.air
                     T(listOfNotNull(if (mins > 0) fmtMin(mins) else null, air?.let { tr("Emitovano") + " " + fmtDate(it) }).joinToString(" · ").ifBlank { title }, 13.sp, C.Muted)  // i18n-ignore
-                    T(translated(e?.plot ?: r.t?.overview) ?: tr("Opis epizode nije dostupan."), 14.sp, C.Soft, maxLines = 5)
+                    val needFree = e?.plot.isNullOrBlank() && r.t?.overview == null
+                    val free by load(s.name, r.season, r.num, needFree) { if (needFree) FreeMeta.episode(s.name, r.season, r.num) else null }
+                    T(translated(e?.plot?.ifBlank { null } ?: r.t?.overview ?: (free as? Load.Ok)?.value) ?: tr(if (free is Load.Loading) "Učitavam opis…" else "Opis epizode nije dostupan."), 14.sp, C.Soft, maxLines = 5)
                     if (pr != null && pr.started) ThinBar(pr.fraction, LampYellow, Modifier.fillMaxWidth(), 3.dp)
                     if (e != null) Row(Modifier.horizontalScroll(rememberScrollState()).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         val started = pr?.started == true

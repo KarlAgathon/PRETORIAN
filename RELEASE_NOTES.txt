@@ -1,2 +1,3 @@
-Opisi filmova, serija i epizoda: ako server odgovori sporo, aplikacija pokuša ponovo i više ne pamti prazan odgovor
-Postavke › Plejer: polje „TMDB ključ“ – opisi, plakati i glumci na tvom jeziku i kad ih server nema
+Opisi filmova, serija i epizoda: kad ih nema ni provider ni TMDB, traže se besplatno bez ključa – Wikipedia za filmove, TVmaze za serije i epizode (prevedeno na tvoj jezik)
+Naslovi s oznakom kao „D+ - …“ se sada prepoznaju
+Umjesto praznog mjesta piše „Opis nije dostupan.“

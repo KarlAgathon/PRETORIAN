@@ -678,6 +678,7 @@ fun cleanTitle(raw: String): Pair<String, String?> {
         ?: Regex("\\b(19|20)\\d{2}\\b\\s*$").find(t)?.value?.trim()
     t = t.replace(Regex("^\\s*[|\\[(]?[A-Z0-9]{2,6}[|\\])]\\s*"), "")            // |EN| , [EXYU]
     t = t.replace(Regex("^\\s*(4K-)?[A-Z]{2,4}\\s*[-:|]\\s*"), "")                   // EN - , 4K-EN -
+    t = t.replace(Regex("^\\s*[A-Z][A-Z0-9]{0,3}\\+\\s*[-:|]\\s*"), "")                     // D+ - , AP+ -
     t = t.replace(Regex("[(\\[](19|20)\\d{2}[)\\]]"), "")
     t = t.replace(Regex("\\b(4K|UHD|FHD|HD|SD|HEVC|H265|1080P|720P|2160P|MULTI[- ]?SUB|SUB|DUB)\\b", RegexOption.IGNORE_CASE), "")
     t = t.replace(Regex("[(\\[]\\s*[)\\]]"), "")                                    // empty () []

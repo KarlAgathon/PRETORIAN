@@ -2125,4 +2125,5 @@ osvježavanje preuzme redoslijed grupa i kanala sa servera (npr. IPTV Editor); s
 TMDB ključ|Ключ TMDB
 ugrađen|встроен
 opisi, plakati i glumci na tvom jeziku, i kad ih server nema · besplatno na themoviedb.org|описания, постеры и актёры на твоём языке, даже если на сервере их нет · бесплатно на themoviedb.org
+Opis nije dostupan.|Описание недоступно.
 """.trimIndent()
