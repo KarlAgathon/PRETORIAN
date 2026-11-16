@@ -834,6 +834,17 @@ object ServerOrder { val on get() = Prefs.bool("srv_order", true) }
 object EpgShift {
     val hours get() = Prefs.long("epg_shift", 0).toInt().coerceIn(-12, 12)
     val ms get() = hours * 3600_000L
+    /** one channel's own shift in minutes, on top of the general one (player › More › Time shift, or long OK on a channel) */
+    var rev by mutableIntStateOf(0)
+    private fun key(url: String) = "epgsh_" + url.hashCode()
+    fun chMin(url: String) = Prefs.long(key(url), 0).toInt().coerceIn(-720, 720)
+    fun chMs(url: String) = chMin(url) * 60_000L
+    fun setCh(url: String, min: Int) { Prefs.put(key(url), min.toLong()); NowCache.drop(url); NextCache.m.remove(url); rev++ }
+    fun label(min: Int): String {
+        if (min == 0) return tr("Bez pomaka")
+        val a = Math.abs(min); val sign = if (min > 0) "+" else "−"
+        return sign + (if (a % 60 == 0) "${a / 60} h" else "$a min")  // i18n-ignore
+    }
 }
 
 

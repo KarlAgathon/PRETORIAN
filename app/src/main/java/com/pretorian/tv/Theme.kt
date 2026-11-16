@@ -172,8 +172,8 @@ object C {
 
     /** Settings › Appearance › "Selected colour": soft (default) mixes the theme colour a little into the background,
      *  so big selected boxes don't glare (white becomes a light grey, gold a calmer gold); strong = the pure colour */
-    val soft get() = Prefs.long("look_focus_soft", 0) == 0L
-    private fun softened(c: Color): Color = if (!soft) c else lerp(c, palette().bg, if (IsLight) 0.22f else 0.3f)
+    val soft get() = FocusCard.pct < 100
+    private fun softened(c: Color): Color = if (!soft) c else lerp(palette().bg, c, FocusCard.pct / 100f)
 
     /** accent colour with the chosen shade; black-and-white theme uses white */
     val Red: Color get() = softened(pureRed)
@@ -203,6 +203,14 @@ object C {
                         else (if (IsLight) Color.White else lerp(palette().bg, Color.White, 0.06f)).copy(alpha = Look.menuOpacity.coerceIn(60, 100) / 100f)
     /** player info bar background */
     val OverlayBar get() = if (Look.theme == "liquid") Color(0x66000000) else if (Look.overlay == 1) Color(0xF2000000) else Color(0x99000000)
+}
+
+/** Settings › Appearance › Focus card: how bright the box you stand on is, 20–100 % in every theme
+ *  (100 = the pure theme colour, less = mixed into the background so big boxes don't glare). */
+object FocusCard {
+    private var v by mutableIntStateOf(Prefs.long("focus_pct", if (Prefs.long("look_focus_soft", 0) == 0L) 70 else 100).toInt().coerceIn(20, 100))
+    val pct get() = v
+    fun set(p: Int) { v = p.coerceIn(20, 100); Prefs.put("focus_pct", v.toLong()) }
 }
 
 /** Corner shape from Settings › Appearance › Corners. */

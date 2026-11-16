@@ -153,6 +153,14 @@ object Dusk {
 
 @Composable
 fun DuskBackground() {
+    DuskPicture()
+    // Settings › Appearance › Background brightness: the whole background a little lighter or darker, in every theme
+    val s = Look.shade.coerceIn(-2, 2)
+    if (s != 0) Box(Modifier.fillMaxSize().background(if (s > 0) Color.White.copy(alpha = 0.05f * s) else Color.Black.copy(alpha = 0.22f * -s)))
+}
+
+@Composable
+private fun DuskPicture() {
     // Lite: one calm picture in the theme's own tone (light themes light, dark themes dark), no blur, nothing that moves
     if (Perf.lite && Look.theme != "vece") {
         androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.fallback_bd1), null, contentScale = androidx.compose.ui.layout.ContentScale.Crop,

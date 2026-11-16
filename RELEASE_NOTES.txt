@@ -1,4 +1,8 @@
-PRETORIAN 1.0.23 (beta)
+PRETORIAN 1.0.24 (beta)
+Pomak vremena vodiča po kanalu (kao TiviMate): u playeru Više › Pomak vremena, ili drži OK na kanalu – ±5, 10, 30 min, ±1, 2, 3 h, Bez pomaka; pamti se za taj kanal
+Postavke › Izgled › „Fokus kartica“ 20–100 %: koliko je svijetlo polje na kojem stojiš, u svim temama (zamjenjuje Blaga/Jaka)
+Postavke › Izgled: „Prozirnost“ sada stvarno mijenja panele, a „Svjetlina podloge“ posvjetljuje ili zatamnjuje pozadinu u svakoj temi
+TV lista: uska polja emisija više ne gube naslov; ispod linije napretka piše šta slijedi
 Čuvar ekrana više se ne pali dok kanal ide (mala slika ili cijeli ekran) – samo na Početnoj kad ništa ne radiš i kad pauziraš film/seriju
 TV lista: odabrani kanal mirniji – blago obojen red s tankim okvirom u boji teme (Postavke › Izgled › Odabrani kanal: Okvir / Puna boja)
 Postavke › Izgled: „Jačina boje odabranog“ 10–100 % za sve teme (manje = blaže za oči), vrijedi i u TV vodiču

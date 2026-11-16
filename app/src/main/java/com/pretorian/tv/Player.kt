@@ -403,6 +403,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         if (Recover.on && reconnect >= 3) { try { player.stop(); player.clearMediaItems() } catch (_: Exception) {}; delay(400) }
         loadMedia(items[index], subFile, if (s.live) 0L else player.currentPosition)
     }
+    // the guide of this channel was moved: now / next in the info bar follow at once
+    LaunchedEffect(EpgShift.rev) { val c = item.channel; if (EpgShift.rev > 0 && s.live && c != null && p != null) nowNext = try { Repo.nowNext(p, c) } catch (_: Exception) { nowNext } }
     LaunchedEffect(showInfo, index, playing, bar) { if (showInfo && !bar && (s.live || playing)) { delay(5000); showInfo = false } }
     LaunchedEffect(Unit) { while (true) { position = player.currentPosition; duration = player.duration.coerceAtLeast(0); delay(500) } }
     // time watched for Settings › Diagnostics
@@ -829,12 +831,14 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             // Više: the rarer things, so the bar fits in one row
             OptionRow(if (Sleep.until > 0) trf("Tajmer: %s min", ((Sleep.until - System.currentTimeMillis()) / 60_000 + 1).coerceAtLeast(1)) else tr("Tajmer za spavanje"), R.drawable.lc_moon) { dialog = "sleep" }
             OptionRow("Kvalitet i informacije", R.drawable.lc_info, value = if (videoH > 0) qualityLabel(videoH) else null) { dialog = "info" }
+            if (s.live) item.channel?.let { c -> OptionRow("Pomak vremena", R.drawable.lc_clock, value = EpgShift.label(EpgShift.chMin(c.url))) { dialog = "epgshift" } }
             OptionRow("Vanjski plejer", R.drawable.lc_external_link) { player.pause(); saveProgress(); dialog = "ext" }
             if (s.live) OptionRow("Arhiva", R.drawable.lc_history, sub = tr("emisije koje su prošle")) { dialog = null; nav.push(Screen.Catchup) }
             if (!s.live && subFile != null) OptionRow("Podesi vrijeme titla", R.drawable.lc_clock, sub = "ako titl kasni ili žuri · SYNC") { dialog = "subsync" }
             if (tracksOf(player, MC.TRACK_TYPE_AUDIO).size > 1) OptionRow("Audio", R.drawable.lc_volume, value = tracksOf(player, MC.TRACK_TYPE_AUDIO).firstOrNull { it.selected }?.label ?: "—") { dialog = "audio" }
         }
         "fav" -> item.channel?.let { FavPicker(it) { dialog = null } }
+        "epgshift" -> item.channel?.let { EpgShiftPopup(it) { dialog = null } }
         "ext" -> ExternalPicker(item.url, item.title, player.currentPosition, onDismiss = { dialog = null })
         "subsync" -> {
             val base = remember { subFile }

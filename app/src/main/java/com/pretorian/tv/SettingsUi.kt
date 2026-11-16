@@ -1806,8 +1806,9 @@ private fun LookV2(openSub: (String) -> Unit) {
             val transp = (100 - Look.opacity).coerceIn(0, 50)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(Modifier.weight(1f)) { SetSlider("Prozirnost", "0 – 50 %, korak 5 %", transp, 0, 50, 5, { "$it %" }) { Look.opacity = 100 - it; save() } }
-                Box(Modifier.weight(1f)) { SetSlider("Svjetlina boje", "tamnije ◀ ▶ svjetlije, korak 5 %", Look.shade, -2, 2, 1, { (if (it > 0) "+" else "") + "${it * 5} %" }) { Look.shade = it; save() } }
+                Box(Modifier.weight(1f)) { SetSlider("Svjetlina podloge", "tamnije ◀ ▶ svjetlije, korak 5 %", Look.shade, -2, 2, 1, { (if (it > 0) "+" else "") + "${it * 5} %" }) { Look.shade = it; save() } }
             }
+            SetSlider("Fokus kartica", "koliko je svijetlo polje na kojem stojiš · u svim temama · manje = blaže za oči · OK pa ◀ ▶", FocusCard.pct, 20, 100, 5, { "$it %" }) { FocusCard.set(it); rev++ }
             SetSection("Veličina i prikaz")
             SetDrop("Veličina", "tekst, pločice i plakati zajedno", listOf("Mala", "Srednja", "Velika"), Look.posterSize) {
                 Look.posterSize = it; Look.tileSize = it; Look.rowSize = it; save(); rev++
@@ -1825,9 +1826,6 @@ private fun LookV2(openSub: (String) -> Unit) {
             }
             SetDrop("Broj kanala na ekranu", "Automatski = prema prikazu liste · uvijek cijeli redovi", listOf("Automatski", "4", "5", "6", "7", "8", "9"), Prefs.long("tv_rows", 0).toInt().let { n -> if (n in 4..9) n - 3 else 0 }) {
                 Prefs.put("tv_rows", if (it == 0) 0L else (it + 3).toLong()); rev++
-            }
-            SetDrop("Boja odabranog", "u svim temama · blaga = ne bliješti", listOf("Blaga", "Jaka"), Prefs.long("look_focus_soft", 0).toInt().coerceIn(0, 1), new = true) {
-                Prefs.put("look_focus_soft", it.toLong()); rev++
             }
             SetDrop("Odabrani kanal", "kako se ističe red na kojem stojiš", listOf("Okvir (mirno)", "Puna boja"), Prefs.long("tv_focus", 0).toInt().coerceIn(0, 1), new = true) {
                 Prefs.put("tv_focus", it.toLong()); rev++

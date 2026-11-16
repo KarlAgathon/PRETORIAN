@@ -1043,6 +1043,9 @@ Dostupni jezici · OK aktivira|Доступные языки · OK активи�
 na jezik opisa|на язык описаний
 boja fokusa u temama koje je koriste|цвет фокуса в темах, которые его используют
 Prozirnost|Прозрачность
+Fokus kartica|Карточка фокуса
+koliko je svijetlo polje na kojem stojiš · u svim temama · manje = blaže za oči · OK pa ◀ ▶|насколько яркое поле, на котором вы стоите · в любой теме · меньше = мягче для глаз · OK, затем ◀ ▶
+Svjetlina podloge|Яркость фона
 Svjetlina boje|Яркость цвета
 Veličina i prikaz|Размер и отображение
 Veličina|Размер

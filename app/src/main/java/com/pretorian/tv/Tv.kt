@@ -774,6 +774,7 @@ fun ChannelOptions(g: GroupRef, ch: Channel, list: List<Channel>, groups: List<C
         "fav" -> { FavPicker(ch) { mode = "menu"; onChanged(false, false) }; return }
         "rename" -> { TextDialog("Preimenuj kanal", "Novi naziv", ch.name, onDismiss = { mode = "menu" }) { n ->
             if (n.isNotBlank()) { if (favId != null) Favs.rename(favId, ch, n) else ovr.renameChannel(ch, n) }; onChanged(true, true) }; return }
+        "epgshift" -> { EpgShiftPopup(ch) { mode = "menu" }; return }
         "info" -> {
             Popup("Informacije o kanalu", onDismiss = { mode = "menu" }) {
                 OptionRow("Naziv", R.drawable.lc_tv, value = ch.name) {}
@@ -847,7 +848,21 @@ fun ChannelOptions(g: GroupRef, ch: Channel, list: List<Channel>, groups: List<C
             }
             OptionRow("Izbriši kanal", R.drawable.lc_trash_2, color = C.Danger) { mode = "delete" }
         }
+        OptionRow("Pomak vremena", R.drawable.lc_clock, value = EpgShift.label(EpgShift.chMin(ch.url))) { mode = "epgshift" }
         OptionRow("Informacije o kanalu", R.drawable.lc_info) { mode = "info" }
+    }
+}
+
+/** The guide of one channel runs early or late: move it by minutes or hours (kept for that channel). */
+@Composable
+fun EpgShiftPopup(ch: Channel, onDismiss: () -> Unit) {
+    val cur = EpgShift.chMin(ch.url)
+    Popup(tr("Pomak vremena") + " · " + ch.name, onDismiss) {
+        listOf(0, 5, 10, 30, 60, 120, 180, -5, -10, -30, -60, -120, -180).forEach { m ->
+            OptionRow(EpgShift.label(m), if (m == 0) R.drawable.lc_rotate_ccw else R.drawable.lc_clock, selected = m == cur, color = if (m == cur) C.Green else null) {
+                EpgShift.setCh(ch.url, m); onDismiss()
+            }
+        }
     }
 }
 
@@ -1130,7 +1145,7 @@ fun PreviewBox(ch: Channel?, modifier: Modifier) {
 fun EpgList(ch: Channel, limit: Int = 12, modifier: Modifier = Modifier) {
     val ctx = LocalContext.current
     // the list is not loaded again when a reminder changes: the focus stays on the show
-    val st by load(ch.url, limit) { Store.byId(ctx, ch.pid)?.let { Repo.epg(it, ch, limit) } ?: emptyList() }
+    val st by load(ch.url, limit, EpgShift.rev) { Store.byId(ctx, ch.pid)?.let { Repo.epg(it, ch, limit) } ?: emptyList() }
     val remRev = Reminders.rev
     when (val s = st) {
         is Load.Loading -> T("Učitavam program…", 13.sp, C.Muted)

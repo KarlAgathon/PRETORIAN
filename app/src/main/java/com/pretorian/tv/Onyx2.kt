@@ -54,7 +54,8 @@ fun Modifier.glass(r: Dp = 18.dp): Modifier = when (Look.theme) {
     "classic" -> this.clip(Rnd(r)).background(C.Tile)
     "reddawn" -> this.clip(Rnd(r)).background(C.Tile).border(1.dp, C.Line, Rnd(r))
     "papir" -> this.clip(Rnd(r)).background(Color.White).border(1.dp, C.Line, Rnd(r))
-    else -> this.clip(Rnd(r)).background(if (C.IsLight) Color(0x0F000000) else Color(0x14FFFFFF)).border(1.dp, C.Line, Rnd(r))
+    // Settings › Appearance › Transparency: 0 % = fuller panels, 50 % = almost only the frame
+    else -> this.clip(Rnd(r)).background((100 - Look.opacity).coerceIn(0, 50).let { t -> if (C.IsLight) Color.Black.copy(alpha = 0.09f - t * 0.0015f) else Color.White.copy(alpha = 0.12f - t * 0.002f) }).border(1.dp, C.Line, Rnd(r))
 }
 
 /** The side column (groups, categories): darker than the list next to it in Classic. */
@@ -75,12 +76,13 @@ object NowCache {
     fun get(url: String): EpgItem? = synchronized(m) { m[url]?.takeIf { it.end > System.currentTimeMillis() } }
     fun put(url: String, e: EpgItem?) = synchronized(m) { if (e != null) m[url] = e else none[url] = System.currentTimeMillis() }
     fun empty(url: String) = synchronized(m) { (none[url] ?: 0L) > System.currentTimeMillis() - 10 * 60_000L }
+    fun drop(url: String) = synchronized(m) { m.remove(url); none.remove(url); Unit }
 }
 
 @Composable
 fun nowOf(ch: Channel, wait: Long = 400): EpgItem? {
     val ctx = LocalContext.current
-    val v by produceState(NowCache.get(ch.url), ch.url) {
+    val v by produceState(NowCache.get(ch.url), ch.url, EpgShift.rev) {
         if (value != null || NowCache.empty(ch.url)) return@produceState
         delay(wait)   // while you scroll fast nothing is asked
         val p = Store.byId(ctx, ch.pid) ?: return@produceState
@@ -97,7 +99,7 @@ object NextCache { val m = java.util.concurrent.ConcurrentHashMap<String, Pair<L
 fun nextOf(ch: Channel, wait: Long = 450): List<EpgItem>? {
     val ctx = LocalContext.current
     val fresh = NextCache.m[ch.url]?.takeIf { it.first > System.currentTimeMillis() - 10 * 60_000L }?.second
-    val v by produceState<List<EpgItem>?>(fresh, ch.url) {
+    val v by produceState<List<EpgItem>?>(fresh, ch.url, EpgShift.rev) {
         if (fresh != null) return@produceState
         delay(wait)
         val p = Store.byId(ctx, ch.pid) ?: return@produceState
@@ -449,7 +451,7 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                                             // widths follow how long each show runs (a 20-minute episode is narrower than a 2-hour film)
                                             val w = if (prop) {
                                                 val from = maxOf(e.start, System.currentTimeMillis())
-                                                ((e.end - from) / 1_800_000f).coerceIn(0.7f, 2.6f)
+                                                ((e.end - from) / 1_800_000f).coerceIn(1f, 2.2f)   // never so narrow that the title is lost
                                             } else if (kk == 0) 1.4f else 1f
                                             Column(Modifier.weight(w).fillMaxHeight().clip(Rnd(8.dp))
                                                 .background(if (isSel && !solid) C.Red.copy(alpha = ListStyle.strength) else if (isSel) C.Bg.copy(alpha = 0.85f) else if (hl) Color.Black.copy(alpha = if (isNow) 0.18f else 0.1f) else if (isNow) C.CardHi else C.Card)
@@ -524,13 +526,17 @@ private fun WideHeader(playing: Channel?, on: Channel?, pick: EpgItem?) {
         val c = on ?: playing
         Column(Modifier.weight(1f).padding(top = 2.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             if (c == null) { T("OK na kanalu: slika ovdje · još jednom OK: cijeli ekran", 12.sp, C.Muted, maxLines = 2); return@Column }
-            val epg by load(c.url) { Store.byId(ctx, c.pid)?.let { Repo.epg(it, c, 4) } ?: emptyList() }
+            val epg by load(c.url, EpgShift.rev) { Store.byId(ctx, c.pid)?.let { Repo.epg(it, c, 4) } ?: emptyList() }
             val nowT = System.currentTimeMillis()
             val cur = pick ?: (epg as? Load.Ok)?.value?.firstOrNull { it.start <= nowT && it.end > nowT }
             Kicker("${c.num} · ${c.name}" + (cur?.let { " · " + it.times() } ?: ""), C.Soft)
             T(cur?.title ?: (if (epg is Load.Loading) "Učitavam program…" else c.name), 20.sp, C.Text, FontWeight.ExtraBold, maxLines = 1)
             cleanDesc(cur?.desc)?.let { T(it, 12.sp, C.Soft, maxLines = when (size) { 0 -> 2; 2 -> 6; else -> 4 }) }
             if (cur != null && cur.start <= nowT) ThinBar(cur.progress(), C.Text, Modifier.fillMaxWidth(0.6f), 3.dp)
+            // what comes after it, in the free line under the progress
+            if (pick == null && cur != null && size > 0) (epg as? Load.Ok)?.value?.firstOrNull { it.start >= cur.end - 60_000L }?.let { nx ->
+                T(tr("Zatim") + ":  " + java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(nx.start)) + "  " + nx.title, 12.sp, C.Muted, maxLines = 1)  // i18n-ignore
+            }
             if (Hints.show()) T(if (pick != null) "◀ ▶ program · OK podsjeti me" else "◀ ▶ program · ◀ grupe · OK slika gore · OK još jednom cijeli ekran", 11.sp, C.Muted, maxLines = 1)
         }
     }
@@ -559,7 +565,7 @@ private fun NowPanel(ch: Channel?, modifier: Modifier) {
             }
         }
         val cc = c ?: run { T("OK na kanalu: slika ovdje · još jednom OK: cijeli ekran", 12.sp, C.Muted, maxLines = 2); return@Column }
-        val epg by load(cc.url) { Store.byId(ctx, cc.pid)?.let { Repo.epg(it, cc, 4) } ?: emptyList() }
+        val epg by load(cc.url, EpgShift.rev) { Store.byId(ctx, cc.pid)?.let { Repo.epg(it, cc, 4) } ?: emptyList() }
         val list = (epg as? Load.Ok)?.value ?: emptyList()
         val nowT = System.currentTimeMillis()
         val cur = list.firstOrNull { it.start <= nowT && it.end > nowT }
