@@ -375,7 +375,9 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                     fun fit(rowDp: Int) = ((hPx + gapPx) / (with(density) { rowDp.dp.roundToPx() } + gapPx)).coerceAtLeast(1)
                     val want = Prefs.long("tv_rows", 0).toInt()
                     // "Automatic" follows the list style: compact (default, like TiviMate), normal or large
-                    val nRows = if (want in 4..9) want.coerceAtMost(fit(32)) else fit(when (ListStyle.mode) { 1 -> 50; 2 -> 64; else -> 38 })
+                    // large is only a bit taller than normal: rows never stretch into big empty boxes
+                    val target = when (ListStyle.mode) { 1 -> 46; 2 -> 54; else -> 38 }
+                    val nRows = if (want in 4..9) want.coerceAtMost(fit(32)) else maxOf(fit(target), fit(target) + if (hPx / fit(target) > with(density) { (target + 14).dp.roundToPx() }) 1 else 0)
                     val rowPx = ((hPx - (nRows - 1) * gapPx) / nRows).coerceAtLeast(1)
                     val rowH = with(density) { rowPx.toDp() }
                     val listH = with(density) { (nRows * rowPx + (nRows - 1) * gapPx).toDp() }
