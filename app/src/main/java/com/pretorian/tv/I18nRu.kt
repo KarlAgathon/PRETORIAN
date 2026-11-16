@@ -2122,7 +2122,7 @@ Utakmice danas na Početnoj|Матчи сегодня на главной
 Pratiš · uživo na Početnoj|Следишь · в эфире на главной
 rezultat, kartoni, zadnji događaj|счёт, карточки, последнее событие
 Sada na tvojim kanalima|Сейчас на твоих каналах
-SNIMAK|ЗАПИСЬ
+SNIMAK|ПОВТОР
 NA TV|ПО ТВ
 produžeci|дополнительное время
 pen.|пен.

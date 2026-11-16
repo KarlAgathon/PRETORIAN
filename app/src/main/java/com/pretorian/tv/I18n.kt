@@ -2155,7 +2155,7 @@ Utakmice danas na Početnoj|Matches today on Home|Spiele heute auf der Startseit
 Pratiš · uživo na Početnoj|Following · live on Home|Du folgst · live auf der Startseite|Pratiš · uživo na Početnoj|Пратиш · уживо на Почетној|Следиш · на живо на началото|Urmărești · live pe Acasă|Takipte · canlı Ana sayfada|Segui · live nella Home|تتابع · مباشر في الرئيسية
 rezultat, kartoni, zadnji događaj|score, cards, last event|Ergebnis, Karten, letztes Ereignis|rezultat, kartoni, zadnji događaj|резултат, картони, задњи догађај|резултат, картони, последно събитие|scor, cartonașe, ultimul eveniment|skor, kartlar, son olay|risultato, cartellini, ultimo evento|النتيجة، البطاقات، آخر حدث
 Sada na tvojim kanalima|Now on your channels|Jetzt auf deinen Sendern|Sada na tvojim kanalima|Сада на твојим каналима|Сега по твоите канали|Acum pe canalele tale|Şimdi kanallarında|Ora sui tuoi canali|الآن على قنواتك
-SNIMAK|RECORDING|AUFZEICHNUNG|SNIMAK|СНИМАК|ЗАПИС|ÎNREGISTRARE|KAYIT|REGISTRATA|تسجيل
+SNIMAK|REPLAY|WIEDERHOLUNG|REPRIZA|РЕПРИЗА|ПОВТОРЕНИЕ|RELUARE|TEKRAR|REPLICA|إعادة
 NA TV|ON TV|IM TV|NA TV|НА ТВ|ПО ТВ|LA TV|TV'DE|IN TV|على التلفاز
 produžeci|extra time|Verlängerung|produžeci|продужеци|продължения|prelungiri|uzatma|supplementari|وقت إضافي
 pen.|pens|i.E.|pen.|пен.|дузпи|pen.|pen.|rig.|ركلات
