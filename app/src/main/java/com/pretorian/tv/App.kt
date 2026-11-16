@@ -170,7 +170,7 @@ class Nav(
     val playlistsChanged: () -> Unit,
 )
 
-object BuildInfo { const val VERSION = "1.0.32" }
+object BuildInfo { const val VERSION = "1.0.33" }
 
 @Composable
 fun PretorianApp() {
@@ -207,8 +207,14 @@ fun PretorianApp() {
     // goals of your teams (Sport › long OK › My teams): checked every 3 minutes wherever you are, only when you have teams
     LaunchedEffect(Unit) {
         delay(4_000)
+        var full = 0L
         while (true) {
-            if (Prefs.bool("bg_sport", true) && (MyTeams.list().isNotEmpty() || MatchFollow.list().isNotEmpty())) try { GoalNote.check(Sports.day(0)) } catch (_: Exception) {}
+            if (Prefs.bool("bg_sport", true) && (MyTeams.list().isNotEmpty() || MatchFollow.list().isNotEmpty())) try {
+                val live = GoalNote.followed.filter { it.state == "in" }
+                // a followed match is live: only its league, often; every league only at the usual pace
+                if (GoalNote.hot && live.isNotEmpty() && System.currentTimeMillis() - full < General.sportEvery * 60_000L) GoalNote.check(Sports.leaguesOf(live))
+                else { GoalNote.check(Sports.day(0)); full = System.currentTimeMillis() }
+            } catch (_: Exception) {}
             delay(if (GoalNote.hot) General.sportLive * 1000L else General.sportEvery * 60_000L)
         }
     }

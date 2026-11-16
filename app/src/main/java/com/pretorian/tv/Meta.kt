@@ -570,18 +570,49 @@ object FreeMeta {
     data class Free(val plot: String?, val cast: String?, val director: String?, val genre: String?, val year: String?, val runtime: String?)
     private val freeCache = java.util.concurrent.ConcurrentHashMap<String, Free>()
 
-    /** Cinemeta (Stremio's open film/series catalog, IMDb data, no key): search by name, then the full card (story, cast, director) */
-    private fun cinemeta(title: String, year: String?, kind: String): Free? {
+    /** surnames of a "A B, C D" list, lower case (to compare cast/director between sources) */
+    private fun names(s: String?): Set<String> = s?.split(',', ';')?.mapNotNull { it.trim().split(' ').lastOrNull()?.lowercase()?.takeIf { n -> n.length > 2 } }?.toSet() ?: emptySet()
+    private fun yearOf(s: String?) = s?.let { Regex("(19|20)\\d{2}").find(it)?.value?.toIntOrNull() }
+
+    /**
+     * Cinemeta (Stremio's open film/series catalog, IMDb data, no key): search by name, then the full card (story, cast, director).
+     * Several titles with the same name (e.g. a 2025 thriller and a 2026 documentary "Tuner"): the year and the cast the
+     * provider gives decide; when it cannot be told which one it is, nothing is shown rather than another film's story.
+     */
+    private fun cinemeta(title: String, year: String?, kind: String, cast: String? = null, director: String? = null): Free? {
         val base = "https://v3-cinemeta.strem.io"  // i18n-ignore
         val a = JSONObject(Http.request("$base/catalog/$kind/top/search=" + Net.enc(title) + ".json")).optJSONArray("metas") ?: return null  // i18n-ignore
-        val hits = (0 until minOf(a.length(), 6)).mapNotNull { a.optJSONObject(it) }.filter { same(title, it.str("name")) }
-        val best = hits.firstOrNull { year != null && it.str("releaseInfo").startsWith(year) } ?: hits.firstOrNull() ?: return null
-        val id = best.str("imdb_id").ifBlank { best.str("id") }
-        val m = if (id.isBlank()) best else try { JSONObject(Http.request("$base/meta/$kind/$id.json")).optJSONObject("meta") ?: best } catch (e: Exception) { best }  // i18n-ignore
-        fun list(k: String, n: Int) = m.optJSONArray(k)?.let { x -> (0 until x.length()).map { x.optString(it) }.filter { it.isNotBlank() }.take(n).joinToString(", ") }?.ifBlank { null }
+        var hits = (0 until minOf(a.length(), 8)).mapNotNull { a.optJSONObject(it) }.filter { same(title, it.str("name")) }
+        if (hits.isEmpty()) return null
+        val y = year?.toIntOrNull()
+        if (y != null) {
+            // the year must fit (a series' year is its first season, so a little more room there)
+            val near = hits.filter { h -> yearOf(h.str("releaseInfo"))?.let { kotlin.math.abs(it - y) <= (if (kind == "series") 2 else 1) } ?: false }
+            if (near.isEmpty()) return null
+            hits = near.sortedBy { h -> kotlin.math.abs((yearOf(h.str("releaseInfo")) ?: 0) - y) }
+        }
+        fun full(h: JSONObject): JSONObject {
+            val id = h.str("imdb_id").ifBlank { h.str("id") }
+            return if (id.isBlank()) h else try { JSONObject(Http.request("$base/meta/$kind/$id.json")).optJSONObject("meta") ?: h } catch (e: Exception) { h }  // i18n-ignore
+        }
+        fun list(m: JSONObject, k: String, n: Int) = m.optJSONArray(k)?.let { x -> (0 until x.length()).map { x.optString(it) }.filter { it.isNotBlank() }.take(n).joinToString(", ") }?.ifBlank { null }
+        val want = names(cast) + names(director)
+        val m: JSONObject = if (want.isNotEmpty()) {
+            // the provider knows the cast: the card whose cast or director matches
+            hits.take(3).map { full(it) }.firstOrNull { m -> (names(list(m, "cast", 12)) + names(list(m, "director", 3))).any { it in want } } ?: run {
+                // nobody matches: only trust a single, year-checked candidate
+                if (hits.size == 1 && y != null) full(hits[0]) else return null
+            }
+        } else {
+            val exact = hits.filter { it.str("name").equals(title, true) }
+            val years = exact.mapNotNull { yearOf(it.str("releaseInfo")) }.toSet()
+            // same name, different years, nothing to tell them apart: better no story than a wrong one
+            if (y == null && years.size > 1) return null
+            full(hits[0])
+        }
         return Free(
-            plot = m.str("description").ifBlank { best.str("description") }.takeIf { it.length > 40 },
-            cast = list("cast", 6), director = list("director", 2), genre = list("genres", 3) ?: list("genre", 3),
+            plot = m.str("description").takeIf { it.length > 40 },
+            cast = list(m, "cast", 6), director = list(m, "director", 2), genre = list(m, "genres", 3) ?: list(m, "genre", 3),
             year = m.str("releaseInfo").ifBlank { m.str("year") }.take(4).ifBlank { null },
             runtime = m.str("runtime").ifBlank { null },
         )
@@ -590,12 +621,25 @@ object FreeMeta {
     /** the first [n] sentences */
     private fun sentences(t: String, n: Int) = Regex("(?<=[.!?])\\s+").split(t.trim()).take(n).joinToString(" ")
 
-    /** story (Cinemeta, a couple of sentences more from Wikipedia when short), cast, director, genre */
-    suspend fun movieFull(raw: String): Free? = withContext(Dispatchers.IO) {
-        val (t, y) = cleanTitle(raw); val k = "M|$t|$y"
+    /** a Wikipedia text belongs to the same film: it names its year (±1) or its director */
+    private fun fits(text: String, year: String?, director: String?): Boolean {
+        val y = year?.toIntOrNull()
+        val ys = Regex("\\b(19|20)\\d{2}\\b").findAll(text.take(300)).mapNotNull { it.value.toIntOrNull() }.toList()
+        val byYear = y != null && ys.any { kotlin.math.abs(it - y) <= 1 }
+        val byDir = names(director).any { text.lowercase().contains(it) }
+        if (y != null && ys.isNotEmpty() && !byYear && !byDir) return false
+        return byYear || byDir
+    }
+
+    /** story (Cinemeta, a couple of sentences more from Wikipedia when short), cast, director, genre.
+     *  [year], [cast], [director] from the provider, when it has them, to pick the right one of several films with that name */
+    suspend fun movieFull(raw: String, year: String? = null, cast: String? = null, director: String? = null): Free? = withContext(Dispatchers.IO) {
+        val (t, y0) = cleanTitle(raw); val y = y0 ?: year?.take(4)?.takeIf { it.length == 4 }
+        val k = "M|$t|$y|${names(cast).sorted().take(3)}"
         freeCache[k]?.let { return@withContext it }
-        val c = safe { cinemeta(t, y, "movie") }
-        val w = if ((c?.plot?.length ?: 0) < 320) safe { wiki(t, y, "film") } else null  // i18n-ignore
+        val c = safe { cinemeta(t, y, "movie", cast, director) }
+        val yy = c?.year ?: y; val dd = c?.director ?: director
+        val w = if ((c?.plot?.length ?: 0) < 320 && (yy != null || dd != null)) safe { wiki(t, yy, "film") }?.takeIf { fits(it, yy, dd) } else null  // i18n-ignore
         val plot = listOfNotNull(c?.plot, w?.let { sentences(it, if (c?.plot == null) 5 else 2) }).joinToString(" ").ifBlank { null }
         val out = (c ?: Free(null, null, null, null, null, null)).copy(plot = plot)
         if (plot != null || out.cast != null) freeCache[k] = out
@@ -606,8 +650,13 @@ object FreeMeta {
         val (t, y) = cleanTitle(raw); val k = "S|$t"
         freeCache[k]?.let { return@withContext it }
         val c = safe { cinemeta(t, y, "series") }
-        val tv = if ((c?.plot?.length ?: 0) < 200) safe { tvmazeShow(t)?.str("summary")?.let(::strip)?.ifBlank { null } } else null
-        val plot = (if ((tv?.length ?: 0) > (c?.plot?.length ?: 0)) tv else c?.plot) ?: safe { wiki(t, y, "TV series") }
+        // TVmaze only when it is the same show (its first year fits the one Cinemeta found)
+        val tv = if ((c?.plot?.length ?: 0) < 200) safe { tvmazeShow(t)?.takeIf { o ->
+            val cy = (c?.year ?: y)?.toIntOrNull(); val ty = yearOf(o.str("premiered"))
+            cy == null || ty == null || kotlin.math.abs(cy - ty) <= 1
+        }?.str("summary")?.let(::strip)?.ifBlank { null } } else null
+        val plot = (if ((tv?.length ?: 0) > (c?.plot?.length ?: 0)) tv else c?.plot)
+            ?: (c?.year ?: y)?.let { yy -> safe { wiki(t, yy, "TV series") }?.takeIf { fits(it, yy, c?.director) } }  // i18n-ignore
         val out = (c ?: Free(null, null, null, null, null, null)).copy(plot = plot)
         if (plot != null || out.cast != null) freeCache[k] = out
         out.takeIf { plot != null || it.cast != null }

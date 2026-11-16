@@ -224,7 +224,7 @@ fun OnyxMovieDetail(v: Vod, nav: Nav) {
     val needFree = m?.overview == null && i?.plot == null && meta !is Load.Loading && info !is Load.Loading
     // no TMDB: cast and director from the free card too (also when the provider has a story)
     val needCard = m == null && meta !is Load.Loading && info !is Load.Loading && (needFree || i?.cast == null)
-    val free by load(v.name, needCard) { if (needCard) FreeMeta.movieFull(v.name) else null }
+    val free by load(v.name, needCard) { if (needCard) FreeMeta.movieFull(v.name, i?.year, i?.cast, i?.director) else null }
     val fr = (free as? Load.Ok)?.value
     val freeRow = fr
     val title = titleCase(m?.title ?: cleanTitle(v.name).first)

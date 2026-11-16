@@ -2224,7 +2224,7 @@ private fun GeneralV2() {
                 listOf(1, 2, 3, 5, 10).forEach { m -> val cur = General.sportEvery == m
                     OptionRow(everyStr(m * 60) + if (m == 1) " · " + tr("troši više") else "", if (cur) R.drawable.lc_check else null, color = if (cur) C.Green else null) { Prefs.put("bg_sport_min", m.toLong()); close() } }
                 T(tr("Dok utakmica traje"), 12.sp, C.Muted)
-                listOf(30, 60, 120).forEach { sec -> val cur = General.sportLive == sec
+                listOf(20, 30, 60, 120).forEach { sec -> val cur = General.sportLive == sec
                     OptionRow(everyStr(sec) + if (sec == 30) " · " + tr("troši više") else "", if (cur) R.drawable.lc_check else null, color = if (cur) C.Green else null) { Prefs.put("bg_sport_live", sec.toLong()); close() } }
             } else listOf(15, 30, 60, 180, 360, 720, 1440).forEach { m -> val cur = General.episodesEvery == m
                 OptionRow(everyStr(m * 60) + if (m == 15) " · " + tr("troši više") else "", if (cur) R.drawable.lc_check else null, color = if (cur) C.Green else null) { Prefs.put("bg_ep_min", m.toLong()); close() } }

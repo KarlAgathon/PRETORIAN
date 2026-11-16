@@ -12,7 +12,7 @@ object General {
     val start get() = Prefs.long("start_screen", if (Prefs.bool("gen_lastch", false)) 5L else 0L).toInt()
     /** background checks, how often (Settings › General › long OK) */
     val sportEvery get() = Prefs.long("bg_sport_min", if (Perf.lite) 10L else 3L).toInt()          // minutes
-    val sportLive get() = Prefs.long("bg_sport_live", if (Perf.lite) 120L else 60L).toInt()         // seconds while a match is live
+    val sportLive get() = Prefs.long("bg_sport_live", if (Perf.lite) 30L else 20L).toInt()         // seconds while a match is live
     val episodesEvery get() = Prefs.long("bg_ep_min", if (Perf.lite) 360L else 60L).toInt()         // minutes
     val confirmExit get() = Prefs.bool("gen_exit", false)
     /** the last channel opens once per start of the app */

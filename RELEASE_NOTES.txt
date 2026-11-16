@@ -1,5 +1,5 @@
-PRETORIAN 1.0.32 (beta)
-TV vodič (EPG) se sada sprema na box, kao kod TiviMatea: 6 sati unazad i 36 sati unaprijed (12 u Lite), samo za tvoje kanale
-Prozor za učitavanje playliste ima i četvrti red: EPG, s napretkom
-Vodič, sad/sljedeće, pretraga emisija i Sport čitaju s diska, bez čekanja
-EPG se sam osvježava jednom dnevno, u pozadini i nikad dok gledaš kanal preko cijelog ekrana
+PRETORIAN 1.0.33 (beta)
+TV: tri kolone (države · kanali · program) dok biraš, ništa se ne pušta samo od sebe
+OK na kanal: široki prikaz s malom slikom i programom; OK još jednom: cijeli ekran; Back: nazad na tri kolone, isti kanal
+Opisi filmova i serija: pravi film se bira po godini i glumcima, nema više miješanja dva filma istog imena
+Utakmice koje pratiš: dok traju, rezultat se provjerava svakih 20 sekundi (Lite 30), samo za tu ligu

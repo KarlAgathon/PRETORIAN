@@ -173,6 +173,9 @@ fun OnyxTv(nav: Nav, onGuide: () -> Unit) {
     val gState = rememberLazyListState()
     val coming = remember { TvMemory.restore && TvMemory.group != null && TvMemory.channel >= 0 }
     var inChannels by remember { mutableStateOf(coming) }
+    // three columns (groups · channels · panel) while you choose; the wide view (small picture on top, guide per channel)
+    // only after OK on a channel. Nothing plays by itself: back from the player it comes back as it was.
+    var wideOn by remember { mutableStateOf(coming && TvMemory.preview != null) }
     var focusedCh by remember { mutableStateOf<Channel?>(null) }
     var focusedGroup by remember { mutableStateOf<GroupRef?>(null) }
     var enterTick by remember { mutableIntStateOf(0) }
@@ -194,9 +197,12 @@ fun OnyxTv(nav: Nav, onGuide: () -> Unit) {
         if (idx >= 0) { st.focusKey = list[idx].id; gState.scrollToItem((idx - 3).coerceAtLeast(0)) }
     }
     fun backToGroups() { st.focusKey = "g:" + (st.group?.key ?: ""); inChannels = false; st.refocus++ }
-    BackHandler(enabled = inChannels && st.groupMenu == null) { backToGroups() }
     // a group opens only with OK; moving over the list changes nothing on the right
-    var preview by remember { mutableStateOf(TvMemory.preview) }
+    var preview by remember { mutableStateOf(if (coming) TvMemory.preview else null.also { TvMemory.preview = null }) }
+    /** Back (or ◀) in the wide view: the small picture stops, the three columns come back on the same channel */
+    fun leaveWide() { wideOn = false; preview = null; TvMemory.preview = null }
+    BackHandler(enabled = wideOn && st.groupMenu == null) { leaveWide() }
+    BackHandler(enabled = !wideOn && inChannels && st.groupMenu == null) { backToGroups() }
     LaunchedEffect(st.refocus, rows is Load.Ok) {
         val list = (rows as? Load.Ok)?.value ?: return@LaunchedEffect
         if (st.refocus == 0) return@LaunchedEffect
@@ -220,7 +226,7 @@ fun OnyxTv(nav: Nav, onGuide: () -> Unit) {
             var upJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
             val wrapScope = rememberCoroutineScope()
             // in the channels the groups slide away (more room); Left from the channels brings them back
-            androidx.compose.animation.AnimatedVisibility(visible = !inChannels || st.group == null,
+            androidx.compose.animation.AnimatedVisibility(visible = !wideOn || st.group == null,
                 enter = if (Perf.lite) androidx.compose.animation.EnterTransition.None else androidx.compose.animation.expandHorizontally() + androidx.compose.animation.fadeIn(),
                 exit = if (Perf.lite) androidx.compose.animation.ExitTransition.None else androidx.compose.animation.shrinkHorizontally() + androidx.compose.animation.fadeOut()) {
                 Column(Modifier.width(196.dp).fillMaxHeight().glassSide().padding(vertical = 8.dp).onPreviewKeyEvent { e ->
@@ -298,18 +304,19 @@ fun OnyxTv(nav: Nav, onGuide: () -> Unit) {
             // in the channels: the groups are gone, the small picture and the show sit on top, every channel shows now · next · later to the right.
             // In the groups: channels stay dimmed on the right with the picture panel.
             val g = st.group
-            val wide = inChannels && g != null
+            val wide = wideOn && g != null
             Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (wide) WideHeader(preview ?: focusedCh, focusedCh, pick)
+                if (wide) WideHeader(preview, focusedCh, pick)
                 Box(Modifier.weight(1f).fillMaxWidth().glass().graphicsLayer { alpha = if (!inChannels && g != null) 0.55f else 1f }.onKeyEvent { e ->
-                    if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { backToGroups(); true } else false
+                    if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { if (wideOn) leaveWide() else backToGroups(); true } else false
                 }) {
                     if (g == null) Message("Izaberi grupu")
-                    else key(g.key, st.rev) { OnyxChannels(g, nav, st, rows, enterTick, preview, { preview = it; TvMemory.preview = it }, wide, { pick = it }) { focusedCh = it; inChannels = true } }
+                    else key(g.key, st.rev) { OnyxChannels(g, nav, st, rows, enterTick, preview, { preview = it; TvMemory.preview = it; wideOn = true }, wide, { pick = it }) { focusedCh = it; inChannels = true } }
                 }
             }
             // ---------------------------------------------------------- picture and programme
-            if (!wide) NowPanel(preview, Modifier.width(272.dp).fillMaxHeight())
+            // the panel only tells what is on the channel you stand on; no picture plays here
+            if (!wide) NowPanel(if (inChannels) focusedCh else null, Modifier.width(272.dp).fillMaxHeight())
         }
         // "Recently watched" lives only on Home, never under TV, Movies, Series or Sports
     }
@@ -333,6 +340,9 @@ private fun TvDialogsRows(st: TvState, rows: Load<List<TRow>>) {
 private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRow>>, enterTick: Int, preview: Channel?, onPreview: (Channel) -> Unit, wide: Boolean, onPick: (EpgItem?) -> Unit, onFocusCh: (Channel) -> Unit) {
     // which show is picked in the row (0 = now); Left/Right move through the guide, it stays when going up/down
     var cell by remember { mutableIntStateOf(0) }
+    // the row you stand on, so switching between the three columns and the wide view keeps you on the same channel
+    var focusedIdx by remember { mutableIntStateOf(-1) }
+    var lastWide by remember { mutableStateOf(wide) }
     // long OK on a later show: only "remind me" and the guide time shift
     var showMenu by remember { mutableStateOf<Pair<Channel, EpgItem>?>(null) }
     var shiftFor by remember { mutableStateOf<Channel?>(null) }
@@ -426,7 +436,7 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                                 }
                             },
                             onMenu = { val sel = nx?.getOrNull(c); if (wide && c > 0 && sel != null) showMenu = ch to sel else menu = ch },
-                            onFocus = { rowFocused = true; onFocusCh(ch) }, focusRequester = cWrap.requester(i),
+                            onFocus = { rowFocused = true; focusedIdx = i; onFocusCh(ch) }, focusRequester = cWrap.requester(i),
                             normal = Color.Transparent, focused = if (solid) C.Red.copy(alpha = ListStyle.strength) else C.Red.copy(alpha = ListStyle.strength * 0.22f), zoom = 1.01f) { f ->
                             // "frame" look (default): a calm, lightly tinted row with a thin theme-colour frame; "full colour" fills the row.
                             // How strong the colour is: Settings › Appearance (every theme, 10–100 %)
@@ -499,6 +509,11 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                         catch (e: kotlinx.coroutines.CancellationException) { kotlinx.coroutines.currentCoroutineContext().ensureActive() }   // your own scroll wins
                     }
                 }
+                LaunchedEffect(wide) {
+                    if (wide == lastWide) return@LaunchedEffect
+                    lastWide = wide
+                    if (focusedIdx >= 0 && list.isNotEmpty()) { delay(60); cWrap.target = focusedIdx.coerceIn(0, list.lastIndex) }
+                }
                 val enter0 = remember { enterTick }
                 LaunchedEffect(enterTick, list.isNotEmpty()) { if (enterTick != enter0 && list.isNotEmpty()) cWrap.target = TvMemory.channel.coerceIn(0, list.lastIndex) }
                 showMenu?.let { (ch, pr) ->
@@ -535,7 +550,7 @@ private fun WideHeader(playing: Channel?, on: Channel?, pick: EpgItem?) {
     Row(Modifier.fillMaxWidth().height(when (size) { 0 -> 96.dp; 2 -> 156.dp; else -> 124.dp }).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Box(Modifier.fillMaxHeight().aspectRatio(16f / 9f).glass(14.dp)) {
             val cc = playing
-            if (cc != null && (Look.previewMode == 2 || PreviewSel.ch?.url == cc.url || TvMemory.preview?.url == cc.url)) PreviewBox(cc, Modifier.fillMaxSize())
+            if (cc != null) PreviewBox(cc, Modifier.fillMaxSize())
             else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { if (cc != null) ChannelLogo(cc, 48.dp) else Ico(R.drawable.lc_tv, 28.dp, C.Muted) }
             if (cc != null) Row(Modifier.align(Alignment.TopStart).padding(7.dp).clip(Rnd(7.dp)).background(Color(0xB3000000)).padding(horizontal = 7.dp, vertical = 3.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -569,15 +584,10 @@ private fun NowPanel(ch: Channel?, modifier: Modifier) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).glass(16.dp)) {
             val cc = c
-            if (cc != null && Look.previewMode == 2) PreviewBox(cc, Modifier.fillMaxSize())
-            else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 if (cc != null) ChannelLogo(cc, 56.dp) else Ico(R.drawable.lc_tv, 30.dp, C.Muted)
             }
             if (cc != null) {
-                Row(Modifier.align(Alignment.TopStart).padding(8.dp).clip(Rnd(7.dp)).background(Color(0xB3000000)).padding(horizontal = 7.dp, vertical = 3.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Box(Modifier.size(6.dp).clip(CircleShape).background(Color(0xFFFF4D55))); T("UŽIVO", 9.sp, Color.White, FontWeight.Bold)
-                }
                 qualityOf(cc.name)?.let { q ->
                     Box(Modifier.align(Alignment.TopEnd).padding(8.dp).clip(Rnd(7.dp)).background(Color(0xB3000000)).padding(horizontal = 7.dp, vertical = 3.dp)) { T(q, 9.sp, Color.White, FontWeight.Bold) }
                 }

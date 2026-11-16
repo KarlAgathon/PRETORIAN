@@ -296,6 +296,15 @@ object Sports {
         part()
     }
 
+    /** only the leagues of these matches, today (a followed match is live: one small request instead of every league) */
+    suspend fun leaguesOf(evs: List<SportEvent>): List<SportEvent> = withContext(Dispatchers.IO) {
+        val abbrs = evs.map { it.leagueAbbr }.toSet()
+        val from = dayStart(0)
+        LEAGUES.filter { it.abbr in abbrs }.distinctBy { it.path }.flatMap { lg ->
+            listOf(espnDate(from), espnDate(from - 86_400_000L)).distinct().flatMap { d -> try { espnQuick(lg, d) } catch (e: Exception) { emptyList() } }
+        }.distinctBy { it.id }
+    }
+
     /** one league, with a short timeout and one quick retry */
     private fun espnQuick(lg: League, date: String): List<SportEvent> =
         try { espn(lg, date, 8000) } catch (e: Exception) { espn(lg, date, 8000) }
