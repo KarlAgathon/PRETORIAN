@@ -333,6 +333,9 @@ private fun TvDialogsRows(st: TvState, rows: Load<List<TRow>>) {
 private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRow>>, enterTick: Int, preview: Channel?, onPreview: (Channel) -> Unit, wide: Boolean, onPick: (EpgItem?) -> Unit, onFocusCh: (Channel) -> Unit) {
     // which show is picked in the row (0 = now); Left/Right move through the guide, it stays when going up/down
     var cell by remember { mutableIntStateOf(0) }
+    // long OK on a later show: only "remind me" and the guide time shift
+    var showMenu by remember { mutableStateOf<Pair<Channel, EpgItem>?>(null) }
+    var shiftFor by remember { mutableStateOf<Channel?>(null) }
     val ctx = LocalContext.current
     var listRev by remember { mutableIntStateOf(0) }
     val isFav = g.pid == null
@@ -422,7 +425,8 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                                     else onPreview(ch)
                                 }
                             },
-                            onMenu = { menu = ch }, onFocus = { rowFocused = true; onFocusCh(ch) }, focusRequester = cWrap.requester(i),
+                            onMenu = { val sel = nx?.getOrNull(c); if (wide && c > 0 && sel != null) showMenu = ch to sel else menu = ch },
+                            onFocus = { rowFocused = true; onFocusCh(ch) }, focusRequester = cWrap.requester(i),
                             normal = Color.Transparent, focused = if (solid) C.Red.copy(alpha = ListStyle.strength) else C.Red.copy(alpha = ListStyle.strength * 0.22f), zoom = 1.01f) { f ->
                             // "frame" look (default): a calm, lightly tinted row with a thin theme-colour frame; "full colour" fills the row.
                             // How strong the colour is: Settings › Appearance (every theme, 10–100 %)
@@ -497,6 +501,19 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                 }
                 val enter0 = remember { enterTick }
                 LaunchedEffect(enterTick, list.isNotEmpty()) { if (enterTick != enter0 && list.isNotEmpty()) cWrap.target = TvMemory.channel.coerceIn(0, list.lastIndex) }
+                showMenu?.let { (ch, pr) ->
+                    val has = Reminders.has(pr.title, pr.start)
+                    Popup(pr.title, { showMenu = null }) {
+                        T(java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(pr.start)) + " · " + ch.name, 13.sp, C.Soft, maxLines = 1)  // i18n-ignore
+                        OptionRow(if (has) "Ne podsjećaj me" else "Podsjeti me", R.drawable.lc_bell, color = if (has) null else C.Amber) {
+                            val on = Reminders.toggle(Reminder("r${pr.start}${pr.title.hashCode()}", pr.title, pr.start, ch.url, ch.name, ch.logo, ch.pid, "tv"))
+                            android.widget.Toast.makeText(ctx, tr(if (on) "Podsjetnik postavljen" else "Podsjetnik uklonjen"), android.widget.Toast.LENGTH_SHORT).show()
+                            showMenu = null
+                        }
+                        OptionRow("Pomak vremena", R.drawable.lc_clock, value = EpgShift.label(EpgShift.chMin(ch.url))) { showMenu = null; shiftFor = ch }
+                    }
+                }
+                shiftFor?.let { ch -> EpgShiftPopup(ch) { shiftFor = null } }
                 menu?.let { ch ->
                     val groups = (rows as? Load.Ok)?.value?.mapNotNull { (it as? TRow.Grp)?.ref }
                         ?.filter { it.pid != null && it.pid == ch.pid.ifBlank { g.pid } && it.cat.id != ALL_GROUP }?.map { it.cat } ?: emptyList()
