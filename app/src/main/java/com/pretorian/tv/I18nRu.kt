@@ -2078,4 +2078,5 @@ Nema sakrivenih grupa|Нет скрытых групп
 Nema grupa|Нет групп
 Nema sakrivenih kanala|Нет скрытых каналов
 Nema kanala|Нет каналов
+Označi sve|Отметить все
 """.trimIndent()

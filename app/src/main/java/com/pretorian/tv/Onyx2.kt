@@ -711,8 +711,8 @@ private fun ToolBtn(text: String, icon: Int, enabled: Boolean = true, onClick: (
 
 @Composable
 private fun CheckBox(on: Boolean, focused: Boolean) {
-    Box(Modifier.size(18.dp).clip(Rnd(5.dp)).background(if (on) Color(0xFF2563EB) else Color.Transparent)
-        .border(1.5.dp, if (on) Color(0xFF60A5FA) else if (focused) C.OnRed.copy(alpha = 0.6f) else C.Muted, Rnd(5.dp)), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(18.dp).clip(Rnd(5.dp)).background(if (on) C.Green else Color.Transparent)
+        .border(1.5.dp, if (on) C.Green else if (focused) C.OnRed.copy(alpha = 0.6f) else C.Muted, Rnd(5.dp)), contentAlignment = Alignment.Center) {
         if (on) Ico(R.drawable.lc_check, 12.dp, Color.White)
     }
 }
@@ -779,6 +779,8 @@ fun BulkEditor(nav: Nav) {
         }
         done()
     }
+    val shownGroups = when (filter) { 1 -> groups.filter { !ovr.isHidden(kind, it.id) }; 2 -> groups.filter { ovr.isHidden(kind, it.id) }; else -> groups }
+    val shownChans = when (filter) { 1 -> chans.filter { !ovr.isChHidden(it) }; 2 -> chans.filter { ovr.isChHidden(it) }; else -> chans }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -791,7 +793,7 @@ fun BulkEditor(nav: Nav) {
         }
         // what you can do with the ticked rows
         val n = if (selC.isNotEmpty()) selC.size else selG.size
-        Row(Modifier.fillMaxWidth().clip(Rnd(14.dp)).background(Color(0x332563EB)).border(1.dp, Color(0x552563EB), Rnd(14.dp)).padding(horizontal = 10.dp, vertical = 7.dp),
+        Row(Modifier.fillMaxWidth().clip(Rnd(14.dp)).background(C.Rail).border(1.dp, C.Line, Rnd(14.dp)).padding(horizontal = 10.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             T(if (n == 0) tr("OK označava · onda biraš radnju") else if (selC.isNotEmpty()) trf("%s kanala označeno", n) else trf("%s grupe označene", n), 12.sp, C.Text, FontWeight.Bold,
                 modifier = Modifier.widthIn(max = 150.dp))
@@ -815,19 +817,19 @@ fun BulkEditor(nav: Nav) {
             // groups
             Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    T(trf("Grupe · %s", groups.size), 13.sp, C.Text, FontWeight.Bold, modifier = Modifier.weight(1f))
+                    T(trf("Grupe · %s", shownGroups.size), 13.sp, C.Text, FontWeight.Bold, modifier = Modifier.weight(1f))
+                    ToolBtn("Označi sve", R.drawable.lc_check) { selC.clear(); selG.clear(); selG.addAll(shownGroups.map { it.id }) }
                     ToolBtn("Sakrij sve", R.drawable.lc_eye_off) { ovr.setHidden(kind, groups.map { it.id }, true); done() }
                     ToolBtn("Prikaži sve", R.drawable.lc_eye) { ovr.setHidden(kind, groups.map { it.id }, false); done() }
                 }
                 if (st is Load.Loading && groups.isEmpty()) Loading("") else LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
-                    val shownGroups = when (filter) { 1 -> groups.filter { !ovr.isHidden(kind, it.id) }; 2 -> groups.filter { ovr.isHidden(kind, it.id) }; else -> groups }
                     if (shownGroups.isEmpty()) item { T(if (filter == 2) "Nema sakrivenih grupa" else "Nema grupa", 12.sp, C.Muted) }
                     itemsIndexed(shownGroups, key = { _, g -> g.id }) { _, g ->
                         val i = groups.indexOf(g)
                         val on = g.id in selG
                         val hidden = ovr.isHidden(kind, g.id)
                         Focusable(onClick = { if (on) selG.remove(g.id) else { selC.clear(); selG.add(g.id) } }, onFocus = { focusG = g }, onMenu = { menu = g },
-                            shape = Rnd(12.dp), normal = if (on) Color(0x332563EB) else if (cur?.id == g.id) C.CardHi else C.Rail, focused = C.Red, zoom = 1.01f,
+                            shape = Rnd(12.dp), normal = if (on) C.Green.copy(alpha = 0.16f) else if (cur?.id == g.id) C.CardHi else C.Rail, focused = C.Red, zoom = 1.01f,
                             modifier = Modifier.fillMaxWidth().height(40.dp)) { f ->
                             Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 CheckBox(on, f)
@@ -845,19 +847,19 @@ fun BulkEditor(nav: Nav) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     T((cur?.name ?: tr("Stani na grupu")) + " · " + tr("kanali"), 13.sp, C.Text, FontWeight.Bold, modifier = Modifier.weight(1f))
                     if (cur != null) {
+                        ToolBtn("Označi sve", R.drawable.lc_check) { selG.clear(); selC.clear(); selC.addAll(shownChans.map { it.url }) }
                         ToolBtn("Sakrij sve", R.drawable.lc_eye_off) { chans.forEach { if (!ovr.isChHidden(it)) ovr.toggleChHidden(it) }; done() }
                         ToolBtn("Prikaži sve", R.drawable.lc_eye) { chans.forEach { if (ovr.isChHidden(it)) ovr.toggleChHidden(it) }; done() }
                     }
                 }
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
-                    val shownChans = when (filter) { 1 -> chans.filter { !ovr.isChHidden(it) }; 2 -> chans.filter { ovr.isChHidden(it) }; else -> chans }
                     if (cur != null && shownChans.isEmpty()) item { T(if (filter == 2) "Nema sakrivenih kanala" else "Nema kanala", 12.sp, C.Muted) }
                     itemsIndexed(shownChans, key = { j, c -> "$j${c.url}" }) { _, c ->
                         val i = chans.indexOf(c)
                         val on = c.url in selC
                         val hidden = ovr.isChHidden(c)
                         Focusable(onClick = { if (on) selC.remove(c.url) else { selG.clear(); selC.add(c.url) } }, shape = Rnd(12.dp),
-                            normal = if (on) Color(0x332563EB) else C.Rail, focused = C.Red, zoom = 1.01f, modifier = Modifier.fillMaxWidth().height(40.dp)) { f ->
+                            normal = if (on) C.Green.copy(alpha = 0.16f) else C.Rail, focused = C.Red, zoom = 1.01f, modifier = Modifier.fillMaxWidth().height(40.dp)) { f ->
                             Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 CheckBox(on, f)
                                 T("${i + 1}", 11.sp, if (f) C.OnRed else C.Muted, modifier = Modifier.width(22.dp))
