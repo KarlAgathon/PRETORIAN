@@ -5,3 +5,4 @@ Sport: u Favoritima i Pratim dugmad ＋ Države i ＋ Timovi
 Lite mod: na Početnoj nikad Najnoviji filmovi i serije
 Dijagnostika: kartice se prilagođavaju širini – veće ikone i brojevi u kolonama kad ima mjesta, manje kad je usko
 Gore iza Postavki: brzinomjer pokazuje mod – žuto Lite, zeleno Full; „S“ kad je uključen jednostavni mod; OK vodi u Izgled › Mod programa
+Obriši obavještenja (dugi OK na Filmovi/Serije) skida i redove Najnoviji filmovi / Najnovije serije s Početne

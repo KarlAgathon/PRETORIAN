@@ -363,7 +363,12 @@ object NewContent {
     fun seen(pid: String, kind: String, id: String) { load(); if (fresh.remove(key(pid, kind, id)) != null) save() }
     fun count(kind: String): Int { load(); return visible().count { it.key.split('|').getOrNull(1) == kind } }
     fun countCat(pid: String, kind: String, cat: String): Int { load(); return visible().count { it.key.startsWith("$pid|$kind|") && it.value.str("c") == cat } }
-    fun clear(kind: String? = null) { load(); fresh.keys.removeAll { kind == null || it.split('|').getOrNull(1) == kind }; save() }
+    fun clear(kind: String? = null) {
+        load(); fresh.keys.removeAll { kind == null || it.split('|').getOrNull(1) == kind }; save()
+        // cleared once: Home no longer shows the "newest at the provider" rows of that kind either
+        (if (kind == null) listOf("vod", "series") else listOf(kind)).forEach { Prefs.put("disc_off_$it", true) }
+        HomeCache.rev++
+    }
 
     /** the new items of a playlist, newest first: (id, name, image, rating, url) */
     fun items(pid: String, kind: String): List<JSONObject> { load(); return visible().filter { it.key.startsWith("$pid|$kind|") }

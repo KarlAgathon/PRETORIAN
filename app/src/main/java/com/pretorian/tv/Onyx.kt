@@ -493,10 +493,11 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                         Triple(mv, se, ch)
                     }.also { HomeCache.disc[p.id] = it } }
                     (HomeCache.disc[p.id] ?: (discL as? Load.Ok)?.value)?.let { (mv, se, ch) ->
-                        posterRow("NAJNOVIJI FILMOVI", minOf(fit, mv.size), mv.size, "filmova", { nav.root(Screen.Movies) }) { i, m, fr ->
+                        // "Clear notifications" (long OK on Movies / Series) also takes these rows off Home
+                        if (!Prefs.bool("disc_off_vod")) posterRow("NAJNOVIJI FILMOVI", minOf(fit, mv.size), mv.size, "filmova", { nav.root(Screen.Movies) }) { i, m, fr ->
                             val v = mv[i]; PosterCard(cleanTitle(v.name).first, v.poster, v.id, null, m, fr = fr, rating = v.rating) { nav.push(Screen.MovieDetail(v)) }
                         }
-                        posterRow("NAJNOVIJE SERIJE", minOf(fit, se.size), se.size, "serija", { nav.root(Screen.Series) }) { i, m, fr ->
+                        if (!Prefs.bool("disc_off_series")) posterRow("NAJNOVIJE SERIJE", minOf(fit, se.size), se.size, "serija", { nav.root(Screen.Series) }) { i, m, fr ->
                             val v = se[i]; PosterCard(cleanTitle(v.name).first, v.cover, v.id, null, m, fr = fr, rating = v.rating) { nav.push(Screen.SeriesDetail(v)) }
                         }
                         val cn = minOf(((fullW - 56.dp) / 232.dp).toInt().coerceAtLeast(2) - 1, ch.size)
