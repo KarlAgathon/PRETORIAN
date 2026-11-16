@@ -741,6 +741,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                         val ch = item.channel
                         val subT = tracksOf(player, MC.TRACK_TYPE_TEXT)
                         val subsOn = subFile != null || (!player.trackSelectionParameters.disabledTrackTypes.contains(MC.TRACK_TYPE_TEXT) && subT.any { it.selected })
+                        @Suppress("UNUSED_VARIABLE") val favRev = Favs.rev   // the star follows every add / remove at once
                         PlayerBar(s.live, playing, ch != null, favOn = ch != null && Favs.inAny(ctx, ch), hasSubs = subT.isNotEmpty(), subsOn = subsOn,
                             audioCount = tracksOf(player, MC.TRACK_TYPE_AUDIO).size, format = FORMATS[resize],
                             onPause = { if (player.isPlaying) player.pause() else player.play() },
@@ -926,7 +927,8 @@ private fun PlayerBar(live: Boolean, playing: Boolean, hasChannel: Boolean, favO
                 focusRequester = if (i == 0) first else null,
                 normal = Color(0x33FFFFFF), focused = C.Red, shape = Rnd(12.dp), zoom = 1.05f, modifier = Modifier.height(42.dp)) { f ->
                 Row(Modifier.align(Alignment.Center).padding(horizontal = 11.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Ico(b.icon, 17.dp, b.tint ?: if (f) C.OnRed else Color.White)
+                    // an "on" button keeps its colour also with focus (dark amber on the yellow focus, so it stays visible)
+                    Ico(b.icon, 17.dp, if (b.tint != null && f) Color(0xFF92400E) else b.tint ?: if (f) C.OnRed else Color.White)
                     T(b.label, 13.sp, if (f) C.OnRed else Color.White, FontWeight.SemiBold, maxLines = 1)
                 }
             }

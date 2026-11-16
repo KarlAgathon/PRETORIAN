@@ -5,3 +5,4 @@ Sport se učitava brže: lige se pojavljuju čim stignu, najviše 8 upita odjedn
 Jučerašnje utakmice se više ne prikazuju kao Uživo
 Sports Center: polje za API-Football ključ – brži rezultati uživo (radi tek kad upišeš ključ)
 Početna › Utakmice danas: dresovi u bojama timova s grbom, vrijeme ili rezultat uživo; kruženje lijevo/desno; „Ukloni“ na kraju reda
+Plejer: zvjezdica Favorit je žuta kad je kanal u favoritima, i kad je dugme označeno
