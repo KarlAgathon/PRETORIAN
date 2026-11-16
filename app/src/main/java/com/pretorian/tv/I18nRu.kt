@@ -2086,4 +2086,5 @@ Omiljeni timovi · %s|Любимые команды · %s
 Još nema timova|Команд пока нет
 OK: ukloni|OK: удалить
 više timova, i po imenu|несколько команд, и по названию
+isključeno u Lite modu|выключено в режиме Lite
 """.trimIndent()

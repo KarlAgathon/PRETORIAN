@@ -1291,12 +1291,12 @@ private fun HomeV2() {
         SetPage("Početna", "OK uključi ili isključi red · ▲ ▼ pomjeri red") {
             val all = HomeRows.all()
             all.forEachIndexed { i, id ->
-                val label = HomeRows.ALL.first { it.first == id }.second
+                val label = HomeRows.ALL.first { it.first == id }.second.let { if (Perf.lite && id == "new") tr(it) + " · " + tr("isključeno u Lite modu") else it }
                 val on = HomeRows.isOn(id)
                 // one compact line: the row (OK = on/off) and its own ▲ ▼ buttons; Left always goes back to the list of sections
                 Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Focusable(modifier = Modifier.weight(1f).fillMaxHeight().border(1.dp, C.Line, Rnd(12.dp)),
-                        onClick = { SetFocus.last = "home:$id"; SetFocus.pending = true; HomeRows.toggle(id) }, focusRequester = setFocusFr("home:$id"),
+                        onClick = { SetFocus.last = "home:$id"; SetFocus.pending = true; if (!(Perf.lite && id == "new")) HomeRows.toggle(id) }, focusRequester = setFocusFr("home:$id"),
                         onFocus = { SetFocus.last = "home:$id" }, shape = Rnd(12.dp), normal = Color.Transparent, focused = C.Red, zoom = 1f) { f ->
                         Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             T((i + 1).toString(), 14.sp, if (f) C.OnRed else C.Muted, FontWeight.Bold)

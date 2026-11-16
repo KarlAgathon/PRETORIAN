@@ -304,8 +304,9 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
             nav.push(Screen.Player(listOf(PlayItem(pr.title, pr.url, pr.poster, null, null, pr.series, pr.season, pr.episode)), 0, live = false))
         }
     }
-    // new films and series are not shown on Home (they come as a notification › Recently added)
-    val newest = emptyList<Pair<String, JSONObject>>()
+    val newest = remember(NewContent.rev) {
+        if (p == null || Perf.lite || !HomeRows.isOn("new")) emptyList() else NewContent.items(p.id, "vod").take(12).map { "vod" to it } + NewContent.items(p.id, "series").take(6).map { "series" to it }
+    }
     fun openNew(kind: String, o: JSONObject) {
         if (kind == "series") nav.push(Screen.SeriesDetail(SeriesItem(o.optString("id"), o.optString("n"), o.optString("i").ifBlank { null }, null, o.optString("r").ifBlank { null })))
         else nav.push(Screen.MovieDetail(Vod(o.optString("id"), o.optString("n"), o.optString("i").ifBlank { null }, o.optString("r").ifBlank { null }, o.optString("u"))))
@@ -825,8 +826,8 @@ fun AdvancedGate(nav: Nav) {
 
 /** Settings › Home: which rows the home screen shows and in which order. */
 object HomeRows {
-    // no "Newly added" posters on Home (any mode): new films and series come as a notification › Recently added
-    val ALL = listOf("fresh" to "Nove epizode", "cont" to "Nastavi gledati", "mylist" to "Moja lista",
+    // "Newly added": on in Full (can be switched off here), never in Lite
+    val ALL = listOf("fresh" to "Nove epizode", "cont" to "Nastavi gledati", "mylist" to "Moja lista", "new" to "Novo dodano",
         "today" to "Utakmice danas", "recent" to "Nedavno gledani kanali")
     var rev by mutableIntStateOf(0)
     /** "Matches today" starts off (it loads live scores) */
