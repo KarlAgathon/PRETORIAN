@@ -39,6 +39,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.ensureActive
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -63,12 +64,6 @@ fun Modifier.glassSide(r: Dp = 18.dp): Modifier = if (Look.theme == "classic" ||
 fun Kicker(t: String, color: Color = C.Muted, size: TextUnit = 10.sp, modifier: Modifier = Modifier) {
     Text(tr(t).uppercase(), style = TextStyle(fontFamily = Inter, fontSize = size, color = color, fontWeight = FontWeight.SemiBold, letterSpacing = 2.sp),
         maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = modifier)
-}
-
-/** Colour of a channel's progress line, the same for the same channel every time. */
-fun hueOf(name: String): Color {
-    val hues = listOf(0xFF3B82F6, 0xFFEF4444, 0xFF14B8A6, 0xFFF97316, 0xFF8B5CF6, 0xFF22C55E, 0xFFEC4899, 0xFFEAB308)
-    return Color(hues[(name.hashCode() and 0x7fffffff) % hues.size])
 }
 
 /** What is on now, per channel, kept until the show ends (asked only for the rows you see, three at a time). */
@@ -399,9 +394,14 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                                         if (nx.isNullOrEmpty()) Box(Modifier.weight(1f).fillMaxHeight().clip(Rnd(8.dp)).background(if (f) Color.Black.copy(alpha = 0.12f) else C.Card), contentAlignment = Alignment.CenterStart) {
                                             T(now?.title ?: if (nx == null) "Učitavam…" else "Bez programa", 12.sp, if (f) C.OnRed.copy(alpha = 0.7f) else C.Muted, modifier = Modifier.padding(horizontal = 10.dp))
                                         }
-                                        val first = (c - 1).coerceAtLeast(0).coerceAtMost(((nx?.size ?: 0) - 3).coerceAtLeast(0))
-                                        nx?.drop(first)?.take(3)?.forEachIndexed { kk, e ->
-                                            val k = kk + first
+                                        // "now" always stays in the first box; the two boxes after it slide through the later shows
+                                        val shown = when {
+                                            nx == null -> emptyList()
+                                            nx.size <= 3 -> nx.indices.toList()
+                                            else -> c.coerceIn(1, nx.lastIndex - 1).let { s0 -> listOf(0, s0, s0 + 1) }
+                                        }
+                                        shown.forEachIndexed { kk, k ->
+                                            val e = nx!![k]
                                             val isNow = k == 0 && e.start <= System.currentTimeMillis()
                                             val isSel = f && k == c
                                             Column(Modifier.weight(if (kk == 0) 1.4f else 1f).fillMaxHeight().clip(Rnd(8.dp))
@@ -413,14 +413,14 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                                                     T((if (isNow) "" else hm.format(java.util.Date(e.start)) + "  ") + e.title, 12.sp,  // i18n-ignore
                                                         if (isSel) C.Text else if (f) C.OnRed else if (isNow) C.Text else C.Soft, if (isNow || isSel) FontWeight.SemiBold else FontWeight.Normal)
                                                 }
-                                                if (isNow) ThinBar(e.progress(), if (f) C.OnRed else hueOf(ch.name), Modifier.fillMaxWidth().padding(top = 3.dp))
+                                                if (isNow) ThinBar(e.progress(), if (f) C.OnRed else C.RedText, Modifier.fillMaxWidth().padding(top = 3.dp))
                                             }
                                         }
                                     }
                                 } else Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                                     T(ovr.chName(ch), 13.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold)
                                     T(now?.title ?: " ", 11.sp, if (f) C.OnRed.copy(alpha = 0.65f) else C.Muted)
-                                    if (now != null) ThinBar(now.progress(), if (f) C.OnRed else hueOf(ch.name), Modifier.fillMaxWidth())
+                                    if (now != null) ThinBar(now.progress(), if (f) C.OnRed else C.RedText, Modifier.fillMaxWidth())
                                 }
                                 if (preview?.url == ch.url) Ico(R.drawable.lc_play, 13.dp, if (f) C.OnRed else C.Green)
                                 if (locked) Ico(R.drawable.lc_lock, 13.dp, if (f) C.OnRed else C.Muted)
@@ -430,6 +430,17 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                     }
                 }
                 LaunchedEffect(list) { if (TvMemory.restore && TvMemory.channel >= 0) { TvMemory.restore = false; cWrap.target = TvMemory.channel.coerceAtMost(list.lastIndex) } }
+                // the list always rests on a whole row: a row cut in half under the title slides out of sight
+                LaunchedEffect(cState) {
+                    androidx.compose.runtime.snapshotFlow { cState.isScrollInProgress }.collect { moving ->
+                        if (moving) return@collect
+                        delay(140)   // while a button is held nothing is touched
+                        if (cState.isScrollInProgress || cState.firstVisibleItemScrollOffset <= 0 || !cState.canScrollForward) return@collect
+                        val to = cState.firstVisibleItemIndex + 1
+                        try { if (Perf.lite) cState.scrollToItem(to) else cState.animateScrollToItem(to) }
+                        catch (e: kotlinx.coroutines.CancellationException) { kotlinx.coroutines.currentCoroutineContext().ensureActive() }   // your own scroll wins
+                    }
+                }
                 val enter0 = remember { enterTick }
                 LaunchedEffect(enterTick, list.isNotEmpty()) { if (enterTick != enter0 && list.isNotEmpty()) cWrap.target = TvMemory.channel.coerceIn(0, list.lastIndex) }
                 menu?.let { ch ->

@@ -535,9 +535,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             }
             .focusable(),
     ) {
-        // the picture: full screen, or small at the top left while the guide is open
-        val small = side == "epg"
-        Box(if (small) Modifier.padding(start = 28.dp, top = 28.dp).fillMaxWidth(0.56f).aspectRatio(16f / 9f).clip(Rnd(16.dp)) else Modifier.fillMaxSize()) {
+        // the picture always stays full screen; the lists and the guide open over it (no black hole, no resizing of the picture)
+        Box(Modifier.fillMaxSize()) {
             AndroidView(
                 factory = { c ->
                     PlayerView(c).apply {
@@ -789,7 +788,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 index = i; side = null; sideGroup = null
             },
             onBackToChannels = { side = null; sideGroup = null; nav.back() })
-        // ------------------------------------------------------------ live: guide on the right, picture small
+        // ------------------------------------------------------------ live: guide on the right, over the picture
         if (side == "epg") {
             val ch = item.channel
             Column(Modifier.align(Alignment.TopEnd).fillMaxWidth(0.4f).fillMaxHeight().background(C.Overlay).padding(20.dp),

@@ -190,9 +190,9 @@ object C {
     val Green get() = if (IsLight) Color(0xFF15803D) else Color(0xFF4ADE80)
     val Amber get() = if (IsLight) Color(0xFFB45309) else Color(0xFFFBBF24)
     val Danger = Color(0xFFEF4444)
-    /** background of menus and popups: see-through glass or solid black */
+    /** background of menus and popups: see-through glass or solid black; the glass takes the tone of the theme (no blue on a black or sand theme) */
     val Overlay get() = if (Look.theme == "liquid") Color(0xFF16222E).copy(alpha = 0.62f) else if (Look.theme == "papir") Color.White else if (Look.overlay == 1) (if (IsLight) Color.White else Color(0xFF07090D))
-                        else (if (IsLight) Color.White else Color(0xFF151A23)).copy(alpha = Look.menuOpacity.coerceIn(60, 100) / 100f)
+                        else (if (IsLight) Color.White else lerp(palette().bg, Color.White, 0.06f)).copy(alpha = Look.menuOpacity.coerceIn(60, 100) / 100f)
     /** player info bar background */
     val OverlayBar get() = if (Look.theme == "liquid") Color(0x66000000) else if (Look.overlay == 1) Color(0xF2000000) else Color(0x99000000)
 }
