@@ -482,8 +482,8 @@ Ne radi na svim uređajima. Ako je box potpuno ugašen, podsjetnik ne može doć
 Tvoji podsjetnici|Your reminders|Deine Erinnerungen|Tvoji podsjetnici|Твоји подсетници|Твоите напомняния|Mementourile tale|Hatırlatıcıların|I tuoi promemoria|تذكيراتك
 Nema podsjetnika.|No reminders.|Keine Erinnerungen.|Nema podsjetnika.|Нема подсетника.|Няма напомняния.|Niciun memento.|Hatırlatıcı yok.|Nessun promemoria.|لا توجد تذكيرات.
 Obriši|Delete|Löschen|Obriši|Обриши|Изтрий|Șterge|Sil|Elimina|حذف
-Backup je spremljen|Backup saved|Backup gespeichert|Sigurnosna kopija je spremljenaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|Бекап је сачуван|Копието е запазено|Backup salvat|Yedek kaydedildi|Backup salvato|تم حفظ النسخة
-Backup nije spremljen|Backup not saved|Backup nicht gespeichert|Sigurnosna kopija nije spremljenaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|Бекап није сачуван|Копието не е запазено|Backup nesalvat|Yedek kaydedilmedi|Backup non salvato|لم تُحفظ النسخة
+Backup je spremljen|Backup saved|Backup gespeichert|Sigurnosna kopija je spremljenaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|Бекап је сачуван|Копието е запазено|Backup salvat|Yedek kaydedildi|Backup salvato|تم حفظ النسخة
+Backup nije spremljen|Backup not saved|Backup nicht gespeichert|Sigurnosna kopija nije spremljenaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|Бекап није сачуван|Копието не е запазено|Backup nesalvat|Yedek kaydedilmedi|Backup non salvato|لم تُحفظ النسخة
 Sve je vraćeno. PRETORIAN se ponovo pokreće.|Everything restored. PRETORIAN restarts.|Alles wiederhergestellt. PRETORIAN startet neu.|Sve je vraćeno. PRETORIAN se ponovo pokreće.|Све је враћено. PRETORIAN се поново покреће.|Всичко е възстановено. PRETORIAN се рестартира.|Totul a fost restaurat. PRETORIAN repornește.|Her şey geri yüklendi. PRETORIAN yeniden başlıyor.|Tutto ripristinato. PRETORIAN si riavvia.|تمت الاستعادة. يُعاد تشغيل PRETORIAN.
 Vraćanje nije uspjelo|Restore failed|Wiederherstellung fehlgeschlagen|Vraćanje nije uspjelo|Враћање није успело|Възстановяването не успя|Restaurarea a eșuat|Geri yükleme başarısız|Ripristino non riuscito|فشلت الاستعادة
 Backup i vraćanje|Backup and restore|Sichern und wiederherstellen|Sigurnosna kopija i vraćanje|Бекап и враћање|Резервно копие|Backup și restaurare|Yedekle ve geri yükle|Backup e ripristino|النسخ والاستعادة
@@ -1979,6 +1979,12 @@ Utakmice ovih država uvijek prve, u Sportu i na Početnoj|Matches of these coun
 Traži tim|Search a team|Team suchen|Traži tim|Тражи тим|Търси отбор|Caută o echipă|Takım ara|Cerca una squadra|ابحث عن فريق
 Ukucaj bar 2 slova imena tima|Type at least 2 letters of the team name|Mindestens 2 Buchstaben des Teamnamens eingeben|Utipkaj bar 2 slova imena tima|Укуцај бар 2 слова имена тима|Въведи поне 2 букви от името|Tastează cel puțin 2 litere din nume|Takım adının en az 2 harfini yaz|Scrivi almeno 2 lettere del nome|اكتب حرفين على الأقل من اسم الفريق
 Otvori u Sportu|Open in Sport|Im Sport öffnen|Otvori u Sportu|Отвори у Спорту|Отвори в Спорт|Deschide în Sport|Spor'da aç|Apri in Sport|افتح في الرياضة
+Nova epizoda|New episode|Neue Folge|Nova epizoda|Нова епизода|Нов епизод|Episod nou|Yeni bölüm|Nuovo episodio|حلقة جديدة
+Ukloni s Početne|Remove from Home|Von der Startseite entfernen|Ukloni s Početne|Уклони са Почетне|Премахни от началния екран|Elimină de pe ecranul principal|Ana ekrandan kaldır|Rimuovi dalla Home|إزالة من الرئيسية
+Ne pratiš nijednu utakmicu · dugi OK na utakmicu › Prati|You follow no matches · long OK on a match › Follow|Du folgst keinem Spiel · langes OK auf ein Spiel › Folgen|Ne pratiš nijednu utakmicu · dugi OK na utakmicu › Prati|Не пратиш ниједну утакмицу · дуги OK на утакмицу › Прати|Не следиш мачове · дълго OK на мач › Следи|Nu urmărești niciun meci · OK lung pe meci › Urmărește|Hiç maç takip etmiyorsun · maçta uzun OK › Takip et|Non segui nessuna partita · OK lungo su una partita › Segui|لا تتابع أي مباراة · OK مطوّل › تابع
+vraća se kad ga opet staviš na Prati|comes back when you follow it again|kommt zurück, wenn du wieder folgst|vraća se kad ga opet staviš na Prati|враћа се кад га опет ставиш на Прати|връща се, когато пак го следиш|revine când îl urmărești din nou|tekrar takip edince geri gelir|torna quando lo segui di nuovo|يعود عند متابعته مجددًا
+Prikaži više · još %s|Show more · %s more|Mehr anzeigen · noch %s|Prikaži više · još %s|Прикажи више · још %s|Покажи още · още %s|Arată mai mult · încă %s|Daha fazla · %s tane daha|Mostra altro · altri %s|عرض المزيد · %s أخرى
+Pratim|Following|Ich folge|Pratim|Пратим|Следя|Urmăresc|Takip|Seguo|أتابع
 Nepoznat jezik|Unknown language|Unbekannte Sprache|Nepoznat jezik|Непознат језик|Неизвестен език|Limbă necunoscută|Bilinmeyen dil|Lingua sconosciuta|لغة غير معروفة
 """.trimIndent()
 

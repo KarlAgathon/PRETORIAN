@@ -361,9 +361,10 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                 }
                 }
                 Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    // playlist always on top; under it at most 2 live matches you follow, then new episodes
+                    SubscriptionCard()
                     FollowCard(nav, (fullW * 0.34f).coerceIn(250.dp, 380.dp))
                     HomeAlerts(nav, (fullW * 0.34f).coerceIn(250.dp, 380.dp))
-                    SubscriptionCard()
                 }
                 }
                 Spacer(Modifier.height(12.dp))
@@ -842,15 +843,19 @@ private fun MoreCard(rest: Int, unit: String, w: Dp, h: Dp, fr: FocusRequester?,
 /** Top right of Home: new episodes of series you watch and news of your teams / followed matches. OK opens it. */
 @Composable
 fun HomeAlerts(nav: Nav, width: Dp) {
-    val items = Notes.list.filter { !it.read && ((it.kind == "sport" && !GoalNote.endedLongAgo(GoalNote.idOf(it.id))) || (it.kind == "series" && it.id.startsWith("ep:"))) }.take(3)
+    val items = Notes.list.filter { !it.read && it.kind == "series" && it.id.startsWith("ep:") }.take(2)
     if (items.isEmpty()) return
-    Column(Modifier.width(width), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    var menu by remember { mutableStateOf<Note?>(null) }
+    menu?.let { n -> Popup(tr("Nova epizoda"), { menu = null }) {
+        OptionRow("Ukloni s Početne", R.drawable.lc_x) { Notes.markRead(n.id); menu = null }
+    } }
+    Column(Modifier.width(width), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         items.forEach { n ->
-            Focusable(onClick = { openNote(nav, n) }, shape = Rnd(14.dp), normal = C.Rail, focused = C.CardHi, zoom = 1.03f,
+            Focusable(onClick = { openNote(nav, n) }, onMenu = { menu = n }, shape = Rnd(14.dp), normal = C.Rail, focused = C.CardHi, zoom = 1.03f,
                 modifier = Modifier.fillMaxWidth().border(1.dp, C.Red.copy(alpha = 0.45f), Rnd(14.dp))) { f ->
                 if (f) Box(Modifier.matchParentSize().border(2.dp, C.Red, Rnd(14.dp)))
                 Column(Modifier.padding(horizontal = 12.dp, vertical = 9.dp)) {
-                    T(if (n.kind == "sport") "SPORT · PRATIŠ" else "NOVA EPIZODA · SERIJA KOJU GLEDAŠ", 10.sp, C.Muted, FontWeight.SemiBold, maxLines = 1)
+                    T("NOVA EPIZODA · SERIJA KOJU GLEDAŠ", 10.sp, C.Muted, FontWeight.SemiBold, maxLines = 1)
                     T(n.text, 14.sp, C.Text, FontWeight.Bold, maxLines = 2)
                 }
             }

@@ -1946,4 +1946,10 @@ Utakmice ovih država uvijek prve, u Sportu i na Početnoj|Матчи этих �
 Traži tim|Поиск команды
 Ukucaj bar 2 slova imena tima|Введите хотя бы 2 буквы названия команды
 Otvori u Sportu|Открыть в Спорте
+Nova epizoda|Новая серия
+Ukloni s Početne|Убрать с главной
+Ne pratiš nijednu utakmicu · dugi OK na utakmicu › Prati|Вы не следите ни за одним матчем · долгий OK на матче › Следить
+vraća se kad ga opet staviš na Prati|вернётся, когда снова нажмёте Следить
+Prikaži više · još %s|Показать ещё · ещё %s
+Pratim|Слежу
 """.trimIndent()

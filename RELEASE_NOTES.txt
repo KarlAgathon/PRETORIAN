@@ -1,8 +1,7 @@
-Brža i stabilnija Početna: najnoviji filmovi, serije i kanali se učitaju jednom i pamte – novo tek nakon osvježavanja playliste ili kad provider doda nešto
-Kartica „Pratiš“ na Početnoj: rezultat, minuta, zadnji gol ili karton za sve utakmice koje pratiš (više utakmica, bilo koji sport), odmah po ulasku
-„Ko gleda?“ se ne pita ako te nije bilo kraće od 1 min (biraš 15 s – 1 h ili Pitaj uvijek u Postavke › Profili)
-Sport: kretanje kroz listu ne mijenja izabranu utakmicu (tek OK), lijevo ili Back s kanala vraća na izabranu utakmicu, utakmice se pokažu odmah
-Postavke › Opće › Rad u pozadini: rezultati, nove epizode i kartica Pratiš mogu se ugasiti
-Padovi i zamrzavanja se čuvaju (zadnjih 10) i mogu se izvući s laptopa – komanda je u Dijagnostici
-Ažuriranje: „Provjeri novu verziju“ ostaje na mjestu i kaže da imaš najnoviju; dugmad u Postavkama više ne bacaju fokus u drugi meni
-Preskoči prethodno („Previously on…“): dugme, sam preskoči ili isključeno, uči se za svaku seriju (Postavke › Plejer)
+Sport: nova traka Uživo · Uskoro · Završeno · Pratim · Sportovi · Regija · Favoriti · Timovi (više izbora odjednom, traži tim kucanjem)
+Sport: favoriti (države i timovi) uvijek prvi; brojevi tačno prate ono što je u listi
+Sport: jednom učitano ostaje zapamćeno – nema ponovnog učitavanja pri prelasku menija, rezultati se osvježavaju u pozadini
+Početna: kartica playliste uvijek gore, ispod najviše 2 utakmice koje pratiš i to samo dok igraju; gore ide ona gdje se upravo desio gol ili karton
+Početna: više od 2 → „Prikaži više“ vodi u Sport › Pratim
+Dugi OK na utakmicu ili novu epizodu na Početnoj: Ukloni s Početne (vraća se kad opet staviš Prati), Ne prati
+Završena utakmica posivi i nestane s Početne nakon 15 minuta; u obavještenjima je posivljena
