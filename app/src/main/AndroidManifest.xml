@@ -35,6 +35,25 @@
         <package android:name="org.xbmc.kodi" />
         <package android:name="is.xyz.mpv" />
         <package android:name="com.google.android.youtube.tv" />
+        <package android:name="com.google.android.youtube" />
+        <package android:name="com.liskovsoft.smarttubetv.beta" />
+        <package android:name="com.liskovsoft.smarttubetv" />
+        <package android:name="com.teamsmart.videomanager.tv" />
+        <package android:name="io.gh.reisxd.tizentube" />
+        <package android:name="com.reisxd.tizentube" />
+        <!-- trailer apps under other names (e.g. TizenTube Cobalt builds): the TV apps on the box and the apps that open YouTube links -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" android:host="www.youtube.com" />
+        </intent>
     </queries>
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />

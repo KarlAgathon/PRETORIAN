@@ -606,7 +606,18 @@ object TrailerApps {
     )
     private fun has(ctx: Context, pkg: String) = try { ctx.packageManager.getPackageInfo(pkg, 0); true } catch (e: Exception) { false }
     /** name and installed package (null = not installed), always in the same order */
-    fun slots(ctx: Context): List<Pair<String, String?>> = FAMILIES.map { (n, pk) -> n to pk.firstOrNull { has(ctx, it) } }
+    fun slots(ctx: Context): List<Pair<String, String?>> = FAMILIES.map { (n, pk) -> n to (pk.firstOrNull { has(ctx, it) } ?: if (n == "TizenTube") findByName(ctx, "tizentube", "cobalt") else null) }  // i18n-ignore
+
+    /** a build under another package name (e.g. TizenTube Cobalt): look for it among the box's TV apps by name */
+    private fun findByName(ctx: Context, vararg words: String): String? = try {
+        val pm = ctx.packageManager
+        val apps = pm.queryIntentActivities(android.content.Intent(android.content.Intent.ACTION_MAIN).addCategory("android.intent.category.LEANBACK_LAUNCHER"), 0) +
+            pm.queryIntentActivities(android.content.Intent(android.content.Intent.ACTION_MAIN).addCategory(android.content.Intent.CATEGORY_LAUNCHER), 0)
+        apps.firstOrNull { ri ->
+            val pkg = ri.activityInfo.packageName.lowercase(); val label = ri.loadLabel(pm).toString().lowercase()
+            pkg != "com.google.android.youtube.tv" && words.any { w -> w in pkg || w in label } && ("tube" in pkg || "tube" in label || "cobalt" in pkg)
+        }?.activityInfo?.packageName
+    } catch (e: Exception) { null }
     fun installed(ctx: Context): List<Pair<String, String>> = slots(ctx).mapNotNull { (n, p) -> p?.let { it to n } }
 
     /** The app picked in Settings, or the first installed one: YouTube, then SmartTube, then TizenTube. */
