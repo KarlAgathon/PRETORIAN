@@ -1,3 +1,4 @@
+Popravljen pad aplikacije pri otvaranju Dijagnostike i O aplikaciji
 Nova instalacija: na Početnoj isključeno Novo dodano (filmovi, serije, kanali) i Utakmice danas – box se ne opterećuje; uključuje se u Postavke › Početna
 Sve opcije uvijek dostupne, i u Lite i u Full modu; prekidač Napredne opcije je uklonjen (bez opcija je samo jednostavni mod)
 Gore uz brzinomjer oznaka moda: A (normalni) ili S (jednostavni)

@@ -336,8 +336,8 @@ fun CardGrid(want: Int, items: List<@Composable (Modifier) -> Unit>) {
     // as many columns as fit: a card is never narrower than about 230 dp, so big text never breaks
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
     val n = (((maxWidth + 12.dp) / (230.dp + 12.dp)).toInt()).coerceIn(1, want)
+    val cw = (maxWidth - 12.dp * (n - 1)) / n
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        val cw = (maxWidth - 12.dp * (n - 1)) / n
         items.chunked(n).forEach { row ->
             Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 androidx.compose.runtime.CompositionLocalProvider(LocalCardW provides cw) { row.forEach { it(Modifier.weight(1f).fillMaxHeight()) } }
