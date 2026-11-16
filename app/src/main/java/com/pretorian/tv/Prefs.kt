@@ -127,12 +127,18 @@ class Ovr(private val ctx: Context, private val pid: String) {
     fun groupName(kind: String, g: Category) = map("gName_$kind").str(g.id).ifBlank { g.name }
     fun renameGroup(kind: String, id: String, name: String) { map("gName_$kind").put(id, name); save() }
     fun isHidden(kind: String, id: String) = id in list("gHidden_$kind")
+    /** hidden right now: by you, or by Parental controls (unless you showed that group yourself — your choice wins) */
+    fun hiddenNow(kind: String, c: Category) = isHidden(kind, c.id) || (Parental.hides(c.name) && c.id !in list("gAllow_$kind"))
     fun toggleHidden(kind: String, id: String) = toggle("gHidden_$kind", id)
     /** hide or show many groups at once */
     fun setHidden(kind: String, ids: List<String>, hidden: Boolean) {
         val cur = list("gHidden_$kind").toMutableSet()
         if (hidden) cur.addAll(ids) else cur.removeAll(ids.toSet())
         setList("gHidden_$kind", cur.toList())
+        // shown by hand: stays visible even while Parental controls would hide it
+        val allow = list("gAllow_$kind").toMutableSet()
+        if (hidden) allow.removeAll(ids.toSet()) else allow.addAll(ids)
+        setList("gAllow_$kind", allow.toList())
     }
     fun isLocked(kind: String, id: String) = id in list("gLocked_$kind")
     fun toggleLocked(kind: String, id: String) = toggle("gLocked_$kind", id)
@@ -155,7 +161,8 @@ class Ovr(private val ctx: Context, private val pid: String) {
         val order = list("gOrder_$kind")
         val sorted = merged.withIndex().sortedBy { (i, g) -> order.indexOf(g.id).let { if (it < 0) 100_000 + i else it } }.map { it.value }
         // Settings › Parental controls: those categories are gone everywhere until the PIN opens them
-        return sorted.filter { (all || !isHidden(kind, it.id)) && !Parental.hides(it.name) }.map { Category(it.id, groupName(kind, it)) }
+        val allow = list("gAllow_$kind").toSet()
+        return sorted.filter { all || (!isHidden(kind, it.id) && (it.id in allow || !Parental.hides(it.name))) }.map { Category(it.id, groupName(kind, it)) }
     }
 
     fun moveGroup(kind: String, current: List<Category>, id: String, delta: Int) {
@@ -242,13 +249,18 @@ object Parental {
     val active get() = !unlocked && KINDS.any { on(it.first) }
     /** ids of the provider categories that are hidden (TV "live", "vod", "series") */
     suspend fun blocked(p: Playlist, kind: String): Set<String> = try {
-        when (kind) { "live" -> Repo.liveGroups(p); "vod" -> Repo.vodGroups(p); else -> Repo.seriesGroups(p) }.filter { hides(it.name) }.map { it.id }.toSet()
+        val allow = allowed(p.id, kind)
+        when (kind) { "live" -> Repo.liveGroups(p); "vod" -> Repo.vodGroups(p); else -> Repo.seriesGroups(p) }.filter { hides(it.name) && it.id !in allow }.map { it.id }.toSet()
+    } catch (e: Exception) { emptySet() }
+    /** groups you showed yourself in Groups and channels (they stay visible) */
+    fun allowed(pid: String, kind: String): Set<String> = try {
+        org.json.JSONObject(Prefs.str("ovr_$pid", "{}")).optJSONArray("gAllow_$kind")?.let { a -> (0 until a.length()).map { a.getString(it) }.toSet() } ?: emptySet()
     } catch (e: Exception) { emptySet() }
     /** channels of hidden categories or with hidden names go away everywhere, "All channels" included */
     suspend fun channels(p: Playlist, l: List<Channel>): List<Channel> {
         if (!active) return l
-        val b = blocked(p, "live")
-        return l.filter { it.group !in b && !hides(it.name) && !hides(it.group) }
+        val b = blocked(p, "live"); val allow = allowed(p.id, "live")
+        return l.filter { it.group in allow || (it.group !in b && !hides(it.name) && !hides(it.group)) }
     }
     /** the whole movie / series list (search, "new", home rows) without hidden categories and titles */
     suspend fun catalog(p: Playlist, kind: String, l: List<org.json.JSONObject>): List<org.json.JSONObject> {

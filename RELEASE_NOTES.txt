@@ -1,5 +1,7 @@
-Popravljen pad aplikacije pri otvaranju Dijagnostike i O aplikaciji
-Nova instalacija: na Početnoj isključeno Novo dodano (filmovi, serije, kanali) i Utakmice danas – box se ne opterećuje; uključuje se u Postavke › Početna
-Sve opcije uvijek dostupne, i u Lite i u Full modu; prekidač Napredne opcije je uklonjen (bez opcija je samo jednostavni mod)
-Gore uz brzinomjer oznaka moda: A (normalni) ili S (jednostavni)
-Sport: OK na utakmicu odmah prebaci fokus na prvi kanal desno; kanali se uvijek vide i kad piše ko prenosi
+Štednja resursa (Postavke › Opće): manje slika odjednom, manji TV vodič, pretraga tek kad je otvoriš, manji plakati, čišćenje memorije poslije plejera, čuvar ekrana bez sekundi, nove filmove provjerava jednom dnevno – sve uključeno, svako se može isključiti
+Nova instalacija uvijek kreće u Lite modu
+Roditeljska kontrola sama sakrije grupe za odrasle (XXX, porn, 18+…) u cijeloj playlisti; u Grupe i kanali vide se kao sakrivene (štit) i „Prikaži“ ih vraća – tvoj izbor ima prednost
+Sport se učitava brže: lige se pojavljuju čim stignu, najviše 8 upita odjednom, nema čekanja minut kad mreža zakaže
+Jučerašnje utakmice se više ne prikazuju kao Uživo
+Sports Center: polje za API-Football ključ – brži rezultati uživo (radi tek kad upišeš ključ)
+Početna › Utakmice danas: dresovi u bojama timova s grbom, vrijeme ili rezultat uživo; kruženje lijevo/desno; „Ukloni“ na kraju reda

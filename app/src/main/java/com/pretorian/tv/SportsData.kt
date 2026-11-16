@@ -7,6 +7,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -53,7 +54,10 @@ data class SportEvent(
     /** TV stations ESPN lists for the match (any country) */
     val tv: List<String> = emptyList(),
 ) {
-    val live get() = state == "in"
+    /** live now: "in" from the feed, but never a match that started more than 6 hours ago (a stale "in" from an old list) */
+    val live get() = state == "in" && System.currentTimeMillis() - start < 6 * 3600_000L
+    /** finished, also a stale "live" one */
+    val over get() = state == "post" || (state == "in" && !live)
 }
 
 data class League(val sport: String, val path: String, val name: String, val abbr: String)
@@ -228,8 +232,8 @@ object Sports {
         )
     }
 
-    private fun espn(lg: League, date: String): List<SportEvent> {
-        val o = JSONObject(http("https://site.api.espn.com/apis/site/v2/sports/${lg.path}/scoreboard?dates=$date&limit=500"))  // i18n-ignore
+    private fun espn(lg: League, date: String, timeout: Int = 15000): List<SportEvent> {
+        val o = JSONObject(http("https://site.api.espn.com/apis/site/v2/sports/${lg.path}/scoreboard?dates=$date&limit=500", timeout))  // i18n-ignore
         val evs = o.optJSONArray("events") ?: return emptyList()
         val out = ArrayList<SportEvent>()
         for (i in 0 until evs.length()) {
@@ -259,18 +263,28 @@ object Sports {
     }
 
     /** Matches of one day from all leagues; leagues that fail are skipped. */
-    suspend fun day(offset: Int): List<SportEvent> = withContext(Dispatchers.IO) {
+    suspend fun day(offset: Int, onPart: ((List<SportEvent>) -> Unit)? = null): List<SportEvent> = withContext(Dispatchers.IO) {
         val from = dayStart(offset); val to = dayStart(offset + 1)
+        // at most 8 requests at a time (many at once made the box and ESPN slow); every league that answers is shown at once
+        val gate = kotlinx.coroutines.sync.Semaphore(8)
+        val got = java.util.Collections.synchronizedList(ArrayList<SportEvent>())
+        fun part() = synchronized(got) { got.toList() }.filter { it.start in from until to }.distinctBy { it.id }.sortedBy { it.start }
         coroutineScope {
-            activeLeagues().map { lg ->
+            activeLeagues().sortedBy { if (it.abbr in BIG) 0 else 1 }.map { lg ->
                 async {
                     // US-dated feeds: European evening matches are on the same date, night games on the day before
                     val dates = listOf(espnDate(from), espnDate(from - 86_400_000L)).distinct()
-                    dates.flatMap { d -> try { espn(lg, d) } catch (e: Exception) { emptyList() } }
+                    val r = dates.flatMap { d -> gate.withPermit { try { espnQuick(lg, d) } catch (e: Exception) { emptyList() } } }
+                    if (r.isNotEmpty()) { got.addAll(r); onPart?.invoke(part()) }
                 }
-            }.awaitAll().flatten()
-        }.filter { it.start in from until to }.distinctBy { it.id }.sortedBy { it.start }
+            }.awaitAll()
+        }
+        part()
     }
+
+    /** one league, with a short timeout and one quick retry */
+    private fun espnQuick(lg: League, date: String): List<SportEvent> =
+        try { espn(lg, date, 8000) } catch (e: Exception) { espn(lg, date, 8000) }
 
     /**
      * matches that have not started yet, the next [days] days: football first, then what is closest to you
@@ -710,5 +724,43 @@ object Rights {
     suspend fun refresh() = withContext(Dispatchers.IO) {
         if (System.currentTimeMillis() - Prefs.long("rights_at") < 24 * 3600_000L) return@withContext
         try { val t = Net.get(URL); parse(t); Prefs.put("rights_json", t); Prefs.put("rights_at", System.currentTimeMillis()); cache = null } catch (_: Exception) {}
+    }
+}
+
+
+/** Optional: API-Football (api-sports.io). With the user's own free key one request brings every live football match;
+ *  asked at most every 15 minutes (the free key allows 100 a day). Nothing happens without a key. */
+object ApiFootball {
+    var key: String get() = Prefs.str("apifb_key"); set(v) = Prefs.put("apifb_key", v.trim())
+    val on get() = key.isNotBlank()
+    @Volatile private var cache: List<SportEvent> = emptyList()
+    @Volatile private var at = 0L
+    suspend fun live(): List<SportEvent> = withContext(Dispatchers.IO) {
+        if (!on) return@withContext emptyList()
+        if (System.currentTimeMillis() - at < 15 * 60_000L) return@withContext cache
+        at = System.currentTimeMillis()
+        try {
+            val c = java.net.URL("https://v3.football.api-sports.io/fixtures?live=all").openConnection() as java.net.HttpURLConnection  // i18n-ignore
+            c.connectTimeout = 8000; c.readTimeout = 8000; c.setRequestProperty("x-apisports-key", key)
+            val t = c.inputStream.bufferedReader().use { it.readText() }
+            val arr = JSONObject(t).optJSONArray("response") ?: return@withContext cache
+            fun team(o: JSONObject?, goals: Any?) = o?.let { Team(it.str("name"), it.str("name").take(3).uppercase(), it.str("logo").ifBlank { null }, null, null, goals?.toString()?.takeIf { g -> g != "null" }) }
+            cache = (0 until arr.length()).mapNotNull { i ->
+                val r = arr.optJSONObject(i) ?: return@mapNotNull null
+                val f = r.optJSONObject("fixture") ?: return@mapNotNull null
+                val lg = r.optJSONObject("league"); val tm = r.optJSONObject("teams"); val g = r.optJSONObject("goals")
+                val el = f.optJSONObject("status")?.optInt("elapsed", 0) ?: 0
+                SportEvent("af" + f.optLong("id"), "football", lg?.str("name") ?: "", "AF", lg?.str("round"), f.optLong("timestamp") * 1000, "in",
+                    if (el > 0) "$el'" else null, team(tm?.optJSONObject("home"), g?.opt("home")), team(tm?.optJSONObject("away"), g?.opt("away")),
+                    "", null, country = (lg?.str("country") ?: "").let { cn -> Locale.getAvailableLocales().firstOrNull { it.getDisplayCountry(Locale.ENGLISH).equals(cn, true) }?.country?.lowercase() ?: "int" })  // i18n-ignore
+            }
+        } catch (_: Exception) {}
+        cache
+    }
+    /** live matches ESPN does not have (same two teams = the same match) */
+    fun extra(espn: List<SportEvent>, af: List<SportEvent>): List<SportEvent> {
+        fun k(e: SportEvent) = Sports.norm((e.home?.name ?: "") + (e.away?.name ?: "")).replace(" ", "")
+        val have = espn.map { k(it) }.toSet()
+        return af.filter { k(it) !in have }
     }
 }

@@ -229,8 +229,17 @@ fun SportMixScreen(nav: Nav) {
     LaunchedEffect(tick, SportCache.rev) {
         if (SportCache.today == null || System.currentTimeMillis() - SportCache.todayAt > 50_000L) {
             loading = SportCache.today == null
-            try { val r = Sports.day(0); if (r.isNotEmpty() || SportCache.today == null) SportCache.today = r; SportCache.todayAt = System.currentTimeMillis() } catch (_: Exception) {}
+            val first = SportCache.today == null
+            try {
+                val r = Sports.day(0) { part -> if (first) { SportCache.today = part; today = part; loading = false } }
+                // with an API-Football key: live football ESPN does not know about is added (one request, at most every 15 min)
+                val all = if (ApiFootball.on) r + ApiFootball.extra(r, ApiFootball.live()) else r
+                if (all.isNotEmpty() || SportCache.today == null) SportCache.today = all
+                SportCache.todayAt = if (all.isEmpty()) 0L else System.currentTimeMillis()
+            } catch (_: Exception) {}
             loading = false
+            // nothing came (network hiccup): ask again in 10 seconds, not in a minute
+            if (SportCache.today.isNullOrEmpty()) { delay(10_000); tick++ }
         }
         today = SportCache.today
     }
@@ -270,7 +279,7 @@ fun SportMixScreen(nav: Nav) {
     // the chosen sports count everywhere: Live, Coming up, Favourites and Following
     fun inSport(e: SportEvent) = sportsOn.isEmpty() || e.sport in sportsOn
     fun followedEv(e: SportEvent) = MatchFollow.has(e.id) || MyTeams.list().any { t -> t.equals(e.home?.name, true) || t.equals(e.away?.name, true) }
-    fun inTab(e: SportEvent, t: String) = when (t) { "live" -> e.state == "in"; "soon" -> e.state == "pre"; "mine" -> followedEv(e); "fav" -> fav(e) && e.state != "post"; else -> e.state == "post" }
+    fun inTab(e: SportEvent, t: String) = when (t) { "live" -> e.live; "soon" -> e.state == "pre"; "mine" -> followedEv(e); "fav" -> fav(e) && !e.over; else -> e.over }
     val shown = remember(withCh, tab, SportCache.rev, MyTeams.rev, MatchFollow.rev) {
         withCh.filter { e -> inSport(e) && inTab(e, tab) }
             .sortedWith(if (tab == "mine" || tab == "fav") compareBy({ it.state != "in" }, { it.state == "post" }, { it.start }) else compareBy({ !fav(it) }, { it.league }, { it.start }))

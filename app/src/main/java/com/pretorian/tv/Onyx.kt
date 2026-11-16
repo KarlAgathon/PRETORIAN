@@ -1,6 +1,7 @@
 package com.pretorian.tv
 
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import androidx.compose.ui.input.key.Key
@@ -451,17 +452,27 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                 // today's matches (only the chosen sports): live first, then by start time
                 val today by load("today_sport") {
                     val en = Prefs.str("sport_enabled", "football").split(',').filter { it.isNotBlank() }
-                    (Sports.lastCombined[0] ?: Sports.day(0)).filter { en.isEmpty() || it.sport in en }.filter { it.state != "post" }
+                    (Sports.lastCombined[0] ?: Sports.day(0)).filter { en.isEmpty() || it.sport in en }.filter { !it.over }
                         .sortedWith(compareBy({ !it.live }, { it.start })).take(15)
                 }
                 (today as? Load.Ok)?.value?.takeIf { it.isNotEmpty() }?.let { ms ->
                     RowTitle("UTAKMICE DANAS")
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(18.dp), contentPadding = PaddingValues(end = 40.dp, top = 6.dp, bottom = 10.dp)) {
-                        items(ms, key = { "td" + it.id }) { e ->
-                            val name = if (e.home != null && e.away != null) e.home.name + " – " + e.away.name else e.title
-                            val sub = if (e.live) listOfNotNull(e.clock, e.home?.score?.let { it + ":" + (e.away?.score ?: "") }).joinToString(" · ")  // i18n-ignore
-                                      else java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(e.start)) + " · " + e.league  // i18n-ignore
-                            WideCard(name, sub, e.home?.logo, "td_" + e.id, null, height = cardH) { SportsMemory.evId = e.id; SportsMemory.day = 0; nav.root(Screen.Sports) }
+                    // goes round: Left on the first → the last (Clear), Right on the last → the first
+                    val w = remember(ms.size) { RowWrap(ms.size + 1) }
+                    val tScope = rememberCoroutineScope()
+                    LazyRow(state = w.state, horizontalArrangement = Arrangement.spacedBy(18.dp), contentPadding = PaddingValues(end = 40.dp, top = 6.dp, bottom = 10.dp)) {
+                        itemsIndexed(ms, key = { _, e -> "td" + e.id }) { i, e ->
+                            MatchKitCard(e, cardH, w.fr(i), w.keys(i, tScope)) { SportsMemory.evId = e.id; SportsMemory.day = 0; nav.root(Screen.Sports) }
+                        }
+                        // last card: take the row off Home (back in Settings › Home)
+                        item {
+                            Focusable(onClick = { HomeRows.toggle("today") }, focusRequester = w.fr(ms.size), shape = Rnd(14.dp), normal = C.Rail, focused = C.Red, zoom = 1.04f,
+                                modifier = Modifier.width(120.dp).height(cardH).border(1.dp, C.Line, Rnd(14.dp)).then(w.keys(ms.size, tScope))) { f ->
+                                Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Ico(R.drawable.lc_x, 20.dp, if (f) C.OnRed else C.Text)
+                                    T("Ukloni", 13.sp, if (f) C.OnRed else C.Text, FontWeight.Bold)
+                                }
+                            }
                         }
                     }
                 }
@@ -932,5 +943,60 @@ fun HomeScenery() {
             contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize(), alpha = if (C.IsLight) 0.35f else 0.55f)
         Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(C.Bg, C.Bg.copy(alpha = 0.85f), C.Bg.copy(alpha = 0.25f)))))
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(C.Bg.copy(alpha = 0.9f), Color.Transparent, C.Bg.copy(alpha = 0.55f)))))
+    }
+}
+
+
+/** "Matches today" card: the two teams' shirts drawn in their colours (crest on the chest when ESPN has one), VS,
+ *  the league on top, name and time (or live minute and score) below. Other sports: the sport's icon. */
+@Composable
+fun MatchKitCard(e: SportEvent, h: Dp, fr: FocusRequester?, keys: Modifier, onClick: () -> Unit) {
+    val two = e.home != null && e.away != null && (e.sport == "football" || e.sport == "basketball" || e.sport == "handball" || e.sport == "volleyball" || e.sport == "hockey")
+    Focusable(onClick = onClick, focusRequester = fr, shape = Rnd(14.dp), normal = C.Rail, focused = C.Red, zoom = 1.04f,
+        modifier = Modifier.width(h * 1.6f).height(h).border(1.dp, C.Line, Rnd(14.dp)).then(keys)) { f ->
+        Column(Modifier.fillMaxSize()) {
+            T(flagEmoji(e.country) + "  " + e.league.uppercase(), 9.sp, if (f) C.OnRed else C.Muted, FontWeight.Bold, modifier = Modifier.padding(start = 10.dp, top = 6.dp, end = 10.dp))  // i18n-ignore
+            Row(Modifier.weight(1f).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                if (two) {
+                    Shirt(e.home!!, h * 0.42f)
+                    T("VS", 12.sp, if (f) C.OnRed else C.Muted, FontWeight.ExtraBold, modifier = Modifier.padding(horizontal = 12.dp))  // i18n-ignore
+                    Shirt(e.away!!, h * 0.42f)
+                } else T(sportEmoji(e.sport), 34.sp, C.Text)
+            }
+            Row(Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.3f)).padding(horizontal = 10.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                val name = if (e.home != null && e.away != null) e.home.name + " – " + e.away.name else e.title
+                T(name, 12.sp, if (f) C.OnRed else C.Text, FontWeight.Bold, modifier = Modifier.weight(1f))
+                val live = e.live
+                val tag = if (live) "● " + listOfNotNull(e.clock, e.home?.score?.let { it + ":" + (e.away?.score ?: "") }).joinToString(" ")  // i18n-ignore
+                          else java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(e.start))  // i18n-ignore
+                Box(Modifier.clip(Rnd(6.dp)).background(if (live) Color(0xFFEF4444) else Color.White).padding(horizontal = 6.dp, vertical = 1.dp)) {
+                    T(tag, 11.sp, if (live) Color.White else Color(0xFF14121C), FontWeight.ExtraBold)
+                }
+            }
+        }
+    }
+}
+
+private fun sportEmoji(s: String) = when (s) { "f1" -> "🏎"; "tennis" -> "🎾"; "motogp" -> "🏍"; "hockey" -> "🏒"; else -> "🏅" }  // i18n-ignore
+
+/** A shirt in the team's colours, with its crest on the chest (not in Lite: no picture). */
+@Composable
+private fun Shirt(t: Team, size: Dp) {
+    val main = t.color ?: Color(0xFF64748B)
+    val trim = t.color2?.takeIf { it != main } ?: if (main.luminance() > 0.6f) Color(0xFF1F2937) else Color.White
+    Box(Modifier.size(size), contentAlignment = Alignment.Center) {
+        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+            val w = size.toPx(); val u = w / 74f
+            val p = androidx.compose.ui.graphics.Path().apply {
+                moveTo(22 * u, 4 * u); lineTo(10 * u, 10 * u); lineTo(2 * u, 26 * u); lineTo(14 * u, 32 * u); lineTo(16 * u, 26 * u)
+                lineTo(16 * u, 74 * u); lineTo(58 * u, 74 * u); lineTo(58 * u, 26 * u); lineTo(60 * u, 32 * u); lineTo(72 * u, 26 * u)
+                lineTo(64 * u, 10 * u); lineTo(52 * u, 4 * u); quadraticBezierTo(37 * u, 14 * u, 22 * u, 4 * u); close()
+            }
+            drawPath(p, main)
+            drawPath(p, trim, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2 * u))
+            val collar = androidx.compose.ui.graphics.Path().apply { moveTo(22 * u, 4 * u); quadraticBezierTo(37 * u, 14 * u, 52 * u, 4 * u) }
+            drawPath(collar, trim, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4 * u))
+        }
+        if (t.logo != null && !Perf.lite) coil.compose.AsyncImage(model = t.logo, contentDescription = null, modifier = Modifier.size(size * 0.3f).offset(y = size * 0.06f))
     }
 }

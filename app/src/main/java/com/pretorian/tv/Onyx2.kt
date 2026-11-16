@@ -811,7 +811,7 @@ fun BulkEditor(nav: Nav) {
         }
         done()
     }
-    val shownGroups = when (filter) { 1 -> groups.filter { !ovr.isHidden(kind, it.id) }; 2 -> groups.filter { ovr.isHidden(kind, it.id) }; else -> groups }
+    val shownGroups = when (filter) { 1 -> groups.filter { !ovr.hiddenNow(kind, it) }; 2 -> groups.filter { ovr.hiddenNow(kind, it) }; else -> groups }
     val shownChans = when (filter) { 1 -> chans.filter { !ovr.isChHidden(it) }; 2 -> chans.filter { ovr.isChHidden(it) }; else -> chans }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -859,7 +859,8 @@ fun BulkEditor(nav: Nav) {
                     itemsIndexed(shownGroups, key = { _, g -> g.id }) { _, g ->
                         val i = groups.indexOf(g)
                         val on = g.id in selG
-                        val hidden = ovr.isHidden(kind, g.id)
+                        val hidden = ovr.hiddenNow(kind, g)
+                        val byParental = hidden && !ovr.isHidden(kind, g.id)
                         Focusable(onClick = { if (on) selG.remove(g.id) else { selC.clear(); selG.add(g.id) } }, onFocus = { focusG = g }, onMenu = { menu = g },
                             shape = Rnd(12.dp), normal = if (on) C.Green.copy(alpha = 0.16f) else if (cur?.id == g.id) C.CardHi else C.Rail, focused = C.Red, zoom = 1.01f,
                             modifier = Modifier.fillMaxWidth().height(40.dp)) { f ->
@@ -867,6 +868,7 @@ fun BulkEditor(nav: Nav) {
                                 CheckBox(on, f)
                                 T("${i + 1}", 11.sp, if (f) C.OnRed else C.Muted, modifier = Modifier.width(22.dp))
                                 T(g.name, 13.sp, if (f) C.OnRed else if (hidden) C.Muted else C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                                if (byParental) Ico(R.drawable.lc_shield_check, 13.dp, if (f) C.OnRed else C.Amber)
                                 if (hidden) Ico(R.drawable.lc_eye_off, 13.dp, if (f) C.OnRed else C.Muted)
                                 if (ovr.isLocked(kind, g.id)) Ico(R.drawable.lc_lock, 13.dp, if (f) C.OnRed else C.Amber)
                             }

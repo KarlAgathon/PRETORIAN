@@ -2008,6 +2008,11 @@ private fun SportV2() {
                 val srcKeys = listOf("sport_src_rights", "sport_src_espn", "sport_src_ai")
                 SetMulti("Izvori", "tvoji kanali (TV vodič) uvijek", listOf("Prava po ligi", "ESPN", "AI"),
                     srcKeys.indices.filter { Prefs.bool(srcKeys[it], true) }.toSet(), all = false) { s2 -> srcKeys.forEachIndexed { i, k -> Prefs.put(k, i in s2) }; changed() }
+                var afDlg by remember { mutableStateOf(false) }
+                SetRow("API-Football ključ", "brži rezultati uživo · besplatno 100 upita dnevno", if (ApiFootball.on) tr("upisan") else tr("nema"),
+                    valueColor = if (ApiFootball.on) C.Green else null) { afDlg = true }
+                if (afDlg) TextDialog("API-Football ključ", "ključ s dashboard.api-football.com", ApiFootball.key, onDismiss = { afDlg = false; SetFocus.tick++ }) { v ->
+                    ApiFootball.key = v; afDlg = false; SportCache.clear(); rev++ }
                 val pv = SportsAI.prov
                 SetRow("AI ključ", pv.site, pv.name + " · " + tr(if (SportsAI.key.isNotBlank()) "upisan" else "nema"),
                     valueColor = if (SportsAI.key.isNotBlank()) C.Green else null) { keyDlg = true }

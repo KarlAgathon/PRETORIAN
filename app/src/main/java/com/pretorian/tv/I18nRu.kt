@@ -2103,4 +2103,7 @@ velike liste i slike se oslobode|большие списки и картинки
 sat se mijenja jednom u minuti|часы меняются раз в минуту
 Nove filmove i serije provjeri jednom dnevno|Проверять новые фильмы и сериалы раз в день
 umjesto svakih 12 sati|вместо каждых 12 часов
+API-Football ključ|Ключ API-Football
+brži rezultati uživo · besplatno 100 upita dnevno|быстрее счёт онлайн · бесплатно 100 запросов в день
+ključ s dashboard.api-football.com|ключ с dashboard.api-football.com
 """.trimIndent()
