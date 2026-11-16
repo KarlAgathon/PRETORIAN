@@ -473,3 +473,5 @@ adb pull
 goal
 skip_recap
 recap
+region
+fav

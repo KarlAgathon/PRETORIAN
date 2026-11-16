@@ -554,7 +554,9 @@ fun NotesPopup(onDismiss: () -> Unit, nav: Nav) {
         if (Notes.list.isEmpty()) T("Nema obavještenja.", 14.sp, C.Muted)
         Notes.list.take(30).forEach { n ->
             val icon = when (n.kind) { "update" -> R.drawable.lc_download; "vod" -> R.drawable.lc_film; "series" -> R.drawable.lc_monitor; else -> R.drawable.lc_bell }
-            OptionRow(n.text, icon, sub = SimpleDateFormat("d. M. HH:mm", Locale.getDefault()).format(Date(n.time)), color = if (n.read) null else C.Amber) {
+            // a finished match is greyed out
+            val done = n.kind == "sport" && GoalNote.ended(GoalNote.idOf(n.id))
+            OptionRow(n.text, icon, sub = SimpleDateFormat("d. M. HH:mm", Locale.getDefault()).format(Date(n.time)), color = if (done) C.Muted else if (n.read) null else C.Amber) {
                 onDismiss(); openNote(nav, n)
             }
         }

@@ -842,7 +842,7 @@ private fun MoreCard(rest: Int, unit: String, w: Dp, h: Dp, fr: FocusRequester?,
 /** Top right of Home: new episodes of series you watch and news of your teams / followed matches. OK opens it. */
 @Composable
 fun HomeAlerts(nav: Nav, width: Dp) {
-    val items = Notes.list.filter { !it.read && (it.kind == "sport" || (it.kind == "series" && it.id.startsWith("ep:"))) }.take(3)
+    val items = Notes.list.filter { !it.read && ((it.kind == "sport" && !GoalNote.endedLongAgo(GoalNote.idOf(it.id))) || (it.kind == "series" && it.id.startsWith("ep:"))) }.take(3)
     if (items.isEmpty()) return
     Column(Modifier.width(width), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items.forEach { n ->

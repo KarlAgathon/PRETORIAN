@@ -1940,4 +1940,10 @@ Sa laptopa (zadnjih 10 padova i zamrzavanja):|С ноутбука (послед�
 PRATIŠ|ВЫ СЛЕДИТЕ
 Preskoči prethodno|Пропустить «Ранее»
 „Previously on…“ na početku epizode, uči se za svaku seriju|«Ранее в сериале…» в начале серии, запоминается для каждого сериала
+Regija|Регион
+Timovi|Команды
+Utakmice ovih država uvijek prve, u Sportu i na Početnoj|Матчи этих стран всегда первыми, в Спорте и на главной
+Traži tim|Поиск команды
+Ukucaj bar 2 slova imena tima|Введите хотя бы 2 буквы названия команды
+Otvori u Sportu|Открыть в Спорте
 """.trimIndent()

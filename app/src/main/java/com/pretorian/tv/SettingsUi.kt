@@ -887,7 +887,7 @@ private fun UpdatePage() {
     }
 }
 
-private val COUNTRIES = listOf("" to "Automatski (po uređaju)", "DE" to "Njemačka", "AT" to "Austrija", "CH" to "Švicarska", "BA" to "Bosna i Hercegovina",
+internal val COUNTRIES = listOf("" to "Automatski (po uređaju)", "DE" to "Njemačka", "AT" to "Austrija", "CH" to "Švicarska", "BA" to "Bosna i Hercegovina",
     "RS" to "Srbija", "HR" to "Hrvatska", "ME" to "Crna Gora", "SI" to "Slovenija", "MK" to "Sjeverna Makedonija", "GB" to "Velika Britanija",
     "IT" to "Italija", "ES" to "Španija", "FR" to "Francuska", "TR" to "Turska", "US" to "SAD")
 
