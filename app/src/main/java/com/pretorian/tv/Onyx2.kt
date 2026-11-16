@@ -567,7 +567,7 @@ private fun NowPanel(ch: Channel?, modifier: Modifier) {
             }
         }
         val cc = c ?: run { T("OK na kanalu: slika ovdje · još jednom OK: cijeli ekran", 12.sp, C.Muted, maxLines = 2); return@Column }
-        val epg by load(cc.url, EpgShift.rev) { Store.byId(ctx, cc.pid)?.let { Repo.epg(it, cc, 4) } ?: emptyList() }
+        val epg by load(cc.url, EpgShift.rev) { Store.byId(ctx, cc.pid)?.let { Repo.epg(it, cc, 8) } ?: emptyList() }
         val list = (epg as? Load.Ok)?.value ?: emptyList()
         val nowT = System.currentTimeMillis()
         val cur = list.firstOrNull { it.start <= nowT && it.end > nowT }
@@ -575,7 +575,7 @@ private fun NowPanel(ch: Channel?, modifier: Modifier) {
         T(cur?.title ?: (if (epg is Load.Loading) "Učitavam program…" else cc.name), 19.sp, C.Text, FontWeight.ExtraBold, maxLines = 2)
         cleanDesc(cur?.desc)?.let { T(it, 11.sp, C.Soft, maxLines = 3) }
         if (cur != null) ThinBar(cur.progress(), C.Text, Modifier.fillMaxWidth(), 3.dp)
-        val next = list.filter { it.start >= (cur?.end ?: nowT) - 60_000 }.take(2)
+        val next = list.filter { it.start >= (cur?.end ?: nowT) - 60_000 }.take(5)
         if (next.isNotEmpty()) Column(Modifier.fillMaxWidth().glass(12.dp).padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             next.forEach { e ->
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
