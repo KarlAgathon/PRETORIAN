@@ -1470,9 +1470,12 @@ fun SetSwitch(title: String, sub: String? = null, on: Boolean, new: Boolean = fa
 
 /** Slider: the row shows the value; OK opens a small window where ◀ ▶ change it, OK or Back closes it.
  *  (◀ ▶ on the row itself move between rows, like everywhere else.) */
+/** which slider popup is open: kept outside the row, so a page that redraws itself on every change (key(rev)) does not close it */
+object SliderOpen { var id by mutableStateOf<String?>(null) }
+
 @Composable
 fun SetSlider(title: String, sub: String?, value: Int, min: Int, max: Int, step: Int, fmt: (Int) -> String = { "$it" }, onChange: (Int) -> Unit) {
-    var open by remember { mutableStateOf(false) }
+    val open = SliderOpen.id == "sl:$title"
     var cur by remember(value) { mutableIntStateOf(value) }
     val id = "sl:$title"
     val fr = setFocusFr(id)
@@ -1483,7 +1486,7 @@ fun SetSlider(title: String, sub: String?, value: Int, min: Int, max: Int, step:
         }
     }
     Focusable(modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).border(1.dp, C.Line, Rnd(12.dp)),
-        onClick = { SetFocus.last = id; open = true }, onFocus = { SetFocus.last = id }, focusRequester = fr,
+        onClick = { SetFocus.last = id; SliderOpen.id = "sl:$title" }, onFocus = { SetFocus.last = id }, focusRequester = fr,
         shape = Rnd(12.dp), normal = C.Rail, focused = C.Red, zoom = 1.01f) { f ->
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 9.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1494,9 +1497,9 @@ fun SetSlider(title: String, sub: String?, value: Int, min: Int, max: Int, step:
             if (sub != null) T(sub, 11.sp, if (f) C.OnRed.copy(alpha = 0.65f) else C.Muted, maxLines = 1)
         }
     }
-    if (open) Popup(title, { open = false; SetFocus.tick++ }, width = 520.dp) {
+    if (open) Popup(title, { SliderOpen.id = null; SetFocus.tick++ }, width = 520.dp) {
         val pfr = remember { FocusRequester() }
-        Focusable(onClick = { open = false; SetFocus.tick++ }, focusRequester = pfr, shape = Rnd(14.dp), normal = C.Card, focused = C.CardHi, zoom = 1f,
+        Focusable(onClick = { SliderOpen.id = null; SetFocus.tick++ }, focusRequester = pfr, shape = Rnd(14.dp), normal = C.Card, focused = C.CardHi, zoom = 1f,
             modifier = Modifier.fillMaxWidth().height(96.dp).onPreviewKeyEvent { e ->
                 if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 when (e.key) {
