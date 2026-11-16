@@ -281,7 +281,7 @@ fun SportMixScreen(nav: Nav) {
     // the chosen sports count everywhere: Live, Coming up, Favourites and Following
     fun inSport(e: SportEvent) = sportsOn.isEmpty() || e.sport in sportsOn
     fun followedEv(e: SportEvent) = MatchFollow.has(e.id) || MyTeams.list().any { t -> t.equals(e.home?.name, true) || t.equals(e.away?.name, true) }
-    fun inTab(e: SportEvent, t: String) = when (t) { "live" -> e.live || e.onAir; "soon" -> e.state == "pre"; "mine" -> followedEv(e); "fav" -> fav(e) && !e.over; else -> e.over }
+    fun inTab(e: SportEvent, t: String) = when (t) { "live" -> e.live; "soon" -> e.state == "pre"; "mine" -> followedEv(e); "fav" -> fav(e) && !e.over; else -> e.over }
     val shown = remember(withCh, tab, SportCache.rev, MyTeams.rev, MatchFollow.rev) {
         withCh.filter { e -> inSport(e) && inTab(e, tab) }
             .sortedWith(if (tab == "mine" || tab == "fav") compareBy({ it.state != "in" }, { it.state == "post" }, { it.start }) else compareBy({ it.fromGuide }, { it.replay }, { !fav(it) }, { it.league }, { it.start }))

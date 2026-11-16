@@ -1,26 +1,7 @@
-PRETORIAN 1.0.25 (beta)
-Pretraga: više ne koči dok se u pozadini čita TV vodič – čitanje vodiča je višestruko brže i lakše za box; kanali, filmovi i serije su tu odmah, emisije iz vodiča stignu zadnje
-Pomak vremena vodiča po kanalu (kao TiviMate): u playeru Više › Pomak vremena, ili drži OK na kanalu – ±5, 10, 30 min, ±1, 2, 3 h, Bez pomaka; pamti se za taj kanal
-Postavke › Izgled › „Fokus kartica“ 20–100 %: koliko je svijetlo polje na kojem stojiš, u svim temama (zamjenjuje Blaga/Jaka)
-Postavke › Izgled: „Prozirnost“ sada stvarno mijenja panele, a „Svjetlina podloge“ posvjetljuje ili zatamnjuje pozadinu u svakoj temi
-TV lista: uska polja emisija više ne gube naslov; ispod linije napretka piše šta slijedi
-Čuvar ekrana više se ne pali dok kanal ide (mala slika ili cijeli ekran) – samo na Početnoj kad ništa ne radiš i kad pauziraš film/seriju
-TV lista: odabrani kanal mirniji – blago obojen red s tankim okvirom u boji teme (Postavke › Izgled › Odabrani kanal: Okvir / Puna boja)
-Postavke › Izgled: „Jačina boje odabranog“ 10–100 % za sve teme (manje = blaže za oči), vrijedi i u TV vodiču
-Prikaz liste kanala: Kompaktni (novo, zadano), Normalni, Veliki i TiviMate mod (grupe lijevo, kanali s programom po satima, bez male slike) – i lista kanala u playeru
-Broj kanala na ekranu do 9
-Emisije široke po trajanju (kratka epizoda uža, dug film širi) – može se isključiti
-Oznaka arhive ↺ na kanalima s gledanjem unazad
-Skok brojem kanala: ukucaj broj na daljinskom i odmah si na kanalu
-Upute na ekranu: par sekundi pa nestanu / uvijek / isključene; „OK = podsjeti me“ više nije na svakoj kartici
-Gornja traka: Lite/Full i A/S kao obične ikone (može i stari izgled s kvadratima)
-Plejer: titlovi se pomjeraju u slobodni dio slike kad je otvorena lista kanala ili vodič
-
-Sve teme: odabrano polje je blaže (bijela postaje svijetlo siva, zlatna mirnija) – Postavke › Izgled › „Boja odabranog“ (Blaga / Jaka)
-TV lista: odabrani kanal je miran red s tankim okvirom u boji teme, a samo odabrana emisija je u boji (ili stara „Puna boja“)
-TV lista: „Prikaz liste kanala“ – Kompaktni (novo, kao TiviMate), Normalni, Veliki ili TiviMate mod (grupe lijevo, kanali s programom po satima, bez male slike); vrijedi i za listu u plejeru
-TV lista: emisije su široke koliko traju; ↺ kod kanala s arhivom; ukucaj broj kanala na daljinskom i odmah si na njemu; do 9 kanala na ekranu
-Upute na ekranu nestanu nakon nekoliko sekundi (ili uvijek / nikad); „OK = podsjeti me“ više ne piše na svakoj kartici
-Gornja traka: Lite/Full i A/S su mirne ikone kao ostale (ili stari obojeni kvadrati)
-Plejer: kad je otvorena lista ili vodič, titl ide u slobodni dio slike i više se ne siječe
-Čuvar ekrana više se ne pali dok kanal ide (mala slika ili cijeli ekran) – samo na Početnoj kad ništa ne radiš ili kad pauziraš film/seriju
+PRETORIAN 1.0.26 (beta)
+Sport › Uživo: samo prave utakmice – izbačen dio „Sada na tvojim kanalima“ koji se pojavljivao i nestajao; oznaka snimka na engleskom je REPLAY
+TV vodič: OK ili dugi OK na kasnijoj emisiji samo uključi/isključi podsjetnik (bez menija); ime grupe iznad datuma, traka se više ne siječe
+TiviMate stil: mala slika gore desno (prvi OK slika, drugi OK cijeli ekran), niži redovi, više kanala
+Grupe bez naslova „TV“ i dugmeta „Channel list“ – više grupa na ekranu; gornji dio bez praznog prostora
+TV lista: manja gornja slika, redovi se ne rastežu (Veliki prikaz manji), desno 5 sljedećih emisija
+Postavke: klizači (npr. Focus card) ostaju otvoreni dok mijenjaš vrijednost
