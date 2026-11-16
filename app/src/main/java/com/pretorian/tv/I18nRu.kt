@@ -1956,4 +1956,5 @@ Države|Страны
 Nema utakmica tvojih favorita u idućih 10 dana · Države ▾ ili dugi OK › Prati tim|Нет матчей ваших избранных в ближайшие 10 дней · Страны ▾ или долгий OK › Следить за командой
 TV:|ТВ:
 Obično prenose:|Обычно показывают:
+Nema utakmica tvojih favorita u idućih 10 dana · ＋ Države ili ＋ Timovi|Нет матчей ваших избранных в ближайшие 10 дней · ＋ Страны или ＋ Команды
 """.trimIndent()

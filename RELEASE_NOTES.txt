@@ -1,7 +1,4 @@
-Sport: novi tab ★ Favoriti – sve utakmice tvojih država (reprezentacija i lige) i timova, uživo i idućih 10 dana
-Sport: buduće utakmice imaju dan i datum (Uto 20:45, 24.11. 18:00), na kartici puni datum
-Sport: ko prenosi – TV kuće bilo gdje (ESPN, AI ako imaš ključ) ili ko obično prenosi tu ligu, i kad nije na tvojoj listi
-Sport: izabrani sportovi vrijede svuda (Uživo, Uskoro, Favoriti, Pratim)
-Sport: OK na malom ekranu = cijeli ekran; Back iz cijelog ekrana vraća tačno na mali ekran ili kanal koji si pustio
-Sport: Back u listi ide na prvu utakmicu, pa na tabove, tek onda izlazi
-Sport: lista Uskoro se ponovo učita ako je prošli put bila prazna (greška mreže), i osvježi se svakih 10 min
+Sport: nakon cijelog ekrana i Back sve ostaje kako je bilo – liste se ne učitavaju ispočetka, samo se tiho osvježe
+Sport: osvježavanje koje vrati praznu listu (greška mreže) više ne briše ono što već imaš
+★ Favoriti: unutra ＋ Države i ＋ Timovi i tvoji favoriti kao dugmad; favoriti i dalje prvi u listi
+Back iz dugmadi favorita vraća na tabove

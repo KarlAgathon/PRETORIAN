@@ -178,6 +178,7 @@ fun SportMixScreen(nav: Nav) {
     val previewFr = remember { FocusRequester() }
     val chipFr = remember { FocusRequester() }
     var listFocus by remember { mutableStateOf(false) }
+    var favRowFocus by remember { mutableStateOf(false) }
     var focusedRow by remember { mutableStateOf<String?>(null) }
     val tabFr = remember { FocusRequester() }
     var menu by remember { mutableStateOf<SportEvent?>(null) }
@@ -192,8 +193,8 @@ fun SportMixScreen(nav: Nav) {
     var loading by remember { mutableStateOf(false) }
     LaunchedEffect(tick, SportCache.rev) {
         if (SportCache.today == null || System.currentTimeMillis() - SportCache.todayAt > 50_000L) {
-            loading = true
-            try { SportCache.today = Sports.day(0); SportCache.todayAt = System.currentTimeMillis() } catch (_: Exception) {}
+            loading = SportCache.today == null
+            try { val r = Sports.day(0); if (r.isNotEmpty() || SportCache.today == null) SportCache.today = r; SportCache.todayAt = System.currentTimeMillis() } catch (_: Exception) {}
             loading = false
         }
         today = SportCache.today
@@ -208,7 +209,8 @@ fun SportMixScreen(nav: Nav) {
                     "fav", "mine" -> Sports.favorites(10, Prefs.str("sport_country").split(',').filter { it.isNotBlank() }.map { it.lowercase() }.toSet())
                     else -> Sports.day(-1)
                 }
-                SportCache.other[tab] = r; SportCache.otherAt[tab] = System.currentTimeMillis()
+                // a refresh that comes back empty never wipes a list you already had
+                if (r.isNotEmpty() || SportCache.other[tab] == null) { SportCache.other[tab] = r; SportCache.otherAt[tab] = System.currentTimeMillis() }
             } catch (_: Exception) {}
             loading = false
         }
@@ -257,6 +259,7 @@ fun SportMixScreen(nav: Nav) {
     }
     BackHandler(enabled = rightFocus || playing != null) { if (rightFocus) focusSel() else playing = null }
     // Back inside the list: first to the top match, then to the tabs; only from the tabs out of Sport
+    BackHandler(enabled = favRowFocus) { scope.launch { tabFr.tryFocus() } }
     BackHandler(enabled = listFocus && !rightFocus && playing == null) {
         val first = shown.firstOrNull()?.id
         if (first != null && focusedRow != first) scope.launch { listState.scrollToItem(0); delay(40); rowFr[first]?.tryFocus() }
@@ -297,11 +300,16 @@ fun SportMixScreen(nav: Nav) {
                 }
                 Chip2(tr("Sportovi") + (if (sportsOn.isEmpty()) "" else " · " + sportsOn.size) + " ▾", false) { pick = "sport" }  // i18n-ignore
                 Chip2(tr("Regija") + " ▾", false) { pick = "region" }  // i18n-ignore
-                Chip2(tr("Države") + (if (favC.isEmpty()) "" else " · " + favC.size) + " ▾", false) { pick = "fav" }  // i18n-ignore
-                Chip2(tr("Timovi") + (if (MyTeams.list().isEmpty()) "" else " · " + MyTeams.list().size) + " ▾", false) { pick = "teams" }  // i18n-ignore
+            }
+            if (tab == "fav") Row(Modifier.onFocusChanged { favRowFocus = it.hasFocus }.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Chip2("＋ " + tr("Države"), false) { pick = "fav" }  // i18n-ignore
+                Chip2("＋ " + tr("Timovi"), false) { pick = "teams" }  // i18n-ignore
+                favC.forEach { c -> Chip2(flagEmoji(c) + " " + tr(COUNTRIES.firstOrNull { it.first.equals(c, true) }?.second ?: c.uppercase()), false) { pick = "fav" } }  // i18n-ignore
+                MyTeams.list().forEach { t -> Chip2("★ " + t, false) { pick = "teams" } }  // i18n-ignore
             }
             if (loading && shown.isEmpty()) Loading("Učitavam utakmice…")
-            else if (shown.isEmpty()) Message(when (tab) { "live" -> "Trenutno nema utakmica uživo"; "soon" -> "Nema utakmica uskoro"; "mine" -> "Ne pratiš nijednu utakmicu · dugi OK na utakmicu › Prati"; "fav" -> "Nema utakmica tvojih favorita u idućih 10 dana · Države ▾ ili dugi OK › Prati tim"; else -> "Nema završenih utakmica" })
+            else if (shown.isEmpty()) Message(when (tab) { "live" -> "Trenutno nema utakmica uživo"; "soon" -> "Nema utakmica uskoro"; "mine" -> "Ne pratiš nijednu utakmicu · dugi OK na utakmicu › Prati"; "fav" -> "Nema utakmica tvojih favorita u idućih 10 dana · ＋ Države ili ＋ Timovi"; else -> "Nema završenih utakmica" })
             else LazyColumn(state = listState, modifier = Modifier.onFocusChanged { listFocus = it.hasFocus }, verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
                 var lastLeague = ""
                 shown.forEachIndexed { i, e ->
