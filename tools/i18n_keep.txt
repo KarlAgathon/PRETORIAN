@@ -518,3 +518,4 @@ look_focus_soft
 tv_focus_pct
 focus_pct
 epgsh_
+text/html

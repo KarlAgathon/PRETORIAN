@@ -1,2 +1,2 @@
-PRETORIAN 1.0.28 (beta)
-Trailer: TizenTube (i TizenTube Cobalt) i SmartTube se sada prepoznaju kad su instalirani
+PRETORIAN 1.0.29 (beta)
+Trailer: TizenTube sada odmah pušta trailer (aplikacija sama nađe video na YouTubeu), više se ne otvara samo početna strana
