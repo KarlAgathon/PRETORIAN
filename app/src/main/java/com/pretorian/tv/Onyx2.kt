@@ -515,7 +515,7 @@ private fun WideHeader(playing: Channel?, on: Channel?, pick: EpgItem?) {
     val ctx = LocalContext.current
     // Settings › Appearance › size of the small picture: a bigger picture leaves room for more of the description (and fewer channels)
     val size = Prefs.long("tv_mini", 1).toInt().coerceIn(0, 2)
-    Row(Modifier.fillMaxWidth().height(when (size) { 0 -> 112.dp; 2 -> 190.dp; else -> 150.dp }).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+    Row(Modifier.fillMaxWidth().height(when (size) { 0 -> 96.dp; 2 -> 156.dp; else -> 124.dp }).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Box(Modifier.fillMaxHeight().aspectRatio(16f / 9f).glass(14.dp)) {
             val cc = playing
             if (cc != null && (Look.previewMode == 2 || PreviewSel.ch?.url == cc.url || TvMemory.preview?.url == cc.url)) PreviewBox(cc, Modifier.fillMaxSize())
