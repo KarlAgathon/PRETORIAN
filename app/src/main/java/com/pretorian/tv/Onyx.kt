@@ -1030,9 +1030,15 @@ fun FollowRow(nav: Nav, h: Dp) {
     var tick by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) { while (true) { delay(60_000); tick++ } }
     // Home must not depend on a visit to Sport: when today's matches are not in memory (app start, playlist refresh), read them quietly here
+    // and keep it fresh in the background while something is followed (every 15 min at most), so followed matches never drop off Home
     LaunchedEffect(Unit) {
-        if (Sports.lastCombined[0] == null && SportCache.today == null && (MatchFollow.list().isNotEmpty() || Prefs.str("sport_teams").isNotBlank() || Prefs.str("sport_nations").isNotBlank())) {
-            try { SportCache.today = Sports.day(0); SportCache.todayAt = System.currentTimeMillis(); SportCache.rev++ } catch (_: Exception) {}
+        while (true) {
+            val follows = MatchFollow.list().isNotEmpty() || Prefs.str("sport_teams").isNotBlank() || Prefs.str("sport_nations").isNotBlank()
+            val empty = Sports.lastCombined[0] == null && SportCache.today == null
+            if (follows && (empty || System.currentTimeMillis() - SportCache.todayAt > 15 * 60_000L)) {
+                try { SportCache.today = Sports.day(0); SportCache.todayAt = System.currentTimeMillis(); SportCache.rev++ } catch (_: Exception) {}
+            }
+            delay(5 * 60_000L)
         }
     }
     val hidden = remember(tick, GoalNote.lastRev) { HomeHide.list() }
