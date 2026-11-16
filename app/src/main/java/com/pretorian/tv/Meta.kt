@@ -566,9 +566,21 @@ object FreeMeta {
         return null
     }
 
-    suspend fun movie(raw: String): String? { val (t, y) = cleanTitle(raw); return memo("m|$t|$y") { wiki(t, y, "film") } }  // i18n-ignore
+    /** Cinemeta (Stremio's open film/series catalog, IMDb data, no key): search by name, then the full description */
+    private fun cinemeta(title: String, year: String?, kind: String): String? {
+        val base = "https://v3-cinemeta.strem.io"  // i18n-ignore
+        val a = JSONObject(Http.request("$base/catalog/$kind/top/search=" + Net.enc(title) + ".json")).optJSONArray("metas") ?: return null  // i18n-ignore
+        val hits = (0 until minOf(a.length(), 6)).mapNotNull { a.optJSONObject(it) }.filter { same(title, it.str("name")) }
+        val best = hits.firstOrNull { year != null && it.str("releaseInfo").startsWith(year) } ?: hits.firstOrNull() ?: return null
+        best.str("description").takeIf { it.length > 40 }?.let { return it }
+        val id = best.str("imdb_id").ifBlank { best.str("id") }.ifBlank { return null }
+        return JSONObject(Http.request("$base/meta/$kind/$id.json")).optJSONObject("meta")?.str("description")?.takeIf { it.length > 40 }  // i18n-ignore
+    }
+    private fun safe(f: () -> String?): String? = try { f() } catch (e: Exception) { null }
+
+    suspend fun movie(raw: String): String? { val (t, y) = cleanTitle(raw); return memo("m|$t|$y") { safe { cinemeta(t, y, "movie") } ?: wiki(t, y, "film") } }  // i18n-ignore
     suspend fun series(raw: String): String? { val (t, y) = cleanTitle(raw)
-        return memo("s|$t") { tvmazeShow(t)?.str("summary")?.let(::strip)?.ifBlank { null } ?: wiki(t, y, "TV series") } }
+        return memo("s|$t") { safe { tvmazeShow(t)?.str("summary")?.let(::strip)?.ifBlank { null } } ?: safe { cinemeta(t, y, "series") } ?: wiki(t, y, "TV series") } }
     suspend fun episode(raw: String, season: Int, num: Int): String? { val (t, _) = cleanTitle(raw)
         return memo("e|$t|$season|$num") {
             val id = tvmazeShow(t)?.optInt("id") ?: return@memo null
