@@ -2183,4 +2183,5 @@ Ukupno %s%%|Всего %s%%
 još oko %s s|осталось около %s с
 još oko %s min|осталось около %s мин
 Nastavi u pozadini|Продолжить в фоне
+EPG link (nije obavezno)|Ссылка EPG (необязательно)
 """.trimIndent()

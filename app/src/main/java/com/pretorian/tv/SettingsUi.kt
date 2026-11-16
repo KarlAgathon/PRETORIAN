@@ -502,6 +502,8 @@ fun AddPlaylistScreen(nav: Nav) {
     var user by remember { mutableStateOf(old?.user ?: "") }
     var pass by remember { mutableStateOf(old?.pass ?: "") }
     var url by remember { mutableStateOf(old?.url ?: "") }
+    val oldEpg = remember { old?.let { o -> EpgSources.list().firstOrNull { it.pid == o.id } } }
+    var epg by remember { mutableStateOf(oldEpg?.url ?: "") }
     var live by remember { mutableStateOf(old?.live ?: true) }
     var vod by remember { mutableStateOf(old?.vod ?: true) }
     var series by remember { mutableStateOf(old?.series ?: true) }
@@ -532,6 +534,7 @@ fun AddPlaylistScreen(nav: Nav) {
                 Field(if (tab == 2) "Korisničko ime (nije obavezno)" else "Korisničko ime", user, { user = it }, Modifier.weight(1f))
                 Field(if (tab == 2) "Lozinka (nije obavezno)" else "Lozinka", pass, { pass = it }, Modifier.weight(1f), password = true)
             }
+            Field("EPG link (nije obavezno)", epg, { epg = it }, Modifier.fillMaxWidth(), KeyboardType.Uri)
             if (tab == 0) Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Box(Modifier.weight(1f)) { ToggleRow("TV kanali", live) { live = it } }
                 Box(Modifier.weight(1f)) { ToggleRow("Filmovi", vod) { vod = it } }
@@ -558,6 +561,15 @@ fun AddPlaylistScreen(nav: Nav) {
                         try {
                             val info = Repo.test(base)
                             val pl = if (base.type != SourceType.M3U) base.copy(exp = info) else base
+                            // EPG typed in the form: kept as this playlist's own guide (default for it), loaded at once
+                            val e = epg.trim()
+                            val epgSrc = when {
+                                e.isBlank() -> { if (oldEpg != null) EpgSources.delete(oldEpg); null }
+                                oldEpg != null && oldEpg.url == e -> null
+                                oldEpg != null -> oldEpg.copy(url = e).also { EpgSources.update(it) }
+                                else -> EpgSources.add(e, pl.id, def = setOf(pl.id))
+                            }
+                            if (epgSrc != null) launch { try { EpgSources.refresh(epgSrc) } catch (_: Exception) {} }
                             if (old != null) {
                                 Store.savePlaylists(ctx, Store.playlists(ctx).map { if (it.id == old.id) pl else it })
                                 Toast.makeText(ctx, tr("Spremljeno"), Toast.LENGTH_SHORT).show()

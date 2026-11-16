@@ -25,7 +25,7 @@ object Look {
     var previewMode by mutableIntStateOf(1)    // small live picture: 0 off, 1 only after OK, 2 by itself when you stop on a channel
     var menuOpacity by mutableIntStateOf(94)   // how solid menus/popups are, in %
     var rowSize by mutableIntStateOf(1)        // channel and group rows: 0 small, 1 medium, 2 large
-    var lang by mutableStateOf("bs")           // app language
+    var lang by mutableStateOf("en")           // app language
     var iconSet by mutableStateOf("lc")        // lc lucide, tb tabler, fl fluent, ms material, ph phosphor, or a downloaded set "dl_<id>"
     var iconStyle by mutableIntStateOf(1)      // variant of the set (thin/normal/bold, outline/filled)
     var corner by mutableIntStateOf(0)         // 0 rounded, 1 slightly rounded, 2 sharp
@@ -71,7 +71,7 @@ object Look {
         previewMode = p.getInt("look_previewmode", 2)
         menuOpacity = p.getInt("look_menuopacity", 94)
         rowSize = p.getInt("look_rowsize", 1)
-        lang = p.getString("app_lang", "bs") ?: "bs"
+        lang = p.getString("app_lang", null) ?: "en"   // a new install starts in English
         iconSet = p.getString("look_iconset", "lc") ?: "lc"
         iconStyle = p.getInt("look_iconstyle", 1)
         corner = p.getInt("look_corner", 0)

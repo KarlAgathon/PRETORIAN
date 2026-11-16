@@ -139,6 +139,7 @@ object Import {
         var n by mutableIntStateOf(0)
         var pct by mutableFloatStateOf(-1f)
         var state by mutableIntStateOf(0)  // 0 waiting, 1 loading, 2 done, 3 failed
+        var err by mutableStateOf<String?>(null)
     }
     var name by mutableStateOf<String?>(null)
     var show by mutableStateOf(false)
@@ -148,9 +149,22 @@ object Import {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     /** playlists added while another one is still loading wait their turn */
     private val queue = ArrayDeque<Pair<Playlist, Boolean>>()
+    private var currentId: String? = null
+
+    /** at start: an active playlist whose movies/series were never put on the box (e.g. added before this version) gets the window too */
+    fun missing(ctx: Context) {
+        try {
+            Store.actives(ctx).filter { it.type == SourceType.XTREAM &&
+                ((it.vod && !CatalogDb.has(it.id, "vod")) || (it.series && !CatalogDb.has(it.id, "series"))) }.forEach { run(it) }
+        } catch (_: Throwable) {}
+    }
 
     fun run(p: Playlist, reset: Boolean = false, onDone: () -> Unit = {}) {
-        if (name != null && !finished) { synchronized(queue) { queue.addLast(p to reset) }; return }
+        if (name != null && !finished) {
+            if (p.id != currentId) synchronized(queue) { if (queue.none { it.first.id == p.id }) queue.addLast(p to reset) }
+            return
+        }
+        currentId = p.id
         val ch = Part("Kanali", R.drawable.lc_tv)
         val mv = if (p.type == SourceType.XTREAM && p.vod) Part("Filmovi", R.drawable.lc_film) else null
         val se = if (p.type == SourceType.XTREAM && p.series) Part("Serije", R.drawable.lc_layers) else null
@@ -163,7 +177,7 @@ object Import {
             try {
                 if (reset) CatalogDb.forgetNow(p.id)
                 ch.state = 1
-                try { ch.n = Repo.allChannels(p).size; ch.pct = 1f; ch.state = 2 } catch (e: Throwable) { ch.state = 3 }
+                try { ch.n = Repo.allChannels(p).size; ch.pct = 1f; ch.state = 2 } catch (e: Throwable) { fail(ch, e) }
                 for ((part, kind) in jobs) {
                     part.state = 1
                     val before = CatalogDb.count(p.id, kind)
@@ -177,7 +191,7 @@ object Import {
                             }
                         }
                         part.pct = 1f; part.state = 2
-                    } catch (e: Throwable) { part.state = 3 }
+                    } catch (e: Throwable) { fail(part, e) }
                 }
             } finally { held.forEach { it.unlock() } }
             Repo.forgetCatalogs(); SearchIndex.clear()
@@ -185,9 +199,15 @@ object Import {
             kotlinx.coroutines.withContext(Dispatchers.Main) { onDone() }
             val next = synchronized(queue) { queue.removeFirstOrNull() }
             if (next != null) { kotlinx.coroutines.withContext(Dispatchers.Main) { name = null; run(next.first, next.second) }; return@launch }
-            delay(2500)
-            if (finished) { show = false; name = null }
+            // all fine: closes by itself; something failed: stays open with the reason until OK
+            if (parts.none { it.state == 3 }) { delay(3000); if (finished) { show = false; name = null } }
         }
+    }
+
+    private fun fail(part: Part, e: Throwable) {
+        part.state = 3; part.err = (e.message ?: e.javaClass.simpleName).take(160)
+        android.util.Log.w("PRETORIAN", "import " + part.label + ": " + part.err, e) // i18n-ignore
+        NewContent.appCtx?.let { CrashLog.archive(it, "import", part.label + "\n" + android.util.Log.getStackTraceString(e)) } // i18n-ignore
     }
 
     /** 0..1 over all parts (channels count little, movies and series most) */
@@ -221,6 +241,7 @@ fun ImportDialog() {
                     T(right, 14.sp, if (p.state == 3) C.Danger else if (p.state == 2) C.Green else C.Soft, FontWeight.SemiBold)
                 }
                 Bar(p)
+                p.err?.let { T(it, 12.sp, C.Danger, maxLines = 2) }
             }
         }
         Spacer(Modifier.height(4.dp))
@@ -235,7 +256,7 @@ fun ImportDialog() {
             else -> trf("Ukupno %s%%", (all * 100).toInt())
         }
         T(status, 15.sp, if (Import.finished) C.Green else C.Text, FontWeight.Bold)
-        Button(if (Import.finished) "U redu" else "Nastavi u pozadini", R.drawable.lc_check, primary = true) { Import.show = false }
+        Button(if (Import.finished) "U redu" else "Nastavi u pozadini", R.drawable.lc_check, primary = true) { Import.show = false; if (Import.finished) Import.name = null }
     }
 }
 

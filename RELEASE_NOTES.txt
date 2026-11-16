@@ -1,4 +1,4 @@
-PRETORIAN 1.0.30 (beta)
-Nova playlista se odmah učitava na box (kanali, filmovi, serije) uz prozor s napretkom: procenat i preostalo vrijeme
-Filmovi i serije se čuvaju u bazi na boxu: pretraga i ostalo rade odmah, bez ponovnog skidanja
-Osvježavanje ide tiho u pozadini, stari podaci rade dok se novi ne skinu
+PRETORIAN 1.0.31 (beta)
+Dodaj playlistu: novo polje EPG link (nije obavezno)
+Nova instalacija počinje na engleskom jeziku
+Prozor s učitavanjem playliste: ostaje otvoren i pokazuje razlog ako nešto ne uspije; pojavi se i pri pokretanju ako filmovi/serije još nisu na boxu
