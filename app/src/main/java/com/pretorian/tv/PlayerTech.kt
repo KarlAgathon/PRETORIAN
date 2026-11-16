@@ -104,3 +104,65 @@ object Afr {
         } catch (_: Throwable) {}
     }
 }
+
+/** Link to a past show (archive / catch-up): Xtream's timeshift, or the M3U list's catchup template. */
+object Catchups {
+    fun has(p: Playlist?, ch: Channel): Boolean = ch.archive > 0 && p != null &&
+        (p.type == SourceType.XTREAM || (p.type == SourceType.M3U && ch.catchup != null && Tech.m3uCatchup))
+
+    fun url(p: Playlist?, ch: Channel, e: EpgItem): String? {
+        if (p == null) return null
+        if (p.type == SourceType.XTREAM) return Xtream(p).timeshiftUrl(ch.id, e)
+        val cu = ch.catchup ?: return null
+        if (!Tech.m3uCatchup) return null
+        val kind = cu.substringBefore('|'); val src = cu.substringAfter('|', "")
+        val start = e.start / 1000; val end = e.end / 1000; val now = System.currentTimeMillis() / 1000
+        fun fill(t: String): String {
+            var r = t
+            val utc = java.util.TimeZone.getTimeZone("UTC") // i18n-ignore
+            fun f(p: String, z: java.util.TimeZone? = null) = java.text.SimpleDateFormat(p, java.util.Locale.US).apply { if (z != null) timeZone = z }.format(java.util.Date(e.start))
+            val pairs = listOf(
+                "{utc}" to "$start", "\${start}" to "$start", "{start}" to "$start", "{utcend}" to "$end", "\${end}" to "$end", "{end}" to "$end", // i18n-ignore
+                "{lutc}" to "$now", "\${now}" to "$now", "{now}" to "$now", "\${timestamp}" to "$now", "{timestamp}" to "$now", // i18n-ignore
+                "{duration}" to "${end - start}", "\${duration}" to "${end - start}", "{offset}" to "${now - start}", "\${offset}" to "${now - start}", // i18n-ignore
+                "{Y}" to f("yyyy"), "{m}" to f("MM"), "{d}" to f("dd"), "{H}" to f("HH"), "{M}" to f("mm"), "{S}" to f("ss"), // i18n-ignore
+                "{utc:YmdHMS}" to f("yyyyMMddHHmmss", utc), "{(b)YmdHMS}" to f("yyyyMMddHHmmss"), // i18n-ignore
+            )
+            pairs.forEach { (k, v) -> r = r.replace(k, v) }
+            return r
+        }
+        return when (kind) {
+            "default" -> if (src.isNotBlank()) fill(src) else null // i18n-ignore
+            "append" -> if (src.isNotBlank()) ch.url + fill(src) else null // i18n-ignore
+            "shift", "timeshift" -> ch.url + (if ('?' in ch.url) "&" else "?") + "utc=$start&lutc=$now" // i18n-ignore
+            "flussonic", "flussonic-hls", "fs" -> { // i18n-ignore
+                val base = ch.url.substringBeforeLast('/')
+                if (ch.url.contains(".m3u8")) "$base/index-$start-${end - start}.m3u8" else "$base/archive-$start-${end - start}.ts" // i18n-ignore
+            }
+            else -> if (src.isNotBlank()) fill(if (src.startsWith("http")) src else ch.url + src) else null
+        }
+    }
+}
+
+/** A channel that does not play: the same channel elsewhere (same guide id, or the same name without "HD", "VIP", country prefix…). */
+object StreamBackup {
+    private val prefix = Regex("^[\\p{L}]{2,4}\\s*[|:]\\s*")
+    private val noise = Regex("\\b(fhd|uhd|hd|sd|4k|hevc|h265|h\\.265|vip|raw|backup|bkp|alt|50fps|60fps|hq|lq)\\b")
+    fun key(name: String): String =
+        Sports.norm(name.replace(prefix, "")).replace(noise, " ").replace(Regex("[^\\p{L}\\p{N}]+"), "")
+
+    suspend fun find(ctx: android.content.Context, ch: Channel, tried: Set<String>): Channel? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val k = key(ch.name); val epg = ch.epg?.lowercase()?.ifBlank { null }
+        if (k.length < 2 && epg == null) return@withContext null
+        val pls = Store.actives(ctx)
+        // the channel's own playlist first (another copy there), then the others
+        val ordered = pls.sortedBy { if (it.id == ch.pid) 0 else 1 }
+        for (p in ordered) {
+            val all = try { Repo.allChannels(p) } catch (e: Exception) { continue }
+            val hit = all.firstOrNull { it.url !in tried && it.url != ch.url && epg != null && it.epg?.lowercase() == epg && key(it.name) == k }
+                ?: all.firstOrNull { it.url !in tried && it.url != ch.url && k.length >= 3 && key(it.name) == k }
+            if (hit != null) return@withContext hit
+        }
+        null
+    }
+}

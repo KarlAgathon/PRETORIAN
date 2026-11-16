@@ -334,8 +334,9 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
                             // on what is on now: straight to full screen, no question; past or coming shows: their menu
                             if (pr != null && pr.end <= t && ch.archive > 0) {
                                 val p = Store.byId(ctx, ch.pid)
-                                if (p != null) gate.run("c:${ch.url}", Ovr(ctx, ch.pid).isChLocked(ch)) {
-                                    Preview.stop(); nav.push(Screen.Player(listOf(PlayItem(pr.title, Xtream(p).timeshiftUrl(ch.id, pr), ch.logo, ch.name, null)), 0, live = false))
+                                val u = Catchups.url(p, ch, pr)
+                                if (p != null && u != null) gate.run("c:${ch.url}", Ovr(ctx, ch.pid).isChLocked(ch)) {
+                                    Preview.stop(); nav.push(Screen.Player(listOf(PlayItem(pr.title, u, ch.logo, ch.name, null)), 0, live = false))
                                 }
                             } else if (ListStyle.tivimate && (pr == null || (pr.start <= t && pr.end > t)) && PreviewSel.ch?.url != ch.url && !(Look.previewMode == 2 && !(Perf.lite && !Prefs.bool("lite_preview")))) {
                                 // TiviMate style: first OK starts the small picture in the corner, the next OK goes full screen
@@ -482,7 +483,8 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
                     if (ch.archive > 0 && pr != null) OptionRow("Gledaj od početka (arhiva)", R.drawable.lc_history, color = C.Green) {
                         detail = null
                         val p = Store.byId(ctx, ch.pid)
-                        if (p != null) { Preview.stop(); nav.push(Screen.Player(listOf(PlayItem(pr.title, Xtream(p).timeshiftUrl(ch.id, pr), ch.logo, ch.name, null)), 0, live = false)) }
+                        val u = Catchups.url(p, ch, pr)
+                        if (p != null && u != null) { Preview.stop(); nav.push(Screen.Player(listOf(PlayItem(pr.title, u, ch.logo, ch.name, null)), 0, live = false)) }
                     }
                     OptionRow("Gledaj kanal sada", R.drawable.lc_play) { detail = null; play(ch) }
                 }

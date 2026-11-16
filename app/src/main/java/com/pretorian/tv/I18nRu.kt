@@ -2209,4 +2209,7 @@ Premotavanje unazad|Перемотка назад
 ◀◀ na kanalima s arhivom (od providera)|◀◀ на каналах с архивом (от провайдера)
 Arhiva za M3U liste|Архив для списков M3U
 kad lista ima catchup oznake|когда в списке есть метки catchup
+Ovaj kanal nema arhivu za premotavanje|У этого канала нет архива для перемотки
+◀◀ %s min iza uživo|◀◀ на %s мин позади эфира
+Kanal ne radi · prebacujem na rezervni: %s|Канал не работает · переключаю на резервный: %s
 """.trimIndent()

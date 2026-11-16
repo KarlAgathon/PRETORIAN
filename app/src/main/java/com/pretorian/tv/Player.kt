@@ -239,6 +239,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     var retried by remember { mutableStateOf(false) }
     var retryToken by remember { mutableIntStateOf(0) }
     var reconnect by remember { mutableIntStateOf(0) }          // live: attempt 1..3 of getting the stream back
+    val backupTried = remember { HashSet<String>() }             // links already tried as backup for this channel
+    var shiftFrom by remember { mutableLongStateOf(0L) }          // live: ◀◀ in the archive, 0 = live
     var digits by remember { mutableStateOf("") }              // channel number typed on the remote
     var digitTick by remember { mutableIntStateOf(0) }
     var prevIndex by remember { mutableIntStateOf(-1) }
@@ -346,6 +348,24 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         }
     }
 
+    /** ◀◀ / ▶▶ on a live channel with archive: 5 minutes per press through the provider's archive; past "now" = live again */
+    fun liveShift(dir: Int) {
+        val cur = items.getOrNull(index) ?: return
+        val ch = cur.channel ?: return
+        if (!Tech.rewind || !Catchups.has(p, ch)) { Toast.makeText(ctx, tr("Ovaj kanal nema arhivu za premotavanje"), Toast.LENGTH_SHORT).show(); return }
+        val now = System.currentTimeMillis()
+        val base = if (shiftFrom > 0) shiftFrom + (player.currentPosition.coerceAtLeast(0)) else now
+        val to = (base + dir * 5 * 60_000L).coerceAtLeast(now - ch.archive * 86_400_000L)
+        if (to >= now - 30_000L) {
+            shiftFrom = 0L; loadMedia(cur, null, 0L)
+            Toast.makeText(ctx, tr("Uživo"), Toast.LENGTH_SHORT).show(); return
+        }
+        val u = Catchups.url(p, ch, EpgItem("", null, to, now + 3 * 3600_000L)) ?: return
+        shiftFrom = to
+        loadMedia(cur.copy(url = u), null, 0L)
+        Toast.makeText(ctx, trf("◀◀ %s min iza uživo", ((now - to) / 60_000).toInt()), Toast.LENGTH_SHORT).show()
+    }
+
     DisposableEffect(Unit) {
         val l = object : Player.Listener {
             override fun onPlayerError(e: PlaybackException) {
@@ -353,7 +373,23 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 if (Recover.on && reconnect < 4) { reconnect++; Stats.recovery(); StreamLog.event(if (reconnect == 1) "freeze" else "x", items.getOrNull(index)?.title ?: ""); StreamLog.event("try", items.getOrNull(index)?.title ?: ""); StreamLog.add(listOf(items.getOrNull(index)?.title ?: "", " · ", e.errorCodeName.removePrefix("ERROR_CODE_"), " · ", trf("spajam ponovo (%s/4)", reconnect)).joinToString("")); retryToken++ }  // i18n-ignore
                 else if (!Recover.on && s.live && reconnect < 3) { reconnect++; retryToken++ }
                 else if (!Recover.on && !s.live && !retried) { retried = true; retryToken++ }
-                else { reconnect = 0; error = errorText(e, s.live) }
+                else {
+                    reconnect = 0
+                    val cur = items.getOrNull(index)
+                    // Settings › Player › Backup stream: the same channel from another playlist (or another copy in this one)
+                    if (s.live && Tech.backup && cur?.channel != null && shiftFrom == 0L) {
+                        backupTried += cur.url
+                        playerScope.launch {
+                            val alt = try { StreamBackup.find(ctx, cur.channel, backupTried) } catch (_: Exception) { null }
+                            if (alt != null) {
+                                backupTried += alt.url
+                                Toast.makeText(ctx, trf("Kanal ne radi · prebacujem na rezervni: %s", alt.name), Toast.LENGTH_LONG).show()
+                                items = items.toMutableList().also { l -> l[index] = cur.copy(url = alt.url, channel = alt) }
+                                loadMedia(items[index], null, 0L)
+                            } else error = errorText(e, s.live)
+                        }
+                    } else error = errorText(e, s.live)
+                }
             }
             override fun onPlaybackStateChanged(state: Int) {
                 buffering = state == Player.STATE_BUFFERING
@@ -402,6 +438,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         error = null; retried = false; showInfo = true; videoH = 0
         val cur = items[index]
         AudioDelay.use(cur.url)   // sound delay kept for this channel / film
+        if (cur.channel?.url != items.getOrNull(prevIndex)?.channel?.url) backupTried.clear()
+        shiftFrom = 0L
         // a subtitle fixed with SYNC earlier for this film comes back by itself
         subFile = cur.subFile ?: if (!s.live) SubSync.kept(cur.url) else null
         val saved = if (!s.live) Watch.get(ctx, cur.url) else null
@@ -419,6 +457,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
               else if (s.live) when (reconnect) { 2 -> 5000L; 3 -> 10_000L; else -> 2000L } else 2000L)
         // the last try is the hand trick: close the stream completely and open it again, like going to another channel and back
         if (Recover.on && reconnect >= 3) { try { player.stop(); player.clearMediaItems() } catch (_: Exception) {}; delay(400) }
+        shiftFrom = 0L
         loadMedia(items[index], subFile, if (s.live) 0L else player.currentPosition)
     }
     // the guide of this channel was moved: now / next in the info bar follow at once
@@ -541,12 +580,21 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                     // ▼ opens the channel options (the bar); CH− changes the channel
                     Key.DirectionDown, Key.ChannelDown -> if (s.live && e.key == Key.ChannelDown) { index = (index + 1) % n; true }
                         else { bar = true; showInfo = true; true }
-                    Key.DirectionLeft, Key.MediaRewind -> if (!s.live) { player.seekTo((player.currentPosition - step).coerceAtLeast(0)); showInfo = true; true }
+                    // live with archive: ◀◀ goes 5 minutes back through the provider's archive, ▶▶ forward (back to live at the end)
+                    Key.MediaRewind -> if (!s.live) { player.seekTo((player.currentPosition - step).coerceAtLeast(0)); showInfo = true; true }
+                        else { liveShift(-1); true }
+                    Key.MediaFastForward -> if (!s.live) { player.seekTo(player.currentPosition + step); showInfo = true; true }
+                        else { liveShift(1); true }
+                    Key.DirectionLeft -> if (!s.live) { player.seekTo((player.currentPosition - step).coerceAtLeast(0)); showInfo = true; true }
                         else { side = "channels"; showInfo = false; true }
-                    Key.DirectionRight, Key.MediaFastForward -> if (!s.live) { player.seekTo(player.currentPosition + step); showInfo = true; true }
+                    Key.DirectionRight -> if (!s.live) { player.seekTo(player.currentPosition + step); showInfo = true; true }
                         else { side = "epg"; showInfo = false; true }
+                    Key.MediaPause, Key.MediaPlay -> { if (!s.live || Tech.livePause) { if (e.key == Key.MediaPause) player.pause() else player.play() }; showInfo = true; true }
                     Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.MediaPlayPause -> {
-                        if (s.live) { if (e.key != Key.MediaPlayPause) { showInfo = true; bar = true } else showInfo = true }
+                        if (s.live) {
+                            if (e.key != Key.MediaPlayPause) { showInfo = true; bar = true }
+                            else { if (Tech.livePause) { if (player.isPlaying) player.pause() else player.play() }; showInfo = true }
+                        }
                         else { if (player.isPlaying) player.pause() else player.play(); showInfo = true }
                         true
                     }

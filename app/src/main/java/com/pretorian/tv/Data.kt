@@ -55,7 +55,9 @@ data class Playlist(
 }
 
 data class Category(val id: String, val name: String)
-data class Channel(val id: String, val num: Int, val name: String, val logo: String?, val group: String, val url: String, val epg: String? = null, val pid: String = "", val archive: Int = 0)
+data class Channel(val id: String, val num: Int, val name: String, val logo: String?, val group: String, val url: String, val epg: String? = null, val pid: String = "", val archive: Int = 0,
+                   /** M3U archive: "kind|template" from catchup / catchup-source (null = none) */
+                   val catchup: String? = null)
 data class Vod(val id: String, val name: String, val poster: String?, val rating: String?, val url: String, val added: Long = 0)
 data class SeriesItem(val id: String, val name: String, val cover: String?, val plot: String?, val rating: String?, val added: Long = 0)
 data class Episode(val id: String, val season: Int, val num: Int, val title: String, val url: String, val plot: String?,
@@ -493,9 +495,18 @@ object M3u {
         var epgId: String? = null
         var group = "Ostalo"
         var pending = false
+        var cuKind: String? = null; var cuSrc: String? = null; var cuDays = 0
+        var headKind: String? = null; var headSrc: String? = null; var headDays = 0
         text.lineSequence().forEach { raw ->
             val line = raw.trim()
-            if (line.startsWith("#EXTINF", true)) {
+            if (line.startsWith("#EXTM3U", true)) {
+                // catch-up for the whole list (some lists put it in the header)
+                headKind = (attr(line, "catchup") ?: attr(line, "catchup-type"))?.lowercase()
+                headSrc = attr(line, "catchup-source"); headDays = attr(line, "catchup-days")?.toIntOrNull() ?: 0
+            } else if (line.startsWith("#EXTINF", true)) {
+                cuKind = (attr(line, "catchup") ?: attr(line, "catchup-type"))?.lowercase() ?: headKind
+                cuSrc = attr(line, "catchup-source") ?: headSrc
+                cuDays = attr(line, "catchup-days")?.toIntOrNull() ?: attr(line, "timeshift")?.toIntOrNull()?.let { (it + 23) / 24 } ?: headDays
                 val lastQuote = line.lastIndexOf('"').coerceAtLeast(0)
                 val comma = line.indexOf(',', lastQuote)
                 name = if (comma >= 0) line.substring(comma + 1).trim() else line
@@ -504,7 +515,9 @@ object M3u {
                 group = attr(line, "group-title") ?: "Ostalo"
                 pending = true
             } else if (line.isNotEmpty() && !line.startsWith("#") && pending) {
-                out.add(Channel(out.size.toString(), out.size + 1, name, logo, group, line, epgId))
+                val cu = cuKind?.takeIf { it.isNotBlank() && it != "none" }?.let { k -> k + "|" + (cuSrc ?: "") }
+                out.add(Channel(out.size.toString(), out.size + 1, name, logo, group, line, epgId,
+                    archive = if (cu != null) cuDays.coerceIn(1, 14) else 0, catchup = cu))
                 pending = false
             }
         }
@@ -600,9 +613,9 @@ object Repo {
     private fun liveFile(key: String) = diskDir?.let { java.io.File(it, "live_" + key.hashCode().toUInt().toString(16) + ".json") }
     private fun catJson(l: List<Category>) = JSONArray().apply { l.forEach { put(JSONArray().put(it.id).put(it.name)) } }.toString()
     private fun catFrom(t: String) = JSONArray(t).let { a -> (0 until a.length()).map { a.getJSONArray(it).let { x -> Category(x.getString(0), x.getString(1)) } } }
-    private fun chJson(l: List<Channel>) = JSONArray().apply { l.forEach { c -> put(JSONArray().put(c.id).put(c.num).put(c.name).put(c.logo ?: "").put(c.group).put(c.url).put(c.epg ?: "").put(c.pid).put(c.archive)) } }.toString()
+    private fun chJson(l: List<Channel>) = JSONArray().apply { l.forEach { c -> put(JSONArray().put(c.id).put(c.num).put(c.name).put(c.logo ?: "").put(c.group).put(c.url).put(c.epg ?: "").put(c.pid).put(c.archive).put(c.catchup ?: "")) } }.toString()
     private fun chFrom(t: String) = JSONArray(t).let { a -> (0 until a.length()).map { a.getJSONArray(it).let { x ->
-        Channel(x.getString(0), x.getInt(1), x.getString(2), x.getString(3).ifBlank { null }, x.getString(4), x.getString(5), x.getString(6).ifBlank { null }, x.getString(7), x.getInt(8)) } } }
+        Channel(x.getString(0), x.getInt(1), x.getString(2), x.getString(3).ifBlank { null }, x.getString(4), x.getString(5), x.getString(6).ifBlank { null }, x.getString(7), x.getInt(8), x.optString(9).ifBlank { null }) } } }
 
     @Suppress("UNCHECKED_CAST")
     private suspend fun <T> disk(key: String, write: (T) -> String, read: (String) -> T, load: () -> T): T = withContext(Dispatchers.IO) {

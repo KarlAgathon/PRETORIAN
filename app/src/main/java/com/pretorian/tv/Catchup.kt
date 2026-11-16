@@ -40,8 +40,9 @@ import java.util.Locale
 fun CatchupScreen(nav: Nav) {
     val ctx = LocalContext.current
     val chans by load(Unit) {
-        Store.actives(ctx).filter { it.type == SourceType.XTREAM }.flatMap { p -> try { Repo.allChannels(p) } catch (e: Exception) { emptyList() } }
-            .filter { it.archive > 0 }.distinctBy { it.url }
+        Store.actives(ctx).filter { it.type == SourceType.XTREAM || (it.type == SourceType.M3U && Tech.m3uCatchup) }
+            .flatMap { p -> try { Repo.allChannels(p).filter { Catchups.has(p, it) } } catch (e: Exception) { emptyList() } }
+            .distinctBy { it.url }
     }
     var q by remember { mutableStateOf("") }
     var ch by remember { mutableStateOf<Channel?>(null) }
@@ -96,7 +97,8 @@ private fun Archive(c: Channel, day: Int, onDay: (Int) -> Unit, nav: Nav) {
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             val x = Xtream(p)
             val now = System.currentTimeMillis()
-            val a = try { x.archive(ch.id) } catch (e: Exception) { emptyList() }
+            // M3U archive: the past shows come from the guide (no archive table at the provider)
+            val a = if (p.type != SourceType.XTREAM) emptyList() else try { x.archive(ch.id) } catch (e: Exception) { emptyList() }
             if (a.any { it.end <= now && it.archived }) a
             else {
                 // the archive table is empty: take past shows from the guide (own EPG sources first, then the provider's XMLTV)
@@ -105,7 +107,7 @@ private fun Archive(c: Channel, day: Int, onDay: (Int) -> Unit, nav: Nav) {
                     val id = ch.epg?.lowercase()?.ifBlank { null } ?: return@firstNotNullOfOrNull null
                     try { Xmltv.read(url, setOf(id), now - days * 86_400_000L, now).filter { it.end <= now }.ifEmpty { null } } catch (e: Exception) { null }
                 }?.map { EpgItem(it.title, it.desc, it.start, it.end, null, true) }
-                own ?: x.archiveFromGuide(ch.epg, days).ifEmpty { throw Exception(tr("Provider za ovaj kanal ne šalje listu arhiviranih emisija.")) }
+                own ?: (if (p.type == SourceType.XTREAM) x.archiveFromGuide(ch.epg, days) else emptyList()).ifEmpty { throw Exception(tr("Provider za ovaj kanal ne šalje listu arhiviranih emisija.")) }
             }
         }
     }
@@ -137,7 +139,7 @@ private fun Archive(c: Channel, day: Int, onDay: (Int) -> Unit, nav: Nav) {
                     items(items, key = { it.start }) { e ->
                         Focusable(modifier = Modifier.fillMaxWidth().height(66.dp), onClick = {
                             Preview.stop()
-                            val url = Xtream(p).timeshiftUrl(ch.id, e)
+                            val url = Catchups.url(p, ch, e) ?: return@Focusable
                             nav.push(Screen.Player(listOf(PlayItem(e.title, url, ch.logo, ch.name + " · " + e.times())), 0, live = false))
                         }, normal = C.Card, zoom = 1.01f) { f ->
                             Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically,

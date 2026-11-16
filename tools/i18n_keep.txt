@@ -519,3 +519,7 @@ tv_focus_pct
 focus_pct
 epgsh_
 text/html
+catchup
+catchup-type
+catchup-source
+catchup-days
