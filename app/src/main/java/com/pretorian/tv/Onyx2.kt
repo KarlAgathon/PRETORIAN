@@ -201,69 +201,74 @@ fun OnyxTv(nav: Nav, onGuide: () -> Unit) {
             val focusables = (rows as? Load.Ok)?.value?.filter { it !is TRow.Title } ?: emptyList()
             var upJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
             val wrapScope = rememberCoroutineScope()
-            Column(Modifier.width(196.dp).fillMaxHeight().glassSide().padding(vertical = 8.dp).onPreviewKeyEvent { e ->
-                if (e.type != KeyEventType.KeyDown || focusables.size < 2) return@onPreviewKeyEvent false
-                val all = (rows as? Load.Ok)?.value ?: return@onPreviewKeyEvent false
-                val first = focusables.first().id; val last = focusables.last().id
-                when {
-                    e.key == Key.DirectionUp && st.focusKey == first -> {
-                        val waiting = upJob
-                        if (waiting != null && waiting.isActive) { waiting.cancel(); upJob = null; false }   // second quick ▲: on to the top bar
-                        else {
-                            // one ▲: after a short moment (no second ▲) the last group takes the focus
-                            upJob = wrapScope.launch { delay(450); st.focusKey = last; gState.scrollToItem(all.lastIndex); st.refocus++; upJob = null }
-                            true
+            // in the channels the groups slide away (more room); Left from the channels brings them back
+            androidx.compose.animation.AnimatedVisibility(visible = !inChannels || st.group == null,
+                enter = if (Perf.lite) androidx.compose.animation.EnterTransition.None else androidx.compose.animation.expandHorizontally() + androidx.compose.animation.fadeIn(),
+                exit = if (Perf.lite) androidx.compose.animation.ExitTransition.None else androidx.compose.animation.shrinkHorizontally() + androidx.compose.animation.fadeOut()) {
+                Column(Modifier.width(196.dp).fillMaxHeight().glassSide().padding(vertical = 8.dp).onPreviewKeyEvent { e ->
+                    if (e.type != KeyEventType.KeyDown || focusables.size < 2) return@onPreviewKeyEvent false
+                    val all = (rows as? Load.Ok)?.value ?: return@onPreviewKeyEvent false
+                    val first = focusables.first().id; val last = focusables.last().id
+                    when {
+                        e.key == Key.DirectionUp && st.focusKey == first -> {
+                            val waiting = upJob
+                            if (waiting != null && waiting.isActive) { waiting.cancel(); upJob = null; false }   // second quick ▲: on to the top bar
+                            else {
+                                // one ▲: after a short moment (no second ▲) the last group takes the focus
+                                upJob = wrapScope.launch { delay(450); st.focusKey = last; gState.scrollToItem(all.lastIndex); st.refocus++; upJob = null }
+                                true
+                            }
                         }
+                        e.key == Key.DirectionDown && st.focusKey == last -> { st.focusKey = first; wrapScope.launch { gState.scrollToItem(0) }; st.refocus++; true }
+                        else -> false
                     }
-                    e.key == Key.DirectionDown && st.focusKey == last -> { st.focusKey = first; wrapScope.launch { gState.scrollToItem(0) }; st.refocus++; true }
-                    else -> false
-                }
-            }) {
-                when (val r = rows) {
-                    is Load.Loading -> Loading("")
-                    is Load.Err -> Message("Greška", r.message)
-                    is Load.Ok -> LazyColumn(state = gState, contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        items(r.value, key = { it.id }) { row ->
-                            when (row) {
-                                is TRow.Title -> Kicker(row.t, modifier = Modifier.padding(start = 10.dp, top = 8.dp, bottom = 4.dp))
-                                is TRow.Grp -> {
-                                    val g = row.ref
-                                    val sel = st.group?.key == g.key
-                                    val locked = g.pid?.let { Ovr(ctx, it).isLocked("live", g.cat.id) } ?: false
-                                    val n = when {
-                                        g.cat.id == RECENT_GROUP -> Recent.list().size
-                                        g.pid == null -> Favs.channels(favListId(g.cat.id)).size
-                                        else -> counts[g.cat.id]
-                                    }
-                                    Focusable(modifier = Modifier.fillMaxWidth().height(34.dp), shape = Rnd(10.dp),
-                                        onClick = { openGroup(ctx, st, g); inChannels = true; enterTick++ },
-                                        onFocus = { st.focusKey = row.id; focusedGroup = g; inChannels = false },
-                                        onMenu = if (Lock.simple || g.cat.id == ALL_GROUP || g.cat.id == RECENT_GROUP) null else ({ st.focusKey = row.id; st.groupMenu = g }),
-                                        focusRequester = if (row.id == st.focusKey) gFr else null,
-                                        normal = if (sel) C.CardHi else Color.Transparent, focused = C.Red, zoom = 1f) { f ->
-                                        Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                            T(g.cat.name, 13.sp, if (f) C.OnRed else if (sel) C.Text else C.Soft, if (sel || f) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
-                                            if (locked) Ico(R.drawable.lc_lock, 12.dp, if (f) C.OnRed else C.Muted)
-                                            if (n != null) T(fmtNum(n), 11.sp, if (f) C.OnRed.copy(alpha = 0.7f) else C.Muted)
+                }) {
+                    when (val r = rows) {
+                        is Load.Loading -> Loading("")
+                        is Load.Err -> Message("Greška", r.message)
+                        is Load.Ok -> LazyColumn(state = gState, contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            items(r.value, key = { it.id }) { row ->
+                                when (row) {
+                                    is TRow.Title -> Kicker(row.t, modifier = Modifier.padding(start = 10.dp, top = 8.dp, bottom = 4.dp))
+                                    is TRow.Grp -> {
+                                        val g = row.ref
+                                        val sel = st.group?.key == g.key
+                                        val locked = g.pid?.let { Ovr(ctx, it).isLocked("live", g.cat.id) } ?: false
+                                        val n = when {
+                                            g.cat.id == RECENT_GROUP -> Recent.list().size
+                                            g.pid == null -> Favs.channels(favListId(g.cat.id)).size
+                                            else -> counts[g.cat.id]
+                                        }
+                                        Focusable(modifier = Modifier.fillMaxWidth().height(34.dp), shape = Rnd(10.dp),
+                                            onClick = { openGroup(ctx, st, g); inChannels = true; enterTick++ },
+                                            onFocus = { st.focusKey = row.id; focusedGroup = g; inChannels = false },
+                                            onMenu = if (Lock.simple || g.cat.id == ALL_GROUP || g.cat.id == RECENT_GROUP) null else ({ st.focusKey = row.id; st.groupMenu = g }),
+                                            focusRequester = if (row.id == st.focusKey) gFr else null,
+                                            normal = if (sel) C.CardHi else Color.Transparent, focused = C.Red, zoom = 1f) { f ->
+                                            Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                T(g.cat.name, 13.sp, if (f) C.OnRed else if (sel) C.Text else C.Soft, if (sel || f) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
+                                                if (locked) Ico(R.drawable.lc_lock, 12.dp, if (f) C.OnRed else C.Muted)
+                                                if (n != null) T(fmtNum(n), 11.sp, if (f) C.OnRed.copy(alpha = 0.7f) else C.Muted)
+                                            }
                                         }
                                     }
-                                }
-                                is TRow.Pl -> Focusable(modifier = Modifier.fillMaxWidth().height(36.dp), shape = Rnd(10.dp), onClick = {
-                                    // fold / unfold; folding the playlist of the open group closes the group too
-                                    TvFold.toggle(row.p.id); if (row.open && st.group?.pid == row.p.id) st.group = null
-                                    if (!row.open) Store.open(ctx, row.p.id)
-                                    st.focusKey = row.id; st.rev++; st.refocus++
-                                }, onFocus = { st.focusKey = row.id }, focusRequester = if (row.id == st.focusKey) gFr else null,
-                                    normal = if (row.open) C.CardHi else Color.Transparent, focused = C.Red, zoom = 1f) { f ->
-                                    Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        T(if (row.open) "▼" else "▶", 11.sp, if (f) C.OnRed else C.Muted)  // i18n-ignore
-                                        T(row.p.name, 13.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                                    is TRow.Pl -> Focusable(modifier = Modifier.fillMaxWidth().height(36.dp), shape = Rnd(10.dp), onClick = {
+                                        // fold / unfold; folding the playlist of the open group closes the group too
+                                        TvFold.toggle(row.p.id); if (row.open && st.group?.pid == row.p.id) st.group = null
+                                        if (!row.open) Store.open(ctx, row.p.id)
+                                        st.focusKey = row.id; st.rev++; st.refocus++
+                                    }, onFocus = { st.focusKey = row.id }, focusRequester = if (row.id == st.focusKey) gFr else null,
+                                        normal = if (row.open) C.CardHi else Color.Transparent, focused = C.Red, zoom = 1f) { f ->
+                                        Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            T(if (row.open) "▼" else "▶", 11.sp, if (f) C.OnRed else C.Muted)  // i18n-ignore
+                                            T(row.p.name, 13.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                                        }
                                     }
-                                }
-                                TRow.NewFav -> Focusable(modifier = Modifier.fillMaxWidth().height(30.dp), shape = Rnd(10.dp), onClick = { st.newFav = true },
-                                    onFocus = { st.focusKey = row.id }, focusRequester = if (row.id == st.focusKey) gFr else null, normal = Color.Transparent, focused = C.Red, zoom = 1f) { f ->
-                                    Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        Ico(R.drawable.lc_plus, 12.dp, if (f) C.OnRed else C.Muted); T("Nova lista favorita", 12.sp, if (f) C.OnRed else C.Muted)
+                                    TRow.NewFav -> Focusable(modifier = Modifier.fillMaxWidth().height(30.dp), shape = Rnd(10.dp), onClick = { st.newFav = true },
+                                        onFocus = { st.focusKey = row.id }, focusRequester = if (row.id == st.focusKey) gFr else null, normal = Color.Transparent, focused = C.Red, zoom = 1f) { f ->
+                                        Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            Ico(R.drawable.lc_plus, 12.dp, if (f) C.OnRed else C.Muted); T("Nova lista favorita", 12.sp, if (f) C.OnRed else C.Muted)
+                                        }
                                     }
                                 }
                             }
