@@ -527,6 +527,6 @@ object SportCache {
     var today: List<SportEvent>? = null; var todayAt = 0L
     val other = HashMap<String, List<SportEvent>>()
     var combined: List<SportEvent> = emptyList()
-    var guide: Guide? = null
+    var guide: Sports.Guide? = null
     fun clear() { today = null; other.clear(); combined = emptyList(); rev++ }
 }
