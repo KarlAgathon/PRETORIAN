@@ -192,7 +192,7 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
             // ---------------------------------------------------------------- picture and show
             val cur = current()
             Row(Modifier.fillMaxWidth().height(176.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                when (Look.previewMode) {
+                when (if (Perf.lite && !Prefs.bool("lite_preview")) 0 else Look.previewMode) {
                     2 -> PreviewBox(cur?.first, Modifier.height(170.dp))
                     1 -> PreviewSel.ch?.let { PreviewBox(it, Modifier.height(170.dp)) }
                 }

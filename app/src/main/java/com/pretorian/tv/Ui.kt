@@ -120,7 +120,8 @@ fun Focusable(
     val src = remember { MutableInteractionSource() }
     val isFocused by src.collectIsFocusedAsState()
     LaunchedEffect(isFocused) { if (isFocused) onFocus?.invoke() }
-    val scale by animateFloatAsState(if (isFocused) zoom else 1f, label = "zoom")
+    // Lite: no zoom animation on focus (lighter for weak boxes)
+    val scale by animateFloatAsState(if (isFocused && !Perf.lite) zoom else 1f, label = "zoom")
     var m = modifier
     if (focusRequester != null) m = m.focusRequester(focusRequester)
     val long = onMenu ?: onLongClick
@@ -503,7 +504,7 @@ fun WrapEffectGrid(w: Wrap, state: androidx.compose.foundation.lazy.grid.LazyGri
 fun Toggle(on: Boolean, focused: Boolean = false, height: androidx.compose.ui.unit.Dp = 22.dp) {
     val pos by androidx.compose.animation.core.animateFloatAsState(if (on) 1f else 0f, label = "toggle")
     val w = height * 1.8f; val knob = height - 6.dp
-    val track = androidx.compose.ui.graphics.lerp(if (C.IsLight) Color(0xFFCBD5E1) else Color(0xFF475569), Color(0xFF22C55E), pos)
+    val track = androidx.compose.ui.graphics.lerp(if (C.IsLight) Color(0xFFC7C7CC) else Color(0xFF5C5C61), Color(0xFF22C55E), pos)
     Box(Modifier.width(w).height(height).clip(androidx.compose.foundation.shape.RoundedCornerShape(50)).background(track)
         .then(if (focused) Modifier.border(1.5.dp, Color(0x55000000), androidx.compose.foundation.shape.RoundedCornerShape(50)) else Modifier)) {
         Box(Modifier.padding(start = 3.dp + (w - knob - 6.dp) * pos).align(Alignment.CenterStart).size(knob)

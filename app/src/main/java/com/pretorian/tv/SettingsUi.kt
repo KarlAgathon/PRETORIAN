@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
@@ -64,7 +65,7 @@ import kotlinx.coroutines.delay
 private data class Section(val id: String, val icon: Int, val title: String, val sub: String)
 
 private val SECTIONS = listOf(
-    Section("profile", R.drawable.lc_users, "Profili", "Ko gleda, Google Drive"),
+    Section("profile", R.drawable.lc_users, "Profil", "Ko gleda, dječiji profil"),
     Section("playlists", R.drawable.lc_list, "Playliste", "Dodaj, aktiviraj, ažuriraj"),
     Section("groups", R.drawable.lc_layers, "Grupe i kanali", "Redoslijed, nazivi, sakrivanje, PIN"),
     Section("language", R.drawable.lc_languages, "Jezik", "Meniji, dugmad i poruke"),
@@ -243,7 +244,7 @@ private fun PlaylistsPage(nav: Nav) {
         Popup(tr("Obrisati playlistu?") + " " + pl.name, onDismiss = { del = null }) {
             OptionRow("Da, obriši", R.drawable.lc_trash_2, color = C.Danger) {
                 val rest = Store.playlists(ctx).filter { it.id != pl.id }
-                Store.savePlaylists(ctx, if (rest.none { it.active } && rest.isNotEmpty()) rest.mapIndexed { i, x -> x.copy(active = i == 0) } else rest)
+                Watch.removePlaylist(ctx, pl.id); Store.savePlaylists(ctx, rest)
                 del = null; openId = null; refresh()
             }
             OptionRow("Odustani", R.drawable.lc_x) { del = null }
@@ -303,73 +304,186 @@ private fun PlaylistDetail(pl: Playlist, nav: Nav, onChanged: () -> Unit, onDele
     LaunchedEffect(pl.id) { first.tryFocus() }
 }
 
-/** EPG sources: for every playlist ([pl] null) or only for one playlist. */
+/** The same ▲ ▼ buttons everywhere something is reordered (Home rows, playlists, EPG…): grey at the top / bottom,
+ *  the focus stays on the button of the moved item, so it follows the row. */
+@Composable
+fun UpDown(key: String, index: Int, last: Int, onMove: (Int) -> Unit) {
+    listOf(-1 to "▲", 1 to "▼").forEach { (d, g) ->  // i18n-ignore
+        val can = if (d < 0) index > 0 else index < last
+        Focusable(modifier = Modifier.size(48.dp).border(1.dp, C.Line, Rnd(12.dp)),
+            onClick = { if (can) { onMove(d); SetFocus.last = "$key:$d"; SetFocus.pending = true } },
+            focusRequester = setFocusFr("$key:$d"), shape = Rnd(12.dp), normal = Color.Transparent, focused = C.Red, zoom = 1f) { f ->
+            T(g, 14.sp, if (!can) C.Line else if (f) C.OnRed else C.Text, FontWeight.Bold, modifier = Modifier.align(Alignment.Center))
+        }
+    }
+}
+
+/** A row with its own on/off pill: OK on the name opens the menu, Right → the pill, OK switches it at once. */
+@Composable
+fun PillRow(key: String, title: String, sub: String?, on: Boolean, titleColor: Color? = null, modifier: Modifier = Modifier,
+            onLong: (() -> Unit)? = null, onToggle: () -> Unit, onOpen: () -> Unit) {
+    Row(modifier.height(if (sub != null) 56.dp else 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Focusable(modifier = Modifier.weight(1f).fillMaxHeight().border(1.dp, C.Line, Rnd(12.dp)),
+            onClick = { SetFocus.last = key; onOpen() }, onMenu = onLong, onFocus = { SetFocus.last = key }, focusRequester = setFocusFr(key),
+            shape = Rnd(12.dp), normal = C.Rail, focused = C.Red, zoom = 1f) { f ->
+            Column(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalArrangement = Arrangement.Center) {
+                T(title, 15.sp, if (f) C.OnRed else (titleColor ?: C.Text), FontWeight.SemiBold, maxLines = 1)
+                if (sub != null) T(sub, 12.sp, if (f) C.OnRed.copy(alpha = 0.65f) else C.Muted, maxLines = 1)
+            }
+        }
+        Focusable(modifier = Modifier.width(118.dp).fillMaxHeight().border(1.dp, C.Line, Rnd(12.dp)),
+            onClick = { SetFocus.last = "$key:sw"; SetFocus.pending = true; onToggle() }, focusRequester = setFocusFr("$key:sw"),
+            shape = Rnd(12.dp), normal = C.Rail, focused = C.Red, zoom = 1f) { f ->
+            Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                T(if (on) "Aktivna" else "Isključena", 12.sp, if (f) C.OnRed else if (on) C.Green else C.Muted, FontWeight.Bold, maxLines = 1, modifier = Modifier.weight(1f))
+                Toggle(on, f, height = 20.dp)
+            }
+        }
+    }
+}
+
+/** EPG sources: all of them ([pl] null) or the ones that apply to one playlist (its menu › EPG of this playlist). */
 @Composable
 private fun EpgSourcesBlock(pl: Playlist?) {
+    val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var add by remember { mutableStateOf(false) }
     var edit by remember { mutableStateOf<EpgSources.Src?>(null) }
     var menu by remember { mutableStateOf<EpgSources.Src?>(null) }
+    var defFor by remember { mutableStateOf<EpgSources.Src?>(null) }
     var updating by remember { mutableStateOf(false) }
-    var pending by remember { mutableStateOf<Pair<String, String>?>(null) }
-    // everything that applies to this playlist: its own sources and the ones for every playlist
-    val list = remember(EpgSources.rev, pl?.id) { EpgSources.list().filter { it.pid == null || it.pid == pl?.id } }
-    if (pl == null) Label(tr("EPG izvori (za sve playliste)"))
-    T("XMLTV link (.xml ili .xml.gz). Koristi se kad provider za kanal nema program.", 12.sp, C.Muted, maxLines = 2)
-    // the provider's own guide: always first, cannot be edited or deleted
-    if (pl != null && pl.type == SourceType.XTREAM) {
-        OptionRow(trf("%s · od providera", pl.name), R.drawable.lc_server, sub = tr("ugrađeni program providera · ne može se uređivati"),
-            value = tr("● Aktivan"), valueColor = C.Green) { }
+    val pls = remember { Store.playlists(ctx) }
+    val all = remember(EpgSources.rev) { EpgSources.list() }
+    val list = all.filter { pl == null || it.pid == null || it.pid == pl.id }
+    T("XMLTV link (.xml ili .xml.gz) ili fajl. Redoslijed: zadani EPG, pa ostali uključeni, pa providerov.", 12.sp, C.Muted, maxLines = 1)
+    // the provider's own guide: can be switched off too, but not edited or deleted
+    (if (pl != null) listOf(pl) else pls).filter { it.type == SourceType.XTREAM }.forEach { p ->
+        PillRow("epgprov:${p.id}", trf("%s · od providera", p.name), tr("ugrađeni program providera"), EpgSources.providerOn(p.id),
+            onToggle = { EpgSources.setProvider(p.id, !EpgSources.providerOn(p.id)); Repo.clear() }) { EpgSources.setProvider(p.id, !EpgSources.providerOn(p.id)); Repo.clear() }
     }
-    list.forEach { s ->
+    list.forEachIndexed { i, s ->
+        val defNames = if ("*" in s.def) listOf(tr("sve playliste")) else pls.filter { it.id in s.def }.map { it.name }
         val status = when {
             s.error != null -> trf("Greška: %s", s.error)
-            s.channels >= 0 -> trf("%s kanala · ažurirano %s", s.channels, java.text.SimpleDateFormat("d. M. HH:mm", java.util.Locale.getDefault()).format(java.util.Date(s.at)))
+            s.channels >= 0 -> trf("%s kanala · osvježeno %s", s.channels, java.text.SimpleDateFormat("d. M. HH:mm", java.util.Locale.getDefault()).format(java.util.Date(s.at)))
             else -> tr("Još nije provjeren")
         }
-        OptionRow(s.name, if (s.on) R.drawable.lc_check else R.drawable.lc_x, sub = tr(if (s.pid == null) "za sve playliste" else "samo za ovu playlistu") + " · " + status, value = tr(if (s.on) "● Aktivan" else "○ Isključen"),
-            color = if (s.error != null) C.Danger else if (s.on) null else C.Muted, valueColor = if (s.on) C.Green else C.Muted) { menu = s }
+        val sub = (if (defNames.isNotEmpty()) "⭐ " + trf("zadani za %s", defNames.joinToString(", ")) + " · " else "") + status
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            PillRow("epg:${s.id}", s.name, sub, s.on, titleColor = if (s.error != null) C.Danger else null, modifier = Modifier.weight(1f),
+                onLong = { EpgSources.update(s.copy(on = !s.on)); Repo.clear() },
+                onToggle = { EpgSources.update(s.copy(on = !s.on)); Repo.clear() }) { menu = s }
+            UpDown("epg:${s.id}", i, list.lastIndex) { d -> EpgSources.move(s, d) }
+        }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Button("Dodaj EPG", R.drawable.lc_plus) { add = true }
-        if (list.isNotEmpty()) Button(if (updating) "Ažuriram…" else "Ažuriraj sve EPG-ove", R.drawable.lc_refresh_cw) {
+        Button("＋ Dodaj EPG", null) { add = true }  // i18n-ignore
+        if (list.isNotEmpty()) Button(if (updating) "Osvježavam…" else "Osvježi sve EPG-ove", R.drawable.lc_refresh_cw) {
             if (updating) return@Button
             updating = true
             scope.launch { list.forEach { try { EpgSources.refresh(it) } catch (_: Exception) {} }; Repo.clear(); updating = false }
         }
     }
-    fun addSrc(n: String, v: String, pid: String?) { val s = EpgSources.add(v, pid, n); scope.launch { EpgSources.refresh(s); Repo.clear() } }
-    if (add) NameLinkDialog("Dodaj EPG", onDismiss = { add = false }) { n, v ->
+    if (add) EpgForm(null, pl, onDismiss = { add = false }) { n, v, sh, ev, def ->
         add = false
-        if (v.isNotBlank()) { if (pl == null) addSrc(n, v, null) else pending = n to v }
-    }
-    pending?.let { (n, v) ->
-        Popup("Za koje playliste?", { pending = null }) {
-            OptionRow("Za sve playliste", R.drawable.lc_list) { pending = null; addSrc(n, v, null) }
-            OptionRow(trf("Samo za %s", pl?.name ?: ""), R.drawable.lc_check) { pending = null; addSrc(n, v, pl?.id) }
-        }
+        val s = EpgSources.add(v, null, n, def, sh, ev); scope.launch { EpgSources.refresh(s); Repo.clear() }
     }
     edit?.let { s ->
-        NameLinkDialog("Uredi EPG", s.name, s.url, onDismiss = { edit = null }) { n, v ->
+        EpgForm(s, pl, onDismiss = { edit = null }) { n, v, sh, ev, def ->
             edit = null
-            if (v.isNotBlank()) {
-                val changed = v != s.url
-                val e = s.copy(url = v, name = n.ifBlank { EpgSources.nameOf(v) }, channels = if (changed) -1 else s.channels, error = if (changed) null else s.error)
-                EpgSources.update(e); if (changed) scope.launch { EpgSources.refresh(e); Repo.clear() }
-            }
+            val changed = v != s.url
+            val e = s.copy(url = v, name = n.ifBlank { EpgSources.nameOf(v) }, shift = sh, every = ev, def = def,
+                channels = if (changed) -1 else s.channels, error = if (changed) null else s.error)
+            EpgSources.update(e); Repo.clear(); if (changed) scope.launch { EpgSources.refresh(e); Repo.clear() }
         }
     }
     menu?.let { s ->
-        Popup(s.name, { menu = null }) {
-            T(s.url, 12.sp, C.Muted, maxLines = 3)
+        Popup(s.name, { menu = null; SetFocus.tick++ }) {
+            T(s.url.removePrefix("file://"), 12.sp, C.Muted, maxLines = 2)
+            OptionRow("⭐ Zadani za…", null, sub = tr("koje playliste ga koriste prvog")) { menu = null; defFor = s }  // i18n-ignore
             OptionRow("Uredi", R.drawable.lc_pencil) { menu = null; edit = s }
-            OptionRow("Ažuriraj", R.drawable.lc_refresh_cw) { menu = null; scope.launch { EpgSources.refresh(s); Repo.clear() } }
-            OptionRow(if (s.on) "Isključi" else "Uključi", R.drawable.lc_check) { EpgSources.update(s.copy(on = !s.on)); Repo.clear(); menu = null }
-            OptionRow("Pomjeri gore", R.drawable.lc_arrow_up) { EpgSources.move(s, -1) }
-            OptionRow("Pomjeri dolje", R.drawable.lc_arrow_down) { EpgSources.move(s, 1) }
+            OptionRow(if (s.on) "Ugasi" else "Uključi", R.drawable.lc_check) { EpgSources.update(s.copy(on = !s.on)); Repo.clear(); menu = null }
+            OptionRow("Osvježi sada", R.drawable.lc_refresh_cw) { menu = null; scope.launch { EpgSources.refresh(s); Repo.clear() } }
             OptionRow("Obriši", R.drawable.lc_trash_2, color = C.Danger) { EpgSources.delete(s); Repo.clear(); menu = null }
         }
     }
+    defFor?.let { s0 ->
+        val s = all.firstOrNull { it.id == s0.id } ?: s0
+        Popup(trf("%s · zadani za", s.name), { defFor = null; SetFocus.tick++ }, width = 600.dp) {
+            fun set(d: Set<String>) { EpgSources.update(s.copy(def = d)); Repo.clear() }
+            ToggleOption("Sve playliste", "*" in s.def) { set(if ("*" in s.def) emptySet() else setOf("*")) }
+            pls.forEach { p -> ToggleOption(p.name, s.isDefault(p.id)) {
+                val cur = if ("*" in s.def) pls.map { it.id }.toSet() else s.def
+                set(if (p.id in cur) cur - p.id else cur + p.id)
+            } }
+            Button("Gotovo", R.drawable.lc_check, primary = true) { defFor = null; SetFocus.tick++ }
+        }
+    }
+}
+
+/** One choice with the pill switch (used in pickers). */
+@Composable
+fun ToggleOption(label: String, on: Boolean, onClick: () -> Unit) {
+    Focusable(modifier = Modifier.fillMaxWidth().height(44.dp), onClick = onClick, shape = Rnd(10.dp), normal = Color.Transparent, focused = C.CardHi, zoom = 1f) { _ ->
+        Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            T(label, 14.sp, if (on) C.Text else C.Muted, FontWeight.Medium, maxLines = 1, modifier = Modifier.weight(1f))
+            Toggle(on, height = 20.dp)
+        }
+    }
+}
+
+/** Add / edit an EPG: name, address (link or a file from USB / disk), time shift, refresh, default for… */
+@Composable
+private fun EpgForm(src: EpgSources.Src?, pl: Playlist?, onDismiss: () -> Unit, onOk: (String, String, Int, Int, Set<String>) -> Unit) {
+    val ctx = LocalContext.current
+    val pls = remember { Store.playlists(ctx) }
+    var name by remember { mutableStateOf(src?.name ?: "") }
+    var link by remember { mutableStateOf(src?.url ?: "") }
+    var shift by remember { mutableIntStateOf(src?.shift ?: 0) }
+    var every by remember { mutableIntStateOf(src?.every ?: 0) }
+    var def by remember { mutableStateOf(src?.def ?: (if (pl != null) setOf(pl.id) else emptySet())) }
+    var pick by remember { mutableStateOf<String?>(null) }
+    val fr = remember { FocusRequester() }
+    Popup(if (src == null) "Dodaj EPG" else "Uredi EPG", onDismiss, width = 700.dp) {
+        Field("Ime", name, { name = it }, Modifier.fillMaxWidth().focusRequester(fr))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Field("Adresa (http://…/epg.xml ili .xml.gz)", link.removePrefix("file://"), { link = it }, Modifier.weight(1f), KeyboardType.Uri)
+            Button("Fajl…", R.drawable.lc_file) { pick = "file" }
+        }
+        val shifts = (-3..3).toList()
+        OptionRow("Pomak vremena", null, value = if (shift == 0) tr("Bez pomaka") else (if (shift > 0) "+" else "") + shift + " h") { pick = "shift" }  // i18n-ignore
+        val evs = listOf(0, 12, 24)
+        val evNames = listOf("S playlistom", "Svakih 12 h", "Svaka 24 h")
+        OptionRow("Osvježavanje", null, value = tr(evNames[evs.indexOf(every).coerceAtLeast(0)])) { pick = "every" }
+        OptionRow("Zadani za…", null, value = if ("*" in def) tr("Sve playliste") else if (def.isEmpty()) tr("Nijednu") else pls.filter { it.id in def }.joinToString(", ") { it.name }) { pick = "def" }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Button("Spremi", R.drawable.lc_check, primary = true) { if (link.isNotBlank()) onOk(name.trim(), link.trim(), shift, every, def) }
+            Button("Odustani", R.drawable.lc_x) { onDismiss() }
+        }
+        when (pick) {
+            "shift" -> Popup("Pomak vremena", { pick = null }) { shifts.forEach { h ->
+                OptionRow(if (h == 0) tr("Bez pomaka") else (if (h > 0) "+" else "") + h + " h", if (h == shift) R.drawable.lc_check else null, color = if (h == shift) C.Green else null) { shift = h; pick = null } } }  // i18n-ignore
+            "every" -> Popup("Osvježavanje", { pick = null }) { evs.forEachIndexed { i, e ->
+                OptionRow(evNames[i], if (e == every) R.drawable.lc_check else null, color = if (e == every) C.Green else null) { every = e; pick = null } } }
+            "def" -> Popup("Zadani za…", { pick = null }, width = 600.dp) {
+                ToggleOption("Sve playliste", "*" in def) { def = if ("*" in def) emptySet() else setOf("*") }
+                pls.forEach { p -> ToggleOption(p.name, "*" in def || p.id in def) {
+                    val cur = if ("*" in def) pls.map { it.id }.toSet() else def
+                    def = if (p.id in cur) cur - p.id else cur + p.id
+                } }
+                Button("Gotovo", R.drawable.lc_check, primary = true) { pick = null }
+            }
+            "file" -> FilePicker("Izaberi EPG fajl", setOf("xml", "gz"), onDismiss = { pick = null }) { bytes, fname ->
+                try {
+                    val f = java.io.File(ctx.filesDir, "epg_" + System.currentTimeMillis().toString(36) + (if (fname.endsWith(".gz")) ".xml.gz" else ".xml"))
+                    f.writeBytes(bytes); link = "file://" + f.path; if (name.isBlank()) name = fname.substringBefore('.')
+                } catch (_: Exception) {}
+                pick = null
+            }
+            else -> {}
+        }
+    }
+    LaunchedEffect(Unit) { try { fr.requestFocus() } catch (_: Exception) {} }
 }
 
 @Composable
@@ -449,7 +563,7 @@ fun AddPlaylistScreen(nav: Nav) {
                                 Toast.makeText(ctx, tr("Spremljeno"), Toast.LENGTH_SHORT).show()
                                 EditPlaylist.target = null; Repo.clear(); Repo.dropCatalogs(); nav.playlistsChanged(); nav.back()
                             } else {
-                                Store.savePlaylists(ctx, Store.playlists(ctx).map { it.copy(active = false) } + pl)
+                                Store.savePlaylists(ctx, Store.playlists(ctx) + pl.copy(active = true))
                                 Toast.makeText(ctx, if (pl.type != SourceType.M3U) tr("Povezano ✓") else trf("Učitano: %s", info), Toast.LENGTH_LONG).show()
                                 nav.playlistsChanged(); nav.root(Screen.Home)
                             }
@@ -801,11 +915,6 @@ private fun BackupPage(nav: Nav) {
                 try { saveDoc.launch(Backup.fileName()) } catch (e: Exception) { Toast.makeText(ctx, tr("Taj file manager se ne može otvoriti, koristim ugrađeni"), Toast.LENGTH_LONG).show(); step = "browse" }
             }
         }
-        "browse" -> FileBrowser("Izaberi folder", emptySet(), pickDir = true, onDismiss = { step = null }) { dir ->
-            try { java.io.File(dir, Backup.fileName()).writeText(Backup.export(ctx, password)); Toast.makeText(ctx, trf("Spremljeno: %s", dir.path + "/" + Backup.fileName()), Toast.LENGTH_LONG).show() }
-            catch (e: Exception) { Toast.makeText(ctx, tr("U taj folder se ne može pisati. Izaberi drugi ili PRETORIAN folder."), Toast.LENGTH_LONG).show() }
-            step = null
-        }
         "pick" -> FilePicker("Izaberi backup", setOf("json"), onDismiss = { step = null }) { bytes, _ ->
             val t = String(bytes)
             if (Backup.summary(t) == null) { Toast.makeText(ctx, tr("Fajl nije PRETORIAN backup"), Toast.LENGTH_LONG).show(); step = null }
@@ -948,7 +1057,7 @@ private fun ProfilePage() {
     val cur = remember(Profiles.rev) { Profiles.current(ctx) }
     val all = remember(Profiles.rev) { Profiles.list(ctx) }
     var setup by remember { mutableStateOf(false) }
-    Page("Profili i Google Drive", "Svaki profil ima svoje favorite, gledano, izgled, jezik i grupe. Playliste su zajedničke.") {
+    Page("Profili", "Svaki profil ima svoje favorite, gledano, izgled, jezik i grupe. Playliste su zajedničke.") {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Avatar(cur, 56.dp)
             Column(Modifier.weight(1f)) {
@@ -959,20 +1068,7 @@ private fun ProfilePage() {
         OptionRow("Profili", R.drawable.lc_users, sub = "Promijeni, dodaj, uredi, PIN") { Profiles.panel = true }
         OptionRow("Ko gleda?", R.drawable.lc_user, sub = "Ekran za izbor profila") { Profiles.picker = true }
         ToggleRow("Pitaj \"Ko gleda?\" pri pokretanju", Profiles.askAtStart, R.drawable.lc_users) { Profiles.askAtStart = it; Profiles.rev++ }
-        Label("Google Drive")
-        T(Drive.statusLine(), 13.sp, if (Drive.signedIn) C.Green else C.Muted, maxLines = 2)
-        if (!Drive.signedIn) OptionRow("Prijavi se Google nalogom", R.drawable.lc_log_in, sub = "Kod na TV-u, potvrda na telefonu", color = C.Green) { Drive.loginOpen = true }
-        else {
-            OptionRow("Sinhronizuj sada", R.drawable.lc_cloud_upload, sub = "Pošalji postavke i profile na Google Drive") {
-                kotlinx.coroutines.GlobalScope.launch { try { Drive.upload(ctx) } catch (_: Exception) {} ; Profiles.rev++ }
-            }
-            OptionRow("Vrati s Google Drivea", R.drawable.lc_cloud_download, sub = "Povuci sve na ovaj uređaj") { Drive.restoreAsk = true }
-            OptionRow("Odjavi se", R.drawable.lc_log_out) { Drive.logout(); Profiles.rev++ }
-        }
-        T("Promjene se same šalju svakih 10 minuta i kad izađeš iz aplikacije. Na novom uređaju se prijaviš istim nalogom i sve se samo preuzme.", 12.sp, C.Muted, maxLines = 3)
-        if (BuildConfig.GOOGLE_CLIENT_ID.isBlank()) OptionRow("Google OAuth klijent", R.drawable.lc_key_round, value = tr(if (Drive.configured) "Upisan" else "Nije upisan")) { setup = true }
     }
-    if (setup) DriveSetup(onDismiss = { setup = false }, onSaved = { setup = false })
 }
 
 @Composable
@@ -1017,33 +1113,33 @@ object SetMode {
 }
 
 private val SECTIONS2 = listOf(
-    Section("playlists", R.drawable.lc_list, "Playliste", "Dodaj, EPG izvori, grupe i kanali"),
-    Section("profile", R.drawable.lc_users, "Profili", "Ko gleda, Google Drive"),
+    Section("profile", R.drawable.lc_users, "Profil", "Ko gleda, dječiji profil"),
+    Section("playlists", R.drawable.lc_list, "Playliste", "Dodaj, aktivne, EPG izvori"),
+    Section("general", R.drawable.lc_settings, "Opće", "Napredne opcije, start, pozadina"),
     Section("home", R.drawable.lc_house, "Početna", "Redovi i redoslijed"),
-    Section("general", R.drawable.lc_settings, "Opće", "Pokretanje, izlaz, mreža"),
     Section("look", R.drawable.lc_palette, "Izgled", "Tema, boja, veličina"),
     Section("language", R.drawable.lc_languages, "Jezik", "Meniji, opisi filmova"),
+    Section("parental", R.drawable.lc_shield_check, "Modovi", "Jednostavni mod, PIN"),
+    Section("kids", R.drawable.lc_lock, "Roditeljska kontrola", "Kategorije, vrijeme gledanja"),
     Section("media", R.drawable.lc_play, "Plejer", "Titlovi, zvuk, stream, kontrole"),
-    Section("sport", R.drawable.lc_trophy, "Sport", "Sportovi, država, AI"),
-    Section("reminders", R.drawable.lc_bell, "Podsjetnici", "Emisije i utakmice"),
-    Section("parental", R.drawable.lc_shield_check, "Jednostavni mod i PIN", "Samo TV, Filmovi, Serije"),
-    Section("kids", R.drawable.lc_lock, "Roditeljska kontrola", "Sakrij kategorije · PIN"),
-    Section("backup", R.drawable.lc_archive, "Backup", "Fajl, USB, Google Drive"),
+    Section("sport", R.drawable.lc_trophy, "Sports Center", "Sportovi, timovi, ko prenosi"),
     Section("saver", R.drawable.lc_moon, "Čuvar ekrana", "Sat, datum, pauzirano"),
     Section("diag", R.drawable.lc_gauge2, "Dijagnostika", "Gledano, protok, brzina, stabilnost"),
+    Section("reminders", R.drawable.lc_bell, "Podsjetnici", "Emisije i utakmice"),
+    Section("backup", R.drawable.lc_archive, "Backup", "Fajl, USB"),
     // always: Update second to last, About last
     Section("update", R.drawable.lc_download, "Ažuriranje", "Nova verzija"),
     Section("about", R.drawable.lc_info, "O aplikaciji", "Uređaj, kontakt, licence"),
 )
-private val BASIC = setOf("playlists", "home", "language", "parental", "kids", "update", "about")
+private val BASIC = setOf("profile", "playlists", "general", "home", "language", "parental", "kids", "update", "about")
 
 /** Settings screen of the new look: sections on the left, the page on the right, sub-pages open inside. */
 @Composable
 fun SettingsScreen2(nav: Nav) {
     val ctx = LocalContext.current
     val list = SECTIONS2.filter { SetMode.advanced || it.id in BASIC }
-    var section by remember { mutableStateOf((SettingsNav.section?.also { SettingsNav.section = null } ?: SettingsNav.last ?: if (Updater.available != null) "update" else "playlists")
-        .let { s -> if (list.any { it.id == s }) s else "playlists" }) }
+    var section by remember { mutableStateOf((SettingsNav.section?.also { SettingsNav.section = null } ?: SettingsNav.last ?: if (Updater.available != null) "update" else "profile")
+        .let { s -> if (list.any { it.id == s }) s else "profile" }) }
     var sub by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(section) { SettingsNav.last = section; sub = null }
     // a notification or a button elsewhere asks for a section while Settings is already open
@@ -1057,14 +1153,20 @@ fun SettingsScreen2(nav: Nav) {
         PinDialog("Postavke", tr("Unesi PIN"), onDismiss = { nav.back() }) { pin -> val err = Lock.check(pin); if (err == null) unlocked = true; err }
         return
     }
+    var inPage by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    // like Search: inside a section the list shrinks to a narrow rail of icons and the page gets the room
+    val railW by androidx.compose.animation.core.animateDpAsState(if (inPage) 74.dp else 270.dp, label = "rail")
+    val slim = inPage
     Row(Modifier.fillMaxSize()) {
-        Column(Modifier.width(270.dp).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 8.dp, top = 6.dp, bottom = 16.dp),
+        Column(Modifier.width(railW).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 8.dp, top = 6.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp)) {
             // search in all settings
             Focusable(modifier = Modifier.fillMaxWidth().height(40.dp).padding(bottom = 4.dp), onClick = { search = true }, shape = Pill,
                 normal = Color.White.copy(alpha = 0.06f), focused = C.Red, zoom = 1f) { f ->
                 Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Ico(R.drawable.lc_search, 14.dp, if (f) C.OnRed else C.Muted); T("Pretraži postavke", 13.sp, if (f) C.OnRed else C.Muted)
+                    Ico(R.drawable.lc_search, 14.dp, if (f) C.OnRed else C.Muted); if (!slim) T("Pretraži postavke", 13.sp, if (f) C.OnRed else C.Muted, maxLines = 1)
                 }
             }
             list.forEach { s ->
@@ -1075,27 +1177,17 @@ fun SettingsScreen2(nav: Nav) {
                         Box(Modifier.size(26.dp).clip(Rnd(8.dp)).background(if (f) C.OnRed.copy(alpha = 0.08f) else C.Card), contentAlignment = Alignment.Center) {
                             Ico(s.icon, 14.dp, if (f) C.OnRed else C.Text)
                         }
-                        Column(Modifier.weight(1f)) {
+                        if (!slim) Column(Modifier.weight(1f)) {
                             T(s.title, 14.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, maxLines = 1)
                             T(if (s.id == "mode") (if (SetMode.advanced) "Napredno" else "Osnovno") else s.sub, 11.sp, if (f) C.OnRed.copy(alpha = 0.6f) else C.Muted, maxLines = 1)
                         }
-                        if (s.id == "update" && Updater.available != null) Box(Modifier.size(16.dp).clip(CircleShape).background(C.Danger), contentAlignment = Alignment.Center) {
+                        if (!slim && s.id == "update" && Updater.available != null) Box(Modifier.size(16.dp).clip(CircleShape).background(C.Danger), contentAlignment = Alignment.Center) {
                             T("1", 9.sp, Color.White, FontWeight.Bold)
                         }
                     }
                 }
             }
-            // basic or all settings: a switch under the list instead of its own section
-            Focusable(modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp).padding(top = 6.dp), onClick = { SetMode.set(!SetMode.advanced) }, shape = Rnd(12.dp),
-                normal = Color.Transparent, focused = C.Red, zoom = 1f) { f ->
-                Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    T("Napredne opcije", 13.sp, if (f) C.OnRed else C.Soft, modifier = Modifier.weight(1f))
-                    Toggle(SetMode.advanced, f, height = 18.dp)
-                }
-            }
         }
-        var inPage by remember { mutableStateOf(false) }
-        val scope = rememberCoroutineScope()
         // Back goes one step: sub-page → its page, page → the list of sections, list → out of Settings
         BackHandler(enabled = true) {
             when {
@@ -1105,21 +1197,26 @@ fun SettingsScreen2(nav: Nav) {
             }
         }
         LaunchedEffect(listFocused) { inPage = false }
-        // into a section: always its first item at the top; out of it with ◀: exactly the section you are in on the left
+        // into a section: Right lands on the item at the same height; Left from anywhere in the page goes back to this section on the left
         val pageFr = remember { FocusRequester() }
         Box(Modifier.weight(1f).fillMaxHeight().onFocusChanged { if (it.hasFocus) inPage = true }
+            .onKeyEvent { ev ->
+                if (ev.type == androidx.compose.ui.input.key.KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
+                    if (!focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Left)) scope.launch { inPage = false; first.tryFocus() }
+                    true
+                } else false
+            }
             .focusProperties {
                 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
-                enter = { d -> if (d == androidx.compose.ui.focus.FocusDirection.Right) { scope.launch { delay(10); try { pageFr.requestFocus() } catch (_: Exception) {} }; FocusRequester.Cancel } else FocusRequester.Default }
-                @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
-                exit = { d -> if (d == androidx.compose.ui.focus.FocusDirection.Left) first else FocusRequester.Default }
+                exit = { d -> if (d == androidx.compose.ui.focus.FocusDirection.Left) { inPage = false; first } else FocusRequester.Default }
             }
             .focusRequester(pageFr).focusGroup()
             .padding(start = 18.dp, end = 24.dp, top = 4.dp, bottom = 8.dp)) {
             key(section, sub) {
                 when (sub) {
                     "groups" -> GroupManager(nav)
-                    "epg" -> SetPage("EPG izvori", "Dodaj, uredi, osvježi ili izbriši izvore TV programa.") { EpgSourcesBlock(Store.active(ctx)) }
+                    "epg" -> { val epl = PlEdit.id?.let { id -> Store.playlists(ctx).firstOrNull { it.id == id } }
+                        SetPage(if (epl != null) trf("EPG · %s", epl.name) else tr("EPG izvori"), "OK: meni · desno: uključi/ugasi · ▲ ▼ redoslijed") { EpgSourcesBlock(epl) } }
                     "plists" -> PlaylistsListV2(nav)
                     "lookmore" -> LookPage()
                     "player" -> MediaPage()
@@ -1153,17 +1250,17 @@ fun SettingsScreen2(nav: Nav) {
 /** Every option by name, with the section it lives in. */
 private val SEARCH_INDEX = listOf(
     "playlists" to "Playliste, dodaj playlistu, Xtream, M3U, Stalker, EPG izvori, grupe i kanali, osvježi playlistu",
-    "profile" to "Profili, ko gleda, profil za djecu, Google Drive, sinhronizacija",
+    "profile" to "Profil, ko gleda, profil za djecu",
     "home" to "Početna, redovi, nove epizode, nastavi gledati, novo dodano, nedavni kanali",
-    "general" to "Opće, start s boxom, zadnji kanal, potvrdi izlaz, User-Agent, UDP proxy",
-    "kids" to "Roditeljska kontrola, sakrij kategorije, odrasli, XXX, LGBT, trans, PIN",
+    "general" to "Opće, napredne opcije, početni ekran, start s boxom, zadnji kanal, potvrdi izlaz, rad u pozadini, User-Agent, UDP proxy",
+    "kids" to "Roditeljska kontrola, sakrij kategorije, odrasli, XXX, LGBT, trans, zaključaj, vrijeme gledanja",
     "look" to "Izgled, tema, boja, veličina, ikone, mod programa, Lite, Full, oblik ivica",
     "language" to "Jezik, meniji, opisi filmova, prevod",
     "media" to "Plejer, titl, titlovi, veličina titla, kašnjenje titla, sync, zvuk, jezik zvuka, Dolby, passthrough, oporavak, prekid streama, bafer, rezolucija, preskok, nastavi gdje si stao, sljedeća epizoda, zamuti, trailer, eksterni plejer, file manager",
-    "sport" to "Sport, država, timovi, AI pretraga, rezultati",
+    "sport" to "Sports Center, sport, sportovi, takmičenja, država, reprezentacije, timovi, ko prenosi, AI pretraga, rezultati",
     "reminders" to "Podsjetnici, obavijest, utakmica, emisija, zvuk obavijesti",
-    "parental" to "Jednostavni mod, PIN, roditelji, vrijeme gledanja, odrasli, zaključaj",
-    "backup" to "Backup, vraćanje, USB, fajl, Google Drive, vrati na početak",
+    "parental" to "Modovi, jednostavni mod, PIN, promijeni PIN",
+    "backup" to "Backup, vraćanje, USB, fajl, Download, automatski backup, vrati na početak",
     "saver" to "Čuvar ekrana, sat, datum, pauzirano, screensaver",
     "diag" to "Dijagnostika, brzina interneta, VPN, protok, gledano, uptime, keš, zapis ažuriranja, zapis streama",
     "update" to "Ažuriranje, nova verzija, beta, stable, kanal, pauza, potpis, vrati prethodnu verziju, USB",
@@ -1286,7 +1383,7 @@ fun SetRow(title: String, sub: String? = null, value: String? = null, arrow: Str
             if (value != null || arrow.isNotEmpty()) Row(Modifier.clip(Rnd(9.dp)).background(if (f) Color(0x14000000) else C.Card)
                 .border(1.dp, if (f) Color(0x26000000) else C.Line, Rnd(9.dp)).padding(horizontal = 10.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                if (value != null) T(value, 14.sp, if (f) C.OnRed else (valueColor ?: C.Text), FontWeight.SemiBold, maxLines = 1, modifier = Modifier.widthIn(max = 300.dp))
+                if (value != null) T(value, 14.sp, if (f) C.OnRed else (valueColor ?: C.Text), FontWeight.SemiBold, maxLines = 1, modifier = Modifier.widthIn(max = 220.dp))
                 if (arrow.isNotEmpty()) T(arrow, 10.sp, if (f) C.OnRed else C.Muted)
             }
         }
@@ -1309,28 +1406,28 @@ fun SetDrop(title: String, sub: String? = null, options: List<String>, selected:
     }
 }
 
-/** Yellow lamp = on, grey = off. */
+/** On/off in lists: the same pill switch as everywhere (green = on, grey = off), only smaller. */
 @Composable
-fun Lamp(on: Boolean) {
-    Box(Modifier.size(10.dp).clip(CircleShape).background(if (on) Color(0xFFFBBF24) else Color(0xFF475569)))
-}
+fun Lamp(on: Boolean) = Toggle(on, height = 16.dp)
 
 /** Several at once: lamps in a list; "Sve" first switches everything. */
 @Composable
 fun SetMulti(title: String, sub: String? = null, options: List<String>, on: Set<Int>, new: Boolean = false, all: Boolean = true,
-             note: String? = null, onChange: (Set<Int>) -> Unit) {
+             note: String? = null, none: Boolean = false, onChange: (Set<Int>) -> Unit) {
     var open by remember { mutableStateOf(false) }
     var cur by remember(open) { mutableStateOf(on) }
+    // short value, never cut: one name, or only how many are chosen
     val value = when {
         on.size == options.size && all -> tr("Sve") + " (${options.size})"
         on.isEmpty() -> tr("Ništa")
-        on.size <= 2 -> on.sorted().joinToString(", ") { tr(options[it]) }
+        on.size == 1 -> tr(options[on.first()])
         else -> trf("%s izabrano", on.size)
     }
     SetRow(title, sub, value, "▼", null, new) { open = true }
     if (open) Popup(title, { open = false; onChange(cur); SetFocus.tick++ }, width = 620.dp) {
         if (note != null) T(note, 12.sp, C.Soft, maxLines = 3)
         if (all) LampRow("Sve", cur.size == options.size) { cur = if (cur.size == options.size) emptySet() else options.indices.toSet() }
+        if (none) LampRow("Nijedan", cur.isEmpty()) { cur = emptySet() }
         options.forEachIndexed { i, o -> LampRow(o, i in cur) { cur = if (i in cur) cur - i else cur + i } }
         Button("Gotovo", R.drawable.lc_check, primary = true) { open = false; onChange(cur); SetFocus.tick++ }
     }
@@ -1347,12 +1444,12 @@ private fun LampRow(label: String, on: Boolean, onClick: () -> Unit) {
 
 /** Switch row: OK turns it on or off. */
 @Composable
-fun SetSwitch(title: String, sub: String? = null, on: Boolean, new: Boolean = false, onChange: (Boolean) -> Unit) {
+fun SetSwitch(title: String, sub: String? = null, on: Boolean, new: Boolean = false, onLong: (() -> Unit)? = null, onChange: (Boolean) -> Unit) {
     val id = "sw:$title"
     val fr = setFocusFr(id)
     var cur by remember(on) { mutableStateOf(on) }
     Focusable(modifier = Modifier.fillMaxWidth().heightIn(min = if (sub != null) 54.dp else 46.dp).border(1.dp, C.Line, Rnd(12.dp)),
-        onClick = { SetFocus.last = id; cur = !cur; onChange(cur) }, onFocus = { SetFocus.last = id }, focusRequester = fr,
+        onClick = { SetFocus.last = id; cur = !cur; onChange(cur) }, onMenu = onLong, onFocus = { SetFocus.last = id }, focusRequester = fr,
         shape = Rnd(12.dp), normal = C.Rail, focused = C.Red, zoom = 1.01f) { f ->
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 7.dp, bottom = 7.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f)) {
@@ -1479,23 +1576,29 @@ private fun PlaylistsV2(nav: Nav, openSub: (String) -> Unit) {
     val scope = rememberCoroutineScope()
     var list by remember { mutableStateOf(Store.playlists(ctx)) }
     var busy by remember { mutableStateOf(false) }
-    val act = Store.active(ctx)
-    SetPage("Playliste", act?.let { a ->
-        val sec = a.exp.toLongOrNull()
-        trf("Aktivna: %s", a.name) + (if (sec != null && sec > 0) " · " + trf("ističe %s", java.text.SimpleDateFormat("dd.MM.yy", java.util.Locale.getDefault()).format(java.util.Date(sec * 1000))) else "")
-    }) {
-        T("OK otvara playlistu · drži OK za brzi meni", 11.sp, C.Muted)
-        list.forEach { pl ->
+    var menu by remember { mutableStateOf<Playlist?>(null) }
+    var del by remember { mutableStateOf<Playlist?>(null) }
+    var pinDel by remember { mutableStateOf<Playlist?>(null) }
+    fun refresh() { list = Store.playlists(ctx); Repo.clear(); nav.playlistsChanged() }
+    // back from Groups and channels / EPG of a playlist: its menu opens again
+    LaunchedEffect(Unit) { PlMenu.open?.let { id -> menu = list.firstOrNull { it.id == id }; PlMenu.open = null } }
+    val on = list.count { it.active }
+    SetPage("Playliste", if (list.isEmpty()) null else trf("Aktivne: %s od %s", on, list.size)) {
+        T("OK na imenu: meni · desno: uključi/isključi · ▲ ▼ redoslijed", 11.sp, C.Muted)
+        list.forEachIndexed { i, pl ->
             val sec = pl.exp.toLongOrNull()
-            SetRow(pl.name, (when (pl.type) { SourceType.XTREAM -> "Xtream"; SourceType.STALKER -> "Stalker"; else -> "M3U" }) +
-                (if (sec != null && sec > 0) " · " + trf("ističe %s", java.text.SimpleDateFormat("dd.MM.yy", java.util.Locale.getDefault()).format(java.util.Date(sec * 1000))) else ""),
-                if (pl.active) "● " + tr("Aktivna") else "○ " + tr("Isključena"), arrow = "", valueColor = if (pl.active) C.Green else C.Muted) { PlMenu.open = pl.id; openSub("plists") }
+            val sub = (when (pl.type) { SourceType.XTREAM -> "Xtream"; SourceType.STALKER -> "Stalker"; else -> "M3U" }) +  // i18n-ignore
+                (if (sec != null && sec > 0) " · " + trf(if (Store.expired(pl)) "istekla %s" else "ističe %s", java.text.SimpleDateFormat("dd.MM.yy", java.util.Locale.getDefault()).format(java.util.Date(sec * 1000))) else "")
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                PillRow("pl:${pl.id}", pl.name, sub, pl.active, titleColor = if (Store.expired(pl)) C.Amber else null, modifier = Modifier.weight(1f),
+                    onToggle = { Store.activate(ctx, pl.id); refresh() }) { menu = pl }
+                UpDown("pl:${pl.id}", i, list.lastIndex) { d -> Store.movePlaylist(ctx, pl.id, d); refresh() }
+            }
         }
+        if (on > 0) SetRow("⏻  " + tr("Ugasi sve"), "nijedna playlista neće biti aktivna", arrow = "") { Store.setAll(ctx, false); refresh() }  // i18n-ignore
         SetRow("+  " + tr("Dodaj playlistu"), "Xtream, M3U link ili fajl") { EditPlaylist.target = null; nav.push(Screen.AddPlaylist) }
-        if (act != null) {
-            SetSection(trf("Za aktivnu playlistu · %s", act.name))
-            SetRow("Grupe i kanali", "sakrij, pomjeri, PIN") { openSub("groups") }
-            SetRow("EPG izvori", "dodaj, uredi, osvježi, izbriši", "● " + trf("%s aktivna", EpgSources.list().count { it.on && (it.pid == null || it.pid == act.id) } + (if (act.type == SourceType.XTREAM) 1 else 0)), valueColor = C.Green) { openSub("epg") }
+        SetRow("EPG izvori", "svi izvori TV programa", "● " + trf("%s aktivna", EpgSources.list().count { it.on }), valueColor = C.Green) { PlEdit.id = null; openSub("epg") }
+        if (list.isNotEmpty()) {
             SetRow(if (busy) "Osvježavam…" else "Osvježi sve", "kanali, filmovi, serije, EPG") {
                 if (busy) return@SetRow
                 busy = true
@@ -1509,11 +1612,48 @@ private fun PlaylistsV2(nav: Nav, openSub: (String) -> Unit) {
             }
             var arRev by remember { mutableIntStateOf(0) }
             key(arRev) {
-                SetDrop("Osvježi samo", "playliste i EPG, bez čekanja ujutro", AutoRefresh.OPTIONS, AutoRefresh.mode, new = true) { Prefs.put("auto_refresh", it.toLong()); arRev++ }
+                SetDrop("Osvježi samo", "playliste i EPG, bez čekanja ujutro", AutoRefresh.OPTIONS, AutoRefresh.mode) { Prefs.put("auto_refresh", it.toLong()); arRev++ }
                 val shifts = (-3..3).toList()
                 SetDrop("Pomak TV programa (EPG)", "ako program kasni ili žuri", shifts.map { if (it == 0) tr("Bez pomaka") else (if (it > 0) "+" else "") + it + " h" },  // i18n-ignore
-                    shifts.indexOf(EpgShift.hours).coerceAtLeast(3), new = true) { Prefs.put("epg_shift", shifts[it].toLong()); Repo.clear(); arRev++ }
+                    shifts.indexOf(EpgShift.hours).coerceAtLeast(3)) { Prefs.put("epg_shift", shifts[it].toLong()); Repo.clear(); arRev++ }
             }
+        }
+    }
+    // the playlist's own menu: edit, on/off, its groups and channels, its EPG, refresh, delete
+    menu?.let { pl0 ->
+        val pl = list.firstOrNull { it.id == pl0.id } ?: pl0
+        Popup(pl.name, { menu = null; SetFocus.tick++ }) {
+            OptionRow("Uredi (naziv, link, korisnik, lozinka)", R.drawable.lc_pencil) { menu = null; EditPlaylist.target = pl; nav.push(Screen.AddPlaylist) }
+            Focusable(onClick = { Store.activate(ctx, pl.id); refresh() }, shape = Rnd(12.dp), normal = Color.Transparent, focused = C.Red, zoom = 1f,
+                modifier = Modifier.fillMaxWidth().height(52.dp)) { f ->
+                Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Ico(R.drawable.lc_check, 18.dp, if (f) C.OnRed else C.Text)
+                    T(if (pl.active) "Aktivna" else "Isključena", 15.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                    Toggle(pl.active, f, height = 24.dp)
+                }
+            }
+            OptionRow("📂  " + tr("Grupe i kanali"), null, sub = tr("pomjeri, sakrij, zaključaj PIN-om")) { menu = null; PlEdit.id = pl.id; PlMenu.open = pl.id; openSub("groups") }  // i18n-ignore
+            OptionRow("📺  " + tr("EPG ove playliste"), null, sub = tr("izvori, zadani, uključi/ugasi")) { menu = null; PlEdit.id = pl.id; PlMenu.open = pl.id; openSub("epg") }  // i18n-ignore
+            OptionRow("Osvježi", R.drawable.lc_refresh_cw, sub = tr("kanali, filmovi i serije")) {
+                menu = null; Repo.dropCatalogs()
+                scope.launch {
+                    val up = try { if (pl.type == SourceType.XTREAM) pl.copy(exp = Repo.test(pl)) else { Repo.test(pl); pl } } catch (e: Exception) { pl }
+                    Store.savePlaylists(ctx, Store.playlists(ctx).map { if (it.id == up.id) up else it }); refresh()
+                    Toast.makeText(ctx, tr("Osvježeno"), Toast.LENGTH_SHORT).show()
+                }
+            }
+            OptionRow("Obriši", R.drawable.lc_trash_2, color = C.Danger) { menu = null; if (Prefs.bool("pin_delpl") && Lock.hasPin()) pinDel = pl else del = pl }
+        }
+    }
+    pinDel?.let { pl -> PinDialog(pl.name, tr("Unesi PIN"), onDismiss = { pinDel = null }) { pin -> val e = Lock.check(pin); if (e == null) { pinDel = null; del = pl }; e } }
+    del?.let { pl ->
+        Popup(trf("Obrisati %s?", pl.name), { del = null; SetFocus.tick++ }) {
+            OptionRow("Obriši", R.drawable.lc_trash_2, color = C.Danger) {
+                val rest = Store.playlists(ctx).filter { it.id != pl.id }
+                Watch.removePlaylist(ctx, pl.id); Store.savePlaylists(ctx, rest)
+                del = null; refresh()
+            }
+            OptionRow("Odustani", R.drawable.lc_x) { del = null }
         }
     }
 }
@@ -1570,7 +1710,7 @@ private fun PlaylistsListV2(nav: Nav) {
         Popup(trf("Obrisati %s?", pl.name), { del = null }) {
             OptionRow("Obriši", R.drawable.lc_trash_2, color = C.Danger) {
                 val rest = Store.playlists(ctx).filter { it.id != pl.id }
-                Store.savePlaylists(ctx, if (rest.none { it.active } && rest.isNotEmpty()) rest.mapIndexed { i, x -> x.copy(active = i == 0) } else rest)
+                Watch.removePlaylist(ctx, pl.id); Store.savePlaylists(ctx, rest)
                 del = null; refresh()
             }
             OptionRow("Odustani", R.drawable.lc_x) { del = null }
@@ -1663,7 +1803,7 @@ private fun LookV2(openSub: (String) -> Unit) {
             SetDrop("Mala slika kanala", "pregled dok stojiš na kanalu", listOf("Automatski", "Na OK", "Isključena"), 2 - Look.previewMode) {
                 Look.previewMode = 2 - it; Look.preview = Look.previewMode > 0; save(); rev++
             }
-            SetDrop("Kad otvoriš TV, prvo vidiš", null, listOf("Lista kanala", "TV vodič"), if (Prefs.str("tv_view", "list") == "guide") 1 else 0) {
+            SetDrop("TV se otvara kao", null, listOf("Lista kanala", "TV vodič"), if (Prefs.str("tv_view", "list") == "guide") 1 else 0) {
                 Prefs.put("tv_view", if (it == 1) "guide" else "list"); rev++
             }
             var stdMsg by remember { mutableStateOf<String?>(null) }
@@ -1672,7 +1812,11 @@ private fun LookV2(openSub: (String) -> Unit) {
             }
             SetDrop("Mod programa", trf("Ocjena uređaja %s/100 · %s GB RAM", Perf.score, String.format("%.1f", Perf.ramGb)),
                 listOf(tr("Automatski") + " (" + tr(if (Perf.weak) "Lite" else "Full") + ")", "Lite", "Full"), Perf.mode,
-                note = tr("Lite: bez velikih slika u pozadini i bez prelaza, manje slike. Za slabije uređaje. Full: puni izgled sa slikama.")) { Perf.set(it); rev++ }
+                note = tr("Lite isključuje: novo dodano na Početnoj, velike slike u pozadini, providne kartice, prelaze, malu sliku kanala (pušta na OK), karticu „Pratiš“ i AI pretragu ko prenosi. Rezultati svakih 10 min, nove epizode svakih 6 h, bafer 32 MB, čuvar ekrana samo sat. Sve se može ručno uključiti.")) { Perf.set(it); rev++ }
+            if (Perf.lite) {
+                SetSwitch("Lite: mala slika kanala", "pregled dok stojiš na kanalu", Prefs.bool("lite_preview")) { Prefs.put("lite_preview", it); rev++ }
+                SetSwitch("Lite: AI pretraga ko prenosi", "traži TV kuće na internetu", Prefs.bool("lite_ai_tv")) { Prefs.put("lite_ai_tv", it); rev++ }
+            }
             if (SetMode.advanced) {
                 SetDrop("Oblik ivica", null, listOf("Zaobljene", "Blago zaobljene", "Oštre"), Look.corner) { Look.corner = it; save(); rev++ }
                 val sets = IconSets.BUILTIN
@@ -1822,53 +1966,50 @@ private fun SportV2() {
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             // ---------------------------------------------------------- left: what you follow
             Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                T("Sport", 20.sp, C.Text, FontWeight.Bold)
-                T("Učitava se tek kad otvoriš Sport. Ništa u pozadini.", 11.sp, C.Muted, maxLines = 2)
-                SetSection("Sportovi")
+                T("Sports Center", 20.sp, C.Text, FontWeight.Bold)
+                // one drop-down for the sports: only how many are chosen on the row; All / None / each, stays open until Back
                 val en = csv("sport_enabled", "football").toMutableSet()
-                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    main.forEach { (id, label) -> SportChip(label, id in en) { if (id in en) en.remove(id) else en.add(id); Prefs.put("sport_enabled", en.joinToString(",")); changed() } }
-                    val n = others.count { it.first in en }
-                    SportChip(tr("Ostali sportovi") + if (n > 0) " · $n" else "", n > 0) { more = true }
+                val allSports = Sports.SPORTS + Sports.MORE_SPORTS
+                SetMulti("Sportovi", null, allSports.map { it.second }, allSports.indices.filter { allSports[it].first in en }.toSet(), none = true) { s2 ->
+                    Prefs.put("sport_enabled", (if (s2.isEmpty()) setOf(0) else s2).sorted().joinToString(",") { allSports[it].first }); changed()
                 }
                 val conts = Sports.CONTINENTS
                 val cOn = csv("sport_cont", "eu").map { if (it == "am") "na" else it }
-                SetMulti("Kontinenti", "više odjednom · svjetska takmičenja uvijek", conts.map { it.second }, conts.indices.filter { conts[it].first in cOn }.toSet(), all = false) { s2 ->
+                SetMulti("Kontinenti", "svjetska takmičenja uvijek", conts.map { it.second }, conts.indices.filter { conts[it].first in cOn }.toSet(), all = false) { s2 ->
                     Prefs.put("sport_cont", (if (s2.isEmpty()) setOf(0) else s2).sorted().joinToString(",") { conts[it].first }); changed()
                 }
                 // several countries at once; none ticked = automatic (by the device)
                 val picked = Prefs.str("sport_country").split(',').filter { it.isNotBlank() }.toSet()
                 val opts = COUNTRIES.drop(1)
-                SetMulti("Moja država", "više odjednom · ništa = automatski", opts.map { it.second }, opts.indices.filter { opts[it].first in picked }.toSet(), all = false,
+                SetMulti("Moja država", "ništa = po uređaju", opts.map { it.second }, opts.indices.filter { opts[it].first in picked }.toSet(), all = false,
                     note = tr("Ništa označeno = automatski (po uređaju)")) { s2 ->
                     Prefs.put("sport_country", s2.sorted().joinToString(",") { opts[it].first }); Sports.lastCombined.clear(); changed()
                 }
-                val teams = Prefs.str("sport_teams").split(',').map { it.trim() }.filter { it.isNotBlank() }
-                SetRow("Omiljeni timovi", "njihove utakmice uvijek na vrhu", if (teams.isEmpty()) tr("Nijedan") else trf("%s tima", teams.size)) { teamDlg = true }
                 val nOpts = COUNTRIES.drop(1).filter { it.first in MyTeams.NATIONS }
                 val nOn = Prefs.str("sport_nations").split(',').filter { it.isNotBlank() }.toSet()
-                SetMulti("Moje reprezentacije", "više odjednom · igraju prve u Sportu", nOpts.map { it.second }, nOpts.indices.filter { nOpts[it].first in nOn }.toSet(), all = false) { s2 ->
+                SetMulti("Moje reprezentacije", "igraju prve u Sportu", nOpts.map { it.second }, nOpts.indices.filter { nOpts[it].first in nOn }.toSet(), all = false) { s2 ->
                     Prefs.put("sport_nations", s2.sorted().joinToString(",") { nOpts[it].first }); MyTeams.rev++; changed()
                 }
-                SetSwitch("Automatski prati timove i reprezentacije", "prvi u Sportu + obavijesti na Početnoj", MyTeams.auto) { Prefs.put("sa_auto", it); MyTeams.rev++; rev++ }
-                val pv = SportsAI.prov
-                SetRow("AI pretraga prenosa", pv.site, pv.name + " · " + tr(if (SportsAI.key.isNotBlank()) "ključ upisan" else "nema ključa"),
-                    valueColor = if (SportsAI.key.isNotBlank()) C.Green else null) { keyDlg = true }
-                SetSection("Prikaz")
-                SetDrop("Mala slika utakmice", null, listOf("Na OK", "Isključena"), if (Prefs.bool("sport_preview", true)) 0 else 1) { Prefs.put("sport_preview", it == 0); rev++ }
-                SetSwitch("Podsjeti me na utakmice omiljenih timova", "vrijeme biraš u Podsjetnicima", (Prefs.str("sport_team_remind", "0").toIntOrNull() ?: 0) > 0) {
-                    Prefs.put("sport_team_remind", if (it) "5" else "0"); rev++
-                }
-                SetSection("Obavijesti na Početnoj")
+                val teams = Prefs.str("sport_teams").split(',').map { it.trim() }.filter { it.isNotBlank() }
+                SetRow("Omiljeni timovi", "uvijek na vrhu", if (teams.isEmpty()) tr("Nijedan") else trf("%s tima", teams.size)) { teamDlg = true }
+                SetSwitch("Automatski prati", "timove i reprezentacije", MyTeams.auto) { Prefs.put("sa_auto", it); MyTeams.rev++; rev++ }
+                SetSection("Obavijesti")
                 val ks = GoalNote.KINDS
-                SetMulti("Za timove i utakmice koje pratiš", "dugi OK na utakmicu › Prati utakmicu ili Prati tim", ks.map { it.second },
+                SetMulti("Obavijesti", "za ono što pratiš", ks.map { it.second },
                     ks.indices.filter { GoalNote.on(ks[it].first) }.toSet(), all = false) { s2 -> ks.forEachIndexed { i, k -> Prefs.put("sa_" + k.first, i in s2) }; rev++ }
-                SetDrop("Osvježavanje rezultata", null, listOf("Svake minute", "Svake 3 min", "Svakih 5 min"),
+                SetSwitch("Podsjetnik prije početka", "za timove i utakmice koje pratiš", (Prefs.str("sport_team_remind", "1").toIntOrNull() ?: 1) > 0) {
+                    Prefs.put("sport_team_remind", if (it) "1" else "0"); rev++
+                }
+                SetDrop("Osvježavanje", "dok je Sport otvoren", listOf("Svake minute", "Svake 3 min", "Svakih 5 min"),
                     listOf(1, 3, 5).indexOf(Prefs.str("sport_refresh", "1").toIntOrNull() ?: 1).coerceAtLeast(0)) { Prefs.put("sport_refresh", listOf(1, 3, 5)[it].toString()); rev++ }
-                SetSection("Ko prenosi · izvori")
-                val srcKeys = listOf("sport_src_rights", "sport_src_ai")
-                SetMulti("Izvori", "odakle se traži ko prenosi · tvoj TV vodič uvijek", listOf("Prava prenosa po ligi", "AI pretraga"),
+                SetDrop("Mala slika utakmice", null, listOf("Na OK", "Isključena"), if (Prefs.bool("sport_preview", true)) 0 else 1) { Prefs.put("sport_preview", it == 0); rev++ }
+                SetSection("Ko prenosi")
+                val srcKeys = listOf("sport_src_rights", "sport_src_espn", "sport_src_ai")
+                SetMulti("Izvori", "tvoji kanali (TV vodič) uvijek", listOf("Prava po ligi", "ESPN", "AI"),
                     srcKeys.indices.filter { Prefs.bool(srcKeys[it], true) }.toSet(), all = false) { s2 -> srcKeys.forEachIndexed { i, k -> Prefs.put(k, i in s2) }; changed() }
+                val pv = SportsAI.prov
+                SetRow("AI ključ", pv.site, pv.name + " · " + tr(if (SportsAI.key.isNotBlank()) "upisan" else "nema"),
+                    valueColor = if (SportsAI.key.isNotBlank()) C.Green else null) { keyDlg = true }
                 SetDrop("AI", tr(if (pv.free) "besplatno" else "plaća se po upitu"), SportsAI.PROVIDERS.map { it.name },
                     SportsAI.PROVIDERS.indexOfFirst { it.id == SportsAI.provider }.coerceAtLeast(0)) { SportsAI.provider = SportsAI.PROVIDERS[it].id; status = null; rev++ }
                 if (SportsAI.ready) SetRow(status ?: tr("Provjeri ključ"), null, arrow = "↻") {
@@ -1927,7 +2068,8 @@ private fun RemindersV2(nav: Nav) {
             SetSection(trf("Nadolazeći · %s", all.size))
             if (all.isEmpty()) T("Nema podsjetnika. U TV vodiču ili Sportu: OK na emisiji › Podsjeti me.", 12.sp, C.Muted, maxLines = 2)
             all.forEach { r ->
-                SetRow(r.title, java.text.SimpleDateFormat("EEE d. M. HH:mm", java.util.Locale(Look.lang)).format(java.util.Date(r.start)) + (r.channelName?.let { " · $it" } ?: ""), arrow = "›") { menu = r }
+                SetRow(r.title, java.text.SimpleDateFormat("EEE d. M. HH:mm", java.util.Locale(Look.lang)).format(java.util.Date(r.start)) + (r.channelName?.let { " · $it" } ?: ""), arrow = "›",
+                    onLong = { menu = r }) { menu = r }
             }
             SetSection("Kad dođe vrijeme")
             SetDrop("Šta da uradi", null, listOf("Prikaži obavijest", "Prebaci na kanal sam"), Reminders.action) { Reminders.action = it; rev++ }
@@ -1939,6 +2081,7 @@ private fun RemindersV2(nav: Nav) {
             }
             SetDrop("Obavijest stoji", null, listOf("10 s", "20 s", "30 s"), listOf(10, 20, 30).indexOf(Reminders.popupSec).coerceAtLeast(1)) { Reminders.popupSec = listOf(10, 20, 30)[it]; rev++ }
             SetSwitch("Zvuk obavijesti", null, Prefs.bool("rem_sound", true), new = true) { Prefs.put("rem_sound", it) }
+            SetSwitch("Utakmice koje pratiš", "same dobiju podsjetnik prije početka", Prefs.str("sport_team_remind", "1") != "0") { Prefs.put("sport_team_remind", if (it) "1" else "0"); rev++ }
             SetSection("Ostalo")
             SetDrop("Kad je aplikacija zatvorena", "ne radi na svim uređajima", listOf("Otvori PRETORIAN", "Ništa"), if (Reminders.wake) 0 else 1, new = true) { Reminders.wake = it == 0; rev++ }
             SetDrop("Stari podsjetnici", null, listOf("Obriši nakon 1 dan", "Obriši nakon 7 dana", "Obriši odmah"),
@@ -1948,9 +2091,10 @@ private fun RemindersV2(nav: Nav) {
     menu?.let { r ->
         Popup(r.title, { menu = null }) {
             if (r.channelUrl != null) OptionRow("Gledaj kanal sada", R.drawable.lc_play, color = C.Green) { menu = null; playReminder(nav, r) }
+            OptionRow("Ukloni", R.drawable.lc_trash_2, color = C.Danger) { Reminders.remove(r.id); menu = null; rev++ }
+            T("Promijeni vrijeme", 12.sp, C.Muted)
             OptionRow("Pomjeri 5 min ranije", R.drawable.lc_arrow_up) { Reminders.remove(r.id); Reminders.add(r.copy(start = r.start - 5 * 60_000L)); menu = null; rev++ }
             OptionRow("Pomjeri 5 min kasnije", R.drawable.lc_arrow_down) { Reminders.remove(r.id); Reminders.add(r.copy(start = r.start + 5 * 60_000L)); menu = null; rev++ }
-            OptionRow("Obriši podsjetnik", R.drawable.lc_trash_2, color = C.Danger) { Reminders.remove(r.id); menu = null; rev++ }
             OptionRow("Zatvori", R.drawable.lc_x) { menu = null }
         }
     }
@@ -1966,23 +2110,16 @@ private fun SimpleV2(nav: Nav) {
     val items = listOf("TV", "Filmovi", "Serije")
     val ids = listOf("tv", "vod", "series")
     key(rev) {
-        SetPage("Jednostavni mod i PIN") {
+        SetPage("Modovi") {
             SetSection("Jednostavni mod")
-            SetDrop("Jednostavni mod", "početna samo s TV, Filmovi, Serije", listOf("Isključen", "Uključen"), if (Lock.simple) 1 else 0) {
-                if (it == 1) { if (!Lock.hasPin()) setup = "simple" else { Lock.switchSimple(true); nav.root(Screen.Home) } }
+            SetSwitch("Jednostavni mod", "početna samo s TV, Filmovi, Serije", Lock.simple) {
+                if (it) { if (!Lock.hasPin()) setup = "simple" else { Lock.switchSimple(true); nav.root(Screen.Home) } } else { Lock.switchSimple(false); rev++ }
             }
             val on = csv("simple_items", "tv,vod,series")
             SetMulti("Šta se vidi", "lampicama biraš", items, ids.indices.filter { ids[it] in on }.toSet(), all = false) { s ->
                 Prefs.put("simple_items", (if (s.isEmpty()) setOf(0) else s).sorted().joinToString(",") { ids[it] }); rev++
             }
-            val lim = listOf(0, 60, 120, 180, 240)
-            SetDrop("Dnevno vrijeme gledanja", "1 h, 2 h, 3 h… pa traži PIN", listOf("Bez ograničenja", "1 h", "2 h", "3 h", "4 h"),
-                lim.indexOf(WatchLimit.limitMin).coerceAtLeast(0), new = true,
-                note = tr("Kad vrijeme istekne, plejer stane i traži PIN. Treba postaviti PIN.")) { Prefs.put("watch_limit", lim[it].toString()); rev++ }
             SetDrop("Izlaz iz jednostavnog moda", null, listOf("Traži PIN", "Bez PIN-a"), if (Prefs.bool("pin_simple_exit", true)) 0 else 1) { Prefs.put("pin_simple_exit", it == 0); rev++ }
-            SetSwitch("Zaključaj kategorije za odrasle", "XXX, Adult, 18+ … traže PIN, same od sebe", Prefs.bool("adult_lock", true), new = true) {
-                Prefs.put("adult_lock", it); if (it) Prefs.put("adult_lock_gen", Prefs.long("adult_lock_gen", 0) + 1); Repo.clear(); rev++
-            }
             SetSection("PIN")
             if (Lock.isDefault()) Row(Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(Rnd(12.dp)).background(C.Amber.copy(alpha = 0.16f))
                 .border(1.dp, C.Amber.copy(alpha = 0.6f), Rnd(12.dp)).padding(horizontal = 14.dp, vertical = 10.dp),
@@ -2013,17 +2150,39 @@ private fun SimpleV2(nav: Nav) {
 private fun GeneralV2() {
     var rev by remember { mutableIntStateOf(0) }
     var edit by remember { mutableStateOf<String?>(null) }
+    var pick by remember { mutableStateOf<String?>(null) }
+    // long OK on a background row: how often it checks (the fastest choices use more internet and battery)
+    pick?.let { k ->
+        val close = { pick = null; rev++; SetFocus.tick++ }
+        Popup(tr(if (k == "sport") "Rezultati utakmica koje pratiš" else "Nove epizode serija koje gledaš"), { close() }) {
+            if (k == "sport") {
+                T(tr("Obično"), 12.sp, C.Muted)
+                listOf(1, 2, 3, 5, 10).forEach { m -> val cur = General.sportEvery == m
+                    OptionRow(everyStr(m * 60) + if (m == 1) " · " + tr("troši više") else "", if (cur) R.drawable.lc_check else null, color = if (cur) C.Green else null) { Prefs.put("bg_sport_min", m.toLong()); close() } }
+                T(tr("Dok utakmica traje"), 12.sp, C.Muted)
+                listOf(30, 60, 120).forEach { sec -> val cur = General.sportLive == sec
+                    OptionRow(everyStr(sec) + if (sec == 30) " · " + tr("troši više") else "", if (cur) R.drawable.lc_check else null, color = if (cur) C.Green else null) { Prefs.put("bg_sport_live", sec.toLong()); close() } }
+            } else listOf(15, 30, 60, 180, 360, 720, 1440).forEach { m -> val cur = General.episodesEvery == m
+                OptionRow(everyStr(m * 60) + if (m == 15) " · " + tr("troši više") else "", if (cur) R.drawable.lc_check else null, color = if (cur) C.Green else null) { Prefs.put("bg_ep_min", m.toLong()); close() } }
+        }
+    }
     key(rev) {
         SetPage("Opće", "Sve je isključeno dok ga ne uključiš.") {
+            // basic or all settings: the first thing in General, so it is there in basic mode too
+            SetSwitch("Napredne opcije", "prikaži sve sekcije i postavke", SetMode.advanced) { SetMode.set(it); rev++ }
             SetSection("Pokretanje")
+            SetDrop("Kad se aplikacija otvori, prvo vidiš", "Nazad s tog ekrana vodi na Početnu",
+                listOf("Početna", "TV", "Filmovi", "Serije", "Sports Center", "Zadnji kanal"), General.start) { Prefs.put("start_screen", it.toLong()); rev++ }
             SetSwitch("Pokreni s boxom", "PRETORIAN se otvori kad se box upali", General.boot) { Prefs.put("gen_boot", it); rev++ }
-            SetSwitch("Zadnji kanal pri pokretanju", "odmah pusti kanal koji si zadnji gledao", General.lastChannel) { Prefs.put("gen_lastch", it); rev++ }
             SetSection("Izlaz")
             SetSwitch("Potvrdi izlaz", "Nazad na Početnoj prvo pita", General.confirmExit) { Prefs.put("gen_exit", it); rev++ }
             SetSection("Rad u pozadini")
-            SetSwitch("Rezultati utakmica koje pratiš", "svake 3 min, uživo svake minute · kartica na Početnoj i obavijesti", Prefs.bool("bg_sport", true)) { Prefs.put("bg_sport", it); rev++ }
-            SetSwitch("Nove epizode serija koje gledaš", "provjera jednom na sat", Prefs.bool("bg_episodes", true)) { Prefs.put("bg_episodes", it); rev++ }
-            SetSwitch("Kartica „Pratiš“ na Početnoj", "rezultat, minuta, gol i karton utakmica koje pratiš", Prefs.bool("home_sport_card", true)) { Prefs.put("home_sport_card", it); rev++ }
+            T(tr("Dugi OK na redu: koliko često provjerava"), 12.sp, C.Muted, maxLines = 1)
+            SetSwitch("Rezultati utakmica koje pratiš", trf("svakih %s · uživo svakih %s", everyStr(General.sportEvery * 60), everyStr(General.sportLive)),
+                Prefs.bool("bg_sport", true), onLong = { pick = "sport" }) { Prefs.put("bg_sport", it); rev++ }
+            SetSwitch("Nove epizode serija koje gledaš", trf("svakih %s", everyStr(General.episodesEvery * 60)),
+                Prefs.bool("bg_episodes", true), onLong = { pick = "ep" }) { Prefs.put("bg_episodes", it); rev++ }
+            SetSwitch("Kartica „Pratiš“ na Početnoj", "rezultat, minuta, gol i karton utakmica koje pratiš", Prefs.bool("home_sport_card", !Perf.lite)) { Prefs.put("home_sport_card", it); rev++ }
             SetSection("Mreža")
             SetRow("User-Agent", "za providere koji puštaju samo određene aplikacije", Prefs.str("net_ua").ifBlank { tr("zadani") }) { edit = "net_ua" }
             SetRow("UDP proxy (udpxy)", "za multicast IPTV od operatera, npr. 192.168.178.1:4022", Prefs.str("net_udpxy").ifBlank { tr("isključen") }) { edit = "net_udpxy" }
@@ -2056,6 +2215,14 @@ private fun ParentalV2() {
     }
     key(rev) {
         SetPage("Roditeljska kontrola", "Sakrivene kategorije se ne vide u TV-u, Filmovima, Serijama ni u Pretrazi") {
+            SetSection("Zaključaj")
+            SetSwitch("Zaključaj kategorije za odrasle", "XXX, Adult, 18+ … traže PIN, same od sebe", Prefs.bool("adult_lock", true)) {
+                Prefs.put("adult_lock", it); if (it) Prefs.put("adult_lock_gen", Prefs.long("adult_lock_gen", 0) + 1); Repo.clear(); rev++
+            }
+            val lim = listOf(0, 60, 120, 180, 240)
+            SetDrop("Dnevno vrijeme gledanja", "1 h, 2 h, 3 h… pa traži PIN", listOf("Bez ograničenja", "1 h", "2 h", "3 h", "4 h"),
+                lim.indexOf(WatchLimit.limitMin).coerceAtLeast(0),
+                note = tr("Kad vrijeme istekne, plejer stane i traži PIN. Treba postaviti PIN.")) { Prefs.put("watch_limit", lim[it].toString()); rev++ }
             SetSection("Sakrij")
             Parental.KINDS.forEach { (k, label, sub) ->
                 SetSwitch(label, sub, Parental.on(k)) { Parental.set(k, it); rev++ }
@@ -2079,7 +2246,7 @@ private fun ProfilesV2() {
     var add by remember { mutableStateOf(false) }
     var setup by remember { mutableStateOf(false) }
     var pinFor by remember { mutableStateOf<Profile?>(null) }
-    SetPage("Profili") {
+    SetPage("Profil") {
         SetSection("Profili · OK = meni profila")
         LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             items(all) { p ->
@@ -2111,18 +2278,6 @@ private fun ProfilesV2() {
         val kid = Prefs.str("kids_profile")
         SetDrop("Profil za djecu", "ulazi odmah u jednostavni mod", listOf(tr("Nijedan")) + all.map { it.name },
             (all.indexOfFirst { it.id == kid } + 1).coerceAtLeast(0), new = true) { Prefs.put("kids_profile", if (it == 0) "" else all[it - 1].id); Profiles.rev++ }
-        SetSection("Google Drive")
-        SetRow("Račun", "prijava kodom s telefona", if (Drive.signedIn) Drive.statusLine() else tr("Nije prijavljen"), valueColor = if (Drive.signedIn) C.Green else null) {
-            if (!Drive.signedIn) Drive.loginOpen = true
-        }
-        if (Drive.signedIn) {
-            SetDrop("Sinhronizacija", "šta ide na Drive biraš u Backup › Šta uključiti", listOf("Svakih 10 min", "Svakih sat", "Isključena"),
-                listOf(10, 60, 0).indexOf(Prefs.str("drive_every", "10").toIntOrNull() ?: 10).coerceAtLeast(0)) { Prefs.put("drive_every", listOf(10, 60, 0)[it].toString()); Profiles.rev++ }
-            SetRow("Sinhronizuj sada", "playliste, favoriti, gledano, postavke") { kotlinx.coroutines.GlobalScope.launch { try { Drive.upload(ctx) } catch (_: Exception) {}; Profiles.rev++ } }
-            SetRow("Vrati s Google Drivea", "povuci sve na ovaj uređaj") { Drive.restoreAsk = true }
-            SetRow("Odjavi se", null) { Drive.logout(); Profiles.rev++ }
-        }
-        if (BuildConfig.GOOGLE_CLIENT_ID.isBlank() && SetMode.advanced) SetRow("Google OAuth klijent", null, tr(if (Drive.configured) "Upisan" else "Nije upisan")) { setup = true }
     }
     menu?.let { p ->
         Popup(p.name, { menu = null }) {
@@ -2138,7 +2293,6 @@ private fun ProfilesV2() {
             if (Profiles.hash(p.id, pin) == p.pinHash) { pinFor = null; Profiles.switchTo(ctx, p); null } else tr("Pogrešan PIN")
         }
     }
-    if (setup) DriveSetup(onDismiss = { setup = false }, onSaved = { setup = false })
 }
 
 /* ---------------------------------------------------------------- Backup */
@@ -2160,32 +2314,42 @@ private fun BackupV2(nav: Nav) {
         } catch (e: Exception) { Toast.makeText(ctx, e.message ?: tr("Vraćanje nije uspjelo"), Toast.LENGTH_LONG).show() }
         step = null
     }
+    val found = remember(rev) { try { Backup.found(ctx) } catch (_: Exception) { emptyList() } }
+    var done by remember { mutableStateOf<String?>(null) }
     key(rev) {
         SetPage("Backup i vraćanje") {
-            SetSection("Napravi backup")
-            val where = Prefs.str("backup_where", "0").toIntOrNull() ?: 0
-            SetRow("Napravi backup sada", null, arrow = "›") {
-                if (where == 1) {
-                    try { val d = java.io.File(ctx.filesDir, "backups").apply { mkdirs() }; java.io.File(d, Backup.fileName()).writeText(Backup.export(ctx, null, parts))
-                        Toast.makeText(ctx, tr("Spremljeno u memoriju TV-a"), Toast.LENGTH_LONG).show(); rev++ }
-                    catch (e: Exception) { Toast.makeText(ctx, e.message ?: "", Toast.LENGTH_LONG).show() }
-                } else step = "browse"
+            SetSection("Napravi kopiju")
+            val usbIn = Backup.usbDirs().isNotEmpty()
+            val usb = Prefs.str("backup_where", "0") == "2" && usbIn
+            // one OK: saved straight to the chosen place, no folder window
+            SetRow("Napravi kopiju sada", done, arrow = "›", valueColor = C.Green) {
+                done = try { trf("✓ Spremljeno u %s", Backup.saveNow(ctx, usb, parts)) } catch (e: Exception) { e.message ?: tr("Nije uspjelo") }
+                rev++
             }
-            SetDrop("Gdje", "USB ili memorija TV-a", listOf("USB / folder", "Memorija TV-a"), where.coerceIn(0, 1)) { Prefs.put("backup_where", it.toString()); rev++ }
-            SetMulti("Šta uključiti", "isto važi za Google Drive", BACKUP_PARTS, parts,
+            SetDrop("Gdje", if (usbIn) null else "USB se pojavi kad ga priključiš", if (usbIn) listOf("Download/PRETORIAN", "USB") else listOf("Download/PRETORIAN"),
+                if (usb) 1 else 0) { Prefs.put("backup_where", if (it == 1) "2" else "0"); rev++ }
+            if (usb && !FileAccess.hasAll(ctx)) Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                T("Za USB aplikacija treba dozvolu za fajlove.", 13.sp, C.Amber, maxLines = 1, modifier = Modifier.weight(1f))
+                Button("Dozvoli", R.drawable.lc_check) { FileAccess.allFilesIntent(ctx)?.let { i -> try { ctx.startActivity(i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {} } }
+            }
+            SetMulti("Šta uključiti", null, BACKUP_PARTS, parts,
                 note = tr("AI ključevi su po defaultu isključeni, zbog sigurnosti")) { s -> Prefs.put("backup_parts", s.sorted().joinToString(",")); rev++ }
-            SetDrop("Automatski backup", "u memoriji TV-a, čuvaju se zadnja 3", listOf("Isključen", "Sedmično", "Dnevno"),
+            SetDrop("Automatska kopija", "čuvaju se zadnje 3", listOf("Isključeno", "Sedmično", "Dnevno"),
                 if (!Prefs.bool("backup_auto", true)) 0 else if (Prefs.bool("backup_daily")) 2 else 1) {
                 Prefs.put("backup_auto", it > 0); Prefs.put("backup_daily", it == 2); rev++
             }
-            SetSection("Vrati iz backupa")
-            Backup.autoList(ctx).forEach { f ->
-                SetRow(java.text.SimpleDateFormat("EEE, dd.MM.yy · HH:mm", java.util.Locale(Look.lang)).format(java.util.Date(f.lastModified())),
-                    tr("Memorija TV-a · automatski") + " · ${f.length() / 1024} KB", tr("Vrati")) { text = f.readText(); step = "preview" }
+            SetSection("Vrati iz kopije")
+            if (found.isEmpty()) T("Još nema nijedne kopije.", 13.sp, C.Muted)
+            found.take(12).forEach { f ->
+                SetRow(java.text.SimpleDateFormat("EEE, dd.MM.yy · HH:mm", java.util.Locale(Look.lang)).format(java.util.Date(f.at)),
+                    trf("%s · %s KB", tr(f.where), (f.size / 1024).coerceAtLeast(1)), tr("Vrati")) {
+                    text = try { f.read() } catch (_: Exception) { null }
+                    if (text == null || Backup.summary(text!!) == null) Toast.makeText(ctx, tr("Fajl nije PRETORIAN backup"), Toast.LENGTH_LONG).show() else step = "preview"
+                }
             }
-            SetRow("Drugi fajl", ".json s USB-a ili diska", tr("Izaberi")) { step = "pick" }
+            SetRow("Drugi fajl…", ".json s USB-a ili diska", tr("Izaberi")) { step = "pick" }
             SetSection("Opasno")
-            SetRow("Vrati aplikaciju na početak", "briše sve: playliste, profile, postavke", tr("Resetuj"), valueColor = C.Danger, new = true) { reset = true }
+            SetRow("Vrati aplikaciju na početak", "briše sve: playliste, profile, postavke", tr("Resetuj"), valueColor = C.Danger) { reset = true }
         }
     }
     when (step) {
@@ -2351,7 +2515,8 @@ private fun UpdateV2() {
         }
     }
     // long OK on the version: make it the Stable one for everybody (author only, with his GitHub key)
-    if (verMenu) Popup(BuildInfo.VERSION + if (Updater.beta) " · Beta" else "", { verMenu = false }, width = 520.dp) {
+    // the title shows the real state: Stable when this version is the Stable one, otherwise Beta
+    if (verMenu) Popup(BuildInfo.VERSION + if (Updater.stableName == BuildInfo.VERSION) " · Stable" else " · Beta", { verMenu = false }, width = 520.dp) {  // i18n-ignore
         if (Updater.stableName == BuildInfo.VERSION) T("Ova verzija je već Stable.", 13.sp, C.Green)
         else OptionRow(if (promoting) "Objavljujem…" else "Označi kao Stable · pošalji svima", R.drawable.lc_shield_check, color = C.Amber) {
             if (promoting) return@OptionRow
@@ -2359,6 +2524,7 @@ private fun UpdateV2() {
             promoting = true
             scope.launch {
                 val err = Updater.promote(); promoting = false; verMenu = false
+                if (err == null) { Updater.stableName = BuildInfo.VERSION; Prefs.put("upd_stable_name", BuildInfo.VERSION) }
                 Toast.makeText(ctx, err ?: tr("Poslano: GitHub pravi Stable izdanje (oko 5 min)"), Toast.LENGTH_LONG).show()
             }
         }
@@ -2418,13 +2584,20 @@ private fun AboutV2(onSub: (String) -> Unit, onSection: (String) -> Unit) {
             // only the logo (no "About / PRETORIAN" next to it): its frame follows the theme so it is always clearly visible
             LogoTile(96.dp)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                FitText(trf("Verzija %s", BuildInfo.VERSION) + (if (Updater.beta && Updater.stableName != BuildInfo.VERSION) " · Beta" else ""), 17.sp, C.Text, FontWeight.Bold)  // i18n-ignore
+                // compact: "v1.0.7" plus STABLE / Beta, so nothing is cut on any screen
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    T("v" + BuildInfo.VERSION, 22.sp, C.Text, FontWeight.ExtraBold, maxLines = 1)  // i18n-ignore
+                    val stable = Updater.stableName == BuildInfo.VERSION
+                    Box(Modifier.clip(Pill).background((if (stable) Color(0xFFFBBF24) else C.Muted).copy(alpha = 0.18f)).padding(horizontal = 8.dp, vertical = 2.dp)) {
+                        T(if (stable) "STABLE" else "Beta", 10.sp, if (stable) Color(0xFFFBBF24) else C.Soft, FontWeight.Bold, maxLines = 1)  // i18n-ignore
+                    }
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     val u = Updater.available
                     Box(Modifier.clip(Pill).background((if (u != null) C.Amber else C.Green).copy(alpha = 0.16f)).padding(horizontal = 9.dp, vertical = 3.dp)) {
                         T(if (u != null) trf("Dostupna %s", u.name) else tr("✓ Najnovija verzija"), 11.sp, if (u != null) C.Amber else C.Green, FontWeight.Bold, maxLines = 1)
                     }
-                    listOf(if (Perf.lite) "Lite" else "Full", trf("%s jezika", Langs.APP.size)).forEach { b ->  // i18n-ignore
+                    listOf(if (Perf.lite) "Lite" else "Full").forEach { b ->  // i18n-ignore
                         Box(Modifier.clip(Pill).background(Color.White.copy(alpha = 0.08f)).padding(horizontal = 9.dp, vertical = 3.dp)) { T(b, 11.sp, C.Text, FontWeight.Bold) }
                     }
                 }
@@ -2433,7 +2606,7 @@ private fun AboutV2(onSub: (String) -> Unit, onSection: (String) -> Unit) {
             val sc = Perf.score
             val scColor = if (sc >= 70) C.Green else if (sc >= 50) C.Amber else C.Danger
             Focusable(onClick = { dlg = "score" }, shape = Rnd(16.dp), normal = scColor.copy(alpha = 0.12f), focused = scColor.copy(alpha = 0.3f), zoom = 1.03f,
-                modifier = Modifier.width(210.dp).border(1.dp, scColor.copy(alpha = 0.6f), Rnd(16.dp))) { f ->
+                modifier = Modifier.width(184.dp).border(1.dp, scColor.copy(alpha = 0.6f), Rnd(16.dp))) { f ->
                 Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp).then(if (f) Modifier else Modifier), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     FitText(tr("Ocjena boxa").uppercase(), 10.sp, scColor, FontWeight.Bold, spacing = 1.5f)
                     Row(verticalAlignment = Alignment.Bottom) {
@@ -2484,6 +2657,8 @@ private fun AboutV2(onSub: (String) -> Unit, onSection: (String) -> Unit) {
             }
             T(if (Perf.weak) "Ispod 70 bodova ili manje od 3 GB RAM-a: Lite štedi memoriju i radi glađe." else "70 bodova i više: Full, puni izgled.", 13.sp, C.Soft, maxLines = 2)
             T("Mod možeš promijeniti u Izgled › Mod programa.", 12.sp, C.Muted)
+            T("Ocjena se izmjeri jednom i ostaje ista.", 12.sp, C.Muted)
+            OptionRow("Izmjeri ponovo", R.drawable.lc_refresh_cw) { Perf.remeasure(ctx); dlg = null; scope.launch { delay(50); dlg = "score" } }
         }
         "author" -> Popup("Autor", { dlg = null }) {
             T("Svi3e", 22.sp, C.Text, FontWeight.ExtraBold)  // i18n-ignore
@@ -2513,7 +2688,7 @@ private fun AboutV2(onSub: (String) -> Unit, onSection: (String) -> Unit) {
                 "TMDB · This product uses the TMDB API but is not endorsed or certified by TMDB.", "PRETORIAN · MIT · github.com/KarlAgathon/PRETORIAN").forEach { T(it, 13.sp, C.Soft, maxLines = 2) }  // i18n-ignore
         }
         "priv" -> Popup("Privatnost", { dlg = null }) {
-            T("Playliste, lozinke, PIN, favoriti i gledano čuvaju se samo na ovom uređaju. Na internet idu samo zahtjevi prema tvom provideru, slike filmova (TMDB) i, ako ih uključiš, Google Drive i AI pretraga.", 13.sp, C.Soft, maxLines = 8)
+            T("Playliste, lozinke, PIN, favoriti i gledano čuvaju se samo na ovom uređaju. Na internet idu samo zahtjevi prema tvom provideru, slike filmova (TMDB) i, ako je uključiš, AI pretraga.", 13.sp, C.Soft, maxLines = 8)
         }
         "crash" -> Popup("Izvještaj o greškama", { dlg = null }, width = 760.dp) {
             T((crash ?: tr("Nema grešaka")).take(1500), 11.sp, C.Soft, maxLines = 24)
@@ -2553,6 +2728,8 @@ fun qrBitmap(text: String, px: Int): androidx.compose.ui.graphics.ImageBitmap? =
 
 /** the playlist whose menu opens on the "Edit playlists" page */
 object PlMenu { var open: String? = null }
+/** the playlist whose groups/channels or EPG are being edited (null = all / the active one) */
+object PlEdit { var id: String? = null }
 
 
 /** The PRETORIAN logo on a frame that suits the theme: glass in Liquid, a gold edge in Sand, a white card in Paper… */
@@ -2572,4 +2749,12 @@ fun LogoTile(size: androidx.compose.ui.unit.Dp) {
         contentAlignment = Alignment.Center) {
         androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.logo_mark), contentDescription = "PRETORIAN", modifier = Modifier.size(size * 0.8f))  // i18n-ignore
     }
+}
+
+/** 30 s, 5 min, 3 h, daily — for the background check intervals */
+fun everyStr(sec: Int): String = when {
+    sec < 60 -> trf("%s s", sec)
+    sec < 3600 -> trf("%s min", sec / 60)
+    sec >= 86400 -> tr("dnevno")
+    else -> trf("%s h", sec / 3600)
 }

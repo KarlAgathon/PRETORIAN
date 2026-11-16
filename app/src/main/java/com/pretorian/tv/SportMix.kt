@@ -484,6 +484,7 @@ private fun MatchCard(e: SportEvent, playing: Channel?, playingFr: FocusRequeste
         if (chs.isEmpty()) T("Nijedan tvoj kanal ne prenosi ovu utakmicu", 12.sp, C.Muted)
         // who broadcasts it anywhere (TV houses), also when it is not in your list
         val tvNames = remember(e.id, e.tv) { e.tv }
+        LaunchedEffect(Unit) { try { Rights.refresh() } catch (_: Exception) {} }
         var aiTv by remember(e.id) { mutableStateOf<List<String>>(emptyList()) }
         LaunchedEffect(e.id) {
             if (!SportsAI.ready) return@LaunchedEffect
@@ -491,7 +492,10 @@ private fun MatchCard(e: SportEvent, playing: Channel?, playingFr: FocusRequeste
             aiTv = try { SportsAI.broadcasters(e).map { (if (it.country.isNotBlank()) it.country + " · " else "") + it.name } } catch (_: Exception) { emptyList() }
         }
         val usual = remember(e.id) { Sports.usualTv(e) }
-        if (tvNames.isNotEmpty() || aiTv.isNotEmpty()) T("📺 " + tr("TV:") + " " + (aiTv + tvNames).distinct().take(10).joinToString(" · "), 12.sp, C.Soft, maxLines = 3)  // i18n-ignore
+        // who shows it: rights where you live first, then ESPN's list, then the AI (each source can be switched off in Settings › Sports Center)
+        val rights = remember(e.id) { Sports.rightsTv(e) }
+        val espn = if (Prefs.bool("sport_src_espn", true)) tvNames else emptyList()
+        if (rights.isNotEmpty() || espn.isNotEmpty() || aiTv.isNotEmpty()) T("📺 " + tr("TV:") + " " + (rights + espn + aiTv).distinct().take(10).joinToString(" · "), 12.sp, C.Soft, maxLines = 3)  // i18n-ignore
         else if (usual.isNotEmpty()) T("📺 " + tr("Obično prenose:") + " " + usual.take(8).joinToString(" · "), 12.sp, C.Soft, maxLines = 3)  // i18n-ignore
         else LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(chs, key = { it.url }) { ch ->
@@ -545,7 +549,7 @@ object HomeHide {
  */
 @Composable
 fun FollowCard(nav: Nav, width: androidx.compose.ui.unit.Dp) {
-    if (!Prefs.bool("home_sport_card", true)) return
+    if (!Prefs.bool("home_sport_card", !Perf.lite)) return
     var tick by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) { while (true) { delay(60_000); tick++ } }
     val all = remember(GoalNote.followed.toList(), GoalNote.lastRev, tick) {

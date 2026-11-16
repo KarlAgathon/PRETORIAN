@@ -10,6 +10,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.border
@@ -248,6 +249,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     var resume by remember { mutableStateOf<Progress?>(null) }
     var bar by remember { mutableStateOf(false) }   // button bar at the bottom
     var subFile by remember { mutableStateOf(s.items.getOrNull(index)?.subFile) }
+    // picture format: 0 Fit, 1 Zoom, 2 Stretch, 3 16:9, 4 4:3 — remembered per channel
     var resize by remember { mutableIntStateOf(0) }
     val player = remember { Preview.stop(); buildPlayer(ctx) }
     val playerScope = rememberCoroutineScope()
@@ -256,7 +258,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     val step = Prefs.seekStep * 1000L
     val focus = remember { FocusRequester() }
     val item = items.getOrElse(index) { items.first() }
-    val p = item.channel?.let { Store.byId(ctx, it.pid) } ?: Store.active(ctx)
+    val p = item.channel?.let { Store.byId(ctx, it.pid) } ?: Store.ownerOf(ctx, item.url) ?: Store.active(ctx)
 
     /** audio / built-in subtitle picked on the movie page, applied when the stream's tracks are known */
     fun applyChoices(item: PlayItem) {
@@ -551,8 +553,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                         }
                     }
                 },
-                update = { v -> v.resizeMode = when (resize) { 1 -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM; 2 -> AspectRatioFrameLayout.RESIZE_MODE_FILL; else -> AspectRatioFrameLayout.RESIZE_MODE_FIT } },
-                modifier = Modifier.fillMaxSize(),
+                update = { v -> v.resizeMode = when (resize) { 1 -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM; 2, 3, 4 -> AspectRatioFrameLayout.RESIZE_MODE_FILL; else -> AspectRatioFrameLayout.RESIZE_MODE_FIT } },
+                modifier = when (resize) { 3 -> Modifier.fillMaxSize().wrapContentSize().aspectRatio(16f / 9f); 4 -> Modifier.fillMaxSize().wrapContentSize().aspectRatio(4f / 3f); else -> Modifier.fillMaxSize() },
             )
         }
 
@@ -731,9 +733,33 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                     val v = player.videoFormat; val a = player.audioFormat
                     if (v != null) T(listOfNotNull("${v.width}×${v.height}", v.sampleMimeType?.substringAfter('/')?.uppercase(), if (v.frameRate > 0) "${v.frameRate.toInt()} fps" else null,
                         a?.let { (it.sampleMimeType?.substringAfter('/')?.uppercase() ?: "") + " " + if (it.channelCount >= 6) "5.1" else "Stereo" }).joinToString(" · "), 12.sp, Color(0xFF9AA4B2))
-                    if (bar) PlayerBar(s.live, playing, item.channel != null,
-                        onPause = { if (player.isPlaying) player.pause() else player.play() },
-                        onAction = { a2 -> bar = false; when (a2) { "epg" -> side = "epg"; "channels" -> side = "channels"; "format" -> { resize = (resize + 1) % 3; bar = true }; else -> dialog = a2 } })
+                    if (bar) {
+                        val ch = item.channel
+                        val subT = tracksOf(player, MC.TRACK_TYPE_TEXT)
+                        val subsOn = subFile != null || (!player.trackSelectionParameters.disabledTrackTypes.contains(MC.TRACK_TYPE_TEXT) && subT.any { it.selected })
+                        PlayerBar(s.live, playing, ch != null, favOn = ch != null && Favs.inAny(ctx, ch), hasSubs = subT.isNotEmpty(), subsOn = subsOn,
+                            audioCount = tracksOf(player, MC.TRACK_TYPE_AUDIO).size, format = FORMATS[resize],
+                            onPause = { if (player.isPlaying) player.pause() else player.play() },
+                            onLong = { a2 -> bar = false; dialog = when (a2) { "fav" -> "fav"; "subs" -> "subs"; else -> null } },
+                            onAction = { a2 -> when (a2) {
+                                // one OK: on or off at once, no window (the star turns yellow)
+                                "fav" -> ch?.let { c ->
+                                    val lists = Favs.lists(ctx)
+                                    if (Favs.inAny(ctx, c)) lists.forEach { l -> if (Favs.contains(l.id, c)) Favs.toggle(l.id, c) }
+                                    else (lists.firstOrNull() ?: Favs.addList(ctx, tr("Favoriti"))).let { Favs.toggle(it.id, c) }
+                                    android.widget.Toast.makeText(ctx, tr(if (Favs.inAny(ctx, c)) "Dodano u favorite" else "Uklonjeno iz favorita"), android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                                "subs" -> if (subT.isEmpty() && !s.live) { bar = false; dialog = "subs" } else {
+                                    val off = subsOn
+                                    if (off) subFile = null
+                                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, off).build()
+                                }
+                                "format" -> { resize = (resize + 1) % FORMATS.size; ch?.let { Prefs.put("fmt_" + it.url.hashCode(), resize.toLong()) } }
+                                "epg" -> { bar = false; side = "epg" }
+                                "channels" -> { bar = false; side = "channels" }
+                                else -> { bar = false; dialog = a2 }
+                            } })
+                    }
                     else T(if (s.live) "▲ ▼ kanal · ◀ lista kanala · ▶ TV vodič · OK još jednom = dugmad"
                       else trf("OK pauza · ◀ ▶ %s s · ▼ = dugmad (audio, titlovi, format slike)", Prefs.seekStep), 13.sp, Color(0xFFB6BCC6))
                 }
@@ -782,18 +808,13 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
 
     when (dialog) {
         "menu" -> Popup(item.title, onDismiss = { dialog = null }) {
-            val ch = item.channel
-            if (s.live && ch != null) {
-                OptionRow(if (Favs.inAny(ctx, ch)) "Liste favorita…" else "Dodaj u favorite", R.drawable.lc_star, color = C.Amber) { dialog = "fav" }
-                OptionRow("TV vodič", R.drawable.lc_calendar_clock) { dialog = null; side = "epg" }
-                OptionRow("Lista kanala", R.drawable.lc_list) { dialog = null; side = "channels" }
-            }
-            OptionRow("Audio", R.drawable.lc_volume, value = tracksOf(player, MC.TRACK_TYPE_AUDIO).firstOrNull { it.selected }?.label ?: "—") { dialog = "audio" }
-            OptionRow("Titlovi", R.drawable.lc_captions, value = if (subFile != null) tr("Učitan") else tracksOf(player, MC.TRACK_TYPE_TEXT).firstOrNull { it.selected }?.label ?: tr("Isključeni")) { dialog = "subs" }
-            if (!s.live && subFile != null) OptionRow("Podesi vrijeme titla", R.drawable.lc_clock, sub = "ako titl kasni ili žuri · SYNC") { dialog = "subsync" }
-            OptionRow("Format slike", R.drawable.lc_monitor, value = tr(listOf("Prilagodi", "Zumiraj", "Rastegni")[resize])) { resize = (resize + 1) % 3 }
+            // Više: the rarer things, so the bar fits in one row
+            OptionRow(if (Sleep.until > 0) trf("Tajmer: %s min", ((Sleep.until - System.currentTimeMillis()) / 60_000 + 1).coerceAtLeast(1)) else tr("Tajmer za spavanje"), R.drawable.lc_moon) { dialog = "sleep" }
             OptionRow("Kvalitet i informacije", R.drawable.lc_info, value = if (videoH > 0) qualityLabel(videoH) else null) { dialog = "info" }
-            if (!s.live) OptionRow("Eksterni player", R.drawable.lc_external_link) { player.pause(); saveProgress(); dialog = "ext" }
+            OptionRow("Vanjski plejer", R.drawable.lc_external_link) { player.pause(); saveProgress(); dialog = "ext" }
+            if (s.live) OptionRow("Arhiva", R.drawable.lc_history, sub = tr("emisije koje su prošle")) { dialog = null; nav.push(Screen.Catchup) }
+            if (!s.live && subFile != null) OptionRow("Podesi vrijeme titla", R.drawable.lc_clock, sub = "ako titl kasni ili žuri · SYNC") { dialog = "subsync" }
+            if (tracksOf(player, MC.TRACK_TYPE_AUDIO).size > 1) OptionRow("Audio", R.drawable.lc_volume, value = tracksOf(player, MC.TRACK_TYPE_AUDIO).firstOrNull { it.selected }?.label ?: "—") { dialog = "audio" }
         }
         "fav" -> item.channel?.let { FavPicker(it) { dialog = null } }
         "ext" -> ExternalPicker(item.url, item.title, player.currentPosition, onDismiss = { dialog = null })
@@ -874,31 +895,35 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     }
 
     LaunchedEffect(dialog, side, resume, bar) { if (dialog == null && side == null && resume == null && !bar) focus.tryFocus() }
+    LaunchedEffect(item.url) { resize = item.channel?.let { Prefs.long("fmt_" + it.url.hashCode(), 0).toInt().coerceIn(0, FORMATS.lastIndex) } ?: resize }
 }
 
-/** Buttons at the bottom of the player. */
+private val FORMATS = listOf("Fit", "Zoom", "Razvuci", "16:9", "4:3")
+
+/** Buttons at the bottom of the player, in one row (no scrolling): Pause · ★ · [CC] · [Audio] · Format · Guide · Group · More.
+ *  Subtitles only when the stream has subtitle tracks, Audio only with 2 or more tracks. */
 @Composable
-private fun PlayerBar(live: Boolean, playing: Boolean, hasChannel: Boolean, onPause: () -> Unit, onAction: (String) -> Unit) {
+private fun PlayerBar(live: Boolean, playing: Boolean, hasChannel: Boolean, favOn: Boolean, hasSubs: Boolean, subsOn: Boolean, audioCount: Int, format: String,
+                      onPause: () -> Unit, onLong: (String) -> Unit, onAction: (String) -> Unit) {
     val first = remember { FocusRequester() }
+    data class B(val id: String, val label: String, val icon: Int, val tint: Color? = null)
     val list = buildList {
-        add(Triple("pause", if (playing) "Pauza" else "Pusti", if (playing) R.drawable.lc_pause else R.drawable.lc_play))
-        if (live && hasChannel) add(Triple("fav", "Favorit", R.drawable.lc_star))
-        add(Triple("subs", "Titlovi", R.drawable.lc_captions))
-        add(Triple("audio", "Audio", R.drawable.lc_volume))
-        add(Triple("format", "Format slike", R.drawable.lc_maximize))
-        add(Triple("sleep", if (Sleep.until > 0) trf("Tajmer: %s min", ((Sleep.until - System.currentTimeMillis()) / 60_000 + 1).coerceAtLeast(1)) else tr("Tajmer za spavanje"), R.drawable.lc_moon))
-        add(Triple("info", "Kvalitet", R.drawable.lc_gauge2))
-        if (live) { add(Triple("epg", "Vodič", R.drawable.lc_calendar_clock)); add(Triple("channels", "Grupa", R.drawable.lc_list)) }
-        add(Triple("menu", "Više", R.drawable.lc_layout_grid))
-        if (!live) add(Triple("ext", "Eksterni", R.drawable.lc_external_link))
+        add(B("pause", if (playing) "Pauza" else "Pusti", if (playing) R.drawable.lc_pause else R.drawable.lc_play))
+        if (live && hasChannel) add(B("fav", "Favorit", R.drawable.lc_star, if (favOn) Color(0xFFFBBF24) else null))
+        if (hasSubs || !live) add(B("subs", "Titlovi", R.drawable.lc_captions, if (subsOn) Color(0xFF22C55E) else null))
+        if (audioCount > 1) add(B("audio", "Audio", R.drawable.lc_volume))
+        add(B("format", format, R.drawable.lc_maximize))
+        if (live) { add(B("epg", "Vodič", R.drawable.lc_calendar_clock)); add(B("channels", "Grupa", R.drawable.lc_list)) }
+        add(B("menu", "Više", R.drawable.lc_layout_grid))
     }
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        itemsIndexed(list) { i, (id, label, icon) ->
-            Focusable(onClick = { if (id == "pause") onPause() else onAction(id) }, focusRequester = if (i == 0) first else null,
-                normal = Color(0x33FFFFFF), focused = C.Red, shape = Rnd(12.dp), zoom = 1.05f, modifier = Modifier.height(44.dp)) { f ->
-                Row(Modifier.align(Alignment.Center).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Ico(icon, 18.dp, if (f) C.OnRed else Color.White)
-                    T(label, 14.sp, if (f) C.OnRed else Color.White, FontWeight.SemiBold)
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        list.forEachIndexed { i, b ->
+            Focusable(onClick = { if (b.id == "pause") onPause() else onAction(b.id) }, onMenu = if (b.id == "fav" || b.id == "subs") ({ onLong(b.id) }) else null,
+                focusRequester = if (i == 0) first else null,
+                normal = Color(0x33FFFFFF), focused = C.Red, shape = Rnd(12.dp), zoom = 1.05f, modifier = Modifier.height(42.dp)) { f ->
+                Row(Modifier.align(Alignment.Center).padding(horizontal = 11.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Ico(b.icon, 17.dp, b.tint ?: if (f) C.OnRed else Color.White)
+                    T(b.label, 13.sp, if (f) C.OnRed else Color.White, FontWeight.SemiBold, maxLines = 1)
                 }
             }
         }

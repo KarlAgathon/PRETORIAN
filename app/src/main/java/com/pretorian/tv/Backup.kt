@@ -126,7 +126,7 @@ object Backup {
         data.optJSONObject("profiles")?.let { Profiles.restoreSnapshots(ctx, it) }
     }
 
-    fun fileName() = "PRETORIAN-backup-" + SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()) + ".json"
+    fun fileName() = "PRETORIAN-backup-" + SimpleDateFormat("yyyy-MM-dd_HH-mm", Locale.US).format(Date()) + ".json"
 
     /** weekly automatic backup inside the box (last 3 kept) */
     fun auto(ctx: Context) {
@@ -141,6 +141,59 @@ object Backup {
     }
 
     fun autoList(ctx: Context): List<File> = File(ctx.filesDir, "backups").listFiles()?.sortedByDescending { it.lastModified() } ?: emptyList()
+
+    /** USB sticks that are plugged in now (their root folder) */
+    fun usbDirs(): List<File> {
+        val out = ArrayList<File>()
+        File("/storage").listFiles()?.filter { it.isDirectory && it.name != "emulated" && it.name != "self" && it.canRead() }?.let { out += it }
+        return out
+    }
+
+    /** one backup found somewhere: where, when, how big, and how to read it */
+    class Found(val where: String, val at: Long, val size: Long, val read: () -> String)
+
+    /** every backup we can see: Download/PRETORIAN, USB sticks (PRETORIAN folder), automatic ones; newest first */
+    fun found(ctx: Context): List<Found> {
+        val out = ArrayList<Found>()
+        val seen = HashSet<String>()
+        // Download/PRETORIAN: the files this app wrote are always readable through the media store
+        if (Build.VERSION.SDK_INT >= 29) try {
+            val uri = android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI
+            ctx.contentResolver.query(uri, arrayOf(android.provider.MediaStore.MediaColumns._ID, android.provider.MediaStore.MediaColumns.DISPLAY_NAME,
+                android.provider.MediaStore.MediaColumns.DATE_MODIFIED, android.provider.MediaStore.MediaColumns.SIZE),
+                android.provider.MediaStore.MediaColumns.DISPLAY_NAME + " LIKE ?", arrayOf("PRETORIAN-backup%"), null)?.use { c ->
+                while (c.moveToNext()) {
+                    val id = c.getLong(0); val name = c.getString(1) ?: continue
+                    if (!seen.add("dl:$name")) continue
+                    val u = android.content.ContentUris.withAppendedId(uri, id)
+                    out += Found("Download/PRETORIAN", c.getLong(2) * 1000, c.getLong(3)) { ctx.contentResolver.openInputStream(u)!!.use { String(it.readBytes()) } }
+                }
+            }
+        } catch (_: Exception) {}
+        @Suppress("DEPRECATION")
+        val dl = File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "PRETORIAN")
+        dl.listFiles()?.filter { it.name.startsWith("PRETORIAN-backup") && seen.add("dl:" + it.name) }?.forEach { f -> out += Found("Download/PRETORIAN", f.lastModified(), f.length()) { f.readText() } }
+        usbDirs().forEach { d ->
+            listOf(d, File(d, "PRETORIAN")).forEach { dir ->
+                dir.listFiles()?.filter { it.name.startsWith("PRETORIAN-backup") && it.name.endsWith(".json") }?.forEach { f -> out += Found("USB", f.lastModified(), f.length()) { f.readText() } }
+            }
+        }
+        autoList(ctx).forEach { f -> out += Found("Automatski", f.lastModified(), f.length()) { f.readText() } }
+        return out.sortedByDescending { it.at }
+    }
+
+    /** saves straight to the chosen place; returns where it went */
+    fun saveNow(ctx: Context, usb: Boolean, parts: Set<Int>): String {
+        val name = fileName(); val text = export(ctx, null, parts)
+        if (usb) {
+            val d = usbDirs().firstOrNull() ?: throw java.io.IOException(tr("USB nije priključen"))
+            val dir = File(d, "PRETORIAN").apply { mkdirs() }
+            File(dir, name).writeText(text)
+            return "USB/PRETORIAN"
+        }
+        PublicFiles.save(ctx, name, text.toByteArray())
+        return "Download/PRETORIAN"
+    }
 }
 
 /** Optional: wakes the box for a reminder (works only where Android allows it). */

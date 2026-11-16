@@ -281,7 +281,7 @@ private fun VodClassic(nav: Nav, series: Boolean) {
         // on top: what arrived lately; the number goes down as you open them
         val nw = NewContent.items(p.id, kind)
         if (nw.isNotEmpty()) out.add(VRow.Group(Category(G_NEW, tr("Nedavno dodano")), nw.size))
-        val cont = Watch.continueList(ctx).filter { (it.series != null) == series && (it.pid.isBlank() || it.pid == p.id) }
+        val cont = Watch.continueList(ctx).filter { (it.series != null) == series && Watch.owner(ctx, it) == p.id }
         if (cont.isNotEmpty()) out.add(VRow.Group(Category(G_CONTINUE, tr("Nastavi gledati")), cont.size))
         val my = MyList.items(kind).size
         if (Look.age && my > 0) out.add(VRow.Group(Category(G_MYLIST, tr("Moja lista")), my))   // shown only when something is on it

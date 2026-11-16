@@ -1,5 +1,8 @@
 package com.pretorian.tv
 
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -132,15 +135,11 @@ class MainActivity : ComponentActivity() {
         if (stoppedAt > 0 && away > 15_000 && !fromExternal) AppHome.tick++
     }
 
-    // leaving the app: send changes to Google Drive
     override fun onStop() {
         super.onStop()
         stoppedAt = System.currentTimeMillis()
         Prefs.put("last_stop", stoppedAt)
         Stats.saveIfDirty()
-        val app = applicationContext
-        @Suppress("OPT_IN_USAGE")
-        kotlinx.coroutines.GlobalScope.launch { try { Drive.autoSync(app) } catch (_: Exception) {} }
     }
 }
 
@@ -169,7 +168,7 @@ class Nav(
     val playlistsChanged: () -> Unit,
 )
 
-object BuildInfo { const val VERSION = "1.0.6" }
+object BuildInfo { const val VERSION = "1.0.7" }
 
 @Composable
 fun PretorianApp() {
@@ -208,15 +207,22 @@ fun PretorianApp() {
         delay(4_000)
         while (true) {
             if (Prefs.bool("bg_sport", true) && (MyTeams.list().isNotEmpty() || MatchFollow.list().isNotEmpty())) try { GoalNote.check(Sports.day(0)) } catch (_: Exception) {}
-            delay(if (GoalNote.hot) 60_000 else 180_000)
+            delay(if (GoalNote.hot) General.sportLive * 1000L else General.sportEvery * 60_000L)
         }
     }
     // Settings › General › Last channel at start
     LaunchedEffect(Unit) {
-        if (General.lastChannel && !General.startedOnce) {
+        if (General.start != 0 && !General.startedOnce && !Lock.simple) {
             General.startedOnce = true
-            delay(1500)
-            Recent.list().firstOrNull()?.let { r -> playChannels(nav, listOf(r.ch), 0) }
+            delay(if (General.start == 5) 1500 else 50)
+            // Settings › General › "When the app opens, you first see": Back from there goes to Home
+            if (stack.lastOrNull() == Screen.Home) when (General.start) {
+                1 -> nav.push(Screen.Tv)
+                2 -> nav.push(Screen.Movies)
+                3 -> nav.push(Screen.Series)
+                4 -> nav.push(Screen.Sports)
+                5 -> Recent.list().firstOrNull()?.let { r -> playChannels(nav, listOf(r.ch), 0) }
+            }
         }
     }
     LaunchedEffect(AppHome.tick) { if (AppHome.tick > 0 && Store.playlists(ctx).isNotEmpty()) { Preview.stop(); stack.clear(); stack.add(Screen.Home) } }
@@ -225,6 +231,7 @@ fun PretorianApp() {
     LaunchedEffect(Unit) {
         Backup.auto(ctx)
         var first = true
+        var epAt = 0L
         while (true) {
             // Settings › Update › Check: at start / hourly / daily / monthly
             val ev = Prefs.str("upd_every", "1"); val since = System.currentTimeMillis() - Prefs.long("upd_last")
@@ -240,7 +247,7 @@ fun PretorianApp() {
                 }
             first = false
             Store.actives(ctx).forEach { p -> try { NewContent.scan(ctx, p) } catch (_: Exception) {} }
-            if (Prefs.bool("bg_episodes", true)) try { Follow.check(ctx) } catch (_: Exception) {}
+            if (Prefs.bool("bg_episodes", true) && System.currentTimeMillis() - epAt >= General.episodesEvery * 60_000L - 60_000L) { epAt = System.currentTimeMillis(); try { Follow.check(ctx) } catch (_: Exception) {} }
             try { Sports.remindTeams() } catch (_: Exception) {}
             // playlist and EPG refresh by themselves: at night (around 4:00) or every 12 / 24 hours (Settings › Playlists)
             try { if (AutoRefresh.due()) AutoRefresh.run(ctx) { nav.playlistsChanged() } } catch (_: Exception) {}
@@ -250,18 +257,8 @@ fun PretorianApp() {
     // Sports Center guide and search list are prepared quietly in the background, so they open at once
     LaunchedEffect(Unit) {
         delay(8_000)
-        try { Sports.guide(ctx, Store.actives(ctx)) } catch (_: Exception) {}
+        if (!Perf.lite) try { Sports.guide(ctx, Store.actives(ctx)) } catch (_: Exception) {}
         try { SearchIndex.get(ctx) } catch (_: Exception) {}
-    }
-    // Google Drive: newer settings from another device at start, your changes sent every 10 minutes
-    LaunchedEffect(Unit) {
-        delay(4_000)
-        Drive.checkRemote(ctx)
-        while (true) {
-            val every = Prefs.str("drive_every", "10").toIntOrNull() ?: 10
-            delay((if (every <= 0) 30 else every) * 60_000L)
-            if (every > 0) Drive.autoSync(ctx)
-        }
     }
     // reminders: checked every 15 seconds, wherever you are in the app
     LaunchedEffect(Unit) {
@@ -278,7 +275,7 @@ fun PretorianApp() {
     // OK on the menus' screen saver: the latest "Continue watching" title plays right away
     LaunchedEffect(Saver.resume) {
         if (Saver.resume == 0) return@LaunchedEffect
-        val pr = Watch.continueList(ctx).firstOrNull() ?: return@LaunchedEffect
+        val pr = Watch.continueList(ctx).firstOrNull()?.takeIf { Watch.blocked(ctx, it) == null } ?: return@LaunchedEffect
         nav.push(Screen.Player(listOf(PlayItem(pr.title, pr.url, pr.poster, null, null, pr.series, pr.season, pr.episode)), 0, live = false))
     }
     // the install confirm screen is opened from here, by the visible app (not from the background)
@@ -360,13 +357,20 @@ fun PretorianApp() {
                             }
                         }
                 }
-                if (Look.age) Box(Modifier.fillMaxSize().background(C.BgBrush)) {
+                // holding ▲ anywhere (outside the player) goes straight to the top bar, on the screen you are on
+                if (Look.age) Box(Modifier.fillMaxSize().background(C.BgBrush).onPreviewKeyEvent { ev ->
+                    if (ev.key == androidx.compose.ui.input.key.Key.DirectionUp && ev.type == androidx.compose.ui.input.key.KeyEventType.KeyDown &&
+                        ev.nativeKeyEvent.repeatCount >= 6) { try { TopNav.fr.requestFocus() } catch (_: Exception) {}; true } else false
+                }) {
                     DuskBackground()
-                    if (top == Screen.Home) key(version) { OnyxHome(nav) }
+                    // every playlist switched off: Home, TV, Movies and Series say so, with a button to switch one on
+                    val noActive = remember(version, top) { Store.playlists(ctx).isNotEmpty() && Store.actives(ctx).isEmpty() } &&
+                        (top == Screen.Home || top == Screen.Tv || top == Screen.Movies || top == Screen.Series)
+                    if (top == Screen.Home && !noActive) key(version) { OnyxHome(nav) }
                     else if (top == Screen.AddPlaylist && Store.playlists(ctx).isEmpty() && Welcome.tab < 0) content()
                     else Column(Modifier.fillMaxSize()) {
                         OnyxTopBar(top, nav)
-                        Box(Modifier.weight(1f).fillMaxWidth()) { content() }
+                        Box(Modifier.weight(1f).fillMaxWidth()) { if (noActive) NoPlaylist(nav) else content() }
                     }
                 } else Row(Modifier.fillMaxSize().background(C.BgBrush)) {
                     Rail(top, nav)
@@ -378,7 +382,6 @@ fun PretorianApp() {
             }
             ReminderPopup(nav)
             if (Profiles.panel) ProfilePanel(nav)
-            DriveDialogs()
             CrashDialog()
             WhatsNewDialog()
             UpdateAskDialog(nav)
@@ -409,7 +412,13 @@ private fun ReminderPopup(nav: Nav) {
     Popup(if (mins > 0) trf("Za %s min počinje", mins) else tr("Počinje sada"), onDismiss = { Reminders.showing = null }) {
         T(r.title, 20.sp, C.Text, FontWeight.Bold, maxLines = 2)
         r.channelName?.let { T(it + " · " + SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(r.start)), 14.sp, C.Soft) }
-        if (r.channelUrl != null) OptionRow("Prebaci", R.drawable.lc_play, color = C.Green) { Reminders.showing = null; playReminder(nav, r) }
+        if (r.channelUrl != null) OptionRow("▶  " + tr("Prebaci na kanal"), null, color = C.Green) { Reminders.showing = null; playReminder(nav, r) }  // i18n-ignore
+        // snooze: the same notice again in 5 minutes
+        OptionRow("⏰  " + tr("Za 5 min"), null) {  // i18n-ignore
+            Reminders.showing = null
+            @Suppress("OPT_IN_USAGE")
+            kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) { delay(5 * 60_000L); if (Reminders.showing == null) Reminders.showing = r }
+        }
         OptionRow("Zatvori", R.drawable.lc_x) { Reminders.showing = null }
     }
 }
@@ -603,7 +612,9 @@ fun ContinueRow(list: List<Progress>, nav: Nav, modifier: Modifier = Modifier) {
         LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(end = 36.dp)) {
             items(list, key = { it.url }) { pr ->
                 Focusable(modifier = Modifier.width(280.dp).height(86.dp), onClick = {
-                    nav.push(Screen.Player(listOf(PlayItem(pr.title, pr.url, pr.poster, null, null, pr.series, pr.season, pr.episode)), 0, live = false))
+                    val why = Watch.blocked(ctx, pr)
+                    if (why != null) android.widget.Toast.makeText(ctx, why, android.widget.Toast.LENGTH_LONG).show()
+                    else nav.push(Screen.Player(listOf(PlayItem(pr.title, pr.url, pr.poster, null, null, pr.series, pr.season, pr.episode)), 0, live = false))
                 }, onMenu = { menu = pr }, normal = C.Card, shape = Rnd(14.dp), zoom = 1.04f) { _ ->
                     Row(Modifier.fillMaxSize().padding(8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Box(Modifier.width(48.dp).fillMaxHeight().clip(Rnd(8.dp)).background(C.Tile)) {

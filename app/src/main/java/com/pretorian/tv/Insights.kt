@@ -130,10 +130,11 @@ object Saver {
     val delayMs get() = delays[Prefs.long("ss_wait", 1).toInt().coerceIn(0, delays.size - 1)] * 60_000L
     /** 0 only when paused, 1 also in the menus (default: also in menus, settings and lists) */
     val inMenus get() = Prefs.long("ss_when2", 1) == 1L
-    val show get() = Prefs.str("ss_show", "0,1,2,3,4,5").split(',').mapNotNull { it.toIntOrNull() }.toSet()
+    /** Lite: clock only (date and seconds), unless chosen by hand */
+    val show get() = Prefs.str("ss_show", if (Perf.lite) "1" else "0,1,2,3,4,5").split(',').mapNotNull { it.toIntOrNull() }.toSet()
     val h24 get() = Prefs.bool("ss_24", true)
     /** 0 soft colours, 1 the poster, 2 black */
-    val bg get() = Prefs.long("ss_bg", 0).toInt()
+    val bg get() = Prefs.long("ss_bg", if (Perf.lite) 2L else 0L).toInt()
     val bright get() = listOf(1f, 0.7f, 0.45f)[Prefs.long("ss_bright", 0).toInt().coerceIn(0, 2)]
     val shift get() = Prefs.bool("ss_shift", true)
 

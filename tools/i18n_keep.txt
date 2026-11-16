@@ -476,3 +476,20 @@ recap
 region
 fav
 mine
+file://
+xml
+gz
+rail
+lite_preview
+lite_ai_tv
+ep
+start_screen
+v
+ESPN
+Download/PRETORIAN
+ · Stable
+Fit
+Zoom
+16:9
+4:3
+USB

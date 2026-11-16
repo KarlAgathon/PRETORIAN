@@ -139,8 +139,34 @@ object Watch {
 
     fun remove(ctx: Context, url: String) { all(ctx).remove(url); persist() }
 
-    /** started and not finished, plus "next episode" entries, newest first */
-    fun continueList(ctx: Context): List<Progress> = all(ctx).values.filter { (it.started || it.next) && !it.done }.sortedByDescending { it.ts }.take(30)
+    /** started and not finished, plus "next episode" entries, newest first — only from playlists that are switched on.
+     *  A switched-off playlist keeps its entries: they come back when it is switched on again. */
+    fun continueList(ctx: Context): List<Progress> {
+        val on = Store.actives(ctx).map { it.id }.toSet()
+        if (on.isEmpty()) return emptyList()
+        val single = Store.playlists(ctx).size == 1
+        return all(ctx).values.filter { (it.started || it.next) && !it.done && owner(ctx, it, single) in on }.sortedByDescending { it.ts }.take(30)
+    }
+
+    /** the playlist an entry came from (older entries without it: found from the link) */
+    fun owner(ctx: Context, p: Progress, single: Boolean = Store.playlists(ctx).size == 1): String? =
+        p.pid.ifBlank { null } ?: Store.ownerOf(ctx, p.url)?.id ?: if (single) Store.playlists(ctx).firstOrNull()?.id else null
+
+    /** null when it can be played; otherwise a short reason (playlist off, deleted or expired) — never plays from a dead list */
+    fun blocked(ctx: Context, p: Progress): String? {
+        val id = owner(ctx, p) ?: return null
+        val pl = Store.playlists(ctx).firstOrNull { it.id == id } ?: return tr("Playlista više ne postoji")
+        if (!pl.active) return tr("Playlista je isključena")
+        if (Store.expired(pl)) return tr("Playlista nije dostupna (istekla ili offline)")
+        return null
+    }
+
+    /** a deleted playlist takes its progress with it */
+    fun removePlaylist(ctx: Context, pid: String) {
+        val m = all(ctx); val single = Store.playlists(ctx).size <= 1
+        m.values.filter { owner(ctx, it, single) == pid || it.pid == pid }.map { it.url }.forEach { m.remove(it) }
+        persist()
+    }
 }
 
 /* ============================================================== reminders */

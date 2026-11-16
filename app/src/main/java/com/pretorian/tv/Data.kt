@@ -125,9 +125,9 @@ object Store {
         prefs(c).edit().putString("playlists", a.toString()).apply()
     }
 
-    /** turned-on playlists, the opened one first */
+    /** turned-on playlists, the opened one first; empty when all are switched off */
     fun actives(c: Context): List<Playlist> {
-        val on = playlists(c).filter { it.active }.ifEmpty { playlists(c).take(1) }
+        val on = playlists(c).filter { it.active }
         val open = Prefs.str("pl_open")
         return on.sortedBy { if (it.id == open) 0 else 1 }
     }
@@ -137,16 +137,30 @@ object Store {
 
     fun byId(c: Context, id: String?): Playlist? = playlists(c).firstOrNull { it.id == id } ?: active(c)
 
-    /** several playlists may be on at once (Settings › Playlists) */
-    var multi: Boolean get() = Prefs.bool("pl_multi", false); set(v) = Prefs.put("pl_multi", v)
+    /** several playlists are on at once: adding or switching one on never switches the others off */
+    var multi: Boolean get() = true; set(@Suppress("UNUSED_PARAMETER") v) {}
 
     fun open(c: Context, id: String) { Prefs.put("pl_open", id) }
 
+    /** switches one playlist on or off; the others stay as they are (all may be off) */
     fun activate(c: Context, id: String) {
-        if (multi) savePlaylists(c, playlists(c).map { if (it.id == id) it.copy(active = !it.active) else it })
-        else savePlaylists(c, playlists(c).map { it.copy(active = it.id == id) })
-        open(c, id)
+        val l = playlists(c).map { if (it.id == id) it.copy(active = !it.active) else it }
+        savePlaylists(c, l)
+        if (l.firstOrNull { it.id == id }?.active == true) open(c, id)
     }
+    fun setAll(c: Context, on: Boolean) = savePlaylists(c, playlists(c).map { it.copy(active = on) })
+
+    /** the playlist a film or episode link belongs to (Xtream links carry the server and user), else null */
+    fun ownerOf(c: Context, url: String): Playlist? = playlists(c).firstOrNull { p ->
+        when {
+            p.type == SourceType.XTREAM && p.server.isNotBlank() -> url.startsWith(p.server.trimEnd('/')) && url.contains("/" + p.user + "/")
+            p.type == SourceType.STALKER && p.server.isNotBlank() -> url.contains(p.server.substringAfter("://").substringBefore('/'))
+            else -> false
+        }
+    }
+
+    /** has its subscription ended? (Xtream tells the end date) */
+    fun expired(p: Playlist): Boolean = p.exp.toLongOrNull()?.let { it > 0 && it * 1000 < System.currentTimeMillis() } ?: false
 
     fun movePlaylist(c: Context, id: String, d: Int) {
         val l = playlists(c).toMutableList(); val i = l.indexOfFirst { it.id == id }; val j = i + d
@@ -577,13 +591,16 @@ object Repo {
     }
 
     suspend fun epg(p: Playlist, ch: Channel, limit: Int = 10): List<EpgItem> {
-        val provider = cached("epg_${p.id}_${ch.url}_$limit") {
-            if (p.type != SourceType.XTREAM || ch.id.isBlank() || !ch.url.contains("/live/")) emptyList() else try { Xtream(p).epg(ch.id, limit) } catch (e: Exception) { emptyList() }
-        }
         val sh = EpgShift.ms
         fun List<EpgItem>.shifted() = if (sh == 0L) this else map { it.copy(start = it.start + sh, end = it.end + sh) }
-        if (provider.isNotEmpty() || !EpgSources.any) return provider.shifted()
-        return try { OwnGuide.of(ch.epg, ch.name, p.id).take(limit).shifted() } catch (e: Exception) { emptyList() }
+        suspend fun own() = try { OwnGuide.of(ch.epg, ch.name, p.id).take(limit).shifted() } catch (e: Exception) { emptyList() }
+        // order: the playlist's default EPG, then the provider's own guide, then the other active EPGs
+        if (EpgSources.hasDefault(p.id)) own().let { if (it.isNotEmpty()) return it }
+        val provider = if (!EpgSources.providerOn(p.id)) emptyList() else cached("epg_${p.id}_${ch.url}_$limit") {
+            if (p.type != SourceType.XTREAM || ch.id.isBlank() || !ch.url.contains("/live/")) emptyList() else try { Xtream(p).epg(ch.id, limit) } catch (e: Exception) { emptyList() }
+        }
+        if (provider.isNotEmpty() || EpgSources.srcs(p.id).isEmpty()) return provider.shifted()
+        return own()
     }
 
     suspend fun nowNext(p: Playlist, ch: Channel): List<Pair<String, String>> = epg(p, ch, 4).take(2).map { it.title to it.times() }

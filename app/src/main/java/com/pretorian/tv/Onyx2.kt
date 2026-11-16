@@ -374,7 +374,7 @@ private fun NowPanel(ch: Channel?, modifier: Modifier) {
                     T(e.title, 12.sp, C.Soft, modifier = Modifier.weight(1f))
                 }
             }
-        } else if (epg is Load.Ok && cur == null) T(if (!EpgSources.any) "Nema programa. Dodaj EPG izvor: Postavke › Playliste › EPG izvori" else "Nema programa za ovaj kanal.", 11.sp, C.Muted, maxLines = 2)
+        } else if (epg is Load.Ok && cur == null) T(if (EpgSources.noneOn(ctx)) "Nijedan EPG nije uključen" else if (!EpgSources.any) "Nema programa. Dodaj EPG izvor: Postavke › Playliste › EPG izvori" else "Nema programa za ovaj kanal.", 11.sp, C.Muted, maxLines = 2)
     }
 }
 
@@ -721,7 +721,7 @@ private fun CheckBox(on: Boolean, focused: Boolean) {
 @Composable
 fun BulkEditor(nav: Nav) {
     val ctx = LocalContext.current
-    val p = remember { Store.active(ctx) } ?: run { NoPlaylist(nav); return }
+    val p = remember { PlEdit.id?.let { id -> Store.playlists(ctx).firstOrNull { it.id == id } } ?: Store.active(ctx) } ?: run { NoPlaylist(nav); return }
     val ovr = remember(p.id) { Ovr(ctx, p.id) }
     var tab by remember { mutableIntStateOf(0) }
     var rev by remember { mutableIntStateOf(0) }
@@ -804,6 +804,7 @@ fun BulkEditor(nav: Nav) {
                     if (selC.size == 1) item { ToolBtn("Preimenuj", R.drawable.lc_pencil) { rename = chans.firstOrNull { it.url == selC.first() } } }
                 }
                 item { ToolBtn("Poništi", R.drawable.lc_x, n > 0) { selG.clear(); selC.clear() } }
+                item { ToolBtn("Promijeni PIN", R.drawable.lc_key_round) { pinSetup = true } }
             }
         }
         Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp)) {

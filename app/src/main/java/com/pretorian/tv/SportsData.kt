@@ -121,9 +121,11 @@ object Sports {
         val names = listOfNotNull(ev.home?.name, ev.away?.name, ev.title).map { norm(it) }; return t.any { w -> names.any { it.contains(w) } } }
     /** reminders for the matches of your favourite teams in the next 3 days */
     suspend fun remindTeams() {
-        val min = Prefs.str("sport_team_remind", "0").toIntOrNull() ?: 0
-        if (min <= 0 || teams().isEmpty()) return
-        upcoming(3).filter { isFav(it) }.forEach { ev ->
+        // followed teams and matches get a reminder before kick-off by themselves (Reminders › "Remind me" times)
+        val min = Prefs.str("sport_team_remind", "1").toIntOrNull() ?: 1
+        val follow = MatchFollow.list()
+        if (min <= 0 || (teams().isEmpty() && follow.isEmpty())) return
+        upcoming(3).filter { isFav(it) || it.id in follow }.forEach { ev ->
             val t = listOfNotNull(ev.home?.name, ev.away?.name).joinToString(" – ").ifBlank { ev.title }
             if (!Reminders.has(t, ev.start)) Reminders.add(Reminder("sp" + ev.id.hashCode(), t, ev.start, null, ev.league, null, null, "sport"))
         }
@@ -356,6 +358,15 @@ object Sports {
     )
 
     /** who usually has the rights for this league (names, for showing; not tied to your list) */
+    /** who holds the rights where you live (built-in table, refreshed from GitHub once a day): "BA · Arena Sport" */
+    fun rightsTv(ev: SportEvent): List<String> {
+        if (!Prefs.bool("sport_src_rights", true)) return emptyList()
+        val m = Rights.table()[ev.leagueAbbr] ?: return emptyList()
+        val mine = countries.map { if (it == "GB") "UK" else it }
+        return (mine.filter { it in m } + m.keys.filter { it !in mine }.take(if (mine.any { it in m }) 0 else 3))
+            .flatMap { c -> m[c].orEmpty().map { "$c · $it" } }.distinct()  // i18n-ignore
+    }
+
     fun usualTv(ev: SportEvent): List<String> = (RIGHTS[ev.leagueAbbr] ?: emptyList()).map { w ->
         w.lowercase().split(' ').joinToString(" ") { p -> if (p.length <= 3 && p.none { it.isDigit() }) p.uppercase() else p.replaceFirstChar { it.uppercase() } } }.distinct()
 
@@ -584,13 +595,16 @@ object Xmltv {
     /** Streams the guide and keeps only programmes of [channels] (lower-case ids) between [from] and [to]. */
     fun read(url: String, channels: Set<String>?, from: Long, to: Long, keepTitle: ((String) -> Boolean)? = null): List<Sports.Prog> {
         if (channels != null && channels.isEmpty()) return emptyList()
-        val c = URL(url).openConnection() as HttpURLConnection
-        c.connectTimeout = 20000; c.readTimeout = 120000
-        c.setRequestProperty("User-Agent", Net.UA)
+        // a guide file copied in from USB or disk ("file://…") or a link
+        val local = url.startsWith("file://")
+        val c = if (local) null else (URL(url).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 20000; readTimeout = 120000; setRequestProperty("User-Agent", Net.UA)
+        }
         val out = ArrayList<Sports.Prog>()
         try {
-            if (c.responseCode !in 200..299) return emptyList()
-            var input: java.io.InputStream = java.io.BufferedInputStream(c.inputStream, 64 * 1024)
+            if (c != null && c.responseCode !in 200..299) return emptyList()
+            val raw = if (c != null) c.inputStream else java.io.FileInputStream(url.removePrefix("file://"))
+            var input: java.io.InputStream = java.io.BufferedInputStream(raw, 64 * 1024)
             input.mark(4)
             val b0 = input.read(); val b1 = input.read(); input.reset()
             if (b0 == 0x1f && b1 == 0x8b) input = java.util.zip.GZIPInputStream(input, 64 * 1024)
@@ -628,7 +642,7 @@ object Xmltv {
             }
         } catch (e: Exception) {
             // a broken or cut guide still gives what was read so far
-        } finally { c.disconnect() }
+        } finally { c?.disconnect() }
         return out
     }
 }
@@ -640,11 +654,11 @@ object OwnGuide {
     private val lock = kotlinx.coroutines.sync.Mutex()
     fun drop(url: String) { caches.remove(url) }
 
-    private suspend fun data(url: String): Map<String, List<Sports.Prog>> {
+    private suspend fun data(url: String, everyH: Int = 0): Map<String, List<Sports.Prog>> {
         lock.lock()
         try {
             val c = caches[url]
-            if (c != null && System.currentTimeMillis() - c.at < 6 * 3600_000L) return c.data
+            if (c != null && System.currentTimeMillis() - c.at < (if (everyH > 0) everyH else 6) * 3600_000L) return c.data
             val now = System.currentTimeMillis()
             val d = try { Xmltv.read(url, null, now - 3 * 3600_000L, now + 36 * 3600_000L).groupBy { it.channel } } catch (e: Exception) { emptyMap() }
             caches[url] = Cache(now, d)
@@ -655,11 +669,12 @@ object OwnGuide {
     /** guide of a channel from your own sources (the playlist's own first) */
     suspend fun of(epgId: String?, name: String, pid: String? = null): List<EpgItem> = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
-        for (url in EpgSources.urls(pid)) {
-            val d = data(url)
+        for (src in EpgSources.srcs(pid)) {
+            val d = data(src.url, src.every)
             val list = epgId?.lowercase()?.ifBlank { null }?.let { d[it] } ?: d[Sports.norm(name).replace(" ", "")]
-            if (!list.isNullOrEmpty()) return@withContext list.filter { it.end > now - 60_000 }.sortedBy { it.start }.take(40)
-                .map { EpgItem(it.title, it.desc, it.start, it.end) }
+            val sh = src.shift * 3600_000L
+            if (!list.isNullOrEmpty()) return@withContext list.filter { it.end + sh > now - 60_000 }.sortedBy { it.start }.take(40)
+                .map { EpgItem(it.title, it.desc, it.start + sh, it.end + sh) }
         }
         emptyList()
     }
@@ -675,5 +690,24 @@ fun countryOf(path: String): String {
         p.startsWith("aut") -> "at"; p.startsWith("sui") -> "ch"; p.startsWith("bih") -> "ba"; p.startsWith("cro") -> "hr"; p.startsWith("srb") -> "rs"
         p.startsWith("usa") || path.startsWith("basketball/nba") || path.startsWith("football/nfl") -> "us"
         else -> "int"
+    }
+}
+
+/** Rights per league per country. A JSON file on GitHub (rights.json), so it can be fixed without a new app version;
+ *  read at most once a day, the last good copy is kept, the built-in table is the fallback. */
+object Rights {
+    private const val URL = "https://raw.githubusercontent.com/KarlAgathon/PRETORIAN/beta/rights.json"  // i18n-ignore
+    private const val BUILTIN = """{"UCL":{"BA":["Arena Sport"],"HR":["Arena Sport"],"RS":["Arena Sport"],"DE":["DAZN","Prime Video"],"AT":["Canal+","ServusTV"],"CH":["blue Sport","SRF"],"UK":["TNT Sports","Prime Video"],"US":["Paramount+","CBS"]},"UEL":{"BA":["Arena Sport"],"HR":["Arena Sport"],"RS":["Arena Sport"],"DE":["RTL+","Nitro"],"AT":["Canal+"],"CH":["blue Sport"],"UK":["TNT Sports"],"US":["Paramount+"]},"UECL":{"BA":["Arena Sport"],"HR":["Arena Sport"],"RS":["Arena Sport"],"DE":["RTL+"],"AT":["Canal+"],"CH":["blue Sport"],"UK":["TNT Sports"],"US":["Paramount+"]},"PL":{"BA":["Arena Sport"],"HR":["Arena Sport"],"RS":["Arena Sport"],"DE":["Sky Sport"],"AT":["Sky Sport Austria"],"CH":["blue Sport"],"UK":["Sky Sports","TNT Sports"],"US":["NBC","Peacock","USA Network"]},"BL":{"BA":["Arena Sport"],"HR":["Arena Sport"],"RS":["Arena Sport"],"DE":["Sky Sport","DAZN","Sat.1"],"AT":["Sky Sport Austria"],"CH":["blue Sport"],"UK":["Sky Sports"],"US":["ESPN+"]},"LL":{"BA":["Arena Sport"],"HR":["Arena Sport"],"RS":["Arena Sport"],"DE":["DAZN"],"AT":["DAZN"],"CH":["blue Sport"],"UK":["Premier Sports"],"US":["ESPN+"]},"SA":{"BA":["Arena Sport"],"HR":["Arena Sport"],"RS":["Arena Sport"],"DE":["DAZN"],"AT":["DAZN"],"CH":["blue Sport"],"UK":["TNT Sports"],"US":["CBS","Paramount+"]},"L1":{"BA":["Arena Sport"],"HR":["Arena Sport"],"RS":["Arena Sport"],"DE":["DAZN"],"AT":["DAZN"],"UK":["Ligue 1+"],"US":["beIN Sports"]}}"""  // i18n-ignore
+    @Volatile private var cache: Map<String, Map<String, List<String>>>? = null
+    private fun parse(t: String): Map<String, Map<String, List<String>>> {
+        val o = org.json.JSONObject(t); val out = HashMap<String, Map<String, List<String>>>()
+        o.keys().forEach { lg -> val c = o.optJSONObject(lg) ?: return@forEach
+            out[lg] = c.keys().asSequence().associateWith { k -> c.optJSONArray(k)?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList() } }
+        return out
+    }
+    fun table(): Map<String, Map<String, List<String>>> = cache ?: (try { parse(Prefs.str("rights_json").ifBlank { BUILTIN }) } catch (e: Exception) { parse(BUILTIN) }).also { cache = it }
+    suspend fun refresh() = withContext(Dispatchers.IO) {
+        if (System.currentTimeMillis() - Prefs.long("rights_at") < 24 * 3600_000L) return@withContext
+        try { val t = Net.get(URL); parse(t); Prefs.put("rights_json", t); Prefs.put("rights_at", System.currentTimeMillis()); cache = null } catch (_: Exception) {}
     }
 }

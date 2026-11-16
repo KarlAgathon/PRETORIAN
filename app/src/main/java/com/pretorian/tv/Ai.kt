@@ -204,7 +204,7 @@ ${JSONArray(cands)}"""
      * (the AI searches the web). Kept 6 hours per match.
      */
     suspend fun broadcasters(ev: SportEvent): List<Station> = withContext(Dispatchers.IO) {
-        if (!ready) return@withContext emptyList()
+        if (!ready || (Perf.lite && !Prefs.bool("lite_ai_tv"))) return@withContext emptyList()
         val who = if (ev.home != null && ev.away != null) "${ev.home.name} vs ${ev.away.name}" else ev.title
         val id = "tv|${ev.id}|$provider"
         val raw = mem[id] ?: readCache(id) ?: run {

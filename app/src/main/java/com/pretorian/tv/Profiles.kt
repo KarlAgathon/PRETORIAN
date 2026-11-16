@@ -372,7 +372,7 @@ fun ProfilePanel(nav: Nav) {
             Avatar(cur, 64.dp)
             Column(Modifier.weight(1f)) {
                 T(cur.name, 20.sp, C.Text, FontWeight.Bold, maxLines = 1)
-                T(Drive.statusLine(), 13.sp, if (Drive.signedIn) C.Green else C.Muted, maxLines = 2)
+                T(trf("Profila: %s", others.size + 1), 13.sp, C.Muted)
             }
         }
         if (others.isNotEmpty()) {
@@ -394,18 +394,6 @@ fun ProfilePanel(nav: Nav) {
         if (others.isNotEmpty()) OptionRow("Obriši profil", R.drawable.lc_trash_2, sub = "Drži OK na profilu gore za drugi profil") { del = cur }
         OptionRow("Pitaj \"Ko gleda?\" pri pokretanju", R.drawable.lc_users, value = tr(if (Profiles.askAtStart) "Da" else "Ne")) {
             Profiles.askAtStart = !Profiles.askAtStart; Profiles.rev++
-        }
-        T("Google Drive", 13.sp, C.Muted, FontWeight.SemiBold)
-        if (!Drive.signedIn) OptionRow("Prijavi se Google nalogom", R.drawable.lc_log_in, sub = "Backup i prenos na drugi uređaj preko interneta", color = C.Green) {
-            Profiles.panel = false; Drive.loginOpen = true
-        } else {
-            OptionRow(if (syncing) "Sinhronizujem…" else "Sinhronizuj sada", R.drawable.lc_cloud_upload, sub = Drive.email) {
-                if (!syncing) { syncing = true; scope.launchSafe { Drive.upload(ctx); syncing = false; Profiles.rev++ } }
-            }
-            OptionRow("Vrati s Google Drivea", R.drawable.lc_cloud_download, sub = "Povuci sve postavke i profile na ovaj uređaj") {
-                Profiles.panel = false; Drive.restoreAsk = true
-            }
-            OptionRow("Odjavi se", R.drawable.lc_log_out) { Drive.logout(); Profiles.rev++ }
         }
         OptionRow("Backup na disk ili USB", R.drawable.lc_archive) { Profiles.panel = false; nav.root(Screen.Settings); SettingsNav.section = "backup" }
     }

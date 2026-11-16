@@ -1957,4 +1957,119 @@ Nema utakmica tvojih favorita u idućih 10 dana · Države ▾ ili dugi OK › P
 TV:|ТВ:
 Obično prenose:|Обычно показывают:
 Nema utakmica tvojih favorita u idućih 10 dana · ＋ Države ili ＋ Timovi|Нет матчей ваших избранных в ближайшие 10 дней · ＋ Страны или ＋ Команды
+Za 5 min|Через 5 мин
+USB nije priključen|USB не подключен
+Nijedan EPG nije uključen|Ни один EPG не включён
+Promijeni PIN|Сменить PIN
+Vanjski plejer|Внешний плеер
+Arhiva|Архив
+emisije koje su prošle|прошедшие передачи
+Ko gleda, dječiji profil|Кто смотрит, детский профиль
+XMLTV link (.xml ili .xml.gz) ili fajl. Redoslijed: zadani EPG, pa ostali uključeni, pa providerov.|Ссылка XMLTV (.xml или .xml.gz) или файл. Порядок: основной EPG, затем другие включённые, затем от провайдера.
+ugrađeni program providera|встроенная программа провайдера
+sve playliste|все плейлисты
+%s kanala · osvježeno %s|%s каналов · обновлено %s
+zadani za %s|основной для %s
+＋ Dodaj EPG|＋ Добавить EPG
+Osvježi sve EPG-ove|Обновить все EPG
+⭐ Zadani za…|⭐ Основной для…
+koje playliste ga koriste prvog|какие плейлисты используют его первым
+Ugasi|Выключить
+Osvježi sada|Обновить сейчас
+%s · zadani za|%s · основной для
+Ime|Имя
+Adresa (http://…/epg.xml ili .xml.gz)|Адрес (http://…/epg.xml или .xml.gz)
+Fajl…|Файл…
+Pomak vremena|Сдвиг времени
+Zadani za…|Основной для…
+Sve playliste|Все плейлисты
+Nijednu|Ни одного
+Izaberi EPG fajl|Выберите файл EPG
+Dodaj, aktivne, EPG izvori|Добавить, активные, источники EPG
+Napredne opcije, start, pozadina|Расширенные опции, запуск, фон
+Modovi|Режимы
+Jednostavni mod, PIN|Простой режим, PIN
+Kategorije, vrijeme gledanja|Категории, время просмотра
+Sportovi, timovi, ko prenosi|Виды спорта, команды, кто показывает
+Fajl, USB|Файл, USB
+EPG · %s|EPG · %s
+OK: meni · desno: uključi/ugasi · ▲ ▼ redoslijed|OK: меню · вправо: вкл/выкл · ▲ ▼ порядок
+Aktivne: %s od %s|Активные: %s из %s
+OK na imenu: meni · desno: uključi/isključi · ▲ ▼ redoslijed|OK на имени: меню · вправо: вкл/выкл · ▲ ▼ порядок
+istekla %s|истёк %s
+Ugasi sve|Выключить все
+nijedna playlista neće biti aktivna|ни один плейлист не будет активен
+svi izvori TV programa|все источники телепрограммы
+pomjeri, sakrij, zaključaj PIN-om|переместить, скрыть, заблокировать PIN
+EPG ove playliste|EPG этого плейлиста
+izvori, zadani, uključi/ugasi|источники, основной, вкл/выкл
+kanali, filmovi i serije|каналы, фильмы и сериалы
+Lite isključuje: novo dodano na Početnoj, velike slike u pozadini, providne kartice, prelaze, malu sliku kanala (pušta na OK), karticu „Pratiš“ i AI pretragu ko prenosi. Rezultati svakih 10 min, nove epizode svakih 6 h, bafer 32 MB, čuvar ekrana samo sat. Sve se može ručno uključiti.|Lite отключает: новое на главной, большие фоновые картинки, прозрачные карточки, переходы, маленькое превью канала (запуск по OK), карточку «Следишь» и поиск ИИ, кто показывает. Счёт каждые 10 мин, новые серии каждые 6 ч, буфер 32 МБ, заставка только часы. Всё можно включить вручную.
+Lite: mala slika kanala|Lite: маленькое превью канала
+Lite: AI pretraga ko prenosi|Lite: поиск ИИ, кто показывает
+traži TV kuće na internetu|ищет телеканалы в интернете
+svjetska takmičenja uvijek|мировые турниры всегда
+ništa = po uređaju|ничего = по устройству
+igraju prve u Sportu|первыми в Спорте
+uvijek na vrhu|всегда наверху
+Automatski prati|Следить автоматически
+timove i reprezentacije|команды и сборные
+Obavijesti|Уведомления
+za ono što pratiš|для того, за чем следишь
+Podsjetnik prije početka|Напоминание до начала
+za timove i utakmice koje pratiš|для команд и матчей, за которыми следишь
+dok je Sport otvoren|пока Спорт открыт
+Ko prenosi|Кто показывает
+tvoji kanali (TV vodič) uvijek|твои каналы (телегид) всегда
+Prava po ligi|Права по лигам
+AI ključ|Ключ ИИ
+upisan|введён
+Utakmice koje pratiš|Матчи, за которыми следишь
+same dobiju podsjetnik prije početka|сами получают напоминание до начала
+Ukloni|Удалить
+Promijeni vrijeme|Изменить время
+Obično|Обычно
+troši više|расходует больше
+Dok utakmica traje|Во время матча
+prikaži sve sekcije i postavke|показать все разделы и настройки
+Kad se aplikacija otvori, prvo vidiš|При открытии приложения сначала видишь
+Nazad s tog ekrana vodi na Početnu|Назад с этого экрана ведёт на главную
+Zadnji kanal|Последний канал
+Dugi OK na redu: koliko često provjerava|Долгий OK на строке: как часто проверять
+svakih %s · uživo svakih %s|каждые %s · в прямом эфире каждые %s
+svakih %s|каждые %s
+Zaključaj|Заблокировать
+Napravi kopiju|Сделать копию
+Napravi kopiju sada|Сделать копию сейчас
+✓ Spremljeno u %s|✓ Сохранено в %s
+USB se pojavi kad ga priključiš|USB появится, когда подключишь
+Za USB aplikacija treba dozvolu za fajlove.|Для USB приложению нужен доступ к файлам.
+Dozvoli|Разрешить
+Automatska kopija|Автоматическая копия
+čuvaju se zadnje 3|хранятся последние 3
+Vrati iz kopije|Восстановить из копии
+Još nema nijedne kopije.|Копий пока нет.
+%s · %s KB|%s · %s КБ
+Drugi fajl…|Другой файл…
+Ocjena se izmjeri jednom i ostaje ista.|Оценка измеряется один раз и не меняется.
+Izmjeri ponovo|Измерить снова
+Playliste, lozinke, PIN, favoriti i gledano čuvaju se samo na ovom uređaju. Na internet idu samo zahtjevi prema tvom provideru, slike filmova (TMDB) i, ako je uključiš, AI pretraga.|Плейлисты, пароли, PIN, избранное и просмотренное хранятся только на этом устройстве. В интернет уходят только запросы к провайдеру, картинки фильмов (TMDB) и, если включишь, поиск ИИ.
+%s s|%s с
+dnevno|ежедневно
+%s h|%s ч
+Profil, ko gleda, profil za djecu|Профиль, кто смотрит, детский профиль
+Opće, napredne opcije, početni ekran, start s boxom, zadnji kanal, potvrdi izlaz, rad u pozadini, User-Agent, UDP proxy|Общие, расширенные опции, стартовый экран, запуск с приставкой, последний канал, подтвердить выход, работа в фоне, User-Agent, UDP прокси
+Roditeljska kontrola, sakrij kategorije, odrasli, XXX, LGBT, trans, zaključaj, vrijeme gledanja|Родительский контроль, скрыть категории, взрослые, XXX, LGBT, транс, заблокировать, время просмотра
+Sports Center, sport, sportovi, takmičenja, država, reprezentacije, timovi, ko prenosi, AI pretraga, rezultati|Sports Center, спорт, виды спорта, турниры, страна, сборные, команды, кто показывает, поиск ИИ, счёт
+Modovi, jednostavni mod, PIN, promijeni PIN|Режимы, простой режим, PIN, сменить PIN
+Backup, vraćanje, USB, fajl, Download, automatski backup, vrati na početak|Резервная копия, восстановление, USB, файл, Download, автокопия, сброс
+Playlista više ne postoji|Плейлиста больше нет
+Playlista je isključena|Плейлист выключен
+Playlista nije dostupna (istekla ili offline)|Плейлист недоступен (истёк или офлайн)
+Nijedna playlista nije aktivna|Ни один плейлист не активен
+Uključi playlistu u Postavke › Playliste|Включи плейлист в Настройки › Плейлисты
+S playlistom|Вместе с плейлистом
+Svakih 12 h|Каждые 12 ч
+Svaka 24 h|Каждые 24 ч
+Razvuci|Растянуть
 """.trimIndent()

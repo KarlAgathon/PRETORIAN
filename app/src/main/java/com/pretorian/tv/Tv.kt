@@ -174,7 +174,7 @@ suspend fun groupRows(ctx: android.content.Context): List<GRow> {
 @Composable
 fun TvScreen(nav: Nav) {
     val ctx = LocalContext.current
-    if (Store.playlists(ctx).isEmpty()) { NoPlaylist(nav); return }
+    if (Store.actives(ctx).isEmpty()) { NoPlaylist(nav); return }
     var guide by remember { mutableStateOf(Prefs.str("tv_view", "list") == "guide") }
     if (guide) TvGuide(nav) { guide = false; Prefs.put("tv_view", "list") }
     else if (Look.age) OnyxTv(nav) { guide = true; Prefs.put("tv_view", "guide") }
@@ -847,10 +847,20 @@ fun ChannelLogo(url: String?, name: String) {
 
 @Composable
 fun NoPlaylist(nav: Nav) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val none = remember { Store.playlists(ctx).isEmpty() }
+    val fr = remember { androidx.compose.ui.focus.FocusRequester() }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        Message("Nema aktivne playliste", "Dodaj Xtream Codes ili M3U playlistu")
-        Button("Dodaj playlistu", R.drawable.lc_plus, primary = true) { nav.push(Screen.AddPlaylist) }
+        if (none) {
+            Message("Nema playliste", "Dodaj Xtream Codes ili M3U playlistu")
+            Button("Dodaj playlistu", R.drawable.lc_plus, primary = true, focusRequester = fr) { nav.push(Screen.AddPlaylist) }
+        } else {
+            // all playlists are switched off (Settings › Playlists)
+            Message("Nijedna playlista nije aktivna", "Uključi playlistu u Postavke › Playliste")
+            Button("Uključi playlistu", R.drawable.lc_list, primary = true, focusRequester = fr) { SettingsNav.section = "playlists"; nav.push(Screen.Settings) }
+        }
     }
+    LaunchedEffect(Unit) { fr.tryFocus() }
 }
 
 /** Settings › Groups and channels: order, names, hidden and locked groups for TV, movies and series. */
@@ -858,7 +868,7 @@ fun NoPlaylist(nav: Nav) {
 fun GroupManager(nav: Nav) {
     if (Look.age) { BulkEditor(nav); return }
     val ctx = LocalContext.current
-    val p = remember { Store.active(ctx) } ?: run { NoPlaylist(nav); return }
+    val p = remember { PlEdit.id?.let { id -> Store.playlists(ctx).firstOrNull { it.id == id } } ?: Store.active(ctx) } ?: run { NoPlaylist(nav); return }
     val ovr = remember(p.id) { Ovr(ctx, p.id) }
     var tab by remember { mutableIntStateOf(0) }
     var rev by remember { mutableIntStateOf(0) }
@@ -1099,7 +1109,7 @@ fun EpgList(ch: Channel, limit: Int = 12, modifier: Modifier = Modifier) {
         is Load.Ok -> if (s.value.isEmpty()) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 T("Nema EPG podataka za ovaj kanal.", 14.sp, C.Soft)
-                T(if (!EpgSources.any) "Dodaj EPG izvor: Postavke › Playliste › EPG izvori" else "Ni tvoji EPG izvori nemaju ovaj kanal.", 12.sp, C.Muted, maxLines = 2)
+                T(if (EpgSources.noneOn(ctx)) "Nijedan EPG nije uključen" else if (!EpgSources.any) "Dodaj EPG izvor: Postavke › Playliste › EPG izvori" else "Ni tvoji EPG izvori nemaju ovaj kanal.", 12.sp, C.Muted, maxLines = 2)
             }
         } else LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             itemsIndexed(s.value, key = { _, e -> e.start }) { _, e ->

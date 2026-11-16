@@ -98,8 +98,14 @@ object Perf {
             listOf("amlogic", "s905x", "s905w", "s905l", "s905y2", "mt8695", "mt8167", "rk3229", "rk3328", "h616", "h313").any { h.contains(it) } }
         val gpu = when { pc >= 31 -> 15; socOld -> 3; sdk >= 31 -> 12; else -> 7 }
         // short speed test: 15 points
-        val t0 = System.nanoTime(); var x = 0L; for (i in 0 until 3_000_000) x += (i xor (i shr 3)).toLong()
-        val ms = (System.nanoTime() - t0) / 1_000_000 + (x and 0)
+        // measured once (best of 5 runs, so a busy moment doesn't lower it) and kept: the score stays the same on every start
+        var ms = Prefs.long("perf_speed_ms", -1)
+        if (ms < 0) {
+            ms = Long.MAX_VALUE
+            repeat(5) { val t0 = System.nanoTime(); var x = 0L; for (i in 0 until 3_000_000) x += (i xor (i shr 3)).toLong()
+                ms = minOf(ms, (System.nanoTime() - t0) / 1_000_000 + (x and 0)) }
+            Prefs.put("perf_speed_ms", ms)
+        }
         val speed = when { ms < 12 -> 15; ms < 20 -> 11; ms < 35 -> 7; ms < 60 -> 3; else -> 0 }
         score = (ram + cpu + os + gpu + speed).coerceIn(0, 100)
         parts = listOf(tr("RAM") to listOf(ram, "/30").joinToString(""), tr("Procesor") to listOf(cpu, "/25").joinToString(""), "Android" to listOf(os, "/15").joinToString(""),  // i18n-ignore
@@ -108,6 +114,8 @@ object Perf {
         mode = Prefs.long("perf_mode", 0).toInt().coerceIn(0, 2)
     }
     fun set(m: Int) { mode = m; Prefs.put("perf_mode", m.toLong()) }
+    /** About › Box score › Measure again */
+    fun remeasure(c: Context) { Prefs.remove("perf_speed_ms"); init(c) }
     val MODES = listOf("Automatski", "Lite", "Full")
 }
 
@@ -141,6 +149,13 @@ object Dusk {
 
 @Composable
 fun DuskBackground() {
+    // Lite: one calm picture in the theme's own tone (light themes light, dark themes dark), no blur, nothing that moves
+    if (Perf.lite && Look.theme != "vece") {
+        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.fallback_bd1), null, contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            modifier = Modifier.fillMaxSize())
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(C.Bg.copy(alpha = 0.78f), C.Bg.copy(alpha = 0.88f), C.Bg.copy(alpha = 0.96f)))))
+        return
+    }
     if (Look.theme == "liquid") {
         // Liquid: a soft blurred picture behind see-through glass menus
         androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.fallback_bd1), null, contentScale = androidx.compose.ui.layout.ContentScale.Crop,
@@ -269,7 +284,9 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
     val homeScope = rememberCoroutineScope()
     // the film or series page goes under the player, so Back lands on it (same season and episode), a second Back on Home
     fun playOf(pr: Progress): () -> Unit = {
-        homeScope.launch {
+        val why = Watch.blocked(ctx, pr)
+        if (why != null) android.widget.Toast.makeText(ctx, why, android.widget.Toast.LENGTH_LONG).show()
+        else homeScope.launch {
             val pl = Store.actives(ctx).firstOrNull { it.id == pr.pid } ?: p
             if (pl != null) try { kotlinx.coroutines.withTimeoutOrNull(2500) {
                 if (pr.series != null) Repo.catalog(pl, "series").firstOrNull { it.str("n") == pr.series }?.let { o ->
@@ -284,7 +301,7 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
         }
     }
     val newest = remember(NewContent.rev) {
-        if (p == null) emptyList() else NewContent.items(p.id, "vod").take(12).map { "vod" to it } + NewContent.items(p.id, "series").take(6).map { "series" to it }
+        if (p == null || Perf.lite) emptyList() else NewContent.items(p.id, "vod").take(12).map { "vod" to it } + NewContent.items(p.id, "series").take(6).map { "series" to it }
     }
     fun openNew(kind: String, o: JSONObject) {
         if (kind == "series") nav.push(Screen.SeriesDetail(SeriesItem(o.optString("id"), o.optString("n"), o.optString("i").ifBlank { null }, null, o.optString("r").ifBlank { null })))
@@ -602,7 +619,7 @@ fun WideCard(title: String, sub: String, image: String?, key: String, progress: 
     Column(Modifier.width(height * (250f / 140f)), verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Focusable(onClick = onClick, onMenu = onMenu, focusRequester = fr, shape = Rnd(12.dp), normal = C.Card, zoom = 1.05f, modifier = Modifier.fillMaxWidth().height(height).then(keys)) { f ->
             // the whole poster is shown (never cut); the empty sides get a soft, blurred copy of the same picture
-            OnyxImage(image, key, Modifier.fillMaxSize().clip(Rnd(12.dp)).blur(18.dp).alpha(0.55f), maxW = 160)
+            if (!Perf.lite) OnyxImage(image, key, Modifier.fillMaxSize().clip(Rnd(12.dp)).blur(18.dp).alpha(0.55f), maxW = 160)
             OnyxImage(image, key, Modifier.fillMaxSize().clip(Rnd(12.dp)), maxW = 300, scale = ContentScale.Fit)
             if (f) Box(Modifier.fillMaxSize().border(2.dp, Color.White, Rnd(12.dp)))
             if (progress != null) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Color(0x33FFFFFF))) {
