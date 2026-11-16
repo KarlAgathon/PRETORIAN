@@ -220,6 +220,13 @@ fun OnyxMovieDetail(v: Vod, nav: Nav) {
     LaunchedEffect(v.id) { NewContent.seen(p.id, "vod", v.id) }
     val i = (info as? Load.Ok)?.value
     val m = (meta as? Load.Ok)?.value
+    // neither TMDB nor the provider has one: a free source (Wikipedia)
+    val needFree = m?.overview == null && i?.plot == null && meta !is Load.Loading && info !is Load.Loading
+    // no TMDB: cast and director from the free card too (also when the provider has a story)
+    val needCard = m == null && meta !is Load.Loading && info !is Load.Loading && (needFree || i?.cast == null)
+    val free by load(v.name, needCard) { if (needCard) FreeMeta.movieFull(v.name) else null }
+    val fr = (free as? Load.Ok)?.value
+    val freeRow = fr
     val title = titleCase(m?.title ?: cleanTitle(v.name).first)
     val pr = remember(Watch.rev) { Watch.get(ctx, v.url) }
     fun play(fromStart: Boolean = false) {
@@ -241,7 +248,7 @@ fun OnyxMovieDetail(v: Vod, nav: Nav) {
                     T(title, 32.sp, C.Text, FontWeight.ExtraBold, maxLines = 2)
                     // year – length – genre – studio
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        val parts = listOfNotNull((m?.year ?: i?.year)?.take(4), fmtMin(mins).ifBlank { null }, translated(m?.genres ?: i?.genre)?.take(40))
+                        val parts = listOfNotNull((m?.year ?: i?.year ?: freeRow?.year)?.take(4), fmtMin(mins).ifBlank { freeRow?.runtime }, translated(m?.genres ?: i?.genre ?: freeRow?.genre)?.take(40))
                         val plat = platformOf(v.id, m)
                         T(parts.joinToString(" – ") + if (plat != null) " –" else "", 14.sp, C.Soft, FontWeight.SemiBold)
                         PlatformChip(v.id, m, 11.sp, v.name)
@@ -250,12 +257,9 @@ fun OnyxMovieDetail(v: Vod, nav: Nav) {
                     if (sound.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         sound.forEach { DBadge(it, bg = Color.White.copy(alpha = 0.12f)) }
                     }
-                    // neither TMDB nor the provider has one: a free source (Wikipedia)
-                    val needFree = m?.overview == null && i?.plot == null && meta !is Load.Loading && info !is Load.Loading
-                    val free by load(v.name, needFree) { if (needFree) FreeMeta.movie(v.name) else null }
-                    val plot = translated(m?.overview ?: i?.plot ?: (free as? Load.Ok)?.value)
-                    T(plot ?: if (meta is Load.Loading || info is Load.Loading || free is Load.Loading) "Učitavam opis…" else tr("Opis nije dostupan."), 14.sp, C.Soft, maxLines = 4)
-                    val dir = m?.people?.firstOrNull { it.role == "Režija" }?.name ?: i?.director
+                    val plot = translated(m?.overview ?: i?.plot ?: fr?.plot)
+                    T(plot ?: if (meta is Load.Loading || info is Load.Loading || free is Load.Loading) "Učitavam opis…" else tr("Opis nije dostupan."), 14.sp, C.Soft, maxLines = 7)
+                    val dir = m?.people?.firstOrNull { it.role == "Režija" }?.name ?: i?.director ?: fr?.director
                     dir?.let { T(tr("Režija") + ": " + it, 12.sp, C.Muted) }
                     Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         val started = pr != null && pr.started
@@ -268,7 +272,7 @@ fun OnyxMovieDetail(v: Vod, nav: Nav) {
                         DBtn(if (on) tr("✓ Ukloni s liste") else tr("+ Moja lista")) { MyList.toggle("vod", v.id, v.name, v.poster, v.url, p.id) }
                     }
                     if (pr != null && pr.started) ThinBar(pr.fraction, C.Text, Modifier.width(320.dp), 3.dp)
-                    m?.people?.let { Cast(it) } ?: i?.cast?.let { T(tr("Glumci") + ": " + it, 12.sp, C.Muted, maxLines = 2) }
+                    m?.people?.let { Cast(it) } ?: (i?.cast ?: fr?.cast)?.let { T(tr("Glumci") + ": " + it, 12.sp, C.Muted, maxLines = 2) }
                 }
             }
             Spacer(Modifier.height(10.dp))
@@ -350,16 +354,21 @@ fun OnyxSeriesDetail(s: SeriesItem, nav: Nav) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Kicker("Serija", C.Soft, size = 11.sp)
                 T(title, 28.sp, C.Text, FontWeight.ExtraBold)
+                // no TMDB: story, year, genre, cast and director from the free card (Cinemeta / TVmaze)
+                val needFree = m == null && meta !is Load.Loading
+                val free by load(s.name, needFree) { if (needFree) FreeMeta.seriesFull(s.name) else null }
+                val fr = (free as? Load.Ok)?.value
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val parts = listOfNotNull(m?.year?.take(4), if (seasons.isNotEmpty()) trf("%s sezone", seasons.size) + " · " + trf("%s epizoda", all.size) else null,
-                        translated(m?.genres)?.take(40))
+                    val parts = listOfNotNull((m?.year ?: fr?.year)?.take(4), if (seasons.isNotEmpty()) trf("%s sezone", seasons.size) + " · " + trf("%s epizoda", all.size) else null,
+                        translated(m?.genres ?: fr?.genre)?.take(40))
                     val plat = platformOf(s.id, m)
                     T(parts.joinToString(" – ") + if (plat != null) " –" else "", 13.sp, C.Soft, FontWeight.SemiBold)
                     PlatformChip(s.id, m, 10.sp, s.name, tv = true)
                 }
-                val needFree = m?.overview == null && s.plot.isNullOrBlank() && meta !is Load.Loading
-                val free by load(s.name, needFree) { if (needFree) FreeMeta.series(s.name) else null }
-                T(translated(m?.overview ?: s.plot?.ifBlank { null } ?: (free as? Load.Ok)?.value) ?: " ", 12.sp, C.Soft, maxLines = 2)
+                val story = listOfNotNull(m?.overview ?: s.plot?.ifBlank { null } ?: fr?.plot).firstOrNull()
+                T(translated(story) ?: if (free is Load.Loading) tr("Učitavam opis…") else " ", 12.sp, C.Soft, maxLines = 3)
+                if (m == null) listOfNotNull(fr?.director?.let { tr("Režija") + ": " + it }, fr?.cast?.let { tr("Glumci") + ": " + it }).joinToString("  ·  ").ifBlank { null }?.let {  // i18n-ignore
+                    T(it, 11.sp, C.Muted, maxLines = 1) }
                 Row(Modifier.horizontalScroll(rememberScrollState()).padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     val np = next?.let { Watch.get(ctx, it.url) }
                     val left = if (np?.started == true && np.dur > 0) ((np.dur - np.pos) / 60_000).toInt().coerceAtLeast(1) else 0

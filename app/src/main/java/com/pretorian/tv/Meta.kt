@@ -566,21 +566,53 @@ object FreeMeta {
         return null
     }
 
-    /** Cinemeta (Stremio's open film/series catalog, IMDb data, no key): search by name, then the full description */
-    private fun cinemeta(title: String, year: String?, kind: String): String? {
+    /** what the free sources give for a film or series */
+    data class Free(val plot: String?, val cast: String?, val director: String?, val genre: String?, val year: String?, val runtime: String?)
+    private val freeCache = java.util.concurrent.ConcurrentHashMap<String, Free>()
+
+    /** Cinemeta (Stremio's open film/series catalog, IMDb data, no key): search by name, then the full card (story, cast, director) */
+    private fun cinemeta(title: String, year: String?, kind: String): Free? {
         val base = "https://v3-cinemeta.strem.io"  // i18n-ignore
         val a = JSONObject(Http.request("$base/catalog/$kind/top/search=" + Net.enc(title) + ".json")).optJSONArray("metas") ?: return null  // i18n-ignore
         val hits = (0 until minOf(a.length(), 6)).mapNotNull { a.optJSONObject(it) }.filter { same(title, it.str("name")) }
         val best = hits.firstOrNull { year != null && it.str("releaseInfo").startsWith(year) } ?: hits.firstOrNull() ?: return null
-        best.str("description").takeIf { it.length > 40 }?.let { return it }
-        val id = best.str("imdb_id").ifBlank { best.str("id") }.ifBlank { return null }
-        return JSONObject(Http.request("$base/meta/$kind/$id.json")).optJSONObject("meta")?.str("description")?.takeIf { it.length > 40 }  // i18n-ignore
+        val id = best.str("imdb_id").ifBlank { best.str("id") }
+        val m = if (id.isBlank()) best else try { JSONObject(Http.request("$base/meta/$kind/$id.json")).optJSONObject("meta") ?: best } catch (e: Exception) { best }  // i18n-ignore
+        fun list(k: String, n: Int) = m.optJSONArray(k)?.let { x -> (0 until x.length()).map { x.optString(it) }.filter { it.isNotBlank() }.take(n).joinToString(", ") }?.ifBlank { null }
+        return Free(
+            plot = m.str("description").ifBlank { best.str("description") }.takeIf { it.length > 40 },
+            cast = list("cast", 6), director = list("director", 2), genre = list("genres", 3) ?: list("genre", 3),
+            year = m.str("releaseInfo").ifBlank { m.str("year") }.take(4).ifBlank { null },
+            runtime = m.str("runtime").ifBlank { null },
+        )
     }
-    private fun safe(f: () -> String?): String? = try { f() } catch (e: Exception) { null }
+    private fun <T> safe(f: () -> T?): T? = try { f() } catch (e: Exception) { null }
+    /** the first [n] sentences */
+    private fun sentences(t: String, n: Int) = Regex("(?<=[.!?])\\s+").split(t.trim()).take(n).joinToString(" ")
 
-    suspend fun movie(raw: String): String? { val (t, y) = cleanTitle(raw); return memo("m|$t|$y") { safe { cinemeta(t, y, "movie") } ?: wiki(t, y, "film") } }  // i18n-ignore
-    suspend fun series(raw: String): String? { val (t, y) = cleanTitle(raw)
-        return memo("s|$t") { safe { tvmazeShow(t)?.str("summary")?.let(::strip)?.ifBlank { null } } ?: safe { cinemeta(t, y, "series") } ?: wiki(t, y, "TV series") } }
+    /** story (Cinemeta, a couple of sentences more from Wikipedia when short), cast, director, genre */
+    suspend fun movieFull(raw: String): Free? = withContext(Dispatchers.IO) {
+        val (t, y) = cleanTitle(raw); val k = "M|$t|$y"
+        freeCache[k]?.let { return@withContext it }
+        val c = safe { cinemeta(t, y, "movie") }
+        val w = if ((c?.plot?.length ?: 0) < 320) safe { wiki(t, y, "film") } else null  // i18n-ignore
+        val plot = listOfNotNull(c?.plot, w?.let { sentences(it, if (c?.plot == null) 5 else 2) }).joinToString(" ").ifBlank { null }
+        val out = (c ?: Free(null, null, null, null, null, null)).copy(plot = plot)
+        if (plot != null || out.cast != null) freeCache[k] = out
+        out.takeIf { plot != null || it.cast != null }
+    }
+    suspend fun movie(raw: String): String? = movieFull(raw)?.plot
+    suspend fun seriesFull(raw: String): Free? = withContext(Dispatchers.IO) {
+        val (t, y) = cleanTitle(raw); val k = "S|$t"
+        freeCache[k]?.let { return@withContext it }
+        val c = safe { cinemeta(t, y, "series") }
+        val tv = if ((c?.plot?.length ?: 0) < 200) safe { tvmazeShow(t)?.str("summary")?.let(::strip)?.ifBlank { null } } else null
+        val plot = (if ((tv?.length ?: 0) > (c?.plot?.length ?: 0)) tv else c?.plot) ?: safe { wiki(t, y, "TV series") }
+        val out = (c ?: Free(null, null, null, null, null, null)).copy(plot = plot)
+        if (plot != null || out.cast != null) freeCache[k] = out
+        out.takeIf { plot != null || it.cast != null }
+    }
+    suspend fun series(raw: String): String? = seriesFull(raw)?.plot
     suspend fun episode(raw: String, season: Int, num: Int): String? { val (t, _) = cleanTitle(raw)
         return memo("e|$t|$season|$num") {
             val id = tvmazeShow(t)?.optInt("id") ?: return@memo null

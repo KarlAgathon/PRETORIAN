@@ -1,3 +1,2 @@
-Opisi filmova, serija i epizoda i bez TMDB ključa: kad ih provider nema, traže se besplatno po nazivu – Cinemeta (IMDb podaci) i Wikipedia za filmove, TVmaze i Cinemeta za serije i epizode, prevedeno na tvoj jezik
-Naslovi s oznakom kao „D+ - …“ se sada prepoznaju
-Umjesto praznog mjesta piše „Opis nije dostupan.“
+Filmovi i serije bez TMDB-a: duži opis (Cinemeta + još koja rečenica sa Wikipedije), glumci, režiser, godina, trajanje i žanr – podaci sa IMDb-a, besplatno
+Opis filma se vidi do 7 redova, serije do 3
