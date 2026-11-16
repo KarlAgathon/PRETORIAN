@@ -5,6 +5,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -55,7 +57,19 @@ import java.util.Locale
 
 private const val MIN = 60_000L
 private const val HALF = 30 * MIN
+private const val DAY = 86_400_000L
 private fun floorHalf(t: Long) = t - (t % HALF)
+/** local midnight of the day of [t] */
+private fun dayStart(t: Long): Long = java.util.Calendar.getInstance().apply {
+    timeInMillis = t; set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+}.timeInMillis
+/** days from today: -1 yesterday, 0 today, 1 tomorrow */
+private fun dayIdx(t: Long, now: Long) = Math.round((dayStart(t) - dayStart(now)).toDouble() / DAY).toInt()
+private fun dayName(d: Int, t: Long): String = when (d) {
+    -1 -> tr("Jučer"); 0 -> tr("Danas"); 1 -> tr("Sutra")
+    else -> SimpleDateFormat("EEE d.", Locale(Look.lang)).format(Date(t))
+}
+private val PICK = Color(0xFFFBBF24)
 
 /**
  * TV guide as a grid: channels down, time across, the picture and the show's details on top.
@@ -141,6 +155,13 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
     val chans by load(g.key, Favs.rev) { channelsOf(ctx, g) }
     val list = (chans as? Load.Ok)?.value ?: emptyList()
     val epg = remember { mutableStateMapOf<String, List<EpgItem>>() }
+    val epgLim = remember { mutableStateMapOf<String, Int>() }
+    // past shows of channels with an archive (catch-up), loaded when the grid goes back in time
+    val past = remember { mutableStateMapOf<String, List<EpgItem>>() }
+    var limit by remember { mutableIntStateOf(40) }
+    val barFr = remember { FocusRequester() }
+    var numBuf by remember { mutableStateOf("") }
+    var pickedHour by remember { mutableIntStateOf(-2) }
     var row by remember { mutableIntStateOf(if (TvMemory.group?.key == g.key) TvMemory.channel.coerceAtLeast(0) else 0) }
     val now0 = remember { System.currentTimeMillis() }
     var focusTime by remember { mutableLongStateOf(now0) }
@@ -153,15 +174,30 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
     val src = remember { MutableInteractionSource() }
     val focused by src.collectIsFocusedAsState()
     LaunchedEffect(Unit) { while (true) { delay(30_000); now = System.currentTimeMillis() } }
+    // in the grid the groups slide away; Left at the start of the grid brings them back
+    LaunchedEffect(focused) { if (focused && Chrome.driven) Chrome.rail = 0 }
 
-    // guide of the rows around the focused one
-    LaunchedEffect(row, list) {
-        for (i in (row - 2).coerceAtLeast(0)..(row + 9).coerceAtMost(list.lastIndex)) {
+    /** how far back this channel can go: its archive days, else now */
+    fun minOf(ch: Channel?): Long = if (ch != null && ch.archive > 0) dayStart(now - ch.archive.coerceIn(1, 7) * DAY) else now
+    val anyArchive = list.any { it.archive > 0 }
+    val wantPast = focusTime < now
+    // guide of the rows around the focused one (more of it when a later day is picked; the archive when going back)
+    LaunchedEffect(row, list, limit, wantPast) {
+        for (i in (row - 2).coerceAtLeast(0)..(row + 12).coerceAtMost(list.lastIndex)) {
             val ch = list[i]
-            if (epg.containsKey(ch.url)) continue
             val p = Store.byId(ctx, ch.pid) ?: continue
-            val short = try { Repo.epg(p, ch, 40) } catch (e: Exception) { emptyList() }
-            epg[ch.url] = short.ifEmpty { try { ProgIndex.forChannel(ctx, ch) } catch (e: Exception) { emptyList() } }
+            if ((epgLim[ch.url] ?: 0) < limit) {
+                val short = try { Repo.epg(p, ch, limit) } catch (e: Exception) { emptyList() }
+                epg[ch.url] = short.ifEmpty { epg[ch.url]?.ifEmpty { null } ?: try { ProgIndex.forChannel(ctx, ch) } catch (e: Exception) { emptyList() } }
+                epgLim[ch.url] = limit
+            }
+            if (wantPast && ch.archive > 0 && !past.containsKey(ch.url) && p.type == SourceType.XTREAM) {
+                past[ch.url] = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    val x = Xtream(p); val t = System.currentTimeMillis()
+                    val a = try { x.archive(ch.id) } catch (e: Exception) { emptyList() }
+                    (if (a.any { it.end <= t }) a else x.archiveFromGuide(ch.epg, ch.archive.coerceIn(1, 7))).filter { it.end <= t }
+                }
+            }
         }
     }
     LaunchedEffect(row) {
@@ -170,7 +206,13 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
         if (vis.none { it.index == row } || vis.lastOrNull()?.index == row) listState.animateScrollToItem((row - 2).coerceAtLeast(0))
     }
 
-    fun progsOf(ch: Channel?) = ch?.let { epg[it.url] } ?: emptyList()
+    fun progsOf(ch: Channel?): List<EpgItem> {
+        ch ?: return emptyList()
+        val fut = epg[ch.url] ?: emptyList()
+        val old = past[ch.url] ?: return fut
+        val first = fut.minOfOrNull { it.start } ?: Long.MAX_VALUE
+        return (old.filter { it.start < first } + fut).sortedBy { it.start }
+    }
     fun current(): Pair<Channel, EpgItem?>? {
         val ch = list.getOrNull(row) ?: return null
         return ch to progsOf(ch).firstOrNull { it.start <= focusTime && it.end > focusTime }
@@ -184,23 +226,31 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
         val viewEnd = viewStart + spanMin * MIN
 
         fun keepVisible(start: Long) {
-            if (start < viewStart) viewStart = floorHalf(start).coerceAtLeast(floorHalf(now))
+            if (start < viewStart) viewStart = floorHalf(start)
             else if (start > viewEnd - HALF) viewStart = floorHalf(start) - HALF
+        }
+        /** jump the grid to [t] (a day or an hour picked above the grid) */
+        fun goTo(t0: Long) {
+            val ch = list.getOrNull(row)
+            val t = t0.coerceAtLeast(minOf(ch)).coerceAtMost(dayStart(now) + 6 * DAY)
+            focusTime = if (t <= now && t >= now - MIN) now else t + 1
+            viewStart = floorHalf(t) - HALF
+            if (t > now + 18 * 3600_000L) limit = maxOf(limit, 150)
         }
 
         Column(Modifier.fillMaxSize().padding(top = 16.dp, start = 12.dp, end = 4.dp)) {
             // ---------------------------------------------------------------- picture and show
             val cur = current()
-            Row(Modifier.fillMaxWidth().height(176.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+            Row(Modifier.fillMaxWidth().height(150.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                 when (if (Perf.lite && !Prefs.bool("lite_preview")) 0 else Look.previewMode) {
-                    2 -> PreviewBox(cur?.first, Modifier.height(170.dp))
-                    1 -> PreviewSel.ch?.let { PreviewBox(it, Modifier.height(170.dp)) }
+                    2 -> PreviewBox(cur?.first, Modifier.height(146.dp))
+                    1 -> PreviewSel.ch?.let { PreviewBox(it, Modifier.height(146.dp)) }
                 }
                 Column(Modifier.weight(1f).padding(top = 4.dp, end = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     val pr = cur?.second
                     T(pr?.title ?: cur?.first?.name ?: "", 22.sp, C.Text, FontWeight.Bold, maxLines = 2)
                     if (pr != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        T(pr.times(), 14.sp, C.Soft, FontWeight.SemiBold)
+                        T((if (dayIdx(pr.start, now) != 0) dayName(dayIdx(pr.start, now), pr.start) + " · " else "") + pr.times(), 14.sp, C.Soft, FontWeight.SemiBold)  // i18n-ignore
                         if (pr.start <= now && pr.end > now) {
                             Box(Modifier.width(70.dp).height(4.dp).clip(Rnd(2.dp)).background(C.CardHi)) {
                                 Box(Modifier.fillMaxWidth(pr.progress(now)).height(4.dp).background(C.Red))
@@ -213,10 +263,38 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
                     cleanDesc(pr?.desc)?.let { T(it, 13.sp, C.Soft, maxLines = 4) }
                 }
             }
+            // ---------------------------------------------------------------- group · day · time
+            val fDay = dayIdx(focusTime, now)
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp).horizontalScroll(rememberScrollState()).onPreviewKeyEvent { e ->
+                if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionDown) { try { fr.requestFocus() } catch (_: Exception) {}; true } else false
+            }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                @Composable fun chip(text: String, on: Boolean, red: Boolean = false, f: FocusRequester? = null, click: () -> Unit) =
+                    Focusable(modifier = Modifier.height(30.dp), onClick = click, focusRequester = f, shape = Pill, zoom = 1.04f,
+                        normal = if (on) PICK else if (red) C.Red.copy(alpha = 0.18f) else C.Card) { foc ->
+                        T(text, 12.sp, if (on && !foc) Color(0xFF1A1300) else if (red && !foc) C.RedText else C.Text, if (on || red) FontWeight.Bold else FontWeight.Normal,
+                            modifier = Modifier.align(Alignment.Center).padding(horizontal = 12.dp))
+                    }
+                chip("☰  " + g.cat.name, false, f = barFr) { onLeftEdge() }  // i18n-ignore
+                Box(Modifier.width(1.dp).height(20.dp).background(C.Line))
+                T("DAN", 10.sp, C.Muted, FontWeight.Bold)
+                for (d in (if (anyArchive) -1 else 0)..3) {
+                    val t = dayStart(now) + d * DAY
+                    chip(dayName(d, t), d == fDay) {
+                        pickedHour = -2
+                        goTo(if (d == 0) maxOf(now, t + (focusTime - dayStart(focusTime))) else t + (focusTime - dayStart(focusTime)))
+                    }
+                }
+                Box(Modifier.width(1.dp).height(20.dp).background(C.Line))
+                T("VRIJEME", 10.sp, C.Muted, FontWeight.Bold)
+                chip("● " + tr("Sada"), false, red = true) { pickedHour = -1; goTo(now) }  // i18n-ignore
+                for ((h, label) in listOf(8 to tr("Jutro"), 12 to tr("Podne"), 18 to "18:00", 20 to "20:00", 22 to "22:00")) {  // i18n-ignore
+                    chip(label, pickedHour == h && dayIdx(focusTime, now) == fDay) { pickedHour = h; goTo(dayStart(focusTime) + h * 3600_000L) }
+                }
+            }
             // ---------------------------------------------------------------- time ruler
             Row(Modifier.fillMaxWidth().height(28.dp).padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                T(SimpleDateFormat("EEE, d. MMM, HH:mm", Locale(Look.lang)).format(Date(now)), 14.sp, C.RedText, FontWeight.SemiBold,
-                    modifier = Modifier.width(nameW))
+                T(dayName(dayIdx(viewStart + HALF, now), viewStart + HALF) + ", " + SimpleDateFormat("d. MMM", Locale(Look.lang)).format(Date(viewStart + HALF)),  // i18n-ignore
+                    14.sp, if (dayIdx(viewStart + HALF, now) == 0) C.RedText else PICK, FontWeight.SemiBold, modifier = Modifier.width(nameW))
                 Box(Modifier.weight(1f).fillMaxHeight()) {
                     var t = floorHalf(viewStart)
                     while (t < viewEnd) {
@@ -241,7 +319,12 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
                             val pr = progsOf(ch).firstOrNull { it.start <= focusTime && it.end > focusTime }
                             val t = System.currentTimeMillis()
                             // on what is on now: straight to full screen, no question; past or coming shows: their menu
-                            if (pr == null || (pr.start <= t && pr.end > t)) {
+                            if (pr != null && pr.end <= t && ch.archive > 0) {
+                                val p = Store.byId(ctx, ch.pid)
+                                if (p != null) gate.run("c:${ch.url}", Ovr(ctx, ch.pid).isChLocked(ch)) {
+                                    Preview.stop(); nav.push(Screen.Player(listOf(PlayItem(pr.title, Xtream(p).timeshiftUrl(ch.id, pr), ch.logo, ch.name, null)), 0, live = false))
+                                }
+                            } else if (pr == null || (pr.start <= t && pr.end > t)) {
                                 val i = list.indexOfFirst { it.url == ch.url }.coerceAtLeast(0)
                                 gate.run("c:${ch.url}", Ovr(ctx, ch.pid).isChLocked(ch)) { TvMemory.channel = i; TvMemory.group = g; TvMemory.restore = true; playChannels(nav, list, i) }
                             } else detail = ch to pr
@@ -251,20 +334,38 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
                         val ch = list.getOrNull(row)
                         val progs = progsOf(ch)
                         val curP = progs.firstOrNull { it.start <= focusTime && it.end > focusTime }
+                        val kc = e.nativeKeyEvent.keyCode
+                        // digits: type a channel number
+                        val digit = when (kc) { in 7..16 -> kc - 7; in 144..153 -> kc - 144; else -> -1 }
+                        if (digit >= 0) { if (numBuf.length < 4) numBuf += digit; return@onPreviewKeyEvent true }
+                        // a row that can't go back (no archive) shows now, not the past
+                        fun fixRow(r: Int) { val c = list.getOrNull(r); if (focusTime < minOf(c)) focusTime = now }
+                        val page = listState.layoutInfo.visibleItemsInfo.size.coerceAtLeast(5) - 1
+                        when (kc) {
+                            android.view.KeyEvent.KEYCODE_CHANNEL_UP, android.view.KeyEvent.KEYCODE_PAGE_UP -> { row = (row - page).coerceAtLeast(0); fixRow(row); return@onPreviewKeyEvent true }
+                            android.view.KeyEvent.KEYCODE_CHANNEL_DOWN, android.view.KeyEvent.KEYCODE_PAGE_DOWN -> { row = (row + page).coerceAtMost(list.lastIndex); fixRow(row); return@onPreviewKeyEvent true }
+                        }
                         when (e.key) {
-                            Key.DirectionUp -> { row = if (row == 0) list.lastIndex else row - 1; true }
-                            Key.DirectionDown -> { row = if (row == list.lastIndex) 0 else row + 1; true }
+                            Key.DirectionUp -> { if (row == 0) { try { barFr.requestFocus() } catch (_: Exception) {} } else { row -= 1; fixRow(row) }; true }
+                            Key.DirectionDown -> { row = if (row == list.lastIndex) 0 else row + 1; fixRow(row); true }
                             Key.DirectionRight -> {
+                                pickedHour = -2
                                 val next = progs.firstOrNull { it.start >= (curP?.end ?: (focusTime + 1)) }
                                 focusTime = next?.start?.plus(1) ?: (focusTime + HALF)
                                 keepVisible(next?.start ?: focusTime); true
                             }
                             Key.DirectionLeft -> {
+                                pickedHour = -2
+                                // holding Left: straight back to now
+                                if (e.nativeKeyEvent.repeatCount > 0) { if (focusTime != now) { focusTime = now; viewStart = floorHalf(now) - HALF }; return@onPreviewKeyEvent true }
+                                val min = minOf(ch)
                                 val startNow = curP?.start ?: focusTime
-                                if (startNow <= now || focusTime - HALF < now) { focusTime = now; viewStart = floorHalf(now) - HALF; onLeftEdge(); true }
-                                else {
-                                    val prev = progs.lastOrNull { it.end <= (curP?.start ?: focusTime) }
-                                    focusTime = (prev?.start?.plus(1) ?: (focusTime - HALF)).coerceAtLeast(now)
+                                val prev = progs.lastOrNull { it.end <= startNow }
+                                if (startNow <= min || (prev == null && focusTime - HALF < min)) {
+                                    // the start of what this channel can show: the groups slide in
+                                    focusTime = now; viewStart = floorHalf(now) - HALF; onLeftEdge(); true
+                                } else {
+                                    focusTime = (prev?.start?.plus(1) ?: (focusTime - HALF)).coerceAtLeast(min)
                                     keepVisible(prev?.start ?: focusTime); true
                                 }
                             }
@@ -298,13 +399,15 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
                                     val w = ((pr.end.coerceAtMost(viewEnd) - pr.start.coerceAtLeast(viewStart)) / MIN) * ppm
                                     val isFocus = sel && pr.start <= focusTime && pr.end > focusTime
                                     val isNow = pr.start <= now && pr.end > now
+                                    val isPast = pr.end <= now
                                     Box(Modifier.offset(x = x.dp).width((w - 3).coerceAtLeast(2f).dp).fillMaxHeight().clip(Rnd(8.dp))
-                                        .background(when { isFocus -> C.Red.copy(alpha = 0.45f); isNow -> C.CardHi; else -> C.Card })
+                                        .background(when { isFocus -> C.Red.copy(alpha = 0.45f); isNow -> C.CardHi; isPast -> C.Card.copy(alpha = 0.55f); else -> C.Card })
                                         .then(if (isFocus) Modifier.border(2.dp, C.Red, Rnd(8.dp)) else Modifier).padding(horizontal = 8.dp),
                                         contentAlignment = Alignment.CenterStart) {
                                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                            if (isPast && ch.archive > 0) Ico(R.drawable.lc_history, 12.dp, if (isFocus) C.Text else C.Muted)
                                             if (Reminders.has(pr.title, pr.start)) Ico(R.drawable.lc_bell, 12.dp, C.Amber)
-                                            T(pr.title, 13.sp, if (isFocus) C.Text else C.Soft, if (isNow) FontWeight.SemiBold else FontWeight.Normal)
+                                            T(pr.title, 13.sp, if (isFocus) C.Text else if (isPast) C.Muted else C.Soft, if (isNow) FontWeight.SemiBold else FontWeight.Normal)
                                         }
                                     }
                                 }
@@ -315,6 +418,23 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
                     }
                 }
             }
+        }
+    }
+
+    // typed channel number: jump after a short pause
+    LaunchedEffect(numBuf) {
+        if (numBuf.isEmpty()) return@LaunchedEffect
+        delay(1300)
+        val n = numBuf.toIntOrNull(); numBuf = ""
+        val i = list.indexOfFirst { it.num == n }
+        if (i >= 0) { row = i; if (focusTime < minOf(list[i])) focusTime = now; listState.scrollToItem((i - 2).coerceAtLeast(0)) }
+        else Toast.makeText(ctx, trf("Nema kanala %s u ovoj grupi", n ?: 0), Toast.LENGTH_SHORT).show()
+    }
+    if (numBuf.isNotEmpty()) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(Modifier.clip(Rnd(16.dp)).background(C.Bg.copy(alpha = 0.95f)).border(2.dp, PICK, Rnd(16.dp)).padding(horizontal = 26.dp, vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally) {
+            T("Broj kanala", 11.sp, C.Muted, FontWeight.SemiBold)
+            T(numBuf.toList().joinToString(" ") + " _", 34.sp, PICK, FontWeight.ExtraBold)  // i18n-ignore
         }
     }
 

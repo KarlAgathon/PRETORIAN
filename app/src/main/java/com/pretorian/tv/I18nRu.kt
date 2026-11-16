@@ -2126,4 +2126,10 @@ TMDB ključ|Ключ TMDB
 ugrađen|встроен
 opisi, plakati i glumci na tvom jeziku, i kad ih server nema · besplatno na themoviedb.org|описания, постеры и актёры на твоём языке, даже если на сервере их нет · бесплатно на themoviedb.org
 Opis nije dostupan.|Описание недоступно.
+Jutro|Утро
+Podne|Полдень
+Broj kanala|Номер канала
+DAN|ДЕНЬ
+VRIJEME|ВРЕМЯ
+Nema kanala %s u ovoj grupi|Нет канала %s в этой группе
 """.trimIndent()
