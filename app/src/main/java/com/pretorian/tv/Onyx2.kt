@@ -26,6 +26,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -105,7 +106,7 @@ fun nextOf(ch: Channel, wait: Long = 450): List<EpgItem>? {
         delay(wait)
         val p = Store.byId(ctx, ch.pid) ?: return@produceState
         val now = System.currentTimeMillis()
-        val l = NowCache.gate.withPermit { try { Repo.epg(p, ch, 5) } catch (e: Exception) { emptyList() } }.filter { it.end > now }.take(3)
+        val l = NowCache.gate.withPermit { try { Repo.epg(p, ch, 14) } catch (e: Exception) { emptyList() } }.filter { it.end > now }.take(12)
         NextCache.m[ch.url] = System.currentTimeMillis() to l; value = l
     }
     return v
@@ -177,6 +178,7 @@ fun OnyxTv(nav: Nav, onGuide: () -> Unit) {
     var focusedCh by remember { mutableStateOf<Channel?>(null) }
     var focusedGroup by remember { mutableStateOf<GroupRef?>(null) }
     var enterTick by remember { mutableIntStateOf(0) }
+    var pick by remember { mutableStateOf<EpgItem?>(null) }
     val gFr = remember { FocusRequester() }
     LaunchedEffect(Unit) { if (!coming) { TvMemory.restore = false; st.refocus++ } }
     // opening TV: the last group comes back at once (lists are kept on the disk); groups of folded playlists wait for your OK
@@ -300,12 +302,12 @@ fun OnyxTv(nav: Nav, onGuide: () -> Unit) {
             val g = st.group
             val wide = inChannels && g != null
             Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (wide) WideHeader(preview ?: focusedCh, focusedCh)
-                Box(Modifier.weight(1f).fillMaxWidth().glass().graphicsLayer { alpha = if (!inChannels && g != null) 0.55f else 1f }.onPreviewKeyEvent { e ->
+                if (wide) WideHeader(preview ?: focusedCh, focusedCh, pick)
+                Box(Modifier.weight(1f).fillMaxWidth().glass().graphicsLayer { alpha = if (!inChannels && g != null) 0.55f else 1f }.onKeyEvent { e ->
                     if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { backToGroups(); true } else false
                 }) {
                     if (g == null) Message("Izaberi grupu")
-                    else key(g.key, st.rev) { OnyxChannels(g, nav, st, rows, enterTick, preview, { preview = it; TvMemory.preview = it }, wide) { focusedCh = it; inChannels = true } }
+                    else key(g.key, st.rev) { OnyxChannels(g, nav, st, rows, enterTick, preview, { preview = it; TvMemory.preview = it }, wide, { pick = it }) { focusedCh = it; inChannels = true } }
                 }
             }
             // ---------------------------------------------------------- picture and programme
@@ -330,7 +332,9 @@ private fun TvDialogsRows(st: TvState, rows: Load<List<TRow>>) {
 }
 
 @Composable
-private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRow>>, enterTick: Int, preview: Channel?, onPreview: (Channel) -> Unit, wide: Boolean, onFocusCh: (Channel) -> Unit) {
+private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRow>>, enterTick: Int, preview: Channel?, onPreview: (Channel) -> Unit, wide: Boolean, onPick: (EpgItem?) -> Unit, onFocusCh: (Channel) -> Unit) {
+    // which show is picked in the row (0 = now); Left/Right move through the guide, it stays when going up/down
+    var cell by remember { mutableIntStateOf(0) }
     val ctx = LocalContext.current
     var listRev by remember { mutableIntStateOf(0) }
     val isFav = g.pid == null
@@ -354,8 +358,26 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                     itemsIndexed(list, key = { i, ch -> "$i${ch.url}" }) { i, ch ->
                         val ovr = remember(ch.pid, g.pid) { Ovr(ctx, ch.pid.ifBlank { g.pid ?: "" }) }
                         val locked = ovr.isChLocked(ch)
-                        Focusable(modifier = Modifier.fillMaxWidth().height(50.dp).wrapKeys(i, list.size, cWrap), shape = Rnd(12.dp),
+                        val nx = if (wide) nextOf(ch) else null
+                        var rowFocused by remember { mutableStateOf(false) }
+                        val c = if (nx.isNullOrEmpty()) 0 else cell.coerceAtMost(nx.lastIndex)
+                        LaunchedEffect(rowFocused, c, nx) { if (rowFocused) onPick(nx?.getOrNull(c)?.takeIf { c > 0 }) }
+                        Focusable(modifier = Modifier.fillMaxWidth().height(50.dp).wrapKeys(i, list.size, cWrap).onPreviewKeyEvent { e ->
+                            if (!wide || e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                            when (e.key) {
+                                Key.DirectionRight -> { if (!nx.isNullOrEmpty() && c < nx.lastIndex) cell = c + 1; true }
+                                Key.DirectionLeft -> if (c > 0) { cell = c - 1; true } else false
+                                else -> false
+                            }
+                        }, shape = Rnd(12.dp),
                             onClick = {
+                                val sel = nx?.getOrNull(c)
+                                if (wide && c > 0 && sel != null) {
+                                    // a later show: remind me / don't
+                                    val on = Reminders.toggle(Reminder("r${sel.start}${sel.title.hashCode()}", sel.title, sel.start, ch.url, ch.name, ch.logo, ch.pid, "tv"))
+                                    android.widget.Toast.makeText(ctx, tr(if (on) "Podsjetnik postavljen" else "Podsjetnik uklonjen"), android.widget.Toast.LENGTH_SHORT).show()
+                                    return@Focusable
+                                }
                                 st.gate.run("c:${ch.url}", locked) {
                                     // first OK: this channel plays in the small picture; OK again on the same channel: full screen
                                     TvMemory.channel = i; TvMemory.group = g
@@ -363,7 +385,7 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                                     else onPreview(ch)
                                 }
                             },
-                            onMenu = { menu = ch }, onFocus = { onFocusCh(ch) }, focusRequester = cWrap.requester(i),
+                            onMenu = { menu = ch }, onFocus = { rowFocused = true; onFocusCh(ch) }, focusRequester = cWrap.requester(i),
                             normal = Color.Transparent, focused = C.Red, zoom = 1.01f) { f ->
                             val now = nowOf(ch)
                             Row(Modifier.fillMaxSize().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -372,19 +394,25 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                                 if (wide) {
                                     // name, then now · next · later across the row
                                     T(ovr.chName(ch), 13.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, maxLines = 2, modifier = Modifier.width(210.dp))
-                                    val nx = nextOf(ch)
                                     val hm = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())  // i18n-ignore
                                     Row(Modifier.weight(1f).fillMaxHeight().padding(vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                         if (nx.isNullOrEmpty()) Box(Modifier.weight(1f).fillMaxHeight().clip(Rnd(8.dp)).background(if (f) Color.Black.copy(alpha = 0.12f) else C.Card), contentAlignment = Alignment.CenterStart) {
                                             T(now?.title ?: if (nx == null) "Učitavam…" else "Bez programa", 12.sp, if (f) C.OnRed.copy(alpha = 0.7f) else C.Muted, modifier = Modifier.padding(horizontal = 10.dp))
                                         }
-                                        nx?.forEachIndexed { k, e ->
+                                        val first = (c - 1).coerceAtLeast(0).coerceAtMost(((nx?.size ?: 0) - 3).coerceAtLeast(0))
+                                        nx?.drop(first)?.take(3)?.forEachIndexed { kk, e ->
+                                            val k = kk + first
                                             val isNow = k == 0 && e.start <= System.currentTimeMillis()
-                                            Column(Modifier.weight(if (k == 0) 1.4f else 1f).fillMaxHeight().clip(Rnd(8.dp))
-                                                .background(if (f) Color.Black.copy(alpha = if (isNow) 0.18f else 0.1f) else if (isNow) C.CardHi else C.Card).padding(horizontal = 9.dp, vertical = 3.dp),
+                                            val isSel = f && k == c
+                                            Column(Modifier.weight(if (kk == 0) 1.4f else 1f).fillMaxHeight().clip(Rnd(8.dp))
+                                                .background(if (isSel) C.Bg.copy(alpha = 0.85f) else if (f) Color.Black.copy(alpha = if (isNow) 0.18f else 0.1f) else if (isNow) C.CardHi else C.Card)
+                                                .then(if (isSel) Modifier.border(2.dp, C.Bg, Rnd(8.dp)) else Modifier).padding(horizontal = 9.dp, vertical = 3.dp),
                                                 verticalArrangement = Arrangement.Center) {
-                                                T((if (isNow) "" else hm.format(java.util.Date(e.start)) + "  ") + e.title, 12.sp,  // i18n-ignore
-                                                    if (f) C.OnRed else if (isNow) C.Text else C.Soft, if (isNow) FontWeight.SemiBold else FontWeight.Normal)
+                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                    if (Reminders.has(e.title, e.start)) Ico(R.drawable.lc_bell, 11.dp, if (isSel) C.Amber else if (f) C.OnRed else C.Amber)
+                                                    T((if (isNow) "" else hm.format(java.util.Date(e.start)) + "  ") + e.title, 12.sp,  // i18n-ignore
+                                                        if (isSel) C.Text else if (f) C.OnRed else if (isNow) C.Text else C.Soft, if (isNow || isSel) FontWeight.SemiBold else FontWeight.Normal)
+                                                }
                                                 if (isNow) ThinBar(e.progress(), if (f) C.OnRed else hueOf(ch.name), Modifier.fillMaxWidth().padding(top = 3.dp))
                                             }
                                         }
@@ -418,7 +446,7 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
 
 /** Top of the wide channel list: the small picture on the left (the channel you picked with OK), the show of the channel you are on next to it. */
 @Composable
-private fun WideHeader(playing: Channel?, on: Channel?) {
+private fun WideHeader(playing: Channel?, on: Channel?, pick: EpgItem?) {
     val ctx = LocalContext.current
     Row(Modifier.fillMaxWidth().height(112.dp).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Box(Modifier.fillMaxHeight().aspectRatio(16f / 9f).glass(14.dp)) {
@@ -435,12 +463,12 @@ private fun WideHeader(playing: Channel?, on: Channel?) {
             if (c == null) { T("OK na kanalu: slika ovdje · još jednom OK: cijeli ekran", 12.sp, C.Muted, maxLines = 2); return@Column }
             val epg by load(c.url) { Store.byId(ctx, c.pid)?.let { Repo.epg(it, c, 4) } ?: emptyList() }
             val nowT = System.currentTimeMillis()
-            val cur = (epg as? Load.Ok)?.value?.firstOrNull { it.start <= nowT && it.end > nowT }
+            val cur = pick ?: (epg as? Load.Ok)?.value?.firstOrNull { it.start <= nowT && it.end > nowT }
             Kicker("${c.num} · ${c.name}" + (cur?.let { " · " + it.times() } ?: ""), C.Soft)
             T(cur?.title ?: (if (epg is Load.Loading) "Učitavam program…" else c.name), 20.sp, C.Text, FontWeight.ExtraBold, maxLines = 1)
             cleanDesc(cur?.desc)?.let { T(it, 12.sp, C.Soft, maxLines = 2) }
-            if (cur != null) ThinBar(cur.progress(), C.Text, Modifier.fillMaxWidth(0.6f), 3.dp)
-            T("◀ grupe · OK slika gore · OK još jednom cijeli ekran", 11.sp, C.Muted, maxLines = 1)
+            if (cur != null && cur.start <= nowT) ThinBar(cur.progress(), C.Text, Modifier.fillMaxWidth(0.6f), 3.dp)
+            T(if (pick != null) "◀ ▶ program · OK podsjeti me" else "◀ ▶ program · ◀ grupe · OK slika gore · OK još jednom cijeli ekran", 11.sp, C.Muted, maxLines = 1)
         }
     }
 }

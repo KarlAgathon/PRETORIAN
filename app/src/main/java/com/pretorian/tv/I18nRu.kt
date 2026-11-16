@@ -2133,4 +2133,6 @@ DAN|ДЕНЬ
 VRIJEME|ВРЕМЯ
 Nema kanala %s u ovoj grupi|Нет канала %s в этой группе
 ◀ grupe · OK slika gore · OK još jednom cijeli ekran|◀ группы · OK картинка сверху · ещё раз OK весь экран
+◀ ▶ program · OK podsjeti me|◀ ▶ программа · OK напомнить
+◀ ▶ program · ◀ grupe · OK slika gore · OK još jednom cijeli ekran|◀ ▶ программа · ◀ группы · OK картинка сверху · ещё раз OK весь экран
 """.trimIndent()

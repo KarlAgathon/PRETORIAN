@@ -1,3 +1,4 @@
+TV lista: strelice lijevo/desno idu kroz program kanala (sada → kasnije i nazad), gore se vidi opis izabrane emisije, OK na kasnijoj = podsjetnik; lijevo s „sada“ vraća grupe
 Plejer: Back radi kao strelica lijevo – kanali → grupe → nazad u TV
 TV lista: manji gornji dio (više kanala), prazna polja pišu „Učitavam…“ ili „Bez programa“
 „Zadnje gledano“ se prikazuje samo na Početnoj, više ne ispod TV-a
