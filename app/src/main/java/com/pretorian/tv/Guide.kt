@@ -101,7 +101,7 @@ fun TvGuide(nav: Nav, onList: () -> Unit) {
                 onFocusGroup = { focusedGroup = it; Chrome.rail = 3 },
                 onOpen = { openGroup(ctx, st, it); st.enter++ },
                 onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
-                onHeader = { p -> Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
+                onHeader = { p -> TvFold.toggle(p.id); if (p.id in TvFold.open) Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
                 onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it },
                 onFocusRow = { st.focusKey = it; Chrome.rail = 3 },
                 extra = {

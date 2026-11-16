@@ -103,7 +103,7 @@ fun ThinBar(f: Float, color: Color, modifier: Modifier = Modifier, h: Dp = 2.dp)
 private sealed class TRow {
     data class Title(val t: String) : TRow()
     data class Grp(val ref: GroupRef) : TRow()
-    data class Pl(val p: Playlist) : TRow()
+    data class Pl(val p: Playlist, val open: Boolean = false) : TRow()
     object NewFav : TRow()
     val id get() = when (this) { is Title -> "t:$t"; is Grp -> "g:" + ref.key; is Pl -> "p:" + p.id; NewFav -> "nf" }
 }
@@ -115,13 +115,29 @@ private suspend fun tvRows(ctx: android.content.Context): List<TRow> {
     if (Recent.list().isNotEmpty()) out.add(TRow.Grp(GroupRef(null, Category(RECENT_GROUP, tr("Zadnje gledano")))))
     if (!Lock.simple) out.add(TRow.NewFav)
     val pls = Store.actives(ctx)
-    pls.firstOrNull()?.let { p ->
+    if (pls.size == 1) pls.first().let { p ->
         out.add(TRow.Title("Kategorije providera"))
         out.add(TRow.Grp(GroupRef(p.id, Category(ALL_GROUP, tr("Svi kanali")))))
         Ovr(ctx, p.id).groups("live", Repo.liveGroups(p)).forEach { out.add(TRow.Grp(GroupRef(p.id, it))) }
+    } else if (pls.size > 1) {
+        // several playlists: each one folded (▶); OK unfolds it (▼) and only then its groups are read
+        out.add(TRow.Title("Playliste"))
+        Store.playlists(ctx).filter { it.active }.forEach { p ->
+            val open = p.id in TvFold.open
+            out.add(TRow.Pl(p, open))
+            if (open) {
+                out.add(TRow.Grp(GroupRef(p.id, Category(ALL_GROUP, tr("Svi kanali")))))
+                Ovr(ctx, p.id).groups("live", Repo.liveGroups(p)).forEach { out.add(TRow.Grp(GroupRef(p.id, it))) }
+            }
+        }
     }
-    if (pls.size > 1) { out.add(TRow.Title("Druge playliste")); pls.drop(1).forEach { out.add(TRow.Pl(it)) } }
     return out
+}
+
+/** Which playlists are unfolded in TV (only for this run of the app; with several playlists all start folded). */
+object TvFold {
+    val open = HashSet<String>()
+    fun toggle(id: String) { if (!open.remove(id)) open.add(id) }
 }
 
 /** TV in the new look: groups · channels with what is on · picture and programme, last watched at the bottom. */
@@ -132,8 +148,9 @@ fun OnyxTv(nav: Nav, onGuide: () -> Unit) {
     val rows by load(st.rev, Favs.rev, Recent.rev, keep = true) { tvRows(ctx) }
     // how many channels each group has (one list of all channels, read in the background)
     val counts by produceState(emptyMap<String, Int>(), st.rev) {
-        delay(1500)
-        val p = Store.active(ctx) ?: return@produceState
+        delay(2500)
+        val acts = Store.actives(ctx)
+        val p = (if (acts.size == 1) acts.first() else acts.firstOrNull { it.id in TvFold.open && it.id == st.group?.pid }) ?: return@produceState
         value = try { val all = Repo.allChannels(p); all.groupingBy { it.group }.eachCount() + (ALL_GROUP to all.size) } catch (e: Exception) { emptyMap() }
     }
     val gState = rememberLazyListState()
@@ -144,6 +161,13 @@ fun OnyxTv(nav: Nav, onGuide: () -> Unit) {
     var enterTick by remember { mutableIntStateOf(0) }
     val gFr = remember { FocusRequester() }
     LaunchedEffect(Unit) { if (!coming) { TvMemory.restore = false; st.refocus++ } }
+    // opening TV: nothing heavy by itself — "All channels" and groups of folded playlists wait for your OK
+    remember {
+        if (!coming) st.group?.let { g ->
+            val multi = Store.actives(ctx).size > 1
+            if (g.cat.id == ALL_GROUP || (multi && g.pid != null && g.pid !in TvFold.open) || (g.pid != null && Store.actives(ctx).none { it.id == g.pid })) st.group = null
+        }; 0
+    }
     // coming back from a channel: the group list shows that channel's group too
     LaunchedEffect(rows is Load.Ok) {
         val list = (rows as? Load.Ok)?.value ?: return@LaunchedEffect
@@ -164,7 +188,12 @@ fun OnyxTv(nav: Nav, onGuide: () -> Unit) {
         if (gState.layoutInfo.visibleItemsInfo.none { it.index == idx }) gState.scrollToItem((idx - 3).coerceAtLeast(0))
         gFr.tryFocus()
     }
-    LaunchedEffect(rows) { if (st.group == null) (rows as? Load.Ok)?.value?.firstOrNull { it is TRow.Grp && (it.ref.pid != null) }?.let { st.group = (it as TRow.Grp).ref } }
+    LaunchedEffect(rows) {
+        if (st.group != null) return@LaunchedEffect
+        val last = TvMemory.group ?: return@LaunchedEffect
+        if (last.cat.id == ALL_GROUP) return@LaunchedEffect
+        (rows as? Load.Ok)?.value?.firstOrNull { it is TRow.Grp && it.ref.key == last.key }?.let { st.group = (it as TRow.Grp).ref }
+    }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 24.dp)) {
         Row(Modifier.weight(1f).fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -220,12 +249,16 @@ fun OnyxTv(nav: Nav, onGuide: () -> Unit) {
                                         }
                                     }
                                 }
-                                is TRow.Pl -> Focusable(modifier = Modifier.fillMaxWidth().height(34.dp), shape = Rnd(10.dp), onClick = {
-                                    Store.open(ctx, row.p.id); st.group = null; st.rev++; st.refocus++
-                                }, onFocus = { st.focusKey = row.id }, focusRequester = if (row.id == st.focusKey) gFr else null, normal = Color.Transparent, focused = C.Red, zoom = 1f) { f ->
+                                is TRow.Pl -> Focusable(modifier = Modifier.fillMaxWidth().height(36.dp), shape = Rnd(10.dp), onClick = {
+                                    // fold / unfold; folding the playlist of the open group closes the group too
+                                    TvFold.toggle(row.p.id); if (row.open && st.group?.pid == row.p.id) st.group = null
+                                    if (!row.open) Store.open(ctx, row.p.id)
+                                    st.focusKey = row.id; st.rev++; st.refocus++
+                                }, onFocus = { st.focusKey = row.id }, focusRequester = if (row.id == st.focusKey) gFr else null,
+                                    normal = if (row.open) C.CardHi else Color.Transparent, focused = C.Red, zoom = 1f) { f ->
                                     Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        Ico(R.drawable.lc_list, 12.dp, if (f) C.OnRed else C.Muted)
-                                        T(row.p.name, 13.sp, if (f) C.OnRed else C.Soft, modifier = Modifier.weight(1f))
+                                        T(if (row.open) "▼" else "▶", 11.sp, if (f) C.OnRed else C.Muted)  // i18n-ignore
+                                        T(row.p.name, 13.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
                                     }
                                 }
                                 TRow.NewFav -> Focusable(modifier = Modifier.fillMaxWidth().height(30.dp), shape = Rnd(10.dp), onClick = { st.newFav = true },

@@ -158,8 +158,9 @@ suspend fun groupRows(ctx: android.content.Context): List<GRow> {
     Favs.lists(ctx).forEach { out.add(GRow.Group(GroupRef(null, Category(FAV_PREFIX + it.id, "★ " + it.name)))) }
     if (!Lock.simple) out.add(GRow.NewFav())
     val pls = Store.actives(ctx)
-    pls.forEachIndexed { i, p ->
-        val open = i == 0
+    pls.forEachIndexed { _, p ->
+        // several playlists: all folded until you open one (its groups are read only then)
+        val open = pls.size == 1 || p.id in TvFold.open
         if (pls.size > 1) out.add(GRow.Header(p, open))
         if (open) {
             val ovr = Ovr(ctx, p.id)
@@ -352,7 +353,7 @@ private fun TvList(nav: Nav, onGuide: () -> Unit) {
                 onFocusGroup = { focusedGroup = it },
                 onOpen = { openGroup(ctx, st, it); enterTick++ },
                 onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
-                onHeader = { p -> Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
+                onHeader = { p -> TvFold.toggle(p.id); if (p.id in TvFold.open) Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
                 onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it },
                 onFocusRow = { st.focusKey = it },
                 extra = {

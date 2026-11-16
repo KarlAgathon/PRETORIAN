@@ -16,3 +16,4 @@ O aplikaciji: kratko „v1.0.7“, ocjena boxa se mjeri jednom i ostaje ista; Oz
 Držanje ▲ vodi direktno na gornji meni
 Nastavi gledati: ako je ista serija ili film i u drugoj aktivnoj playlisti, ostaje na Početnoj i nastavlja odatle s istim napretkom
 Grupe i kanali: filter Sve / Prikazane / Sakrivene i „Označi sve“ – npr. sve sakrivene odjednom pa Prikaži; iste boje kao ostatak aplikacije
+TV: s više aktivnih playlisti svaka je sklopljena (▶) – OK je raširi (▼) i tek tada se učitaju njene grupe; „Svi kanali“ se više ne učitavaju sami pri otvaranju TV-a
