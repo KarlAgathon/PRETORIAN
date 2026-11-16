@@ -81,6 +81,7 @@ private fun norm(s: String) = Sports.norm(s)
 object SearchIndex {
     class Item(val n: String, val hit: Hit, val num: String? = null)
     private val parts = HashMap<String, Pair<String, List<Item>>>()
+    fun clear() = synchronized(parts) { parts.clear() }
 
     private suspend fun part(ctx: android.content.Context, name: String, build: suspend (List<Playlist>) -> List<Item>): List<Item> = withContext(Dispatchers.IO) {
         val pls = Store.actives(ctx)

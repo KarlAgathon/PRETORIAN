@@ -562,8 +562,10 @@ fun AddPlaylistScreen(nav: Nav) {
                                 Store.savePlaylists(ctx, Store.playlists(ctx).map { if (it.id == old.id) pl else it })
                                 Toast.makeText(ctx, tr("Spremljeno"), Toast.LENGTH_SHORT).show()
                                 EditPlaylist.target = null; Repo.clear(); Repo.dropCatalogs(); nav.playlistsChanged(); nav.back()
+                                if (pl.active) Import.run(pl, reset = true) else CatalogDb.forget(old.id)
                             } else {
                                 Store.savePlaylists(ctx, Store.playlists(ctx) + pl.copy(active = true))
+                                Import.run(pl.copy(active = true))
                                 Toast.makeText(ctx, if (pl.type != SourceType.M3U) tr("Povezano ✓") else trf("Učitano: %s", info), Toast.LENGTH_LONG).show()
                                 nav.playlistsChanged(); nav.root(Screen.Home)
                             }
@@ -1616,6 +1618,7 @@ private fun PlaylistsV2(nav: Nav, openSub: (String) -> Unit) {
                     val updated = Store.playlists(ctx).map { pl -> try { if (pl.type == SourceType.XTREAM) pl.copy(exp = Repo.test(pl)) else { Repo.test(pl); pl } } catch (e: Exception) { pl } }
                     Store.savePlaylists(ctx, updated); list = updated
                     Prefs.put("auto_refresh_at", System.currentTimeMillis())
+                    updated.filter { it.active && it.type == SourceType.XTREAM }.forEach { CatalogDb.refreshLater(it, "vod"); CatalogDb.refreshLater(it, "series") }
                     EpgSources.list().filter { it.on }.forEach { try { EpgSources.refresh(it) } catch (_: Exception) {} }
                     nav.playlistsChanged()
                     busy = false; Toast.makeText(ctx, tr("Osvježeno"), Toast.LENGTH_SHORT).show()

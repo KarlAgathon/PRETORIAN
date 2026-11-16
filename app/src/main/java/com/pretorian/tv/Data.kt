@@ -218,7 +218,10 @@ object Net {
     fun get(url: String): String = open(url) { it.bufferedReader().use { r -> r.readText() } }
 
     /** opens [url] (following redirects) and hands the body as a stream: big lists are read piece by piece, never whole */
-    fun <T> open(url: String, read: (java.io.InputStream) -> T): T {
+    fun <T> open(url: String, read: (java.io.InputStream) -> T): T = openLen(url) { input, _ -> read(input) }
+
+    /** like [open], also hands the size the server announced (-1 = unknown), for progress bars */
+    fun <T> openLen(url: String, read: (java.io.InputStream, Long) -> T): T {
         var current = url
         repeat(5) {
             val c = URL(current).openConnection() as HttpURLConnection
@@ -234,7 +237,8 @@ object Net {
                     return@repeat
                 }
                 if (code !in 200..299) throw IOException(trf("Server je odgovorio greškom %s", code))
-                return c.inputStream.use(read)
+                val len = c.contentLengthLong
+                return c.inputStream.use { read(it, len) }
             } finally {
                 c.disconnect()
             }
@@ -319,11 +323,17 @@ class Xtream(private val p: Playlist) {
      * every movie or series of the account, one at a time. The list can be hundreds of MB,
      * so it is read as a stream with only the few fields we need kept (a whole copy would not fit in a TV box's memory).
      */
-    fun catalogEach(kind: String, each: (JSONObject) -> Unit) {
+    fun catalogEach(kind: String, bytes: ((Long, Long) -> Unit)? = null, each: (JSONObject) -> Unit) {
         val url = "$base/player_api.php?username=${Net.enc(p.user)}&password=${Net.enc(p.pass)}&action=" +
             (if (kind == "vod") "get_vod_streams" else "get_series")
         val want = setOf("stream_id", "series_id", "category_id", "name", "stream_icon", "cover", "rating", "container_extension")
-        Net.open(url) { input ->
+        Net.openLen(url) { raw, total ->
+            val input = if (bytes == null) raw else object : java.io.FilterInputStream(raw) {
+                var n = 0L; var last = 0L
+                private fun add(k: Int) { if (k > 0) { n += k; if (n - last > 256_000) { last = n; bytes(n, total) } } }
+                override fun read(): Int = super.read().also { if (it >= 0) add(1) }
+                override fun read(b: ByteArray, off: Int, len: Int): Int = super.read(b, off, len).also { add(it) }
+            }
             val r = android.util.JsonReader(java.io.InputStreamReader(input, Charsets.UTF_8))
             r.isLenient = true
             if (r.peek() != android.util.JsonToken.BEGIN_ARRAY) return@open
@@ -515,6 +525,7 @@ object Repo {
     }
 
     /** the whole film / series catalog is big: it stays on the disk and in memory only as long as Android has room (soft) */
+    fun forgetCatalogs() = catalogs.clear()
     private val catalogs = HashMap<String, java.lang.ref.SoftReference<List<JSONObject>>>()
 
     @Suppress("UNCHECKED_CAST")
@@ -555,6 +566,9 @@ object Repo {
         if (p.type != SourceType.XTREAM) emptyList() else withContext(Dispatchers.IO) {
             val key = "cat_${kind}_${p.id}"
             catalogs[key]?.get()?.let { return@withContext it }
+            // the catalog kept in the box's own database (filled at import / refresh); the old way below stays as a fallback
+            val fromDb = try { CatalogDb.ensure(p, kind) } catch (e: Throwable) { null }
+            if (fromDb != null) { catalogs[key] = java.lang.ref.SoftReference(fromDb); return@withContext fromDb }
             val f = diskDir?.let { java.io.File(it, "catalog_${kind}_${p.id.hashCode()}.json") }
             val fresh = f != null && f.exists() && System.currentTimeMillis() - f.lastModified() < 24 * 3600_000L
             val fromDisk = if (fresh) try { org.json.JSONArray(f!!.readText()).let { a -> (0 until a.length()).map { a.getJSONObject(it) } } } catch (e: Throwable) { null } else null
@@ -567,11 +581,12 @@ object Repo {
 
     /** how many movies or series a playlist has, counted while reading, nothing kept in memory */
     suspend fun catalogCount(p: Playlist, kind: String): Int =
-        if (p.type != SourceType.XTREAM) 0 else cached("cnt_${kind}_${p.id}") { var n = 0; Xtream(p).catalogEach(kind) { n++ }; n }
+        if (p.type != SourceType.XTREAM) 0 else CatalogDb.count(p.id, kind).takeIf { it >= 0 } ?: cached("cnt_${kind}_${p.id}") { var n = 0; Xtream(p).catalogEach(kind) { n++ }; n }
 
     /** "Update all": forget the kept catalog so it is downloaded again. */
     /** "Refresh" of a playlist: everything is read again from the provider (also the TV lists kept on the disk) */
     fun dropCatalogs() {
+        CatalogDb.markStale()
         diskDir?.listFiles()?.filter { it.name.startsWith("catalog_") || it.name.startsWith("live_") }?.forEach { it.delete() }
         synchronized(cache) { cache.clear() }; m3uFor = null; m3u = emptyList()
     }

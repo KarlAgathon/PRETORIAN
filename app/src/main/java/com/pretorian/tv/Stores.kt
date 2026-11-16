@@ -214,6 +214,7 @@ object Watch {
 
     /** a deleted playlist takes its progress with it */
     fun removePlaylist(ctx: Context, pid: String) {
+        CatalogDb.forget(pid)
         val m = all(ctx); val single = Store.playlists(ctx).size <= 1
         m.values.filter { owner(ctx, it, single) == pid || it.pid == pid }.map { it.url }.forEach { m.remove(it) }
         persist()

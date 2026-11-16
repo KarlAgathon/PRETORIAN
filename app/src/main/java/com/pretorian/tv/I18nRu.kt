@@ -2175,4 +2175,12 @@ Jaka|Яркий
 Jačina boje odabranog|Яркость цвета выбранного
 kanal i emisija na kojoj stojiš · u svakoj temi · manje = blaže za oči · OK pa ◀ ▶|канал и передача, на которых вы стоите · любая тема · меньше = мягче для глаз · OK, затем ◀ ▶
 OK = slika ovdje · OK još jednom = cijeli ekran|OK = картинка здесь · ещё раз OK = весь экран
+Učitavam playlistu: %s|Загрузка плейлиста: %s
+Kanali, filmovi i serije se spremaju na box, da poslije sve radi odmah.|Каналы, фильмы и сериалы сохраняются на приставке, чтобы потом всё работало сразу.
+čeka|ожидает
+Gotovo ✓|Готово ✓
+Ukupno %s%%|Всего %s%%
+još oko %s s|осталось около %s с
+još oko %s min|осталось около %s мин
+Nastavi u pozadini|Продолжить в фоне
 """.trimIndent()

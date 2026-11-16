@@ -74,6 +74,7 @@ class MainActivity : ComponentActivity() {
         Prefs.init(this)
         NewContent.appCtx = applicationContext
         Repo.diskDir = cacheDir
+        CatalogDb.init(applicationContext)
         Profiles.onStart(this)
         SportsAI.dir = cacheDir
         AutoTranslate.dir = filesDir
@@ -168,7 +169,7 @@ class Nav(
     val playlistsChanged: () -> Unit,
 )
 
-object BuildInfo { const val VERSION = "1.0.29" }
+object BuildInfo { const val VERSION = "1.0.30" }
 
 @Composable
 fun PretorianApp() {
@@ -386,6 +387,7 @@ fun PretorianApp() {
             if (Profiles.panel) ProfilePanel(nav)
             CrashDialog()
             WhatsNewDialog()
+            ImportDialog()
             UpdateAskDialog(nav)
             CrashGuardDialog(nav)
             GoalNoteOverlay()

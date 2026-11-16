@@ -1,2 +1,4 @@
-PRETORIAN 1.0.29 (beta)
-Trailer: TizenTube sada odmah pušta trailer (aplikacija sama nađe video na YouTubeu), više se ne otvara samo početna strana
+PRETORIAN 1.0.30 (beta)
+Nova playlista se odmah učitava na box (kanali, filmovi, serije) uz prozor s napretkom: procenat i preostalo vrijeme
+Filmovi i serije se čuvaju u bazi na boxu: pretraga i ostalo rade odmah, bez ponovnog skidanja
+Osvježavanje ide tiho u pozadini, stari podaci rade dok se novi ne skinu
