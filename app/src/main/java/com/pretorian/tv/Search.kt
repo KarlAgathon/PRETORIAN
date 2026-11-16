@@ -52,6 +52,7 @@ sealed class Hit {
 /** Programmes of the next hours of every channel, for searching shows (kept for 3 hours). */
 object ProgIndex {
     private var at = 0L
+    fun clear() { at = 0L }
     private var data: List<Pair<Channel, EpgItem>> = emptyList()
     suspend fun get(ctx: android.content.Context): List<Pair<Channel, EpgItem>> = withContext(Dispatchers.IO) {
         if (data.isNotEmpty() && System.currentTimeMillis() - at < 3 * 3600_000L) return@withContext data
@@ -59,7 +60,13 @@ object ProgIndex {
         val all = pls.flatMap { p -> try { Repo.allChannels(p) } catch (e: Exception) { emptyList() } }
         val byEpg = all.filter { !it.epg.isNullOrBlank() }.groupBy { it.epg!!.lowercase() }
         val now = System.currentTimeMillis()
-        val progs = pls.filter { it.type == SourceType.XTREAM }.flatMap { p -> Xmltv.read(Xtream(p).xmltvUrl(), byEpg.keys, now - 3600_000L, now + 30 * 3600_000L) }
+        val keys = byEpg.keys
+        // from the guide kept on the box when it is there, otherwise downloaded as before
+        val progs = pls.filter { it.type == SourceType.XTREAM }.flatMap { p ->
+            val src = GuideDb.srcOf(p)
+            if (GuideDb.has(src)) GuideDb.range(src, now - 3600_000L, now + 30 * 3600_000L, keys)
+            else Xmltv.read(Xtream(p).xmltvUrl(), keys, now - 3600_000L, now + 30 * 3600_000L)
+        }
         data = progs.mapNotNull { pr -> byEpg[pr.channel]?.firstOrNull()?.let { it to EpgItem(pr.title, pr.desc, pr.start, pr.end) } }
         byId = data.groupBy({ it.first.epg?.lowercase() ?: "" }, { it.second }).mapValues { (_, l) -> l.sortedBy { it.start } }
         at = now

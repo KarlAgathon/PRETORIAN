@@ -73,6 +73,8 @@ object EpgSources {
             OwnGuide.drop(s.url)
             s.copy(at = now, channels = progs.map { it.channel }.distinct().size, error = null)
         } catch (e: Exception) { s.copy(at = now, error = e.message ?: e.javaClass.simpleName) }
-        update(r); r
+        update(r)
+        if (r.error == null) NewContent.appCtx?.let { GuideSync.later(it) }   // a new or changed link goes onto the box too
+        r
     }
 }

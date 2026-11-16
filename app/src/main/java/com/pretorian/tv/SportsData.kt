@@ -342,9 +342,15 @@ object Sports {
         if (progs.isEmpty()) {
             val from = dayStart(-1); val to = dayStart(5)
             progs = pls.filter { it.type == SourceType.XTREAM }.flatMap { p ->
-                Xmltv.read(Xtream(p).xmltvUrl(), byEpg.keys, from, to) { t -> vsWords.containsMatchIn(t) }
+                val src = GuideDb.srcOf(p)
+                if (GuideDb.has(src)) GuideDb.range(src, from, to, byEpg.keys, vsWords)
+                else Xmltv.read(Xtream(p).xmltvUrl(), byEpg.keys, from, to) { t -> vsWords.containsMatchIn(t) }
             }
-            EpgSources.urls(null).forEach { u -> progs = progs + try { Xmltv.read(u, byEpg.keys, from, to) { t -> vsWords.containsMatchIn(t) } } catch (e: Exception) { emptyList() } }
+            EpgSources.urls(null).forEach { u -> progs = progs + try {
+                val src = GuideDb.srcOf(u)
+                if (GuideDb.has(src)) GuideDb.range(src, from, to, byEpg.keys, vsWords)
+                else Xmltv.read(u, byEpg.keys, from, to) { t -> vsWords.containsMatchIn(t) }
+            } catch (e: Exception) { emptyList() } }
             try { writeProgs(cache, progs) } catch (_: Exception) {}
         }
         val g = Guide(progs, byEpg, all, trf("Pretraženo %s kanala · program za %s · %s emisija", all.size, byEpg.size, progs.size))
@@ -660,16 +666,33 @@ object Xmltv {
 
     /** Streams the guide and keeps only programmes of [channels] (lower-case ids) between [from] and [to]. */
     fun read(url: String, channels: Set<String>?, from: Long, to: Long, keepTitle: ((String) -> Boolean)? = null): List<Sports.Prog> {
-        if (channels != null && channels.isEmpty()) return emptyList()
+        val out = ArrayList<Sports.Prog>()
+        each(url, channels, from, to, channels == null, keepTitle = keepTitle) { out.add(it) }
+        return out
+    }
+
+    /**
+     * Same, one programme at a time (for the guide kept on the box). [bytes] gets (read, size or -1) now and then.
+     * Returns false when the guide could not be opened at all.
+     */
+    fun each(url: String, channels: Set<String>?, from: Long, to: Long, withDesc: Boolean, bytes: ((Long, Long) -> Unit)? = null,
+             keepTitle: ((String) -> Boolean)? = null, out: (Sports.Prog) -> Unit): Boolean {
+        if (channels != null && channels.isEmpty()) return true
         // a guide file copied in from USB or disk ("file://…") or a link
         val local = url.startsWith("file://")
         val c = if (local) null else (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 20000; readTimeout = 120000; setRequestProperty("User-Agent", Net.UA)
         }
-        val out = ArrayList<Sports.Prog>()
         try {
-            if (c != null && c.responseCode !in 200..299) return emptyList()
-            val raw = if (c != null) c.inputStream else java.io.FileInputStream(url.removePrefix("file://"))
+            if (c != null && c.responseCode !in 200..299) return false
+            val total = c?.contentLengthLong ?: java.io.File(url.removePrefix("file://")).length()
+            val raw0 = if (c != null) c.inputStream else java.io.FileInputStream(url.removePrefix("file://"))
+            val raw = if (bytes == null) raw0 else object : java.io.FilterInputStream(raw0) {
+                var n = 0L; var last = 0L
+                private fun add(k: Int) { if (k > 0) { n += k; if (n - last > 256_000) { last = n; bytes(n, total) } } }
+                override fun read(): Int = super.read().also { if (it >= 0) add(1) }
+                override fun read(b: ByteArray, off: Int, len: Int): Int = super.read(b, off, len).also { add(it) }
+            }
             var input: java.io.InputStream = java.io.BufferedInputStream(raw, 64 * 1024)
             input.mark(4)
             val b0 = input.read(); val b1 = input.read(); input.reset()
@@ -679,41 +702,46 @@ object Xmltv {
             var ch: String? = null; var start = 0L; var end = 0L; var title: String? = null; var cat: String? = null; var desc: String? = null
             var keep = false; var tag: String? = null
             var ev = xp.eventType
-            while (ev != org.xmlpull.v1.XmlPullParser.END_DOCUMENT) {
-                when (ev) {
-                    org.xmlpull.v1.XmlPullParser.START_TAG -> {
-                        tag = xp.name
-                        if (tag == "programme") {
-                            ch = xp.getAttributeValue(null, "channel")?.lowercase()
-                            // channels nobody asked for are skipped before their times are even read
-                            keep = ch != null && (channels == null || ch in channels)
-                            if (keep) {
-                                start = time(xp.getAttributeValue(null, "start")) ?: 0L
-                                end = time(xp.getAttributeValue(null, "stop")) ?: start
-                                keep = end > from && start < to
+            try {
+                while (ev != org.xmlpull.v1.XmlPullParser.END_DOCUMENT) {
+                    when (ev) {
+                        org.xmlpull.v1.XmlPullParser.START_TAG -> {
+                            tag = xp.name
+                            if (tag == "programme") {
+                                ch = xp.getAttributeValue(null, "channel")?.lowercase()
+                                // channels nobody asked for are skipped before their times are even read
+                                keep = ch != null && (channels == null || ch in channels)
+                                if (keep) {
+                                    start = time(xp.getAttributeValue(null, "start")) ?: 0L
+                                    end = time(xp.getAttributeValue(null, "stop")) ?: start
+                                    keep = end > from && start < to
+                                }
+                                title = null; cat = null; desc = null
                             }
-                            title = null; cat = null; desc = null
+                        }
+                        org.xmlpull.v1.XmlPullParser.TEXT -> if (keep) {
+                            if (tag == "title" && title == null) title = xp.text?.trim()
+                            else if (tag == "category" && cat == null) cat = xp.text?.trim()
+                            else if (tag == "desc" && desc == null && withDesc) desc = xp.text?.trim()
+                        }
+                        org.xmlpull.v1.XmlPullParser.END_TAG -> {
+                            if (xp.name == "programme") {
+                                if (keep && !title.isNullOrBlank() && (keepTitle == null || keepTitle(title!!))) out(Sports.Prog(ch!!, start, end, title!!, cat, desc))
+                                keep = false
+                            }
+                            tag = null
                         }
                     }
-                    org.xmlpull.v1.XmlPullParser.TEXT -> if (keep) {
-                        if (tag == "title" && title == null) title = xp.text?.trim()
-                        else if (tag == "category" && cat == null) cat = xp.text?.trim()
-                        else if (tag == "desc" && desc == null && channels == null) desc = xp.text?.trim()
-                    }
-                    org.xmlpull.v1.XmlPullParser.END_TAG -> {
-                        if (xp.name == "programme") {
-                            if (keep && !title.isNullOrBlank() && (keepTitle == null || keepTitle(title!!))) out.add(Sports.Prog(ch!!, start, end, title!!, cat, desc))
-                            keep = false
-                        }
-                        tag = null
-                    }
+                    ev = xp.next()
                 }
-                ev = xp.next()
-            }
+            } catch (e: org.xmlpull.v1.XmlPullParserException) {
+                // a broken or cut guide still gives what was read so far
+            } catch (e: java.io.EOFException) {}
+            return true
         } catch (e: Exception) {
-            // a broken or cut guide still gives what was read so far
+            if (bytes != null) throw e
+            return false
         } finally { c?.disconnect() }
-        return out
     }
 }
 
@@ -741,9 +769,16 @@ object OwnGuide {
     suspend fun of(epgId: String?, name: String, pid: String? = null): List<EpgItem> = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         for (src in EpgSources.srcs(pid)) {
+            val sh = src.shift * 3600_000L
+            // the guide kept on the box first
+            val dbSrc = GuideDb.srcOf(src.url)
+            if (GuideDb.has(dbSrc)) {
+                val l = GuideDb.items(dbSrc, epgId, 40).ifEmpty { GuideDb.items(dbSrc, Sports.norm(name).replace(" ", ""), 40) }
+                if (l.isNotEmpty()) return@withContext l.map { it.copy(start = it.start + sh, end = it.end + sh) }
+                continue
+            }
             val d = data(src.url, src.every)
             val list = epgId?.lowercase()?.ifBlank { null }?.let { d[it] } ?: d[Sports.norm(name).replace(" ", "")]
-            val sh = src.shift * 3600_000L
             if (!list.isNullOrEmpty()) return@withContext list.filter { it.end + sh > now - 60_000 }.sortedBy { it.start }.take(40)
                 .map { EpgItem(it.title, it.desc, it.start + sh, it.end + sh) }
         }

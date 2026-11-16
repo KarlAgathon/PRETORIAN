@@ -35,20 +35,28 @@ object CatalogDb {
 
     fun init(ctx: Context) {
         if (helper != null) return
-        helper = object : SQLiteOpenHelper(ctx, "catalog.db", null, 1) { // i18n-ignore
+        helper = object : SQLiteOpenHelper(ctx, "catalog.db", null, 2) { // i18n-ignore
             override fun onConfigure(db: SQLiteDatabase) { db.enableWriteAheadLogging() }
             override fun onCreate(db: SQLiteDatabase) {
                 db.execSQL("CREATE TABLE items(pl TEXT, kind TEXT, id TEXT, c TEXT, n TEXT, i TEXT, r TEXT, u TEXT)") // i18n-ignore
                 db.execSQL("CREATE INDEX items_pk ON items(pl, kind)") // i18n-ignore
                 db.execSQL("CREATE TABLE meta(pl TEXT, kind TEXT, at INTEGER, n INTEGER, PRIMARY KEY(pl, kind))") // i18n-ignore
+                guideTables(db)
             }
             override fun onUpgrade(db: SQLiteDatabase, o: Int, n: Int) {
-                db.execSQL("DROP TABLE IF EXISTS items"); db.execSQL("DROP TABLE IF EXISTS meta"); onCreate(db) // i18n-ignore
+                // version 2 adds the TV guide; movies and series already on the box stay
+                if (o < 2) guideTables(db)
             }
         }
     }
 
-    private fun db(): SQLiteDatabase? = try { helper?.writableDatabase } catch (e: Throwable) { null }
+    private fun guideTables(db: SQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS progs(src TEXT, ch TEXT, s INTEGER, e INTEGER, t TEXT, d TEXT, k TEXT)") // i18n-ignore
+        db.execSQL("CREATE INDEX IF NOT EXISTS progs_ch ON progs(src, ch, e)") // i18n-ignore
+        db.execSQL("CREATE TABLE IF NOT EXISTS gmeta(src TEXT PRIMARY KEY, at INTEGER, n INTEGER)") // i18n-ignore
+    }
+
+    internal fun db(): SQLiteDatabase? = try { helper?.writableDatabase } catch (e: Throwable) { null }
 
     /** (time of the last full download, how many) or null when this playlist part was never downloaded */
     private fun meta(pl: String, kind: String): Pair<Long, Int>? = try {
@@ -150,16 +158,22 @@ object Import {
     /** playlists added while another one is still loading wait their turn */
     private val queue = ArrayDeque<Pair<Playlist, Boolean>>()
     private var currentId: String? = null
+    fun busy() = name != null && !finished
 
     /** at start: an active playlist whose movies/series were never put on the box (e.g. added before this version) gets the window too */
     fun missing(ctx: Context) {
         try {
             Store.actives(ctx).filter { it.type == SourceType.XTREAM &&
-                ((it.vod && !CatalogDb.has(it.id, "vod")) || (it.series && !CatalogDb.has(it.id, "series"))) }.forEach { run(it) }
+                ((it.vod && !CatalogDb.has(it.id, "vod")) || (it.series && !CatalogDb.has(it.id, "series")) ||
+                 (EpgSources.providerOn(it.id) && !GuideDb.has(GuideDb.srcOf(it)))) }.forEach { run(it) }
         } catch (_: Throwable) {}
+        GuideSync.start(ctx)
+        GuideSync.later(ctx)
     }
 
-    fun run(p: Playlist, reset: Boolean = false, onDone: () -> Unit = {}) {
+    fun run(p: Playlist, reset: Boolean = false, onDone: () -> Unit = {}) { runWith(p, reset, onDone) }
+
+    private fun runWith(p: Playlist, reset: Boolean, onDone: () -> Unit) {
         if (name != null && !finished) {
             if (p.id != currentId) synchronized(queue) { if (queue.none { it.first.id == p.id }) queue.addLast(p to reset) }
             return
@@ -168,7 +182,8 @@ object Import {
         val ch = Part("Kanali", R.drawable.lc_tv)
         val mv = if (p.type == SourceType.XTREAM && p.vod) Part("Filmovi", R.drawable.lc_film) else null
         val se = if (p.type == SourceType.XTREAM && p.series) Part("Serije", R.drawable.lc_layers) else null
-        parts = listOfNotNull(ch, mv, se); name = p.name; finished = false; show = true; started = System.currentTimeMillis()
+        val ep = Part("EPG", R.drawable.lc_calendar)
+        parts = listOfNotNull(ch, mv, se, ep); name = p.name; finished = false; show = true; started = System.currentTimeMillis()
         scope.launch {
             val jobs = listOfNotNull(mv?.let { it to "vod" }, se?.let { it to "series" })
             // movies and series are held for this window, so nothing else starts the same download meanwhile
@@ -194,11 +209,30 @@ object Import {
                     } catch (e: Throwable) { fail(part, e) }
                 }
             } finally { held.forEach { it.unlock() } }
+            // the TV guide of this playlist (provider's and your own EPG links), on the box too
+            ep.state = 1
+            try {
+                GuideSync.holding {
+                    val ctx = NewContent.appCtx
+                    val js = if (ctx != null) GuideSync.jobs(ctx, p) else emptyList()
+                    var done = 0; var total = 0
+                    js.forEachIndexed { i, j ->
+                        val n = GuideDb.download(j.src, j.url, j.channels) { items, read, size ->
+                            ep.n = total + items
+                            ep.pct = ((i + (if (size > 0) read.toFloat() / size else 0.5f)) / js.size).coerceIn(0f, 0.99f)
+                        }
+                        total += n; done++; ep.n = total
+                        OwnGuide.drop(j.url)
+                    }
+                    ProgIndex.clear()
+                }
+                ep.pct = 1f; ep.state = 2
+            } catch (e: Throwable) { fail(ep, e) }
             Repo.forgetCatalogs(); SearchIndex.clear()
             finished = true
             kotlinx.coroutines.withContext(Dispatchers.Main) { onDone() }
             val next = synchronized(queue) { queue.removeFirstOrNull() }
-            if (next != null) { kotlinx.coroutines.withContext(Dispatchers.Main) { name = null; run(next.first, next.second) }; return@launch }
+            if (next != null) { kotlinx.coroutines.withContext(Dispatchers.Main) { name = null; runWith(next.first, next.second) {} }; return@launch }
             // all fine: closes by itself; something failed: stays open with the reason until OK
             if (parts.none { it.state == 3 }) { delay(3000); if (finished) { show = false; name = null } }
         }
@@ -212,7 +246,7 @@ object Import {
 
     /** 0..1 over all parts (channels count little, movies and series most) */
     fun overall(): Float {
-        val w = parts.map { if (it.icon == R.drawable.lc_tv) 0.15f else 1f }
+        val w = parts.map { if (it.icon == R.drawable.lc_tv) 0.15f else if (it.icon == R.drawable.lc_calendar) 0.6f else 1f }
         val sum = w.sum().takeIf { it > 0 } ?: return 0f
         return parts.mapIndexed { i, p -> w[i] * when (p.state) { 2, 3 -> 1f; 1 -> p.pct.coerceAtLeast(0f); else -> 0f } }.sum() / sum
     }
@@ -270,4 +304,146 @@ private fun Bar(p: Import.Part) {
         val f = if (frac >= 0f) frac.coerceIn(0f, 1f) else (phase % 1f)
         Box(Modifier.fillMaxWidth(f).fillMaxHeight().clip(Rnd(4.dp)).background(if (frac >= 0f) col else col.copy(alpha = 0.6f)))
     }
+}
+
+/**
+ * The TV guide kept on the box (in the same database): the provider's guide of every playlist ("pl:<id>")
+ * and your own EPG links ("url:<link>"), only for channels you have, 6 h back and 36 h ahead (12 h in Lite).
+ * Read from here first; when a channel has nothing here the old way (asking the provider) still works.
+ */
+object GuideDb {
+    const val BACK = 6 * 3600_000L
+    val ahead get() = (if (Perf.lite) 12 else 36) * 3600_000L
+    private val known = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    /** guides that had nothing for your channels (in memory only): not downloaded again for a day */
+    val empty = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    fun srcOf(p: Playlist) = "pl:" + p.id // i18n-ignore
+    fun srcOf(url: String) = "url:" + url // i18n-ignore
+
+    /** time of the last full download of a source, or null */
+    fun at(src: String): Long? {
+        known[src]?.let { return it }
+        return try {
+            CatalogDb.db()?.rawQuery("SELECT at FROM gmeta WHERE src=?", arrayOf(src))?.use { c -> if (c.moveToFirst()) c.getLong(0) else null } // i18n-ignore
+        } catch (e: Throwable) { null }?.also { known[src] = it }
+    }
+    fun has(src: String) = at(src) != null
+
+    fun items(src: String, ch: String?, limit: Int): List<EpgItem> {
+        val id = ch?.lowercase()?.ifBlank { null } ?: return emptyList()
+        val now = System.currentTimeMillis()
+        return try {
+            CatalogDb.db()?.rawQuery("SELECT t, d, s, e FROM progs WHERE src=? AND ch=? AND e>? ORDER BY s LIMIT ?", // i18n-ignore
+                arrayOf(src, id, (now - 60_000).toString(), limit.toString()))?.use { c ->
+                val out = ArrayList<EpgItem>()
+                while (c.moveToNext()) out += EpgItem(c.getString(0) ?: "", c.getString(1), c.getLong(2), c.getLong(3))
+                out
+            } ?: emptyList()
+        } catch (e: Throwable) { emptyList() }
+    }
+
+    /** every programme of a source between two times (search, sport) */
+    fun range(src: String, from: Long, to: Long, channels: Set<String>? = null, title: Regex? = null): List<Sports.Prog> = try {
+        CatalogDb.db()?.rawQuery("SELECT ch, s, e, t, k, d FROM progs WHERE src=? AND e>? AND s<?", arrayOf(src, from.toString(), to.toString()))?.use { c -> // i18n-ignore
+            val out = ArrayList<Sports.Prog>()
+            while (c.moveToNext()) {
+                val ch = c.getString(0) ?: continue
+                if (channels != null && ch !in channels) continue
+                val t = c.getString(3) ?: continue
+                if (title != null && !title.containsMatchIn(t)) continue
+                out += Sports.Prog(ch, c.getLong(1), c.getLong(2), t, c.getString(4), c.getString(5))
+            }
+            out
+        } ?: emptyList()
+    } catch (e: Throwable) { emptyList() }
+
+    /** downloads one guide into the database; the old one stays until the new one is complete (and not empty) */
+    fun download(src: String, url: String, channels: Set<String>, progress: ((Int, Long, Long) -> Unit)? = null): Int {
+        val d = CatalogDb.db() ?: throw IllegalStateException("db") // i18n-ignore
+        val now = System.currentTimeMillis()
+        var n = 0; var lastBytes = 0L; var total = -1L
+        d.beginTransactionNonExclusive()
+        try {
+            d.delete("progs", "src=?", arrayOf(src)) // i18n-ignore
+            val st = d.compileStatement("INSERT INTO progs(src, ch, s, e, t, d, k) VALUES(?,?,?,?,?,?,?)") // i18n-ignore
+            val ok = Xmltv.each(url, channels, now - BACK, now + ahead, true, bytes = { r, t -> lastBytes = r; total = t; progress?.invoke(n, r, t) }) { pr ->
+                st.clearBindings()
+                st.bindString(1, src); st.bindString(2, pr.channel); st.bindLong(3, pr.start); st.bindLong(4, pr.end); st.bindString(5, pr.title)
+                st.bindString(6, pr.desc ?: ""); st.bindString(7, pr.category ?: "")
+                st.executeInsert()
+                n++
+                if (n % 1000 == 0) progress?.invoke(n, lastBytes, total)
+            }
+            if (!ok) throw java.io.IOException(tr("EPG server ne odgovara"))
+            if (n > 0) {
+                d.insertWithOnConflict("gmeta", null, ContentValues().apply { put("src", src); put("at", now); put("n", n) }, SQLiteDatabase.CONFLICT_REPLACE) // i18n-ignore
+                d.setTransactionSuccessful()
+            }
+        } finally { d.endTransaction() }
+        if (n == 0) {
+            // nothing for your channels in this guide: the old one (if any) stays; asked again in a day, not every half hour
+            empty[src] = now
+            return 0
+        }
+        known[src] = now
+        return n
+    }
+
+    fun forget(src: String) { try { CatalogDb.db()?.let { it.delete("progs", "src=?", arrayOf(src)); it.delete("gmeta", "src=?", arrayOf(src)) }; known.remove(src) } catch (_: Throwable) {} } // i18n-ignore
+    fun markStale() { try { CatalogDb.db()?.execSQL("UPDATE gmeta SET at=0"); known.clear() } catch (_: Throwable) {} } // i18n-ignore
+}
+
+/** Which guides belong on the box and keeping them fresh (once a day, while nobody is watching). */
+object GuideSync {
+    private val lock = Mutex()
+    private val bg = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var loop = false
+    private const val MAX_AGE = 20 * 3600_000L
+
+    class Job(val src: String, val url: String, val channels: Set<String>)
+
+    /** guides of the active playlists: each provider's own one (if switched on) and your own EPG links */
+    suspend fun jobs(ctx: Context, only: Playlist? = null): List<Job> {
+        val pls = if (only != null) listOf(only) else Store.actives(ctx)
+        val out = ArrayList<Job>()
+        val allIds = HashSet<String>()
+        for (p in pls) {
+            val chans = try { Repo.allChannels(p) } catch (e: Throwable) { emptyList() }
+            val ids = chans.mapNotNull { it.epg?.lowercase()?.ifBlank { null } }.toSet()
+            allIds += ids; chans.forEach { allIds += Sports.norm(it.name).replace(" ", "") }
+            if (p.type == SourceType.XTREAM && EpgSources.providerOn(p.id) && ids.isNotEmpty()) out += Job(GuideDb.srcOf(p), Xtream(p).xmltvUrl(), ids)
+        }
+        val urls = (if (only != null) EpgSources.srcs(only.id) else pls.flatMap { EpgSources.srcs(it.id) }).map { it.url }.distinct()
+        urls.forEach { u -> out += Job(GuideDb.srcOf(u), u, allIds) }
+        return out
+    }
+
+    fun stale(src: String) = (GuideDb.at(src) ?: GuideDb.empty[src])?.let { System.currentTimeMillis() - it > MAX_AGE } ?: true
+
+    /** quietly brings old guides up to date; never while a channel is playing in full screen */
+    fun later(ctx: Context, force: Boolean = false) {
+        bg.launch {
+            if (Import.busy()) return@launch   // the import window is doing it right now
+            if (!lock.tryLock()) return@launch
+            try {
+                for (j in jobs(ctx)) {
+                    if (!force && !stale(j.src)) continue
+                    while (CrashLog.screen.startsWith("Player")) delay(60_000) // i18n-ignore
+                    try { GuideDb.download(j.src, j.url, j.channels); OwnGuide.drop(j.url) } catch (_: Throwable) {}
+                }
+                ProgIndex.clear()
+            } finally { lock.unlock() }
+        }
+    }
+
+    /** every half hour: is a guide older than a day? */
+    fun start(ctx: Context) {
+        if (loop) return
+        loop = true
+        val app = ctx.applicationContext
+        bg.launch { while (true) { delay(30 * 60_000L); try { later(app) } catch (_: Throwable) {} } }
+    }
+
+    suspend fun <T> holding(block: suspend () -> T): T = lock.withLock { block() }
 }

@@ -1631,6 +1631,7 @@ private fun PlaylistsV2(nav: Nav, openSub: (String) -> Unit) {
                     Store.savePlaylists(ctx, updated); list = updated
                     Prefs.put("auto_refresh_at", System.currentTimeMillis())
                     updated.filter { it.active && it.type == SourceType.XTREAM }.forEach { CatalogDb.refreshLater(it, "vod"); CatalogDb.refreshLater(it, "series") }
+                    GuideSync.later(ctx, force = true)
                     EpgSources.list().filter { it.on }.forEach { try { EpgSources.refresh(it) } catch (_: Exception) {} }
                     nav.playlistsChanged()
                     busy = false; Toast.makeText(ctx, tr("Osvježeno"), Toast.LENGTH_SHORT).show()
