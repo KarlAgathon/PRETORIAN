@@ -68,4 +68,6 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.4.1")
     implementation("androidx.media3:media3-exoplayer-hls:1.4.1")
     implementation("androidx.media3:media3-ui:1.4.1")
+    // FFmpeg sound decoder for media3 1.4.1 (Jellyfin build, GPL-3): AC3 / E-AC3 / MP2 / DTS when the box has none
+    implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.4.1+1")
 }

@@ -7,3 +7,4 @@ Winter
 Dew
 passthrough
 Dolby
+NextDNS

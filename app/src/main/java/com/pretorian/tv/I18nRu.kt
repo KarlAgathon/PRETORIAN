@@ -2185,4 +2185,28 @@ još oko %s min|осталось около %s мин
 Nastavi u pozadini|Продолжить в фоне
 EPG link (nije obavezno)|Ссылка EPG (необязательно)
 EPG server ne odgovara|Сервер EPG не отвечает
+možda je VPN adresa blokirana, probaj drugi VPN server|возможно, адрес VPN заблокирован, попробуйте другой VPN-сервер
+Adresa servera nije pronađena (DNS): provjeri internet, VPN ili NextDNS / privatni DNS|Адрес сервера не найден (DNS): проверьте интернет, VPN или NextDNS / частный DNS
+Server ne odgovara (isteklo vrijeme)|Сервер не отвечает (время истекло)
+Pomak zvuka|Сдвиг звука
+ako zvuk kasni ili žuri|если звук отстаёт или спешит
++ = zvuk kasni za slikom · − = zvuk žuri|+ = звук отстаёт от картинки · − = звук спешит
+Ugrađeni dekoder zvuka (FFmpeg)|Встроенный аудиодекодер (FFmpeg)
+AC3, E-AC3, MP2, DTS kad ih box nema · pomaže kad kanal nema zvuka|AC3, E-AC3, MP2, DTS, если их нет на приставке · помогает, когда у канала нет звука
+u plejeru: Više › Pomak zvuka · pamti se po kanalu|в плеере: Ещё › Сдвиг звука · запоминается для каждого канала
+Slika i dekoder|Изображение и декодер
+Automatska frekvencija (AFR)|Автоматическая частота кадров (AFR)
+TV prelazi na 24/25/50/60 Hz po videu · ekran može na tren pocrniti|телевизор переходит на 24/25/50/60 Гц по видео · экран может на миг потемнеть
+Dekoder slike|Видеодекодер
+Softverski troši više procesora (ne za slabe boxove)|Программный использует больше процессора (не для слабых приставок)
+Hardverski|Аппаратный
+Softverski|Программный
+Rezervni stream|Резервный поток
+kanal ne radi: isti kanal iz druge aktivne liste|канал не работает: тот же канал из другого активного списка
+Pauza živog kanala|Пауза прямого эфира
+pauza čuva ono što dolazi u memoriji plejera|пауза сохраняет поступающее в памяти плеера
+Premotavanje unazad|Перемотка назад
+◀◀ na kanalima s arhivom (od providera)|◀◀ на каналах с архивом (от провайдера)
+Arhiva za M3U liste|Архив для списков M3U
+kad lista ima catchup oznake|когда в списке есть метки catchup
 """.trimIndent()

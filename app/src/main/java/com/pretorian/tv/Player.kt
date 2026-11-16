@@ -86,15 +86,20 @@ fun buildPlayer(ctx: Context, preview: Boolean = false): ExoPlayer {
     val passthrough = Prefs.bool("audio_passthrough", false)
     val renderers = object : DefaultRenderersFactory(ctx) {
         @Suppress("DEPRECATION")
-        override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioTrackPlaybackParams: Boolean): androidx.media3.exoplayer.audio.AudioSink? =
-            if (passthrough) super.buildAudioSink(context, enableFloatOutput, enableAudioTrackPlaybackParams)
+        override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioTrackPlaybackParams: Boolean): androidx.media3.exoplayer.audio.AudioSink? {
+            val sink = if (passthrough) super.buildAudioSink(context, enableFloatOutput, enableAudioTrackPlaybackParams)
             else androidx.media3.exoplayer.audio.DefaultAudioSink.Builder(context)
                 .setAudioCapabilities(androidx.media3.exoplayer.audio.AudioCapabilities.DEFAULT_AUDIO_CAPABILITIES)
                 .setEnableFloatOutput(enableFloatOutput)
                 .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
                 .build()
+            // Settings › Player › Sound delay: the picture follows a moved sound clock (not in the small preview)
+            return if (sink != null && !preview && Tech.audioDelay) DelaySink(sink) else sink
+        }
     }
-        .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+        // FFmpeg (built in) only steps in when the box itself has no decoder for a sound (AC3, E-AC3, MP2, DTS)
+        .setExtensionRendererMode(if (Tech.ffmpeg) DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON else DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF)
+        .setMediaCodecSelector(codecSelector())
         .setEnableDecoderFallback(true)
     val builder = ExoPlayer.Builder(ctx, renderers)
         .setMediaSourceFactory(DefaultMediaSourceFactory(ctx).setDataSourceFactory(DefaultDataSource.Factory(ctx, http)))
@@ -198,17 +203,26 @@ private fun httpCode(e: PlaybackException): Int? {
     return null
 }
 
+private inline fun <reified T : Throwable> causeOf(e: Throwable): Boolean {
+    var c: Throwable? = e
+    while (c != null) { if (c is T) return true; c = c.cause }
+    return false
+}
+
 /** A clear message for a stream that does not play, in the app language. */
 private fun errorText(e: PlaybackException, live: Boolean): String {
     val code = httpCode(e)
     return when {
-        code == 401 || code == 403 -> tr("Server odbija pristup: nalog istekao ili blokiran") + " (HTTP $code)"
+        code == 401 || code == 403 -> tr("Server odbija pristup: nalog istekao ili blokiran") + " (HTTP $code)" + (if (Net.vpnOn()) " · " + tr("možda je VPN adresa blokirana, probaj drugi VPN server") else "")
         code == 429 || code == 458 || code == 509 || code == 456 -> tr("Previše konekcija: ugasi gledanje na drugom uređaju") + " (HTTP $code)"
         code == 404 -> tr("Kanal više ne postoji kod providera") + " (HTTP 404)"
         code != null && code >= 500 -> tr("Server trenutno ne radi") + " (HTTP $code)"
         code != null -> tr("Server je odbio zahtjev") + " (HTTP $code)"
-        e.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED || e.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ->
-            tr("Nema veze sa serverom")
+        causeOf<java.net.UnknownHostException>(e) -> tr("Adresa servera nije pronađena (DNS): provjeri internet, VPN ili NextDNS / privatni DNS")
+        e.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT || causeOf<java.net.SocketTimeoutException>(e) ->
+            tr("Server ne odgovara (isteklo vrijeme)") + (if (Net.vpnOn()) " · " + tr("VPN je uključen") else "")
+        e.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ->
+            tr("Nema veze sa serverom") + (if (Net.vpnOn()) " · " + tr("VPN je uključen") else "")
         else -> tr(if (live) "Kanal trenutno ne radi" else "Video se ne može pustiti") + " (${e.errorCodeName.removePrefix("ERROR_CODE_")})"
     }
 }
@@ -351,6 +365,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 player.videoFormat?.let {
                     if (it.height != videoH) resUntil = System.currentTimeMillis() + 6000
                     videoH = it.height; videoW = it.width; fps = it.frameRate
+                    // Settings › Player › Auto frame rate: the TV takes the video's refresh rate
+                    if (it.frameRate > 1f) Afr.apply(ctx as? android.app.Activity, it.frameRate)
                 }
                 player.audioFormat?.let { channels = it.channelCount }
                 if (!applied[0] && tracks.groups.isNotEmpty()) { applied[0] = true; applyChoices(items[index]) }
@@ -367,6 +383,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         player.addListener(l); player.addAnalyticsListener(a)
         onDispose {
             saveProgress(); player.removeListener(l); player.removeAnalyticsListener(a); player.release()
+            Afr.reset(ctx as? android.app.Activity); AudioDelay.us = 0L
             // leaving the player: big lists and pictures are let go at once (they come back from the disk when needed)
             if (Lean.trim) { Repo.trim(true); try { coil.Coil.imageLoader(ctx).memoryCache?.trimMemory(android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) } catch (_: Exception) {} }
         }
@@ -384,6 +401,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         }
         error = null; retried = false; showInfo = true; videoH = 0
         val cur = items[index]
+        AudioDelay.use(cur.url)   // sound delay kept for this channel / film
         // a subtitle fixed with SYNC earlier for this film comes back by itself
         subFile = cur.subFile ?: if (!s.live) SubSync.kept(cur.url) else null
         val saved = if (!s.live) Watch.get(ctx, cur.url) else null
@@ -835,10 +853,12 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             OptionRow("Vanjski plejer", R.drawable.lc_external_link) { player.pause(); saveProgress(); dialog = "ext" }
             if (s.live) OptionRow("Arhiva", R.drawable.lc_history, sub = tr("emisije koje su prošle")) { dialog = null; nav.push(Screen.Catchup) }
             if (!s.live && subFile != null) OptionRow("Podesi vrijeme titla", R.drawable.lc_clock, sub = "ako titl kasni ili žuri · SYNC") { dialog = "subsync" }
+            if (Tech.audioDelay) OptionRow("Pomak zvuka", R.drawable.lc_volume, sub = tr("ako zvuk kasni ili žuri"), value = AudioDelay.label(AudioDelay.of(item.url))) { dialog = "adelay" }
             if (tracksOf(player, MC.TRACK_TYPE_AUDIO).size > 1) OptionRow("Audio", R.drawable.lc_volume, value = tracksOf(player, MC.TRACK_TYPE_AUDIO).firstOrNull { it.selected }?.label ?: "—") { dialog = "audio" }
         }
         "fav" -> item.channel?.let { FavPicker(it) { dialog = null } }
         "epgshift" -> item.channel?.let { EpgShiftPopup(it) { dialog = null } }
+        "adelay" -> AudioDelayPopup(item.url) { dialog = null }
         "ext" -> ExternalPicker(item.url, item.title, player.currentPosition, onDismiss = { dialog = null })
         "subsync" -> {
             val base = remember { subFile }
@@ -1079,4 +1099,18 @@ object SkipMem {
     fun learnRecap(series: String, end: Long) = save(series, of(series).copy(recapEnd = end))
     fun learnCredits(series: String, left: Long) = save(series, of(series).copy(creditsLeft = left))
     fun forget(series: String) = Prefs.put(key(series), "")
+}
+
+/** Player › More › Sound delay: the picture waits for a late sound (or catches up with an early one); kept per channel / film. */
+@Composable
+fun AudioDelayPopup(url: String, onDismiss: () -> Unit) {
+    val cur = AudioDelay.of(url)
+    Popup(tr("Pomak zvuka"), onDismiss) {
+        T("+ = zvuk kasni za slikom · − = zvuk žuri", 12.sp, C.Muted, maxLines = 2)
+        listOf(0, 50, 100, 150, 200, 300, 400, 500, 750, 1000, -50, -100, -150, -200, -300, -500).forEach { ms ->
+            OptionRow(AudioDelay.label(ms), if (ms == 0) R.drawable.lc_rotate_ccw else R.drawable.lc_volume, selected = ms == cur, color = if (ms == cur) C.Green else null) {
+                AudioDelay.set(url, ms); onDismiss()
+            }
+        }
+    }
 }

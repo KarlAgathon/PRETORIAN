@@ -1927,6 +1927,16 @@ private fun PlayerV2(openSub: (String) -> Unit) {
                 rev++
             }
             SetSwitch("Dolby zvuk direktno na TV (passthrough)", "ako neki kanali nemaju zvuk, ostavi isključeno", Prefs.bool("audio_passthrough", false)) { Prefs.put("audio_passthrough", it) }
+            SetSwitch("Ugrađeni dekoder zvuka (FFmpeg)", "AC3, E-AC3, MP2, DTS kad ih box nema · pomaže kad kanal nema zvuka", Tech.ffmpeg, new = true) { Prefs.put("tech_ffmpeg", it); rev++ }
+            SetSwitch("Pomak zvuka", "u plejeru: Više › Pomak zvuka · pamti se po kanalu", Tech.audioDelay, new = true) { Prefs.put("tech_adelay", it); rev++ }
+            SetSection("Slika i dekoder")
+            SetSwitch("Automatska frekvencija (AFR)", "TV prelazi na 24/25/50/60 Hz po videu · ekran može na tren pocrniti", Tech.afr, new = true) { Prefs.put("tech_afr", it); rev++ }
+            SetDrop("Dekoder slike", "Softverski troši više procesora (ne za slabe boxove)", listOf("Automatski", "Hardverski", "Softverski"), Tech.decoder, new = true) { Prefs.put("tech_decoder", it.toLong()); rev++ }
+            SetSection("Kanali uživo")
+            SetSwitch("Rezervni stream", "kanal ne radi: isti kanal iz druge aktivne liste", Tech.backup, new = true) { Prefs.put("tech_backup", it); rev++ }
+            SetSwitch("Pauza živog kanala", "pauza čuva ono što dolazi u memoriji plejera", Tech.livePause, new = true) { Prefs.put("tech_pause", it); rev++ }
+            SetSwitch("Premotavanje unazad", "◀◀ na kanalima s arhivom (od providera)", Tech.rewind, new = true) { Prefs.put("tech_rewind", it); rev++ }
+            SetSwitch("Arhiva za M3U liste", "kad lista ima catchup oznake", Tech.m3uCatchup, new = true) { Prefs.put("tech_m3ucatch", it); rev++ }
             SetSection("Stream i bafer")
             SetSwitch("Automatski oporavak", "zamrznut ili prekinut stream se tiho ponovo spoji", Recover.on) { Prefs.put("recover_on", it); rev++ }
             if (Recover.on) SetDrop("Reaguj nakon", if (Recover.choice == 0) tr("Automatski") + ": " + (NetProfile.autoWait / 1000) + " s · " + NetProfile.why() else "bez slike, vremena ili podataka",
