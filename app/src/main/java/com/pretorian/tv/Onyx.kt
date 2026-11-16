@@ -1029,6 +1029,12 @@ private fun Shirt(t: Team, size: Dp) {
 fun FollowRow(nav: Nav, h: Dp) {
     var tick by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) { while (true) { delay(60_000); tick++ } }
+    // Home must not depend on a visit to Sport: when today's matches are not in memory (app start, playlist refresh), read them quietly here
+    LaunchedEffect(Unit) {
+        if (Sports.lastCombined[0] == null && SportCache.today == null && (MatchFollow.list().isNotEmpty() || Prefs.str("sport_teams").isNotBlank() || Prefs.str("sport_nations").isNotBlank())) {
+            try { SportCache.today = Sports.day(0); SportCache.todayAt = System.currentTimeMillis(); SportCache.rev++ } catch (_: Exception) {}
+        }
+    }
     val hidden = remember(tick, GoalNote.lastRev) { HomeHide.list() }
     val live = remember(GoalNote.followed.toList(), GoalNote.lastRev, tick) {
         GoalNote.followed.filter { it.id !in hidden && (it.live || (it.over && !GoalNote.endedLongAgo(it.id))) }
