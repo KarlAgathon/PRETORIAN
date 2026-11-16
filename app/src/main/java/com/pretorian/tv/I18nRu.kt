@@ -2079,4 +2079,11 @@ Nema grupa|Нет групп
 Nema sakrivenih kanala|Нет скрытых каналов
 Nema kanala|Нет каналов
 Označi sve|Отметить все
+Dodaj tim|Добавить команду
+Traži ili upiši ime tima|Найди или введи название команды
+Dodaj „%s“|Добавить «%s»
+Omiljeni timovi · %s|Любимые команды · %s
+Još nema timova|Команд пока нет
+OK: ukloni|OK: удалить
+više timova, i po imenu|несколько команд, и по названию
 """.trimIndent()

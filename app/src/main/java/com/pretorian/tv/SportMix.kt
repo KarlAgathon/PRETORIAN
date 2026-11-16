@@ -57,6 +57,38 @@ object MyTeams {
     }
 }
 
+/** Favourite teams: the list with ✕ to remove, and "＋ Add team" (search among known teams or type any name) — as many as you like. */
+@Composable
+fun FavTeamsDialog(onDismiss: () -> Unit) {
+    var rev by remember { mutableIntStateOf(0) }
+    var add by remember { mutableStateOf(false) }
+    val mine = remember(rev, MyTeams.rev) { Prefs.str("sport_teams").split(',').map { it.trim() }.filter { it.isNotBlank() } }
+    if (add) {
+        var q by remember { mutableStateOf("") }
+        val known = remember { (SportCache.today.orEmpty() + SportCache.other.values.flatten() + SportCache.combined)
+            .flatMap { listOfNotNull(it.home?.name, it.away?.name) }.distinct().sorted() }
+        Popup(tr("Dodaj tim"), { add = false }, width = 640.dp) {
+            Field(tr("Traži ili upiši ime tima"), q, { q = it }, Modifier.fillMaxWidth())
+            if (q.trim().length >= 2) {
+                OptionRow(trf("Dodaj „%s“", q.trim()), R.drawable.lc_plus, color = C.Green) {
+                    if (!MyTeams.has(q.trim())) MyTeams.toggle(q.trim()); q = ""; rev++; Sports.lastCombined.clear()
+                }
+                known.filter { it.contains(q.trim(), true) && !MyTeams.has(it) }.take(12).forEach { t ->
+                    OptionRow(t, R.drawable.lc_plus) { MyTeams.toggle(t); q = ""; rev++; Sports.lastCombined.clear() }
+                }
+            } else T("Ukucaj bar 2 slova imena tima", 13.sp, C.Muted)
+            Button("Gotovo", R.drawable.lc_check, primary = true) { add = false }
+        }
+        return
+    }
+    Popup(trf("Omiljeni timovi · %s", mine.size), onDismiss, width = 600.dp) {
+        if (mine.isEmpty()) T("Još nema timova", 13.sp, C.Muted)
+        mine.forEach { t -> OptionRow(t, R.drawable.lc_x, sub = tr("OK: ukloni")) { MyTeams.toggle(t); rev++; Sports.lastCombined.clear() } }
+        OptionRow("＋  " + tr("Dodaj tim"), null, color = C.Green) { add = true }  // i18n-ignore
+        Button("Gotovo", R.drawable.lc_check, primary = true) { onDismiss() }
+    }
+}
+
 /** Single matches you follow (long OK › Follow match); dropped by themselves when the match ends. */
 object MatchFollow {
     var rev by mutableIntStateOf(0)
@@ -301,7 +333,8 @@ fun SportMixScreen(nav: Nav) {
                 Chip2(tr("Sportovi") + (if (sportsOn.isEmpty()) "" else " · " + sportsOn.size) + " ▾", false) { pick = "sport" }  // i18n-ignore
                 Chip2(tr("Regija") + " ▾", false) { pick = "region" }  // i18n-ignore
             }
-            if (tab == "fav") Row(Modifier.onFocusChanged { favRowFocus = it.hasFocus }.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp),
+            // Favourites and Following: add as many countries and teams as you like
+            if (tab == "fav" || tab == "mine") Row(Modifier.onFocusChanged { favRowFocus = it.hasFocus }.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 Chip2("＋ " + tr("Države"), false) { pick = "fav" }  // i18n-ignore
                 Chip2("＋ " + tr("Timovi"), false) { pick = "teams" }  // i18n-ignore
@@ -369,7 +402,9 @@ fun SportMixScreen(nav: Nav) {
             }
         }
     }
-    pick?.let { k ->
+    // teams: the list with ✕ and "＋ Add team" (search or any name), several at once
+    if (pick == "teams") FavTeamsDialog { pick = null; SportCache.other.remove("fav"); SportCache.other.remove("mine"); SportCache.rev++ }
+    pick?.takeIf { it != "teams" }?.let { k ->
         Popup(tr(when (k) { "sport" -> "Sportovi"; "region" -> "Regija"; "fav" -> "Države"; else -> "Timovi" }), { pick = null }, width = 520.dp) {
             Column(Modifier.heightIn(max = 420.dp).verticalScroll(androidx.compose.foundation.rememberScrollState())) {
                 when (k) {
@@ -406,6 +441,9 @@ fun SportMixScreen(nav: Nav) {
                         val list = (MyTeams.list() + names.filter { n -> q.length >= 2 && n.contains(q.trim(), true) }.take(40)).distinct()
                         if (list.isEmpty()) T(if (q.length < 2) "Ukucaj bar 2 slova imena tima" else "Ništa nije pronađeno", 13.sp, C.Muted)
                         list.forEach { t -> ToggleRow(t, MyTeams.has(t)) { MyTeams.toggle(t); SportCache.rev++ } }
+                        var manage by remember { mutableStateOf(false) }
+                        OptionRow("＋  " + tr("Dodaj tim"), null, sub = tr("više timova, i po imenu"), color = C.Green) { manage = true }  // i18n-ignore
+                        if (manage) FavTeamsDialog { manage = false; SportCache.rev++ }
                     }
                 }
             }

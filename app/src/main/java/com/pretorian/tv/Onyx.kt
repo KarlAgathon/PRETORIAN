@@ -833,10 +833,11 @@ object HomeRows {
     fun order(): List<String> {
         val saved = Prefs.str("home_rows", "fresh,cont,new,recent").split(',').filter { s -> ALL.any { it.first == s } }
         val off = offStr().split(',').toSet()
-        return (saved + ALL.map { it.first }.filter { it !in saved }).filter { it !in off }
+        // Lite: never "Newly added" (posters, the heaviest row), whatever is saved
+        return (saved + ALL.map { it.first }.filter { it !in saved }).filter { it !in off && !(Perf.lite && it == "new") }
     }
     fun all(): List<String> { val saved = Prefs.str("home_rows", "fresh,cont,new,recent").split(',').filter { s -> ALL.any { it.first == s } }; return saved + ALL.map { it.first }.filter { it !in saved } }
-    fun isOn(id: String) = id !in offStr().split(',')
+    fun isOn(id: String) = id !in offStr().split(',') && !(Perf.lite && id == "new")
     fun toggle(id: String) { val off = offStr().split(',').filter { it.isNotBlank() }.toMutableSet(); if (!off.add(id)) off.remove(id); Prefs.put("home_off", off.joinToString(",")); rev++ }
     fun move(id: String, by: Int) {
         val l = all().toMutableList(); val i = l.indexOf(id); val j = (i + by).coerceIn(0, l.lastIndex)

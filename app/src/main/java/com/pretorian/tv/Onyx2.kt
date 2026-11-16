@@ -161,11 +161,11 @@ fun OnyxTv(nav: Nav, onGuide: () -> Unit) {
     var enterTick by remember { mutableIntStateOf(0) }
     val gFr = remember { FocusRequester() }
     LaunchedEffect(Unit) { if (!coming) { TvMemory.restore = false; st.refocus++ } }
-    // opening TV: nothing heavy by itself — "All channels" and groups of folded playlists wait for your OK
+    // opening TV: the last group comes back at once (lists are kept on the disk); groups of folded playlists wait for your OK
     remember {
         if (!coming) st.group?.let { g ->
             val multi = Store.actives(ctx).size > 1
-            if (g.cat.id == ALL_GROUP || (multi && g.pid != null && g.pid !in TvFold.open) || (g.pid != null && Store.actives(ctx).none { it.id == g.pid })) st.group = null
+            if ((multi && g.pid != null && g.pid !in TvFold.open) || (g.pid != null && Store.actives(ctx).none { it.id == g.pid })) st.group = null
         }; 0
     }
     // coming back from a channel: the group list shows that channel's group too
@@ -191,7 +191,6 @@ fun OnyxTv(nav: Nav, onGuide: () -> Unit) {
     LaunchedEffect(rows) {
         if (st.group != null) return@LaunchedEffect
         val last = TvMemory.group ?: return@LaunchedEffect
-        if (last.cat.id == ALL_GROUP) return@LaunchedEffect
         (rows as? Load.Ok)?.value?.firstOrNull { it is TRow.Grp && it.ref.key == last.key }?.let { st.group = (it as TRow.Grp).ref }
     }
 

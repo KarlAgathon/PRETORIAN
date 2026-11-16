@@ -1,19 +1,6 @@
-Playliste: više aktivnih odjednom, svaka ima svoj prekidač desno i ▲ ▼ za redoslijed; „Ugasi sve“ – dozvoljeno i nula aktivnih
-Meni playliste: Uredi, Aktivna, Grupe i kanali, EPG ove playliste, Osvježi, Obriši
-Nastavi gledati prikazuje samo sadržaj iz aktivnih playlisti; ugašena, obrisana ili istekla lista se više ne pušta
-EPG: dodaj link ili fajl, ime, pomak vremena, osvježavanje, „Zadani za…“ po playlisti; prekidač na svakom EPG-u, i providerovom
-Postavke: novi redoslijed (Profil, Playliste, Opće…), Modovi i Sports Center; lista se suzi kad uđeš u sekciju; ◀ uvijek vraća na listu
-Napredne opcije su sada prvi red u Općem; Google Drive je uklonjen
-Početni ekran po izboru: Početna, TV, Filmovi, Serije, Sports Center ili zadnji kanal
-Rad u pozadini: dugi OK bira koliko često se provjeravaju rezultati i epizode
-Pravi Lite mod: bez novo dodanog, bez providnih kartica i prelaza, jedna mirna pozadina, manje provjera u pozadini
-Plejer: dugmad u jednom redu – Favorit jednim OK (žuta zvijezda), Titlovi i Audio samo kad postoje, Format Fit/Zoom/Razvuci/16:9/4:3 pamti se po kanalu, ostalo u Više
-Sports Center postavke: Sportovi kao jedan padajući meni, kratki naslovi, ko prenosi: prava po ligi (tabela na GitHubu), ESPN i AI
-Podsjetnici: „Prebaci na kanal“ i „Za 5 min“, dugi OK – Ukloni / Promijeni vrijeme; utakmice koje pratiš same dobiju podsjetnik
-Backup: kopija jednim OK u Download/PRETORIAN ili na USB, lista svih nađenih kopija za vraćanje
-Jednostavni mod je prekidač; zaključavanje kategorija i dnevno vrijeme prešli u Roditeljsku kontrolu; svi prekidači sivi/zeleni
-O aplikaciji: kratko „v1.0.7“, ocjena boxa se mjeri jednom i ostaje ista; Označi kao Stable pokazuje pravo stanje
-Držanje ▲ vodi direktno na gornji meni
-Nastavi gledati: ako je ista serija ili film i u drugoj aktivnoj playlisti, ostaje na Početnoj i nastavlja odatle s istim napretkom
-Grupe i kanali: filter Sve / Prikazane / Sakrivene i „Označi sve“ – npr. sve sakrivene odjednom pa Prikaži; iste boje kao ostatak aplikacije
-TV: s više aktivnih playlisti svaka je sklopljena (▶) – OK je raširi (▼) i tek tada se učitaju njene grupe; „Svi kanali“ se više ne učitavaju sami pri otvaranju TV-a
+TV se otvara odmah: grupe i kanali se čuvaju na boxu i ne učitavaju se svaki put ispočetka; lista od providera se tiho osvježi u pozadini
+Sitne promjene (EPG, favoriti, postavke) više ne brišu učitane kanale
+Omiljeni timovi: lista s ✕ i „＋ Dodaj tim“ – koliko god timova, pretraga ili bilo koje ime
+Sport: u Favoritima i Pratim dugmad ＋ Države i ＋ Timovi
+Lite mod: na Početnoj nikad Najnoviji filmovi i serije
+Dijagnostika: kartice se prilagođavaju širini – veće ikone i brojevi u kolonama kad ima mjesta, manje kad je usko

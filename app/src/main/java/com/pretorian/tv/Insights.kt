@@ -259,28 +259,58 @@ fun MenuSaver(inPlayer: Boolean) {
 @Composable
 fun InfoCard(label: String, title: String, sub: String?, icon: Int, color: Color, modifier: Modifier = Modifier, minH: Dp = 80.dp,
              bar: Float? = null, onClick: (() -> Unit)? = null, titleColor: Color = C.Text, action: (@Composable () -> Unit)? = null,
-             extra: (@Composable ColumnScope.() -> Unit)? = null) {
+             stats: List<Triple<String, String, Color?>>? = null, extra: (@Composable ColumnScope.() -> Unit)? = null) {
     val inner: @Composable (Boolean) -> Unit = { f ->
-        Row(Modifier.fillMaxWidth().then(if (f) Modifier.border(2.dp, Color.White, Rnd(16.dp)) else Modifier).padding(horizontal = 14.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(Modifier.size(34.dp).clip(Rnd(10.dp)).background(color), contentAlignment = Alignment.Center) { Ico(icon, 17.dp, Color.White) }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    FitText(tr(label).uppercase(), 10.sp, C.Muted, FontWeight.SemiBold, Modifier.weight(1f), spacing = 1.5f)
-                    action?.invoke()
+        // the card follows its width: icon and letters grow on a wide card and get smaller (to a minimum) on a narrow one;
+        // on a wide card the numbers stand in columns next to the title instead of one long list
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val k = (maxWidth / 620.dp).coerceIn(0.82f, 1.45f)
+            val wide = maxWidth >= 640.dp
+            Row(Modifier.fillMaxWidth().then(if (f) Modifier.border(2.dp, Color.White, Rnd(16.dp)) else Modifier).padding(horizontal = 14.dp * k, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp * k)) {
+                Box(Modifier.size(34.dp * k).clip(Rnd(10.dp * k)).background(color), contentAlignment = Alignment.Center) { Ico(icon, 17.dp * k, Color.White) }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        FitText(tr(label).uppercase(), 10.sp * k, C.Muted, FontWeight.SemiBold, Modifier.weight(1f), spacing = 1.5f)
+                        action?.invoke()
+                    }
+                    if (wide && stats != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                        Column(Modifier.weight(1f)) {
+                            FitText(tr(title), 16.sp * k, titleColor, FontWeight.ExtraBold)
+                            sub?.let { FitText(tr(it), 12.sp * k, C.Soft) }
+                        }
+                        Box(Modifier.weight(1.3f)) { StatCols(stats, k) }
+                    } else {
+                        // one line each, the letters get a little smaller instead of breaking into a second line
+                        FitText(tr(title), 16.sp * k, titleColor, FontWeight.ExtraBold)
+                        sub?.let { FitText(tr(it), 12.sp * k, C.Soft) }
+                        if (stats != null) Box(Modifier.padding(top = 4.dp)) { StatCols(stats, k) }
+                    }
+                    if (bar != null) ThinBar(bar, color, Modifier.fillMaxWidth().padding(top = 6.dp), 4.dp)
+                    extra?.invoke(this)
                 }
-                // one line each, the letters get a little smaller instead of breaking into a second line
-                FitText(tr(title), 16.sp, titleColor, FontWeight.ExtraBold)
-                sub?.let { FitText(tr(it), 12.sp, C.Soft) }
-                if (bar != null) ThinBar(bar, color, Modifier.fillMaxWidth().padding(top = 6.dp), 4.dp)
-                extra?.invoke(this)
+                if (onClick != null) T("›", 18.sp, C.Muted, modifier = Modifier.align(Alignment.CenterVertically))  // i18n-ignore
             }
-            if (onClick != null) T("›", 18.sp, C.Muted, modifier = Modifier.align(Alignment.CenterVertically))  // i18n-ignore
         }
     }
     val m = modifier.heightIn(min = minH).clip(Rnd(16.dp)).border(1.dp, C.Line, Rnd(16.dp))
     if (onClick != null) Focusable(onClick = onClick, shape = Rnd(16.dp), normal = C.Card, focused = C.CardHi, zoom = 1.02f, modifier = m) { f -> inner(f) }
     else Box(m.background(C.Card)) { inner(false) }
+}
+
+/** Numbers of a card side by side: the name small above, the number big under it; too narrow for that → name left, number right. */
+@Composable
+fun StatCols(items: List<Triple<String, String, Color?>>, k: Float = 1f) {
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+        if (maxWidth >= 110.dp * items.size) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            items.forEach { (l, v, c) ->
+                Column(Modifier.weight(1f)) {
+                    FitText(tr(l), 11.sp * k, C.Muted, FontWeight.SemiBold)
+                    FitText(v, 17.sp * k, c ?: C.Text, FontWeight.ExtraBold)
+                }
+            }
+        } else Column { items.forEach { (l, v, c) -> KV(tr(l), v, c ?: C.Text) } }
+    }
 }
 
 @Composable
@@ -403,11 +433,9 @@ fun DiagnosticsV2() {
                     }
                 }
                 InfoCard("Uptime", fmtDur(System.currentTimeMillis() - Stats.appStart), tr("od zadnjeg pokretanja"), R.drawable.lc_clock, Color(0xFF22C55E),
-                    Modifier.fillMaxWidth(), action = { SmallBtn(tr("↺ Reset")) { Stats.reset(listOf("up")); rev++ } }) {
-                    KV(tr("Ukupno"), fmtDur(Stats.totalUptime()))
-                    val crashes = Prefs.str("crash_times").split(',').count { it.isNotBlank() }
-                    KV(tr("Rušenja (10 min)"), crashes.toString(), if (crashes == 0) C.Green else C.Danger)
-                }
+                    Modifier.fillMaxWidth(), action = { SmallBtn(tr("↺ Reset")) { Stats.reset(listOf("up")); rev++ } },
+                    stats = Prefs.str("crash_times").split(',').count { it.isNotBlank() }.let { crashes ->
+                        listOf(Triple("Ukupno", fmtDur(Stats.totalUptime()), null), Triple("Rušenja (10 min)", crashes.toString(), if (crashes == 0) C.Green else C.Danger)) })
             }
             val bTv = Stats.sum("b_tv", period); val bSer = Stats.sum("b_ser", period); val bMov = Stats.sum("b_mov", period)
             val updW = Stats.sum("upd", 1); val updM = Stats.sum("upd", 2); val updY = Stats.sum("upd", 3)
@@ -415,51 +443,50 @@ fun DiagnosticsV2() {
             val stall = Stats.sum("stall", period)
             CardGrid(1, listOf(
                 { m -> InfoCard("Protok podataka", fmtGb(bTv + bSer + bMov), trf("ukupno · %s", tr(pw)), R.drawable.lc_download, Color(0xFFF59E0B), m,
-                    action = { SmallBtn(tr("↺ Reset")) { Stats.reset(listOf("b_tv", "b_ser", "b_mov")); rev++ } }) {
-                    KV("TV", fmtGb(bTv)); KV(tr("Serije"), fmtGb(bSer)); KV(tr("Filmovi"), fmtGb(bMov))
-                } },
+                    action = { SmallBtn(tr("↺ Reset")) { Stats.reset(listOf("b_tv", "b_ser", "b_mov")); rev++ } },
+                    stats = listOf(Triple("TV", fmtGb(bTv), null), Triple("Serije", fmtGb(bSer), null), Triple("Filmovi", fmtGb(bMov), null))) },
                 { m -> InfoCard("Brzina interneta", if (vpn) tr("VPN je uključen") else tr("bez VPN-a"), null, R.drawable.lc_gauge2, Color(0xFF06B6D4), m) {
                     // two rows, each with its own test: the VPN row only measures while a VPN is on
                     val norm = Prefs.str("speed_norm"); val vp = Prefs.str("speed_vpn")
-                    SpeedRow("Normalna brzina", if (testing && testingNorm) tr("Mjerim…") else norm.ifBlank { "—" },
+                    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    val two = maxWidth >= 700.dp
+                    val content: @Composable (Modifier) -> Unit = { rm ->
+                    Box(rm) { SpeedRow("Normalna brzina", if (testing && testingNorm) tr("Mjerim…") else norm.ifBlank { "—" },
                         if (bypassErr) tr("Tvoj VPN ne pušta mjerenje mimo njega · ugasi VPN na tren za novo mjerenje")
                         else (Prefs.str("speed_norm_at").ifBlank { null }?.let { tr("izmjereno") + " " + it + if (vpn) " · " + tr("mimo VPN-a") else "" } ?: ""),
-                        enabled = !testing) { runSpeed(true) }
-                    SpeedRow("VPN brzina", if (!vpn) tr("VPN nije aktivan") else if (testing && !testingNorm) tr("Mjerim…") else vp.ifBlank { "—" },
+                        enabled = !testing) { runSpeed(true) } }
+                    Box(rm) { SpeedRow("VPN brzina", if (!vpn) tr("VPN nije aktivan") else if (testing && !testingNorm) tr("Mjerim…") else vp.ifBlank { "—" },
                         if (!vpn) tr("uključi VPN na boxu pa testiraj") else (Prefs.str("speed_vpn_at").ifBlank { null }?.let { tr("izmjereno") + " " + it } ?: ""),
-                        enabled = vpn && !testing, dim = !vpn) { runSpeed(false) }
+                        enabled = vpn && !testing, dim = !vpn) { runSpeed(false) } }
+                    }
+                    if (two) Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { content(Modifier.weight(1f)) } else Column { content(Modifier.fillMaxWidth()) }
+                    }
                 } },
                 { m -> InfoCard("Ažuriranja", trf("%s ovaj mjesec", updM), null, R.drawable.lc_refresh_cw, Color(0xFF8B5CF6), m,
-                    action = { SmallBtn(tr("↺ Reset")) { Stats.reset(listOf("upd")); rev++ } }) {
-                    KV(tr("Sedmica"), updW.toString()); KV(tr("Godina"), updY.toString())
-                    KV(tr("Zadnje"), BuildInfo.VERSION + " · " + SimpleDateFormat("dd.MM.yy", Locale.US).format(Date(Prefs.long("stats_upd_at", System.currentTimeMillis()))))  // i18n-ignore
-                } },
+                    action = { SmallBtn(tr("↺ Reset")) { Stats.reset(listOf("upd")); rev++ } },
+                    stats = listOf(Triple("Sedmica", updW.toString(), null), Triple("Godina", updY.toString(), null),
+                        Triple("Zadnje", BuildInfo.VERSION + " · " + SimpleDateFormat("dd.MM.yy", Locale.US).format(Date(Prefs.long("stats_upd_at", System.currentTimeMillis()))), null))) },  // i18n-ignore
                 { m -> InfoCard("Server providera", when (serverOk) { true -> tr("Radi"); false -> tr("Ne odgovara"); null -> tr("Provjeravam…") },
                     listOfNotNull(Store.active(ctx)?.name, server?.takeIf { serverOk == true }?.let { trf("odziv %s ms", it) }).joinToString(" · "),
                     R.drawable.lc_server, Color(0xFFEF4444), m, titleColor = if (serverOk == true) C.Green else if (serverOk == false) C.Danger else C.Text,
-                    action = { SmallBtn(tr("↺ Reset")) { Stats.reset(listOf("rec", "stall")); rev++ } }) {
-                    KV(tr("Prekidi streama"), recs.toString())
-                    KV(tr("Baferovanje"), if (total > 0) String.format(Locale.US, "%.1f %%", stall * 100.0 / total) else "0 %")  // i18n-ignore
-                } },
+                    action = { SmallBtn(tr("↺ Reset")) { Stats.reset(listOf("rec", "stall")); rev++ } },
+                    stats = listOf(Triple("Prekidi streama", recs.toString(), null),
+                        Triple("Baferovanje", if (total > 0) String.format(Locale.US, "%.1f %%", stall * 100.0 / total) else "0 %", null))) },  // i18n-ignore
                 { m -> InfoCard("Keš i memorija", if (cacheMb < 0) "…" else "$cacheMb MB", tr("slike, EPG, liste"), R.drawable.lc_hard_drive, Color(0xFF64748B), m,
                     action = { SmallBtn(tr("✕ Očisti")) {
                         scope.launch(Dispatchers.IO) { ctx.cacheDir.listFiles()?.forEach { it.deleteRecursively() } }
                         cacheMb = 0; Toast.makeText(ctx, tr("Keš je očišćen"), Toast.LENGTH_SHORT).show()
-                    } }) {
-                    val rt = Runtime.getRuntime()
-                    KV(tr("RAM aplikacije"), ((rt.totalMemory() - rt.freeMemory()) / 1_048_576).toString() + " MB")  // i18n-ignore
-                    KV(tr("Način rada"), if (Perf.lite) "Lite" else "Full")  // i18n-ignore
-                } },
+                    } }, stats = Runtime.getRuntime().let { rt -> listOf(Triple("RAM aplikacije", ((rt.totalMemory() - rt.freeMemory()) / 1_048_576).toString() + " MB", null),  // i18n-ignore
+                        Triple("Način rada", if (Perf.lite) "Lite" else "Full", null)) }) },  // i18n-ignore
                 { m ->
                     val crash = remember { java.io.File(ctx.filesDir, "last_crash.txt").takeIf { it.exists() } }
                     val days = crash?.let { ((System.currentTimeMillis() - it.lastModified()) / 86_400_000L).toInt() }
                     InfoCard("Stabilnost", if (days == null || days >= 7) tr("Odlično") else tr("Bilo je rušenja"),
                         if (days == null) tr("bez rušenja") else trf("bez rušenja %s dana", days), R.drawable.lc_shield_check, Color(0xFFEC4899), m,
                         titleColor = if (days == null || days >= 7) C.Green else C.Amber,
-                        action = { SmallBtn(tr("↺ Reset")) { crash?.delete(); Prefs.put("crash_times", ""); rev++ } }) {
-                        KV(tr("Izvještaj o grešci"), if (crash == null) tr("nema") else tr("postoji"))
-                        KV(tr("Automatski oporavak"), if (Recover.on) tr("uključen") else tr("isključen"), if (Recover.on) C.Green else C.Muted)
-                    }
+                        action = { SmallBtn(tr("↺ Reset")) { crash?.delete(); Prefs.put("crash_times", ""); rev++ } },
+                        stats = listOf(Triple("Izvještaj o grešci", tr(if (crash == null) "nema" else "postoji"), null),
+                            Triple("Automatski oporavak", tr(if (Recover.on) "uključen" else "isključen"), if (Recover.on) C.Green else C.Muted)))
                 },
             ))
             // every step of the last updates, with the time: shows exactly where an update stops

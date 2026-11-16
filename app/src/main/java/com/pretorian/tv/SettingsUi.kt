@@ -2050,9 +2050,7 @@ private fun SportV2() {
             CheckRow(tr(label), id in en) { if (id in en) en.remove(id) else en.add(id); Prefs.put("sport_enabled", en.joinToString(",")); Sports.lastCombined.clear(); more = false; rev++ }
         }
     }
-    if (teamDlg) TextDialog("Omiljeni timovi", "Imena, odvojena zarezom (npr. Željezničar, Bayern)", Prefs.str("sport_teams"), onDismiss = { teamDlg = false; SetFocus.tick++ }) { v ->
-        Prefs.put("sport_teams", v); teamDlg = false; Sports.lastCombined.clear(); rev++
-    }
+    if (teamDlg) FavTeamsDialog { teamDlg = false; Sports.lastCombined.clear(); rev++; SetFocus.tick++ }
     if (keyDlg) TextDialog(trf("%s ključ", SportsAI.prov.name), trf("Ključ (%s)", SportsAI.prov.keyHint), SportsAI.key, onDismiss = { keyDlg = false; SetFocus.tick++ }) { v -> SportsAI.key = v; keyDlg = false; status = null; rev++ }
 }
 

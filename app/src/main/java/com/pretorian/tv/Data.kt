@@ -3,6 +3,7 @@ package com.pretorian.tv
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
@@ -500,7 +501,9 @@ object Repo {
     private var m3uFor: String? = null
     private var m3u: List<Channel> = emptyList()
 
-    fun clear() { cache.clear(); m3uFor = null; m3u = emptyList(); catalogs.clear(); HomeCache.clear() }
+    /** small changes (EPG, favourites, settings): TV groups and channel lists stay, so TV opens at once */
+    fun clear() { synchronized(cache) { cache.keys.removeAll { !isLive(it) } }; catalogs.clear(); HomeCache.clear() }
+    private fun isLive(k: String) = k.startsWith("lg_") || k.startsWith("ch_") || k.startsWith("all_")
 
     /** frees memory: always the big catalogs, and with [hard] also films, series and all-channel lists (groups and the open channels stay) */
     fun trim(hard: Boolean) {
@@ -521,13 +524,13 @@ object Repo {
         return m3u
     }
 
-    suspend fun liveGroups(p: Playlist): List<Category> = cached("lg_${p.id}") {
+    suspend fun liveGroups(p: Playlist): List<Category> = disk("lg_${p.id}", ::catJson, ::catFrom) {
         if (p.type == SourceType.XTREAM) Xtream(p).liveCategories()
         else if (p.type == SourceType.STALKER) Stalker(p).liveCategories()
         else m3uChannels(p).map { it.group }.distinct().map { Category(it, it) }
     }
 
-    suspend fun channels(p: Playlist, groupId: String): List<Channel> = cached("ch_${p.id}_$groupId") {
+    suspend fun channels(p: Playlist, groupId: String): List<Channel> = disk("ch_${p.id}_$groupId", ::chJson, ::chFrom) {
         if (p.type == SourceType.XTREAM) Xtream(p).channels(groupId)
         else if (p.type == SourceType.STALKER) ((cache["all_${p.id}"] as? List<*>)?.filterIsInstance<Channel>() ?: Stalker(p).allChannels().also { cache["all_${p.id}"] = it }).filter { it.group == groupId }
         else m3uChannels(p).filter { it.group == groupId }
@@ -535,7 +538,7 @@ object Repo {
 
     /** every live channel of the playlist ("All channels", sports search) */
     suspend fun allChannels(p: Playlist): List<Channel> = rawAllChannels(p).let { l -> Parental.channels(p, l) }
-    private suspend fun rawAllChannels(p: Playlist): List<Channel> = cached("all_${p.id}") {
+    private suspend fun rawAllChannels(p: Playlist): List<Channel> = disk("all_${p.id}", ::chJson, ::chFrom) {
         if (p.type == SourceType.XTREAM) Xtream(p).allChannels() else if (p.type == SourceType.STALKER) Stalker(p).allChannels() else m3uChannels(p)
     }
 
@@ -564,7 +567,39 @@ object Repo {
         if (p.type != SourceType.XTREAM) 0 else cached("cnt_${kind}_${p.id}") { var n = 0; Xtream(p).catalogEach(kind) { n++ }; n }
 
     /** "Update all": forget the kept catalog so it is downloaded again. */
-    fun dropCatalogs() { diskDir?.listFiles()?.filter { it.name.startsWith("catalog_") }?.forEach { it.delete() } }
+    /** "Refresh" of a playlist: everything is read again from the provider (also the TV lists kept on the disk) */
+    fun dropCatalogs() {
+        diskDir?.listFiles()?.filter { it.name.startsWith("catalog_") || it.name.startsWith("live_") }?.forEach { it.delete() }
+        synchronized(cache) { cache.clear() }; m3uFor = null; m3u = emptyList()
+    }
+
+    /* ---- TV lists on the disk: shown at once (also after a restart), read again quietly when older than 12 hours */
+    private fun liveFile(key: String) = diskDir?.let { java.io.File(it, "live_" + key.hashCode().toUInt().toString(16) + ".json") }
+    private fun catJson(l: List<Category>) = JSONArray().apply { l.forEach { put(JSONArray().put(it.id).put(it.name)) } }.toString()
+    private fun catFrom(t: String) = JSONArray(t).let { a -> (0 until a.length()).map { a.getJSONArray(it).let { x -> Category(x.getString(0), x.getString(1)) } } }
+    private fun chJson(l: List<Channel>) = JSONArray().apply { l.forEach { c -> put(JSONArray().put(c.id).put(c.num).put(c.name).put(c.logo ?: "").put(c.group).put(c.url).put(c.epg ?: "").put(c.pid).put(c.archive)) } }.toString()
+    private fun chFrom(t: String) = JSONArray(t).let { a -> (0 until a.length()).map { a.getJSONArray(it).let { x ->
+        Channel(x.getString(0), x.getInt(1), x.getString(2), x.getString(3).ifBlank { null }, x.getString(4), x.getString(5), x.getString(6).ifBlank { null }, x.getString(7), x.getInt(8)) } } }
+
+    @Suppress("UNCHECKED_CAST")
+    private suspend fun <T> disk(key: String, write: (T) -> String, read: (String) -> T, load: () -> T): T = withContext(Dispatchers.IO) {
+        (synchronized(cache) { cache[key] } as T?)?.let { return@withContext it }
+        val f = liveFile(key)
+        val kept = try { if (f != null && f.exists() && System.currentTimeMillis() - f.lastModified() < 7 * 86_400_000L) read(f.readText()) else null } catch (e: Exception) { null }
+        if (kept != null) {
+            synchronized(cache) { cache[key] = kept as Any }
+            // older than 12 hours: read again in the background, the next opening gets the new list
+            if (System.currentTimeMillis() - f!!.lastModified() > 12 * 3600_000L) {
+                @Suppress("OPT_IN_USAGE")
+                kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) { try { val fresh = load(); f.writeText(write(fresh)); synchronized(cache) { cache[key] = fresh as Any } } catch (_: Exception) {} }
+            }
+            return@withContext kept
+        }
+        val fresh = load()
+        synchronized(cache) { cache[key] = fresh as Any }
+        try { f?.writeText(write(fresh)) } catch (_: Exception) {}
+        fresh
+    }
 
     suspend fun vodGroups(p: Playlist): List<Category> =
         if (p.type == SourceType.XTREAM) cached("vg_${p.id}") { Xtream(p).vodCategories() }
