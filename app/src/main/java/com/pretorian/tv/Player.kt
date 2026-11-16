@@ -786,7 +786,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             onChannel = { list, i ->
                 if (sideGroup != null) { items = list.map { c -> PlayItem(c.name, c.url, c.logo, "${c.num}", c) }; TvMemory.group = sideGroup }
                 index = i; side = null; sideGroup = null
-            })
+            },
+            onBackToChannels = { side = "channels" })
         // ------------------------------------------------------------ live: guide on the right, picture small
         if (side == "epg") {
             val ch = item.channel
@@ -799,7 +800,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 T("◀ ili Nazad = slika preko cijelog ekrana · OK na emisiji = podsjeti me", 11.sp, C.Muted, maxLines = 2)
                 val fr = remember { FocusRequester() }
                 Box(Modifier.weight(1f).focusRequester(fr).onPreviewKeyEvent { e ->
-                    if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { side = null; true } else false
+                    if (e.key == Key.Back || e.key == Key.Escape) { if (e.type == KeyEventType.KeyUp) side = null; true }
+                    else if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { side = null; true } else false
                 }) { if (ch != null) EpgList(ch, 24) else T("Nema EPG podataka za ovaj kanal.", 14.sp, C.Soft) }
                 LaunchedEffect(Unit) { delay(150); fr.tryFocus() }
             }
@@ -943,7 +945,8 @@ private fun PlayerBar(live: Boolean, playing: Boolean, hasChannel: Boolean, favO
 /** Live: the channels of the group (Left again: the groups) over the picture. */
 @Composable
 private fun SideLists(mode: String, sideGroup: GroupRef?, items: List<PlayItem>, index: Int, p: Playlist?,
-                      onGroups: () -> Unit, onClose: () -> Unit, onGroup: (GroupRef) -> Unit, onChannel: (List<Channel>, Int) -> Unit) {
+                      onGroups: () -> Unit, onClose: () -> Unit, onGroup: (GroupRef) -> Unit, onChannel: (List<Channel>, Int) -> Unit,
+                      onBackToChannels: () -> Unit = {}) {
     val ctx = LocalContext.current
     val fr = remember { FocusRequester() }
     var has by remember { mutableStateOf(false) }
@@ -953,6 +956,11 @@ private fun SideLists(mode: String, sideGroup: GroupRef?, items: List<PlayItem>,
         Column(Modifier.fillMaxHeight().width(380.dp).background(C.Overlay).padding(horizontal = 16.dp, vertical = 20.dp)
             .onFocusChanged { has = it.hasFocus }
             .onPreviewKeyEvent { e ->
+                // Back is handled here (one step: groups → channels → picture), so it never leaves the player
+                if (e.key == Key.Back || e.key == Key.Escape) {
+                    if (e.type == KeyEventType.KeyUp) { if (mode == "groups") onBackToChannels() else onClose() }
+                    return@onPreviewKeyEvent true
+                }
                 if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 when (e.key) {
                     Key.DirectionLeft -> { if (mode == "channels") onGroups(); true }

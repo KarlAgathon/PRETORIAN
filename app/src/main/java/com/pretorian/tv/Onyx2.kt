@@ -97,10 +97,10 @@ fun nowOf(ch: Channel, wait: Long = 400): EpgItem? {
 /** what is on now and the next shows of a channel (for the wide channel list); asked only after a short pause while scrolling */
 object NextCache { val m = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, List<EpgItem>>>() }
 @Composable
-fun nextOf(ch: Channel, wait: Long = 450): List<EpgItem> {
+fun nextOf(ch: Channel, wait: Long = 450): List<EpgItem>? {
     val ctx = LocalContext.current
     val fresh = NextCache.m[ch.url]?.takeIf { it.first > System.currentTimeMillis() - 10 * 60_000L }?.second
-    val v by produceState(fresh ?: emptyList(), ch.url) {
+    val v by produceState<List<EpgItem>?>(fresh, ch.url) {
         if (fresh != null) return@produceState
         delay(wait)
         val p = Store.byId(ctx, ch.pid) ?: return@produceState
@@ -375,10 +375,10 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                                     val nx = nextOf(ch)
                                     val hm = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())  // i18n-ignore
                                     Row(Modifier.weight(1f).fillMaxHeight().padding(vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        if (nx.isEmpty()) Box(Modifier.weight(1f).fillMaxHeight().clip(Rnd(8.dp)).background(if (f) Color.Black.copy(alpha = 0.12f) else C.Card), contentAlignment = Alignment.CenterStart) {
-                                            T(now?.title ?: " ", 12.sp, if (f) C.OnRed.copy(alpha = 0.7f) else C.Muted, modifier = Modifier.padding(horizontal = 10.dp))
+                                        if (nx.isNullOrEmpty()) Box(Modifier.weight(1f).fillMaxHeight().clip(Rnd(8.dp)).background(if (f) Color.Black.copy(alpha = 0.12f) else C.Card), contentAlignment = Alignment.CenterStart) {
+                                            T(now?.title ?: if (nx == null) "Učitavam…" else "Bez programa", 12.sp, if (f) C.OnRed.copy(alpha = 0.7f) else C.Muted, modifier = Modifier.padding(horizontal = 10.dp))
                                         }
-                                        nx.forEachIndexed { k, e ->
+                                        nx?.forEachIndexed { k, e ->
                                             val isNow = k == 0 && e.start <= System.currentTimeMillis()
                                             Column(Modifier.weight(if (k == 0) 1.4f else 1f).fillMaxHeight().clip(Rnd(8.dp))
                                                 .background(if (f) Color.Black.copy(alpha = if (isNow) 0.18f else 0.1f) else if (isNow) C.CardHi else C.Card).padding(horizontal = 9.dp, vertical = 3.dp),
@@ -420,7 +420,7 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
 @Composable
 private fun WideHeader(playing: Channel?, on: Channel?) {
     val ctx = LocalContext.current
-    Row(Modifier.fillMaxWidth().height(132.dp).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+    Row(Modifier.fillMaxWidth().height(112.dp).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Box(Modifier.fillMaxHeight().aspectRatio(16f / 9f).glass(14.dp)) {
             val cc = playing
             if (cc != null && (Look.previewMode == 2 || PreviewSel.ch?.url == cc.url || TvMemory.preview?.url == cc.url)) PreviewBox(cc, Modifier.fillMaxSize())
