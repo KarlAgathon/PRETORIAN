@@ -241,7 +241,8 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
         Column(Modifier.fillMaxSize().padding(top = 16.dp, start = 12.dp, end = 4.dp)) {
             // ---------------------------------------------------------------- picture and show
             val cur = current()
-            Row(Modifier.fillMaxWidth().height(150.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+            val noPic = ListStyle.tivimate || (Perf.lite && !Prefs.bool("lite_preview")) || (Look.previewMode == 1 && PreviewSel.ch == null) || Look.previewMode == 0
+            Row(Modifier.fillMaxWidth().height(if (noPic) 104.dp else 150.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                 // TiviMate mode: no small picture, the show fills the top
                 when (if (ListStyle.tivimate || (Perf.lite && !Prefs.bool("lite_preview"))) 0 else Look.previewMode) {
                     2 -> PreviewBox(cur?.first, Modifier.height(146.dp))
@@ -249,7 +250,7 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
                 }
                 Column(Modifier.weight(1f).padding(top = 4.dp, end = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     val pr = cur?.second
-                    T(pr?.title ?: cur?.first?.name ?: "", 22.sp, C.Text, FontWeight.Bold, maxLines = 2)
+                    T(pr?.title ?: cur?.first?.name ?: "", if (noPic) 19.sp else 22.sp, C.Text, FontWeight.Bold, maxLines = if (noPic) 1 else 2)
                     if (pr != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         T((if (dayIdx(pr.start, now) != 0) dayName(dayIdx(pr.start, now), pr.start) + " · " else "") + pr.times(), 14.sp, C.Soft, FontWeight.SemiBold)  // i18n-ignore
                         if (pr.start <= now && pr.end > now) {
@@ -261,21 +262,21 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
                         if (Reminders.has(pr.title, pr.start)) Ico(R.drawable.lc_bell, 15.dp, C.Amber)
                     }
                     cur?.first?.let { T(it.name, 13.sp, C.RedText, FontWeight.SemiBold) }
-                    cleanDesc(pr?.desc)?.let { T(it, 13.sp, C.Soft, maxLines = 4) }
+                    cleanDesc(pr?.desc)?.let { T(it, 13.sp, C.Soft, maxLines = if (noPic) 2 else 4) }
                 }
             }
             // ---------------------------------------------------------------- group · day · time
             val fDay = dayIdx(focusTime, now)
-            Row(Modifier.fillMaxWidth().padding(top = 8.dp).horizontalScroll(rememberScrollState()).onPreviewKeyEvent { e ->
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp).onPreviewKeyEvent { e ->
                 if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionDown) { try { fr.requestFocus() } catch (_: Exception) {}; true } else false
             }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 @Composable fun chip(text: String, on: Boolean, red: Boolean = false, f: FocusRequester? = null, click: () -> Unit) =
                     Focusable(modifier = Modifier.height(30.dp), onClick = click, focusRequester = f, shape = Pill, zoom = 1.04f,
                         normal = if (on) PICK else if (red) C.Red.copy(alpha = 0.18f) else C.Card) { foc ->
                         T(text, 12.sp, if (on && !foc) Color(0xFF1A1300) else if (red && !foc) C.RedText else C.Text, if (on || red) FontWeight.Bold else FontWeight.Normal,
-                            modifier = Modifier.align(Alignment.Center).padding(horizontal = 12.dp))
+                            maxLines = 1, modifier = Modifier.align(Alignment.Center).padding(horizontal = 10.dp))
                     }
-                chip("☰  " + g.cat.name, false, f = barFr) { onLeftEdge() }  // i18n-ignore
+                chip("☰", false, f = barFr) { onLeftEdge() }  // i18n-ignore
                 Box(Modifier.width(1.dp).height(20.dp).background(C.Line))
                 T("DAN", 10.sp, C.Muted, FontWeight.Bold)
                 for (d in (if (anyArchive) -1 else 0)..3) {
@@ -293,9 +294,12 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
                 }
             }
             // ---------------------------------------------------------------- time ruler
-            Row(Modifier.fillMaxWidth().height(28.dp).padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                T(dayName(dayIdx(viewStart + HALF, now), viewStart + HALF) + ", " + SimpleDateFormat("d. MMM", Locale(Look.lang)).format(Date(viewStart + HALF)),  // i18n-ignore
-                    14.sp, if (dayIdx(viewStart + HALF, now) == 0) C.RedText else PICK, FontWeight.SemiBold, modifier = Modifier.width(nameW))
+            Row(Modifier.fillMaxWidth().height(38.dp).padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.width(nameW)) {
+                    T(g.cat.name, 11.sp, C.Muted, FontWeight.Bold, maxLines = 1)
+                    T(dayName(dayIdx(viewStart + HALF, now), viewStart + HALF) + ", " + SimpleDateFormat("d. MMM", Locale(Look.lang)).format(Date(viewStart + HALF)),  // i18n-ignore
+                        13.sp, if (dayIdx(viewStart + HALF, now) == 0) C.RedText else PICK, FontWeight.SemiBold, maxLines = 1)
+                }
                 Box(Modifier.weight(1f).fillMaxHeight()) {
                     var t = floorHalf(viewStart)
                     while (t < viewEnd) {
@@ -328,7 +332,7 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
                             } else if (pr == null || (pr.start <= t && pr.end > t)) {
                                 val i = list.indexOfFirst { it.url == ch.url }.coerceAtLeast(0)
                                 gate.run("c:${ch.url}", Ovr(ctx, ch.pid).isChLocked(ch)) { TvMemory.channel = i; TvMemory.group = g; TvMemory.restore = true; playChannels(nav, list, i) }
-                            } else detail = ch to pr
+                            } else remindToggle(ch, pr)
                             return@onPreviewKeyEvent true
                         }
                         if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
@@ -371,7 +375,12 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
                                 }
                             }
                             Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
-                                if (e.nativeKeyEvent.repeatCount > 0 && !longFired && ch != null) { longFired = true; chMenu = ch }
+                                // long OK: on a later show only the reminder, never the channel menu; on what is on now the channel menu
+                                if (e.nativeKeyEvent.repeatCount > 0 && !longFired && ch != null) {
+                                    longFired = true
+                                    val pr = progsOf(ch).firstOrNull { it.start <= focusTime && it.end > focusTime }
+                                    if (pr != null && pr.start > System.currentTimeMillis()) remindToggle(ch, pr) else chMenu = ch
+                                }
                                 true
                             }
                             else -> false
@@ -437,6 +446,12 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
             T("Broj kanala", 11.sp, C.Muted, FontWeight.SemiBold)
             T(numBuf.toList().joinToString(" ") + " _", 34.sp, PICK, FontWeight.ExtraBold)  // i18n-ignore
         }
+    }
+
+    /** a later show: remind me / don't — nothing else to ask */
+    fun remindToggle(ch: Channel, pr: EpgItem) {
+        val on = Reminders.toggle(Reminder("r${pr.start}${pr.title.hashCode()}", pr.title, pr.start, ch.url, ch.name, ch.logo, ch.pid, "tv"))
+        Toast.makeText(ctx, tr(if (on) "Podsjetnik postavljen" else "Podsjetnik uklonjen"), Toast.LENGTH_SHORT).show()
     }
 
     fun play(ch: Channel) {
