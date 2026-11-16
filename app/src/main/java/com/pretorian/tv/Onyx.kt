@@ -279,12 +279,14 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
     val ctx = LocalContext.current
     val first = remember { FocusRequester() }
     val cont = remember(Watch.rev) { Watch.continueList(ctx) }
+    LaunchedEffect(Unit) { try { Watch.findAlternatives(ctx) } catch (_: Exception) {} }
     var contMenu by remember { mutableStateOf<Progress?>(null) }
     val p = remember { Store.active(ctx) }
     val homeScope = rememberCoroutineScope()
     // the film or series page goes under the player, so Back lands on it (same season and episode), a second Back on Home
-    fun playOf(pr: Progress): () -> Unit = {
-        val why = Watch.blocked(ctx, pr)
+    fun playOf(pr0: Progress): () -> Unit = {
+        val why = Watch.blocked(ctx, pr0)
+        val pr = if (why == null) Watch.playable(ctx, pr0) else pr0
         if (why != null) android.widget.Toast.makeText(ctx, why, android.widget.Toast.LENGTH_LONG).show()
         else homeScope.launch {
             val pl = Store.actives(ctx).firstOrNull { it.id == pr.pid } ?: p

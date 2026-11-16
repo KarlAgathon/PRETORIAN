@@ -101,7 +101,7 @@ private suspend fun postersOf(ctx: Context, nav: Nav, p: Playlist, g: Category, 
     val kind = if (series) "series" else "vod"
     return when (g.id) {
         G_CONTINUE -> Watch.continueList(ctx).filter { (it.series != null) == series }.map { pr ->
-            val play = { nav.push(Screen.Player(listOf(PlayItem(pr.title, pr.url, pr.poster, null, null, pr.series, pr.season, pr.episode)), 0, live = false)) }
+            val play = { val q = Watch.playable(ctx, pr); nav.push(Screen.Player(listOf(PlayItem(q.title, q.url, q.poster, null, null, q.series, q.season, q.episode)), 0, live = false)) }
             Poster(pr.url, pr.title, pr.poster, null, pr.url, false, play, play)
         }
         G_NEW -> NewContent.items(p.id, kind).map { o ->
@@ -281,7 +281,7 @@ private fun VodClassic(nav: Nav, series: Boolean) {
         // on top: what arrived lately; the number goes down as you open them
         val nw = NewContent.items(p.id, kind)
         if (nw.isNotEmpty()) out.add(VRow.Group(Category(G_NEW, tr("Nedavno dodano")), nw.size))
-        val cont = Watch.continueList(ctx).filter { (it.series != null) == series && Watch.owner(ctx, it) == p.id }
+        val cont = Watch.continueList(ctx).filter { (it.series != null) == series && (Watch.owner(ctx, it) == p.id || Watch.altPid(it.url) == p.id) }
         if (cont.isNotEmpty()) out.add(VRow.Group(Category(G_CONTINUE, tr("Nastavi gledati")), cont.size))
         val my = MyList.items(kind).size
         if (Look.age && my > 0) out.add(VRow.Group(Category(G_MYLIST, tr("Moja lista")), my))   // shown only when something is on it
@@ -391,7 +391,7 @@ private fun VodClassic(nav: Nav, series: Boolean) {
                 val state by load(p.id, g.id, series, Watch.rev, NewContent.rev, MyList.rev) {
                     when (g.id) {
                         G_CONTINUE -> Watch.continueList(ctx).filter { (it.series != null) == series }.map { pr ->
-                            val play = { nav.push(Screen.Player(listOf(PlayItem(pr.title, pr.url, pr.poster, null, null, pr.series, pr.season, pr.episode)), 0, live = false)) }
+                            val play = { val q = Watch.playable(ctx, pr); nav.push(Screen.Player(listOf(PlayItem(q.title, q.url, q.poster, null, null, q.series, q.season, q.episode)), 0, live = false)) }
                             Poster(pr.url, pr.title, pr.poster, null, pr.url, false, play, play)
                         }
                         G_NEW -> NewContent.items(p.id, kind).map { o ->

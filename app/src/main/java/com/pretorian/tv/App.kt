@@ -272,10 +272,12 @@ fun PretorianApp() {
         }
     }
     LaunchedEffect(Reminders.rev) { ReminderReceiver.schedule(ctx) }
+    // a playlist switched on or off: the same films / episodes are looked for in the switched-on ones
+    LaunchedEffect(version) { delay(3_000); try { Watch.findAlternatives(ctx) } catch (_: Exception) {} }
     // OK on the menus' screen saver: the latest "Continue watching" title plays right away
     LaunchedEffect(Saver.resume) {
         if (Saver.resume == 0) return@LaunchedEffect
-        val pr = Watch.continueList(ctx).firstOrNull()?.takeIf { Watch.blocked(ctx, it) == null } ?: return@LaunchedEffect
+        val pr = Watch.continueList(ctx).firstOrNull()?.takeIf { Watch.blocked(ctx, it) == null }?.let { Watch.playable(ctx, it) } ?: return@LaunchedEffect
         nav.push(Screen.Player(listOf(PlayItem(pr.title, pr.url, pr.poster, null, null, pr.series, pr.season, pr.episode)), 0, live = false))
     }
     // the install confirm screen is opened from here, by the visible app (not from the background)
@@ -614,7 +616,7 @@ fun ContinueRow(list: List<Progress>, nav: Nav, modifier: Modifier = Modifier) {
                 Focusable(modifier = Modifier.width(280.dp).height(86.dp), onClick = {
                     val why = Watch.blocked(ctx, pr)
                     if (why != null) android.widget.Toast.makeText(ctx, why, android.widget.Toast.LENGTH_LONG).show()
-                    else nav.push(Screen.Player(listOf(PlayItem(pr.title, pr.url, pr.poster, null, null, pr.series, pr.season, pr.episode)), 0, live = false))
+                    else Watch.playable(ctx, pr).let { q -> nav.push(Screen.Player(listOf(PlayItem(q.title, q.url, q.poster, null, null, q.series, q.season, q.episode)), 0, live = false)) }
                 }, onMenu = { menu = pr }, normal = C.Card, shape = Rnd(14.dp), zoom = 1.04f) { _ ->
                     Row(Modifier.fillMaxSize().padding(8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Box(Modifier.width(48.dp).fillMaxHeight().clip(Rnd(8.dp)).background(C.Tile)) {

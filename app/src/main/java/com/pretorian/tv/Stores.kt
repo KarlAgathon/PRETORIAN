@@ -145,7 +145,52 @@ object Watch {
         val on = Store.actives(ctx).map { it.id }.toSet()
         if (on.isEmpty()) return emptyList()
         val single = Store.playlists(ctx).size == 1
-        return all(ctx).values.filter { (it.started || it.next) && !it.done && owner(ctx, it, single) in on }.sortedByDescending { it.ts }.take(30)
+        return all(ctx).values.filter { (it.started || it.next) && !it.done && (owner(ctx, it, single) in on || alt[it.url]?.first in on) }
+            .sortedByDescending { it.ts }
+            // the same film / episode from two playlists: only the newest one
+            .distinctBy { (it.series?.let { s -> "s:" + key(s) + ":" + it.season + ":" + it.episode } ?: ("m:" + key(it.title))) }
+            .take(30)
+    }
+
+    /* ---- the same film or episode in another, switched-on playlist: Continue watching keeps it and plays it from there */
+    private val alt = java.util.concurrent.ConcurrentHashMap<String, Pair<String, String>>()   // old link -> (playlist id, link there)
+    fun altPid(url: String): String? = alt[url]?.first
+    private fun key(s: String) = Sports.norm(cleanTitle(s).first).replace(Regex("[^a-z0-9]"), "")
+
+    /** looks for every entry of a switched-off playlist in the switched-on ones (by name, season and episode) */
+    suspend fun findAlternatives(ctx: Context) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val on = Store.actives(ctx)
+        if (on.isEmpty()) return@withContext
+        val onIds = on.map { it.id }.toSet()
+        val single = Store.playlists(ctx).size == 1
+        val need = all(ctx).values.filter { (it.started || it.next) && !it.done && owner(ctx, it, single) !in onIds && alt[it.url]?.first !in onIds }
+        var found = 0
+        for (pr in need) for (pl in on) {
+            val hit = try { kotlinx.coroutines.withTimeoutOrNull(20_000) { match(pl, pr) } } catch (_: Exception) { null }
+            if (hit != null) { alt[pr.url] = pl.id to hit; found++; break }
+        }
+        if (found > 0) kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { rev++ }
+    }
+
+    private suspend fun match(pl: Playlist, pr: Progress): String? {
+        if (pl.type != SourceType.XTREAM) return null
+        if (pr.series != null) {
+            val k = key(pr.series)
+            val o = Repo.catalog(pl, "series").firstOrNull { key(it.str("n")) == k } ?: return null
+            return Repo.episodes(pl, o.str("id")).firstOrNull { it.season == pr.season && it.num == pr.episode }?.url
+        }
+        val k = key(pr.title)
+        return Repo.catalog(pl, "vod").firstOrNull { key(it.str("n")) == k }?.str("u")?.ifBlank { null }
+    }
+
+    /** what to play: the entry itself, or the same film / episode in a switched-on playlist (the progress goes with it) */
+    fun playable(ctx: Context, p: Progress): Progress {
+        if (blockedOwn(ctx, p) == null) return p
+        val (pid, url) = alt[p.url] ?: return p
+        if (Store.actives(ctx).none { it.id == pid }) return p
+        val moved = (get(ctx, url) ?: p.copy(url = url, pid = pid)).let { if (it.ts < p.ts) p.copy(url = url, pid = pid) else it }
+        save(ctx, moved)
+        return moved
     }
 
     /** the playlist an entry came from (older entries without it: found from the link) */
@@ -154,6 +199,12 @@ object Watch {
 
     /** null when it can be played; otherwise a short reason (playlist off, deleted or expired) — never plays from a dead list */
     fun blocked(ctx: Context, p: Progress): String? {
+        val own = blockedOwn(ctx, p) ?: return null
+        val a = alt[p.url]
+        return if (a != null && Store.actives(ctx).any { it.id == a.first }) null else own
+    }
+
+    private fun blockedOwn(ctx: Context, p: Progress): String? {
         val id = owner(ctx, p) ?: return null
         val pl = Store.playlists(ctx).firstOrNull { it.id == id } ?: return tr("Playlista više ne postoji")
         if (!pl.active) return tr("Playlista je isključena")
