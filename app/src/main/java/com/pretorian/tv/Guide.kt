@@ -337,7 +337,7 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
                                 if (p != null) gate.run("c:${ch.url}", Ovr(ctx, ch.pid).isChLocked(ch)) {
                                     Preview.stop(); nav.push(Screen.Player(listOf(PlayItem(pr.title, Xtream(p).timeshiftUrl(ch.id, pr), ch.logo, ch.name, null)), 0, live = false))
                                 }
-                            } else if (ListStyle.tivimate && (pr == null || (pr.start <= t && pr.end > t)) && PreviewSel.ch?.url != ch.url && Look.previewMode != 2) {
+                            } else if (ListStyle.tivimate && (pr == null || (pr.start <= t && pr.end > t)) && PreviewSel.ch?.url != ch.url && !(Look.previewMode == 2 && !(Perf.lite && !Prefs.bool("lite_preview")))) {
                                 // TiviMate style: first OK starts the small picture in the corner, the next OK goes full screen
                                 gate.run("c:${ch.url}", Ovr(ctx, ch.pid).isChLocked(ch)) { PreviewSel.ch = ch }
                             } else if (pr == null || (pr.start <= t && pr.end > t)) {
