@@ -13,8 +13,8 @@ android {
         minSdk = 24
         targetSdk = 34
         // raise both numbers for every new version (needed for updates)
-        versionCode = 60
-        versionName = "1.0.8"
+        versionCode = 61
+        versionName = "1.0.9"
         // Google sign-in for Drive sync ("TVs and Limited Input devices" client), from the GitHub secrets
         // GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET. Empty: the app asks for them in Settings.
         // TMDB_KEY from GitHub Secrets: posters, cast, platform and coming episodes work for everyone without typing a key

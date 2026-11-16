@@ -304,9 +304,8 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
             nav.push(Screen.Player(listOf(PlayItem(pr.title, pr.url, pr.poster, null, null, pr.series, pr.season, pr.episode)), 0, live = false))
         }
     }
-    val newest = remember(NewContent.rev) {
-        if (p == null || Perf.lite) emptyList() else NewContent.items(p.id, "vod").take(12).map { "vod" to it } + NewContent.items(p.id, "series").take(6).map { "series" to it }
-    }
+    // new films and series are not shown on Home (they come as a notification › Recently added)
+    val newest = emptyList<Pair<String, JSONObject>>()
     fun openNew(kind: String, o: JSONObject) {
         if (kind == "series") nav.push(Screen.SeriesDetail(SeriesItem(o.optString("id"), o.optString("n"), o.optString("i").ifBlank { null }, null, o.optString("r").ifBlank { null })))
         else nav.push(Screen.MovieDetail(Vod(o.optString("id"), o.optString("n"), o.optString("i").ifBlank { null }, o.optString("r").ifBlank { null }, o.optString("u"))))
@@ -323,9 +322,8 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
     }
     Box(Modifier.fillMaxSize()) {
         OnyxBackdrop(hero?.image, hero?.key ?: "home")
-        // weak box: no pictures behind, a calm glow in the theme's colour instead
-        if (Perf.score < 50 || Perf.lite) Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(C.Red.copy(alpha = 0.13f), Color.Transparent),
-            center = androidx.compose.ui.geometry.Offset(1600f, 120f), radius = 1300f)))
+        // one calm picture behind Home (no film posters): fades into the theme's own background, so the text stays easy to read
+        HomeScenery()
         Column(Modifier.fillMaxSize()) {
             OnyxTopBar(Screen.Home, nav, simple)
             // everything sits higher and bigger: no empty half screen, nothing cut at the bottom of the TV
@@ -827,7 +825,8 @@ fun AdvancedGate(nav: Nav) {
 
 /** Settings › Home: which rows the home screen shows and in which order. */
 object HomeRows {
-    val ALL = listOf("fresh" to "Nove epizode", "cont" to "Nastavi gledati", "mylist" to "Moja lista", "new" to "Novo dodano",
+    // no "Newly added" posters on Home (any mode): new films and series come as a notification › Recently added
+    val ALL = listOf("fresh" to "Nove epizode", "cont" to "Nastavi gledati", "mylist" to "Moja lista",
         "today" to "Utakmice danas", "recent" to "Nedavno gledani kanali")
     var rev by mutableIntStateOf(0)
     /** "Matches today" starts off (it loads live scores) */
@@ -915,4 +914,16 @@ fun ModeBadges(simple: Boolean, onOpen: () -> Unit) {
         }
     }
     if (simple) badge(Color(0xFF93C5FD)) { T("S", 13.sp, Color(0xFF93C5FD), FontWeight.ExtraBold, modifier = Modifier.align(Alignment.Center)) }  // i18n-ignore
+}
+
+
+/** The quiet landscape behind Home: visible on the right and at the bottom, blended into the theme colour on the left and top. */
+@Composable
+fun HomeScenery() {
+    Box(Modifier.fillMaxSize()) {
+        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.fallback_bd3), null,
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize(), alpha = if (C.IsLight) 0.35f else 0.55f)
+        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(C.Bg, C.Bg.copy(alpha = 0.85f), C.Bg.copy(alpha = 0.25f)))))
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(C.Bg.copy(alpha = 0.9f), Color.Transparent, C.Bg.copy(alpha = 0.55f)))))
+    }
 }

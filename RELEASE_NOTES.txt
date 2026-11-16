@@ -1,8 +1,2 @@
-TV se otvara odmah: grupe i kanali se čuvaju na boxu i ne učitavaju se svaki put ispočetka; lista od providera se tiho osvježi u pozadini
-Sitne promjene (EPG, favoriti, postavke) više ne brišu učitane kanale
-Omiljeni timovi: lista s ✕ i „＋ Dodaj tim“ – koliko god timova, pretraga ili bilo koje ime
-Sport: u Favoritima i Pratim dugmad ＋ Države i ＋ Timovi
-Lite mod: na Početnoj nikad Najnoviji filmovi i serije
-Dijagnostika: kartice se prilagođavaju širini – veće ikone i brojevi u kolonama kad ima mjesta, manje kad je usko
-Gore iza Postavki: brzinomjer pokazuje mod – žuto Lite, zeleno Full; „S“ kad je uključen jednostavni mod; OK vodi u Izgled › Mod programa
-Obriši obavještenja (dugi OK na Filmovi/Serije) skida i redove Najnoviji filmovi / Najnovije serije s Početne
+Početna bez najnovijih filmova, serija i kanala (u svim modovima) – novo stiže kao obavještenje, OK vodi u Nedavno dodano
+Iza Početne jedna mirna slika pejzaža u bojama teme
