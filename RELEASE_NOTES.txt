@@ -1,2 +1,3 @@
+Popravljen pad aplikacije pri otvaranju Dijagnostike i O aplikaciji (1.0.8)
 Novo dodano na Početnoj: u Full modu uključeno (isključuje se u Postavke › Početna), u Lite modu uvijek isključeno
 Iza Početne jedna mirna slika pejzaža u bojama teme

@@ -263,9 +263,10 @@ fun InfoCard(label: String, title: String, sub: String?, icon: Int, color: Color
     val inner: @Composable (Boolean) -> Unit = { f ->
         // the card follows its width: icon and letters grow on a wide card and get smaller (to a minimum) on a narrow one;
         // on a wide card the numbers stand in columns next to the title instead of one long list
-        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val k = (maxWidth / 620.dp).coerceIn(0.82f, 1.45f)
-            val wide = maxWidth >= 640.dp
+        run {
+            val cw = LocalCardW.current
+            val k = (cw / 620.dp).coerceIn(0.82f, 1.45f)
+            val wide = cw >= 640.dp
             Row(Modifier.fillMaxWidth().then(if (f) Modifier.border(2.dp, Color.White, Rnd(16.dp)) else Modifier).padding(horizontal = 14.dp * k, vertical = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp * k)) {
                 Box(Modifier.size(34.dp * k).clip(Rnd(10.dp * k)).background(color), contentAlignment = Alignment.Center) { Ico(icon, 17.dp * k, Color.White) }
@@ -279,12 +280,12 @@ fun InfoCard(label: String, title: String, sub: String?, icon: Int, color: Color
                             FitText(tr(title), 16.sp * k, titleColor, FontWeight.ExtraBold)
                             sub?.let { FitText(tr(it), 12.sp * k, C.Soft) }
                         }
-                        Box(Modifier.weight(1.3f)) { StatCols(stats, k) }
+                        Box(Modifier.weight(1.3f)) { StatCols(stats, k, cw * 0.5f) }
                     } else {
                         // one line each, the letters get a little smaller instead of breaking into a second line
                         FitText(tr(title), 16.sp * k, titleColor, FontWeight.ExtraBold)
                         sub?.let { FitText(tr(it), 12.sp * k, C.Soft) }
-                        if (stats != null) Box(Modifier.padding(top = 4.dp)) { StatCols(stats, k) }
+                        if (stats != null) Box(Modifier.padding(top = 4.dp)) { StatCols(stats, k, cw - 80.dp) }
                     }
                     if (bar != null) ThinBar(bar, color, Modifier.fillMaxWidth().padding(top = 6.dp), 4.dp)
                     extra?.invoke(this)
@@ -298,11 +299,14 @@ fun InfoCard(label: String, title: String, sub: String?, icon: Int, color: Color
     else Box(m.background(C.Card)) { inner(false) }
 }
 
+/** The width a card gets (set by the page or the card grid), so cards adapt without measuring themselves. */
+val LocalCardW = androidx.compose.runtime.compositionLocalOf { 600.dp }
+
 /** Numbers of a card side by side: the name small above, the number big under it; too narrow for that → name left, number right. */
 @Composable
-fun StatCols(items: List<Triple<String, String, Color?>>, k: Float = 1f) {
-    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
-        if (maxWidth >= 110.dp * items.size) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+fun StatCols(items: List<Triple<String, String, Color?>>, k: Float = 1f, room: Dp = 400.dp) {
+    run {
+        if (room >= 110.dp * items.size) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             items.forEach { (l, v, c) ->
                 Column(Modifier.weight(1f)) {
                     FitText(tr(l), 11.sp * k, C.Muted, FontWeight.SemiBold)
@@ -333,9 +337,10 @@ fun CardGrid(want: Int, items: List<@Composable (Modifier) -> Unit>) {
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
     val n = (((maxWidth + 12.dp) / (230.dp + 12.dp)).toInt()).coerceIn(1, want)
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        val cw = (maxWidth - 12.dp * (n - 1)) / n
         items.chunked(n).forEach { row ->
             Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                row.forEach { it(Modifier.weight(1f).fillMaxHeight()) }
+                androidx.compose.runtime.CompositionLocalProvider(LocalCardW provides cw) { row.forEach { it(Modifier.weight(1f).fillMaxHeight()) } }
                 repeat(n - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
@@ -394,6 +399,8 @@ fun DiagnosticsV2() {
     // the counters change every minute: the page is redrawn in place (not rebuilt), so the focus stays where you are
     @Suppress("UNUSED_VARIABLE") val statsTick = Stats.rev
     key(rev) {
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+        androidx.compose.runtime.CompositionLocalProvider(LocalCardW provides maxWidth) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 T("Dijagnostika", 23.sp, C.Text, FontWeight.Bold, modifier = Modifier.weight(1f))
@@ -448,8 +455,8 @@ fun DiagnosticsV2() {
                 { m -> InfoCard("Brzina interneta", if (vpn) tr("VPN je uključen") else tr("bez VPN-a"), null, R.drawable.lc_gauge2, Color(0xFF06B6D4), m) {
                     // two rows, each with its own test: the VPN row only measures while a VPN is on
                     val norm = Prefs.str("speed_norm"); val vp = Prefs.str("speed_vpn")
-                    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
-                    val two = maxWidth >= 700.dp
+                    run {
+                    val two = LocalCardW.current >= 760.dp
                     val content: @Composable (Modifier) -> Unit = { rm ->
                     Box(rm) { SpeedRow("Normalna brzina", if (testing && testingNorm) tr("Mjerim…") else norm.ifBlank { "—" },
                         if (bypassErr) tr("Tvoj VPN ne pušta mjerenje mimo njega · ugasi VPN na tren za novo mjerenje")
@@ -523,6 +530,8 @@ fun DiagnosticsV2() {
                     SetDrop("Briši samo", "da zapis ne puni memoriju", StreamLog.CLEAR, StreamLog.clearMode) { Prefs.put("stream_clear", it.toLong()); StreamLog.rev++ }
                 }
             }
+        }
+        }
         }
     }
     if (streamAll) Popup("Zapis streama", { streamAll = false }, width = 820.dp) {
