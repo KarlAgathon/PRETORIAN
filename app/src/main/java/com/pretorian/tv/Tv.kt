@@ -203,8 +203,9 @@ fun GroupColumn(
     onHeader: (Playlist) -> Unit, onNewFav: () -> Unit, onNewGroup: (String) -> Unit, onFocusRow: (String) -> Unit, extra: (@Composable () -> Unit)? = null,
 ) {
     val ctx = LocalContext.current
-    Column(Modifier.width(width).fillMaxHeight().padding(start = 14.dp, end = 10.dp, top = 22.dp)) {
-        T(title, 26.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 8.dp, bottom = 2.dp))
+    Column(Modifier.width(width).fillMaxHeight().padding(start = 14.dp, end = 10.dp, top = if (title.isEmpty()) 8.dp else 22.dp)) {
+        // no title (TV guide): the groups start right under the top bar
+        if (title.isNotEmpty()) T(title, 26.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 8.dp, bottom = 2.dp))
         if (sub != null) T(sub, 12.sp, C.Muted, modifier = Modifier.padding(start = 8.dp, bottom = 8.dp))
         extra?.invoke()
         when (rows) {

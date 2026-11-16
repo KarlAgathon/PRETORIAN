@@ -11,6 +11,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -112,21 +113,13 @@ fun TvGuide(nav: Nav, onList: () -> Unit) {
 
     Row(Modifier.fillMaxSize()) {
         if (groupsOpen) {
-            GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, 250.dp, "TV", null,
+            GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, 250.dp, "", null,
                 onFocusGroup = { focusedGroup = it; Chrome.rail = 3 },
                 onOpen = { openGroup(ctx, st, it); st.enter++ },
                 onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
                 onHeader = { p -> TvFold.toggle(p.id); if (p.id in TvFold.open) Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
                 onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it },
-                onFocusRow = { st.focusKey = it; Chrome.rail = 3 },
-                extra = {
-                    Focusable(modifier = Modifier.padding(start = 4.dp, bottom = 8.dp).height(36.dp), onClick = onList, normal = C.Card, shape = Pill, zoom = 1.03f) { _ ->
-                        Row(Modifier.align(Alignment.Center).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Ico(R.drawable.lc_list, 16.dp, C.RedText); T("Lista kanala", 13.sp, C.Text, FontWeight.SemiBold)
-                        }
-                    }
-                })
+                onFocusRow = { st.focusKey = it; Chrome.rail = 3 })
             Box(Modifier.width(1.dp).fillMaxHeight().background(C.Line))
             LaunchedEffect(st.refocus, rows is Load.Ok) {
                 val list = (rows as? Load.Ok)?.value ?: return@LaunchedEffect
@@ -244,7 +237,7 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
             val cur = current()
             val tmPic = ListStyle.tivimate
             val noPic = !tmPic && (ListStyle.tivimate || (Perf.lite && !Prefs.bool("lite_preview")) || (Look.previewMode == 1 && PreviewSel.ch == null) || Look.previewMode == 0)
-            Row(Modifier.fillMaxWidth().height(if (noPic) 104.dp else if (tmPic) 128.dp else 150.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+            Row(Modifier.fillMaxWidth().heightIn(min = if (tmPic) 124.dp else 60.dp, max = if (noPic) 104.dp else if (tmPic) 128.dp else 150.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                 // TiviMate mode: no small picture, the show fills the top
                 when (if (ListStyle.tivimate || (Perf.lite && !Prefs.bool("lite_preview"))) 0 else Look.previewMode) {
                     2 -> PreviewBox(cur?.first, Modifier.height(146.dp))
