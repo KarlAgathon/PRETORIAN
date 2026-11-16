@@ -560,7 +560,15 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                         }
                     }
                 },
-                update = { v -> v.resizeMode = when (resize) { 1 -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM; 2, 3, 4 -> AspectRatioFrameLayout.RESIZE_MODE_FILL; else -> AspectRatioFrameLayout.RESIZE_MODE_FIT } },
+                update = { v ->
+                    // a list on the left or the guide on the right: the subtitles move into the free part of the picture (never cut)
+                    if (Prefs.bool("sub_shift", true)) v.subtitleView?.let { sv ->
+                        val dens = v.resources.displayMetrics.density
+                        val l = if (side == "channels" || side == "groups") (380 * dens).toInt() else 0
+                        val r = if (side == "epg") (v.width * 0.4f).toInt() else 0
+                        if (sv.paddingLeft != l || sv.paddingRight != r) sv.setPadding(l, sv.paddingTop, r, sv.paddingBottom)
+                    }
+                    v.resizeMode = when (resize) { 1 -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM; 2, 3, 4 -> AspectRatioFrameLayout.RESIZE_MODE_FILL; else -> AspectRatioFrameLayout.RESIZE_MODE_FIT } },
                 modifier = when (resize) { 3 -> Modifier.fillMaxSize().wrapContentSize().aspectRatio(16f / 9f); 4 -> Modifier.fillMaxSize().wrapContentSize().aspectRatio(4f / 3f); else -> Modifier.fillMaxSize() },
             )
         }
@@ -797,7 +805,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                     ChannelLogo(item.logo, item.title)
                     T(item.title, 17.sp, C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
                 }
-                T("◀ ili Nazad = slika preko cijelog ekrana · OK na emisiji = podsjeti me", 11.sp, C.Muted, maxLines = 2)
+                if (Hints.show()) T("◀ ili Nazad = slika preko cijelog ekrana · OK na emisiji = podsjeti me", 11.sp, C.Muted, maxLines = 2)
                 val fr = remember { FocusRequester() }
                 Box(Modifier.weight(1f).focusRequester(fr).onPreviewKeyEvent { e ->
                     if (e.key == Key.Back || e.key == Key.Escape) { if (e.type == KeyEventType.KeyUp) side = null; true }
@@ -1002,7 +1010,7 @@ private fun SideLists(mode: String, sideGroup: GroupRef?, items: List<PlayItem>,
                         val cur = if (sideGroup == null) index else -1
                         LazyColumn(state = state, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             itemsIndexed(s.value, key = { i, c -> "$i${c.url}" }) { i, c ->
-                                Focusable(modifier = Modifier.fillMaxWidth().height(Rows.channel), onClick = { onChannel(s.value, i) },
+                                Focusable(modifier = Modifier.fillMaxWidth().height(ListStyle.sideRow), onClick = { onChannel(s.value, i) },
                                     focusRequester = if (i == cur.coerceAtLeast(0)) fr else null,
                                     normal = if (i == cur) C.CardFocus else C.Card, zoom = 1.01f) { f ->
                                     Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically,

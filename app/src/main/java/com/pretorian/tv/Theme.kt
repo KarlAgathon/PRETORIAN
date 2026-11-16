@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.dp
 
@@ -169,8 +170,14 @@ object C {
             start = androidx.compose.ui.geometry.Offset(0f, 0f), end = androidx.compose.ui.geometry.Offset(2400f, 1400f))
         else androidx.compose.ui.graphics.SolidColor(palette().bg)
 
+    /** Settings › Appearance › "Selected colour": soft (default) mixes the theme colour a little into the background,
+     *  so big selected boxes don't glare (white becomes a light grey, gold a calmer gold); strong = the pure colour */
+    val soft get() = Prefs.long("look_focus_soft", 0) == 0L
+    private fun softened(c: Color): Color = if (!soft) c else lerp(c, palette().bg, if (IsLight) 0.22f else 0.3f)
+
     /** accent colour with the chosen shade; black-and-white theme uses white */
-    val Red: Color
+    val Red: Color get() = softened(pureRed)
+    private val pureRed: Color
         get() {
             if (Look.theme == "bw" || Look.theme == "vece") return Color.White
             Look.FIXED[Look.theme]?.let { return it.first }
@@ -184,7 +191,8 @@ object C {
             }
         }
     /** text drawn on top of the accent colour */
-    val OnRed get() = Look.FIXED[Look.theme]?.second ?: if (Look.theme == "bw" || Look.theme == "vece" || Look.theme == "pijesak") Color.Black else Color.White  // staklo/pijesak: black accent, white text
+    val OnRed get() = if (soft) (if (Red.luminance() > 0.4f) Color(0xFF111111) else Color.White)
+        else Look.FIXED[Look.theme]?.second ?: if (Look.theme == "bw" || Look.theme == "vece" || Look.theme == "pijesak") Color.Black else Color.White  // staklo/pijesak: black accent, white text
     val RedText get() = if (Look.theme == "classic" || Look.theme == "papir") (if (IsLight) Color(0xFF1E3A8A) else Color.White) else if (Look.FIXED.containsKey(Look.theme)) Red else if (Look.theme == "bw" || Look.theme == "vece") Color.White else if (Look.theme == "pijesak") Color(0xFFE0B25C) else lerp(Red, if (IsLight) Color.Black else Color.White, if (IsLight) 0.2f else 0.35f)
     val CardFocus get() = if (Look.theme == "dew") Color(0x40FFFFFF) else Red.copy(alpha = 0.18f)
     val Green get() = if (IsLight) Color(0xFF15803D) else Color(0xFF4ADE80)

@@ -1819,8 +1819,27 @@ private fun LookV2(openSub: (String) -> Unit) {
             SetDrop("Veličina male slike", "u listi kanala · veća slika = više opisa emisije", listOf("Mala", "Srednja", "Velika"), Prefs.long("tv_mini", 1).toInt().coerceIn(0, 2)) {
                 Prefs.put("tv_mini", it.toLong()); rev++
             }
-            SetDrop("Broj kanala na ekranu", "u listi kanala · uvijek cijeli redovi", listOf("Automatski", "4", "5", "6", "7"), Prefs.long("tv_rows", 0).toInt().let { n -> if (n in 4..7) n - 3 else 0 }) {
+            SetDrop("Prikaz liste kanala", "u TV-u i u listi u playeru · TiviMate mod = grupe lijevo, kanali s programom po satima", listOf("Kompaktni", "Normalni", "Veliki", "TiviMate mod"), ListStyle.mode, new = true) {
+                Prefs.put("tv_density", it.toLong())
+                Prefs.put("tv_view", if (it == 3) "guide" else "list"); rev++
+            }
+            SetDrop("Broj kanala na ekranu", "Automatski = prema prikazu liste · uvijek cijeli redovi", listOf("Automatski", "4", "5", "6", "7", "8", "9"), Prefs.long("tv_rows", 0).toInt().let { n -> if (n in 4..9) n - 3 else 0 }) {
                 Prefs.put("tv_rows", if (it == 0) 0L else (it + 3).toLong()); rev++
+            }
+            SetDrop("Boja odabranog", "u svim temama · blaga = ne bliješti", listOf("Blaga", "Jaka"), Prefs.long("look_focus_soft", 0).toInt().coerceIn(0, 1), new = true) {
+                Prefs.put("look_focus_soft", it.toLong()); rev++
+            }
+            SetDrop("Odabrani kanal", "kako se ističe red na kojem stojiš", listOf("Okvir (mirno)", "Puna boja"), Prefs.long("tv_focus", 0).toInt().coerceIn(0, 1), new = true) {
+                Prefs.put("tv_focus", it.toLong()); rev++
+            }
+            SetSwitch("Emisije široke po trajanju", "kratka epizoda uža, dug film širi", Prefs.bool("tv_prop", true)) { Prefs.put("tv_prop", it); rev++ }
+            SetSwitch("Oznaka arhive ↺", "kanali na kojima možeš gledati unazad", Prefs.bool("tv_archmark", true)) { Prefs.put("tv_archmark", it); rev++ }
+            SetSwitch("Skok brojem kanala", "ukucaj broj na daljinskom (npr. 7) i odmah si na kanalu", Prefs.bool("tv_digits", true)) { Prefs.put("tv_digits", it); rev++ }
+            SetDrop("Upute na ekranu", "npr. ◀ ▶ program · OK podsjeti me", listOf("Nekoliko sekundi pa nestanu", "Uvijek", "Isključene"), Prefs.long("tv_hints", 0).toInt().coerceIn(0, 2), new = true) {
+                Prefs.put("tv_hints", it.toLong()); rev++
+            }
+            SetDrop("Oznake u gornjoj traci", "Lite/Full i A/S pored Postavki", listOf("Samo ikone", "Obojeni kvadrati"), Prefs.long("bar_badges", 0).toInt().coerceIn(0, 1), new = true) {
+                Prefs.put("bar_badges", it.toLong()); rev++
             }
             SetDrop("TV se otvara kao", null, listOf("Lista kanala", "TV vodič"), if (Prefs.str("tv_view", "list") == "guide") 1 else 0) {
                 Prefs.put("tv_view", if (it == 1) "guide" else "list"); rev++
@@ -1878,6 +1897,7 @@ private fun PlayerV2(openSub: (String) -> Unit) {
                 rev++
             }
             SetDrop("Veličina titla", null, listOf("Mala", "Srednja", "Velika", "Vrlo velika"), Prefs.str("sub_size", "1").toIntOrNull() ?: 1, new = true) { Prefs.put("sub_size", it.toString()); rev++ }
+            SetSwitch("Titlovi se pomjeraju uz listu", "kad je otvorena lista kanala ili vodič, titl ide u slobodni dio slike", Prefs.bool("sub_shift", true)) { Prefs.put("sub_shift", it); rev++ }
             SetDrop("Izgled titla", null, listOf("Sjena", "Okvir", "Tamna pozadina"), Prefs.str("sub_style", "0").toIntOrNull() ?: 0, new = true) { Prefs.put("sub_style", it.toString()); rev++ }
             SetRow("Kašnjenje titla", "u plejeru: meni › Podesi vrijeme titla · SYNC popravi cijeli fajl", tr("u plejeru"), new = true) {}
             SetSection("Zvuk")

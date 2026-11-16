@@ -77,6 +77,14 @@ object Preview {
 }
 
 /** Row heights from Settings › Appearance › Row size. */
+/** Style of the channel lists (TV and the list in the player): 0 compact (default), 1 normal, 2 large,
+ *  3 TiviMate mode (TV opens as the guide grid: groups left, channels with their shows by time, no small picture). */
+object ListStyle {
+    val mode get() = Prefs.long("tv_density", 0).toInt().coerceIn(0, 3)
+    val tivimate get() = mode == 3
+    val sideRow get() = when (mode) { 1 -> 52.dp; 2 -> 62.dp; else -> 42.dp }
+}
+
 object Rows {
     val channel get() = when (Look.rowSize) { 0 -> 46.dp; 2 -> 60.dp; else -> 52.dp }
     val group get() = when (Look.rowSize) { 0 -> 36.dp; 2 -> 44.dp; else -> 40.dp }
@@ -176,7 +184,7 @@ suspend fun groupRows(ctx: android.content.Context): List<GRow> {
 fun TvScreen(nav: Nav) {
     val ctx = LocalContext.current
     if (Store.actives(ctx).isEmpty()) { NoPlaylist(nav); return }
-    var guide by remember { mutableStateOf(Prefs.str("tv_view", "list") == "guide") }
+    var guide by remember { mutableStateOf(ListStyle.tivimate || Prefs.str("tv_view", "list") == "guide") }
     if (guide) TvGuide(nav) { guide = false; Prefs.put("tv_view", "list") }
     else if (Look.age) OnyxTv(nav) { guide = true; Prefs.put("tv_view", "guide") }
     else TvList(nav) { guide = true; Prefs.put("tv_view", "guide") }
@@ -306,6 +314,21 @@ fun TvDialogs(st: TvState, rows: Load<List<GRow>>) {
 /** Opens a group (after the PIN when locked). */
 /** The channel shown in the small picture when the preview starts on OK. */
 object PreviewSel { var ch by mutableStateOf<Channel?>(null) }
+
+/** Hints on the screen (Settings › Appearance): 0 a few seconds, then they go · 1 always · 2 never. */
+object Hints {
+    val mode get() = Prefs.long("tv_hints", 0).toInt()
+    val always get() = mode == 1
+    /** when the hint line of a screen was first shown */
+    var since by mutableStateOf(0L)
+    @Composable fun show(key: Any? = Unit): Boolean {
+        if (mode == 2) return false
+        if (mode == 1) return true
+        var vis by remember(key) { mutableStateOf(true) }
+        LaunchedEffect(key) { vis = true; delay(6_000); vis = false }
+        return vis
+    }
+}
 
 /** Repeated text from some providers ("A. B. A. B.") shown once. */
 fun cleanDesc(s: String?): String? {
@@ -1082,6 +1105,8 @@ fun PreviewBox(ch: Channel?, modifier: Modifier) {
         androidx.compose.ui.viewinterop.AndroidView(factory = { v ->
             androidx.media3.ui.PlayerView(v).apply {
                 this.player = player; useController = false; isFocusable = false
+                // a channel playing in the small picture keeps the TV awake (no Android screen saver either)
+                keepScreenOn = true
                 setShutterBackgroundColor(android.graphics.Color.BLACK)
                 descendantFocusability = android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
             }
@@ -1126,7 +1151,7 @@ fun EpgList(ch: Channel, limit: Int = 12, modifier: Modifier = Modifier) {
                             T(e.times(), 12.sp, if (now) C.RedText else C.Muted, FontWeight.SemiBold)
                             if (now) Chip("SADA", C.Red, C.OnRed)
                             if (rem) { Ico(R.drawable.lc_bell, 14.dp, C.Amber); T("OK = ukloni podsjetnik", 11.sp, C.Amber) }
-                            if (!now && !rem) T("OK = podsjeti me", 11.sp, C.Muted)
+                            if (!now && !rem && Hints.always) T("OK = podsjeti me", 11.sp, C.Muted)
                         }
                         T(e.title, 15.sp, C.Text, FontWeight.Medium, maxLines = 2)
                         if (now) {

@@ -506,3 +506,12 @@ tmdb_key
 d. MMM
 tv_mini
 tv_rows
+tv_focus
+tv_prop
+tv_archmark
+tv_digits
+tv_hints
+bar_badges
+sub_shift
+tv_density
+look_focus_soft

@@ -238,11 +238,15 @@ fun SaverV2() {
 
 /** Over every screen except the player: the menus' screen saver and the preview from Settings. */
 @Composable
-fun MenuSaver(inPlayer: Boolean) {
-    LaunchedEffect(inPlayer) {
+fun MenuSaver(inPlayer: Boolean, onHome: Boolean = false) {
+    LaunchedEffect(inPlayer, onHome) {
         while (true) {
             delay(5_000)
-            if (!inPlayer && Saver.on && Saver.inMenus && !Saver.showing && System.currentTimeMillis() - Saver.lastKey > Saver.delayMs) Saver.showing = true
+            // only on Home with nothing going on – never while a channel plays (small picture or full screen);
+            // in the player the saver comes only after a pause (see ScreenSaver)
+            val playing = runCatching { Preview.player?.isPlaying == true }.getOrDefault(false)
+            if (!inPlayer && onHome && !playing && Saver.on && Saver.inMenus && !Saver.showing &&
+                System.currentTimeMillis() - Saver.lastKey > Saver.delayMs) Saver.showing = true
         }
     }
     val ctx = LocalContext.current

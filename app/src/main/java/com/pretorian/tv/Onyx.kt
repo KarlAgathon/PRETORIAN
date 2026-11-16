@@ -922,9 +922,13 @@ object HomeCache {
 fun ModeBadges(simple: Boolean, onOpen: () -> Unit) {
     val lite = Perf.lite
     val c = if (lite) Color(0xFFFBBF24) else Color(0xFF22C55E)
+    // Settings › Appearance › "Marks in the top bar": quiet icons like the rest of the bar (default) or the old coloured squares
+    val boxed = Prefs.long("bar_badges", 0) == 1L
     @Composable fun badge(color: Color, content: @Composable BoxScope.() -> Unit) {
-        Focusable(onClick = { if (!simple) onOpen() }, shape = Rnd(9.dp), normal = color.copy(alpha = 0.16f), focused = C.Red, zoom = 1.06f,
+        if (boxed) Focusable(onClick = { if (!simple) onOpen() }, shape = Rnd(9.dp), normal = color.copy(alpha = 0.16f), focused = C.Red, zoom = 1.06f,
             modifier = Modifier.size(30.dp).border(1.dp, color.copy(alpha = 0.55f), Rnd(9.dp))) { _ -> content() }
+        else Focusable(onClick = { if (!simple) onOpen() }, shape = CircleShape, normal = Color.Transparent, focused = C.CardHi, zoom = 1.06f,
+            modifier = Modifier.size(30.dp)) { _ -> content() }
     }
     badge(c) {
         androidx.compose.foundation.Canvas(Modifier.size(18.dp).align(Alignment.Center)) {

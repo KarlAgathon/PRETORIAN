@@ -389,7 +389,7 @@ fun PretorianApp() {
             UpdateAskDialog(nav)
             CrashGuardDialog(nav)
             GoalNoteOverlay()
-            MenuSaver(inPlayer = top is Screen.Player)
+            MenuSaver(inPlayer = top is Screen.Player, onHome = top is Screen.Home)
         }
     }
     }

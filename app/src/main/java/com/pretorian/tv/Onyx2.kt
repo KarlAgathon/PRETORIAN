@@ -28,6 +28,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -336,6 +337,20 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
     val state by load(g.key, listRev, Favs.rev, keep = true) { channelsOf(ctx, g) }
     var menu by remember { mutableStateOf<Channel?>(null) }
     val cWrap = remember { Wrap() }
+    // Settings › Appearance: look of the picked row, widths by duration, archive mark, jump by number
+    val solid = Prefs.long("tv_focus", 0) == 1L
+    val prop = Prefs.bool("tv_prop", true)
+    val archMark = Prefs.bool("tv_archmark", true)
+    val digitsOn = Prefs.bool("tv_digits", true)
+    var typed by remember { mutableStateOf("") }
+    LaunchedEffect(typed) {
+        if (typed.isEmpty()) return@LaunchedEffect
+        delay(1500)
+        val n = typed.toIntOrNull(); typed = ""
+        val list = (state as? Load.Ok)?.value ?: return@LaunchedEffect
+        val at = list.indexOfFirst { it.num == n }
+        if (at >= 0) cWrap.target = at
+    }
     val cState = rememberLazyListState()
     WrapEffect(cWrap, cState)
     Column(Modifier.fillMaxSize().padding(top = 12.dp, start = 12.dp, end = 12.dp, bottom = 10.dp)) {
@@ -357,11 +372,22 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                     val gapPx = with(density) { 3.dp.roundToPx() }
                     fun fit(rowDp: Int) = ((hPx + gapPx) / (with(density) { rowDp.dp.roundToPx() } + gapPx)).coerceAtLeast(1)
                     val want = Prefs.long("tv_rows", 0).toInt()
-                    val nRows = if (want in 4..7) want.coerceAtMost(fit(40)) else fit(50)
+                    // "Automatic" follows the list style: compact (default, like TiviMate), normal or large
+                    val nRows = if (want in 4..9) want.coerceAtMost(fit(32)) else fit(when (ListStyle.mode) { 1 -> 50; 2 -> 64; else -> 38 })
                     val rowPx = ((hPx - (nRows - 1) * gapPx) / nRows).coerceAtLeast(1)
                     val rowH = with(density) { rowPx.toDp() }
                     val listH = with(density) { (nRows * rowPx + (nRows - 1) * gapPx).toDp() }
-                    LazyColumn(Modifier.fillMaxWidth().height(listH), state = cState, verticalArrangement = Arrangement.spacedBy(with(density) { gapPx.toDp() })) {
+                    // digits on the remote: jump to that channel number (small box top right while typing)
+                    if (typed.isNotEmpty()) Box(Modifier.align(Alignment.TopEnd).padding(8.dp).zIndex(2f).clip(Rnd(10.dp)).background(C.Red).padding(horizontal = 14.dp, vertical = 6.dp)) {
+                        T(typed, 22.sp, C.OnRed, FontWeight.ExtraBold)
+                    }
+                    LazyColumn(Modifier.fillMaxWidth().height(listH).onPreviewKeyEvent { e ->
+                        if (!digitsOn || e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                        val d = when (e.key) { Key.Zero, Key.NumPad0 -> 0; Key.One, Key.NumPad1 -> 1; Key.Two, Key.NumPad2 -> 2; Key.Three, Key.NumPad3 -> 3
+                            Key.Four, Key.NumPad4 -> 4; Key.Five, Key.NumPad5 -> 5; Key.Six, Key.NumPad6 -> 6; Key.Seven, Key.NumPad7 -> 7
+                            Key.Eight, Key.NumPad8 -> 8; Key.Nine, Key.NumPad9 -> 9; else -> -1 }
+                        if (d < 0) false else { if (typed.length < 4) typed += d; true }
+                    }, state = cState, verticalArrangement = Arrangement.spacedBy(with(density) { gapPx.toDp() })) {
                     itemsIndexed(list, key = { i, ch -> "$i${ch.url}" }) { i, ch ->
                         val ovr = remember(ch.pid, g.pid) { Ovr(ctx, ch.pid.ifBlank { g.pid ?: "" }) }
                         val locked = ovr.isChLocked(ch)
@@ -393,18 +419,21 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                                 }
                             },
                             onMenu = { menu = ch }, onFocus = { rowFocused = true; onFocusCh(ch) }, focusRequester = cWrap.requester(i),
-                            normal = Color.Transparent, focused = C.Red, zoom = 1.01f) { f ->
+                            normal = Color.Transparent, focused = if (solid) C.Red else C.CardHi, zoom = 1.01f) { f ->
+                            // "frame" look (default): a calm light row with a thin theme-colour frame; "full colour" fills the row
+                            val hl = f && solid
+                            if (f && !solid) Box(Modifier.matchParentSize().border(2.dp, C.Red, Rnd(12.dp)))
                             val now = nowOf(ch)
                             Row(Modifier.fillMaxSize().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                T("${ch.num}", 11.sp, if (f) C.OnRed.copy(alpha = 0.6f) else C.Muted, modifier = Modifier.width(26.dp), align = androidx.compose.ui.text.style.TextAlign.End)
-                                ChannelLogo(ch, 34.dp, onLight = f)
+                                T("${ch.num}", 11.sp, if (hl) C.OnRed.copy(alpha = 0.6f) else C.Muted, modifier = Modifier.width(26.dp), align = androidx.compose.ui.text.style.TextAlign.End)
+                                ChannelLogo(ch, 34.dp, onLight = hl)
                                 if (wide) {
                                     // name, then now · next · later across the row
-                                    T(ovr.chName(ch), 13.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, maxLines = 2, modifier = Modifier.width(210.dp))
+                                    T(ovr.chName(ch), 13.sp, if (hl) C.OnRed else C.Text, FontWeight.SemiBold, maxLines = 2, modifier = Modifier.width(210.dp))
                                     val hm = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())  // i18n-ignore
                                     Row(Modifier.weight(1f).fillMaxHeight().padding(vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        if (nx.isNullOrEmpty()) Box(Modifier.weight(1f).fillMaxHeight().clip(Rnd(8.dp)).background(if (f) Color.Black.copy(alpha = 0.12f) else C.Card), contentAlignment = Alignment.CenterStart) {
-                                            T(now?.title ?: if (nx == null) "Učitavam…" else "Bez programa", 12.sp, if (f) C.OnRed.copy(alpha = 0.7f) else C.Muted, modifier = Modifier.padding(horizontal = 10.dp))
+                                        if (nx.isNullOrEmpty()) Box(Modifier.weight(1f).fillMaxHeight().clip(Rnd(8.dp)).background(if (hl) Color.Black.copy(alpha = 0.12f) else C.Card), contentAlignment = Alignment.CenterStart) {
+                                            T(now?.title ?: if (nx == null) "Učitavam…" else "Bez programa", 12.sp, if (hl) C.OnRed.copy(alpha = 0.7f) else C.Muted, modifier = Modifier.padding(horizontal = 10.dp))
                                         }
                                         // "now" always stays in the first box; the two boxes after it slide through the later shows
                                         val shown = when {
@@ -416,26 +445,33 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                                             val e = nx!![k]
                                             val isNow = k == 0 && e.start <= System.currentTimeMillis()
                                             val isSel = f && k == c
-                                            Column(Modifier.weight(if (kk == 0) 1.4f else 1f).fillMaxHeight().clip(Rnd(8.dp))
-                                                .background(if (isSel) C.Bg.copy(alpha = 0.85f) else if (f) Color.Black.copy(alpha = if (isNow) 0.18f else 0.1f) else if (isNow) C.CardHi else C.Card)
-                                                .then(if (isSel) Modifier.border(2.dp, C.Bg, Rnd(8.dp)) else Modifier).padding(horizontal = 9.dp, vertical = 3.dp),
+                                            // widths follow how long each show runs (a 20-minute episode is narrower than a 2-hour film)
+                                            val w = if (prop) {
+                                                val from = maxOf(e.start, System.currentTimeMillis())
+                                                ((e.end - from) / 1_800_000f).coerceIn(0.7f, 2.6f)
+                                            } else if (kk == 0) 1.4f else 1f
+                                            Column(Modifier.weight(w).fillMaxHeight().clip(Rnd(8.dp))
+                                                .background(if (isSel && !solid) C.Red else if (isSel) C.Bg.copy(alpha = 0.85f) else if (hl) Color.Black.copy(alpha = if (isNow) 0.18f else 0.1f) else if (isNow) C.CardHi else C.Card)
+                                                .then(if (isSel && solid) Modifier.border(2.dp, C.Bg, Rnd(8.dp)) else Modifier).padding(horizontal = 9.dp, vertical = 3.dp),
                                                 verticalArrangement = Arrangement.Center) {
                                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                    if (Reminders.has(e.title, e.start)) Ico(R.drawable.lc_bell, 11.dp, if (isSel) C.Amber else if (f) C.OnRed else C.Amber)
+                                                    if (Reminders.has(e.title, e.start)) Ico(R.drawable.lc_bell, 11.dp, if (isSel) C.Amber else if (hl) C.OnRed else C.Amber)
                                                     T((if (isNow) "" else hm.format(java.util.Date(e.start)) + "  ") + e.title, 12.sp,  // i18n-ignore
-                                                        if (isSel) C.Text else if (f) C.OnRed else if (isNow) C.Text else C.Soft, if (isNow || isSel) FontWeight.SemiBold else FontWeight.Normal)
+                                                        if (isSel && !solid) C.OnRed else if (isSel) C.Text else if (hl) C.OnRed else if (isNow) C.Text else C.Soft, if (isNow || isSel) FontWeight.SemiBold else FontWeight.Normal)
                                                 }
-                                                if (isNow) ThinBar(e.progress(), if (f) C.OnRed else C.RedText, Modifier.fillMaxWidth().padding(top = 3.dp))
+                                                if (isNow) ThinBar(e.progress(), if (hl) C.OnRed else C.RedText, Modifier.fillMaxWidth().padding(top = 3.dp))
                                             }
                                         }
                                     }
                                 } else Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                                    T(ovr.chName(ch), 13.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold)
-                                    T(now?.title ?: " ", 11.sp, if (f) C.OnRed.copy(alpha = 0.65f) else C.Muted)
-                                    if (now != null) ThinBar(now.progress(), if (f) C.OnRed else C.RedText, Modifier.fillMaxWidth())
+                                    T(ovr.chName(ch), 13.sp, if (hl) C.OnRed else C.Text, FontWeight.SemiBold)
+                                    T(now?.title ?: " ", 11.sp, if (hl) C.OnRed.copy(alpha = 0.65f) else C.Muted)
+                                    if (now != null) ThinBar(now.progress(), if (hl) C.OnRed else C.RedText, Modifier.fillMaxWidth())
                                 }
-                                if (preview?.url == ch.url) Ico(R.drawable.lc_play, 13.dp, if (f) C.OnRed else C.Green)
-                                if (locked) Ico(R.drawable.lc_lock, 13.dp, if (f) C.OnRed else C.Muted)
+                                if (preview?.url == ch.url) Ico(R.drawable.lc_play, 13.dp, if (hl) C.OnRed else C.Green)
+                                if (locked) Ico(R.drawable.lc_lock, 13.dp, if (hl) C.OnRed else C.Muted)
+                                // the channel has an archive (catch-up): you can go back in time
+                                if (archMark && ch.archive > 0) T("↺", 14.sp, if (hl) C.OnRed else C.Soft, FontWeight.Bold)
                                 if (!isFav && Favs.inAny(ctx, ch)) T("★", 13.sp, Color(0xFFFF5A64))
                             }
                         }
@@ -494,7 +530,7 @@ private fun WideHeader(playing: Channel?, on: Channel?, pick: EpgItem?) {
             T(cur?.title ?: (if (epg is Load.Loading) "Učitavam program…" else c.name), 20.sp, C.Text, FontWeight.ExtraBold, maxLines = 1)
             cleanDesc(cur?.desc)?.let { T(it, 12.sp, C.Soft, maxLines = when (size) { 0 -> 2; 2 -> 6; else -> 4 }) }
             if (cur != null && cur.start <= nowT) ThinBar(cur.progress(), C.Text, Modifier.fillMaxWidth(0.6f), 3.dp)
-            T(if (pick != null) "◀ ▶ program · OK podsjeti me" else "◀ ▶ program · ◀ grupe · OK slika gore · OK još jednom cijeli ekran", 11.sp, C.Muted, maxLines = 1)
+            if (Hints.show()) T(if (pick != null) "◀ ▶ program · OK podsjeti me" else "◀ ▶ program · ◀ grupe · OK slika gore · OK još jednom cijeli ekran", 11.sp, C.Muted, maxLines = 1)
         }
     }
 }

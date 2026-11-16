@@ -2139,4 +2139,34 @@ Nema kanala %s u ovoj grupi|Нет канала %s в этой группе
 ◀ grupe · OK slika gore · OK još jednom cijeli ekran|◀ группы · OK картинка сверху · ещё раз OK весь экран
 ◀ ▶ program · OK podsjeti me|◀ ▶ программа · OK напомнить
 ◀ ▶ program · ◀ grupe · OK slika gore · OK još jednom cijeli ekran|◀ ▶ программа · ◀ группы · OK картинка сверху · ещё раз OK весь экран
+Prikaz liste kanala|Вид списка каналов
+u TV-u i u listi u playeru|в ТВ и в списке в плеере
+Kompaktni|Компактный
+Normalni|Обычный
+Automatski = prema prikazu liste · uvijek cijeli redovi|Автоматически = по виду списка · всегда целые строки
+Odabrani kanal|Выбранный канал
+kako se ističe red na kojem stojiš|как выделяется текущая строка
+Okvir (mirno)|Рамка (спокойно)
+Emisije široke po trajanju|Передачи шириной по длительности
+kratka epizoda uža, dug film širi|короткая серия уже, длинный фильм шире
+Oznaka arhive ↺|Значок архива ↺
+kanali na kojima možeš gledati unazad|каналы, которые можно смотреть в записи
+Skok brojem kanala|Переход по номеру канала
+ukucaj broj na daljinskom (npr. 7) i odmah si na kanalu|наберите номер на пульте (напр. 7) — и вы на канале
+Upute na ekranu|Подсказки на экране
+npr. ◀ ▶ program · OK podsjeti me|напр. ◀ ▶ программа · OK напомнить
+Nekoliko sekundi pa nestanu|Несколько секунд, потом исчезают
+Isključene|Выключены
+Oznake u gornjoj traci|Значки в верхней панели
+Lite/Full i A/S pored Postavki|Lite/Full и A/S рядом с Настройками
+Samo ikone|Только значки
+Obojeni kvadrati|Цветные квадраты
+Titlovi se pomjeraju uz listu|Субтитры сдвигаются рядом со списком
+kad je otvorena lista kanala ili vodič, titl ide u slobodni dio slike|при открытом списке или гиде субтитры уходят в свободную часть кадра
+u TV-u i u listi u playeru · TiviMate mod = grupe lijevo, kanali s programom po satima|в ТВ и списке плеера · режим TiviMate = группы слева, каналы с передачами по времени
+TiviMate mod|Режим TiviMate
+Boja odabranog|Цвет выделения
+u svim temama · blaga = ne bliješti|во всех темах · мягкий = не слепит
+Blaga|Мягкий
+Jaka|Яркий
 """.trimIndent()

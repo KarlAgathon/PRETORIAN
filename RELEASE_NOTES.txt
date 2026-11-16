@@ -1,16 +1,8 @@
-TV lista: nijedan kanal više nije presječen – ni gore ni dolje; redovi tačno popune prostor i uvijek se vidi cijeli naziv
-TV lista: mala slika gore lijevo je veća, a opis emisije duži (više redova)
-Postavke › Izgled: „Veličina male slike“ (mala / srednja / velika) i „Broj kanala na ekranu“ (automatski, 4–7)
-TV lista: gornji red više nikad nije presječen napola – lista uvijek stane na cijeli red
-TV lista: „sada“ uvijek ostaje u prvom polju dok strelicom desno ideš kroz kasnije emisije
-TV lista: linije napretka su iste boje u svim redovima (boja teme)
-Plejer: TV vodič se otvara preko slike – slika ostaje preko cijelog ekrana, bez crne praznine
-Meniji i liste u plejeru imaju ton izabrane teme (nema više plave na crnoj ili pješčanoj temi)
-TV lista: strelice lijevo/desno idu kroz program kanala (sada → kasnije i nazad), gore se vidi opis izabrane emisije, OK na kasnijoj = podsjetnik; lijevo s „sada“ vraća grupe
-Plejer: Back radi kao strelica lijevo – kanali → grupe → nazad u TV
-TV lista: manji gornji dio (više kanala), prazna polja pišu „Učitavam…“ ili „Bez programa“
-„Zadnje gledano“ se prikazuje samo na Početnoj, više ne ispod TV-a
-TV lista: kad uđeš u kanale grupe nestanu, gore lijevo je mala slika i opis emisije, a svaki kanal pokazuje sada · sljedeće · kasnije; lijevo vraća grupe (kanali se zatamne)
-Plejer: lista kanala i grupa se više ne zaglavi (fokus se uvijek vrati na listu, i kad se lista sporo učita)
-Plejer: lista grupe (lijevo pa još lijevo) se više ne zaglavi – fokus odmah stoji na tvojoj grupi i možeš ići kroz grupe
-TV vodič (mreža): traka DAN/VRIJEME, brojevi za kanal, CH▲▼ stranica, držanje ◀ = Sada, arhiva unazad, grupe se sklapaju
+Sve teme: odabrano polje je blaže (bijela postaje svijetlo siva, zlatna mirnija) – Postavke › Izgled › „Boja odabranog“ (Blaga / Jaka)
+TV lista: odabrani kanal je miran red s tankim okvirom u boji teme, a samo odabrana emisija je u boji (ili stara „Puna boja“)
+TV lista: „Prikaz liste kanala“ – Kompaktni (novo, kao TiviMate), Normalni, Veliki ili TiviMate mod (grupe lijevo, kanali s programom po satima, bez male slike); vrijedi i za listu u plejeru
+TV lista: emisije su široke koliko traju; ↺ kod kanala s arhivom; ukucaj broj kanala na daljinskom i odmah si na njemu; do 9 kanala na ekranu
+Upute na ekranu nestanu nakon nekoliko sekundi (ili uvijek / nikad); „OK = podsjeti me“ više ne piše na svakoj kartici
+Gornja traka: Lite/Full i A/S su mirne ikone kao ostale (ili stari obojeni kvadrati)
+Plejer: kad je otvorena lista ili vodič, titl ide u slobodni dio slike i više se ne siječe
+Čuvar ekrana više se ne pali dok kanal ide (mala slika ili cijeli ekran) – samo na Početnoj kad ništa ne radiš ili kad pauziraš film/seriju
