@@ -40,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -245,6 +246,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     var nowNext by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
     var dialog by remember { mutableStateOf<String?>(null) }   // menu, audio, subs, info, fav, ext
     var side by remember { mutableStateOf<String?>(null) }     // channels, groups, epg (live only)
+    // the player owns the focus: a left menu that held it before must not block the lists here
+    remember { Chrome.inRail = false; 0 }
     var sideGroup by remember { mutableStateOf<GroupRef?>(null) }
     var resume by remember { mutableStateOf<Progress?>(null) }
     var bar by remember { mutableStateOf(false) }   // button bar at the bottom
@@ -943,8 +946,12 @@ private fun SideLists(mode: String, sideGroup: GroupRef?, items: List<PlayItem>,
                       onGroups: () -> Unit, onClose: () -> Unit, onGroup: (GroupRef) -> Unit, onChannel: (List<Channel>, Int) -> Unit) {
     val ctx = LocalContext.current
     val fr = remember { FocusRequester() }
+    var has by remember { mutableStateOf(false) }
+    // a slow list can come after the first focus try: keep trying for a few seconds until the panel holds the focus
+    LaunchedEffect(mode) { repeat(30) { delay(200); if (!has) try { fr.requestFocus() } catch (_: Exception) {} } }
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxHeight().width(380.dp).background(C.Overlay).padding(horizontal = 16.dp, vertical = 20.dp)
+            .onFocusChanged { has = it.hasFocus }
             .onPreviewKeyEvent { e ->
                 if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 when (e.key) {

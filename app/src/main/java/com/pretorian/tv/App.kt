@@ -448,6 +448,8 @@ fun Rail(current: Screen, nav: Nav) {
     // one look everywhere: icon with the name under it
     val width = 96.dp
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    // the menu can vanish while it holds the focus (a channel starts): never leave "in the menu" behind, it blocks every focus request
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { Chrome.inRail = false } }
     // a section opens only on OK; moving through the menu changes nothing (the last one you clicked stays open)
     Column(
         Modifier.width(width).fillMaxHeight().background(C.Rail).padding(vertical = 14.dp)
