@@ -336,7 +336,7 @@ class Xtream(private val p: Playlist) {
             }
             val r = android.util.JsonReader(java.io.InputStreamReader(input, Charsets.UTF_8))
             r.isLenient = true
-            if (r.peek() != android.util.JsonToken.BEGIN_ARRAY) return@open
+            if (r.peek() != android.util.JsonToken.BEGIN_ARRAY) return@openLen
             r.beginArray()
             while (r.hasNext()) {
                 if (r.peek() != android.util.JsonToken.BEGIN_OBJECT) { r.skipValue(); continue }
