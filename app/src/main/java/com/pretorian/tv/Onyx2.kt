@@ -746,6 +746,8 @@ fun BulkEditor(nav: Nav) {
     var moveTo by remember { mutableStateOf(false) }
     var rename by remember { mutableStateOf<Channel?>(null) }
     var menu by remember { mutableStateOf<Category?>(null) }
+    // filter: all, only the shown ones, only the hidden ones (to see at once what you hid and edit it)
+    var filter by remember { mutableIntStateOf(0) }
     LaunchedEffect(tab) { selG.clear(); selC.clear(); cur = null }
     fun done() { rev++; changed[0] = true }
     fun reorder(ids: List<String>, sel: List<String>, how: String): List<String> {
@@ -783,6 +785,8 @@ fun BulkEditor(nav: Nav) {
                 T(tr("Playliste") + " › " + p.name, 10.sp, C.Muted)
                 T("Uređivanje grupa i kanala", 19.sp, C.Text, FontWeight.Bold)
             }
+            Segmented(listOf("Sve", "Prikazane", "Sakrivene"), filter) { filter = it; selG.clear(); selC.clear() }
+            Spacer(Modifier.width(10.dp))
             Segmented(listOf("TV", "Filmovi", "Serije"), tab) { tab = it }
         }
         // what you can do with the ticked rows
@@ -816,7 +820,10 @@ fun BulkEditor(nav: Nav) {
                     ToolBtn("Prikaži sve", R.drawable.lc_eye) { ovr.setHidden(kind, groups.map { it.id }, false); done() }
                 }
                 if (st is Load.Loading && groups.isEmpty()) Loading("") else LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
-                    itemsIndexed(groups, key = { _, g -> g.id }) { i, g ->
+                    val shownGroups = when (filter) { 1 -> groups.filter { !ovr.isHidden(kind, it.id) }; 2 -> groups.filter { ovr.isHidden(kind, it.id) }; else -> groups }
+                    if (shownGroups.isEmpty()) item { T(if (filter == 2) "Nema sakrivenih grupa" else "Nema grupa", 12.sp, C.Muted) }
+                    itemsIndexed(shownGroups, key = { _, g -> g.id }) { _, g ->
+                        val i = groups.indexOf(g)
                         val on = g.id in selG
                         val hidden = ovr.isHidden(kind, g.id)
                         Focusable(onClick = { if (on) selG.remove(g.id) else { selC.clear(); selG.add(g.id) } }, onFocus = { focusG = g }, onMenu = { menu = g },
@@ -843,7 +850,10 @@ fun BulkEditor(nav: Nav) {
                     }
                 }
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
-                    itemsIndexed(chans, key = { i, c -> "$i${c.url}" }) { i, c ->
+                    val shownChans = when (filter) { 1 -> chans.filter { !ovr.isChHidden(it) }; 2 -> chans.filter { ovr.isChHidden(it) }; else -> chans }
+                    if (cur != null && shownChans.isEmpty()) item { T(if (filter == 2) "Nema sakrivenih kanala" else "Nema kanala", 12.sp, C.Muted) }
+                    itemsIndexed(shownChans, key = { j, c -> "$j${c.url}" }) { _, c ->
+                        val i = chans.indexOf(c)
                         val on = c.url in selC
                         val hidden = ovr.isChHidden(c)
                         Focusable(onClick = { if (on) selC.remove(c.url) else { selG.clear(); selC.add(c.url) } }, shape = Rnd(12.dp),

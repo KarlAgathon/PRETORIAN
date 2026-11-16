@@ -2072,4 +2072,10 @@ S playlistom|Вместе с плейлистом
 Svakih 12 h|Каждые 12 ч
 Svaka 24 h|Каждые 24 ч
 Razvuci|Растянуть
+Prikazane|Показанные
+Sakrivene|Скрытые
+Nema sakrivenih grupa|Нет скрытых групп
+Nema grupa|Нет групп
+Nema sakrivenih kanala|Нет скрытых каналов
+Nema kanala|Нет каналов
 """.trimIndent()
