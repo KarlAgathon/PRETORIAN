@@ -241,8 +241,9 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
         Column(Modifier.fillMaxSize().padding(top = 16.dp, start = 12.dp, end = 4.dp)) {
             // ---------------------------------------------------------------- picture and show
             val cur = current()
-            val noPic = ListStyle.tivimate || (Perf.lite && !Prefs.bool("lite_preview")) || (Look.previewMode == 1 && PreviewSel.ch == null) || Look.previewMode == 0
-            Row(Modifier.fillMaxWidth().height(if (noPic) 104.dp else 150.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+            val tmPic = ListStyle.tivimate && !(Perf.lite && !Prefs.bool("lite_preview")) && (Look.previewMode == 2 || (Look.previewMode == 1 && PreviewSel.ch != null))
+            val noPic = !tmPic && (ListStyle.tivimate || (Perf.lite && !Prefs.bool("lite_preview")) || (Look.previewMode == 1 && PreviewSel.ch == null) || Look.previewMode == 0)
+            Row(Modifier.fillMaxWidth().height(if (noPic) 104.dp else if (tmPic) 128.dp else 150.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                 // TiviMate mode: no small picture, the show fills the top
                 when (if (ListStyle.tivimate || (Perf.lite && !Prefs.bool("lite_preview"))) 0 else Look.previewMode) {
                     2 -> PreviewBox(cur?.first, Modifier.height(146.dp))
@@ -262,7 +263,12 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
                         if (Reminders.has(pr.title, pr.start)) Ico(R.drawable.lc_bell, 15.dp, C.Amber)
                     }
                     cur?.first?.let { T(it.name, 13.sp, C.RedText, FontWeight.SemiBold) }
-                    cleanDesc(pr?.desc)?.let { T(it, 13.sp, C.Soft, maxLines = if (noPic) 2 else 4) }
+                    cleanDesc(pr?.desc)?.let { T(it, 13.sp, C.Soft, maxLines = if (noPic) 2 else 3) }
+                }
+                // TiviMate style: the small picture sits in the top right corner
+                if (tmPic) {
+                    val pc = if (Look.previewMode == 2) cur?.first else PreviewSel.ch
+                    if (pc != null) PreviewBox(pc, Modifier.height(124.dp).padding(end = 8.dp))
                 }
             }
             // ---------------------------------------------------------------- group · day · time
@@ -388,7 +394,7 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
                     }.focusable(interactionSource = src)) {
                     itemsIndexed(list, key = { i, c -> "$i${c.url}" }) { i, ch ->
                         val sel = i == row && focused
-                        Row(Modifier.fillMaxWidth().height(46.dp).padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().height(if (ListStyle.tivimate) 38.dp else 46.dp).padding(vertical = if (ListStyle.tivimate) 1.5.dp else 2.dp), verticalAlignment = Alignment.CenterVertically) {
                             Row(Modifier.width(nameW).fillMaxHeight().clip(Rnd(10.dp)).background(if (i == row) C.CardFocus else Color.Transparent)
                                 .padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 T("${ch.num}", 12.sp, if (i == row) C.RedText else C.Muted, modifier = Modifier.width(28.dp))
