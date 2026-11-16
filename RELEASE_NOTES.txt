@@ -1,5 +1,2 @@
-PRETORIAN 1.0.27 (beta)
-Početna: praćene utakmice i podsjetnici se više ne gube – Početna sama u pozadini osvježava današnje utakmice (najviše svakih 15 min), ne treba prvo otvoriti Sport
-TiviMate stil: prvi OK pokrene malu sliku gore desno i u Lite modu, drugi OK cijeli ekran
-TV lista: dugi OK na kasnijoj emisiji = samo Podsjeti me i Pomak vremena
-Naziv kanala uvijek u jednom redu (predug se skrati sa …)
+PRETORIAN 1.0.28 (beta)
+Trailer: TizenTube (i TizenTube Cobalt) i SmartTube se sada prepoznaju kad su instalirani
