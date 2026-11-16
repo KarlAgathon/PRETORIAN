@@ -223,6 +223,8 @@ fun OnyxTopBar(current: Screen, nav: Nav, simple: Boolean = false, firstFocus: F
                     if (Updater.available != null) 1 else 0), section == Screen.Settings, if (section == Screen.Settings) TopNav.fr else null, big = false) {
                     nav.root(Screen.Settings)
                 }
+                // what is on: Lite / Full gauge and S when simple mode is on (OK → Settings › Appearance › App mode)
+                ModeBadges(simple) { SettingsNav.section = "look"; nav.root(Screen.Settings) }
             }
             Spacer(Modifier.width(8.dp))
             T(SimpleDateFormat("HH:mm", Locale.getDefault()).format(now), 13.sp, C.Text, FontWeight.SemiBold)  // i18n-ignore
@@ -889,4 +891,27 @@ object HomeCache {
     var rev by mutableIntStateOf(0)
     val disc = java.util.concurrent.ConcurrentHashMap<String, Triple<List<Vod>, List<SeriesItem>, List<Channel>>>()
     fun clear() { if (disc.isNotEmpty()) { disc.clear(); rev++ } }
+}
+
+
+/** Small marks after Settings: a gauge (Lite = yellow, needle left · Full = green, needle right) and "S" while simple mode is on. */
+@Composable
+fun ModeBadges(simple: Boolean, onOpen: () -> Unit) {
+    val lite = Perf.lite
+    val c = if (lite) Color(0xFFFBBF24) else Color(0xFF22C55E)
+    @Composable fun badge(color: Color, content: @Composable BoxScope.() -> Unit) {
+        Focusable(onClick = { if (!simple) onOpen() }, shape = Rnd(9.dp), normal = color.copy(alpha = 0.16f), focused = C.Red, zoom = 1.06f,
+            modifier = Modifier.size(30.dp).border(1.dp, color.copy(alpha = 0.55f), Rnd(9.dp))) { _ -> content() }
+    }
+    badge(c) {
+        androidx.compose.foundation.Canvas(Modifier.size(18.dp).align(Alignment.Center)) {
+            val w = size.width; val st = androidx.compose.ui.graphics.drawscope.Stroke(width = w * 0.12f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            drawArc(c, 180f, 180f, false, topLeft = androidx.compose.ui.geometry.Offset(w * 0.1f, w * 0.25f),
+                size = androidx.compose.ui.geometry.Size(w * 0.8f, w * 0.8f), style = st)
+            val cx = w / 2; val cy = w * 0.65f
+            val ex = if (lite) cx - w * 0.28f else cx + w * 0.28f
+            drawLine(c, androidx.compose.ui.geometry.Offset(cx, cy), androidx.compose.ui.geometry.Offset(ex, cy - w * 0.3f), strokeWidth = w * 0.12f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+        }
+    }
+    if (simple) badge(Color(0xFF93C5FD)) { T("S", 13.sp, Color(0xFF93C5FD), FontWeight.ExtraBold, modifier = Modifier.align(Alignment.Center)) }  // i18n-ignore
 }

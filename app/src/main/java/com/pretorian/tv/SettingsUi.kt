@@ -1131,7 +1131,7 @@ private val SECTIONS2 = listOf(
     Section("update", R.drawable.lc_download, "Ažuriranje", "Nova verzija"),
     Section("about", R.drawable.lc_info, "O aplikaciji", "Uređaj, kontakt, licence"),
 )
-private val BASIC = setOf("profile", "playlists", "general", "home", "language", "parental", "kids", "update", "about")
+private val BASIC = setOf("profile", "playlists", "general", "home", "look", "language", "parental", "kids", "update", "about")
 
 /** Settings screen of the new look: sections on the left, the page on the right, sub-pages open inside. */
 @Composable

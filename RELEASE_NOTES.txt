@@ -4,3 +4,4 @@ Omiljeni timovi: lista s ✕ i „＋ Dodaj tim“ – koliko god timova, pretra
 Sport: u Favoritima i Pratim dugmad ＋ Države i ＋ Timovi
 Lite mod: na Početnoj nikad Najnoviji filmovi i serije
 Dijagnostika: kartice se prilagođavaju širini – veće ikone i brojevi u kolonama kad ima mjesta, manje kad je usko
+Gore iza Postavki: brzinomjer pokazuje mod – žuto Lite, zeleno Full; „S“ kad je uključen jednostavni mod; OK vodi u Izgled › Mod programa
