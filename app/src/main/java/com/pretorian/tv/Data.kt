@@ -252,6 +252,9 @@ class Xtream(private val p: Playlist) {
         Net.get("$base/player_api.php?username=${Net.enc(p.user)}&password=${Net.enc(p.pass)}" +
             (action?.let { "&action=$it" } ?: "") + extra)
 
+    /** slow servers (e.g. an editor in front of the provider): one more try before giving up */
+    private fun retry2(f: () -> JSONObject): JSONObject = try { f() } catch (e: Exception) { try { Thread.sleep(800); f() } catch (e2: Exception) { JSONObject() } }
+
     private fun array(text: String): JSONArray = try { JSONArray(text) } catch (e: Exception) { JSONArray() }
 
     fun login(): String {
@@ -413,7 +416,7 @@ class Xtream(private val p: Playlist) {
     }
 
     fun movieInfo(id: String): VodInfo {
-        val o = try { JSONObject(api("get_vod_info", "&vod_id=${Net.enc(id)}")) } catch (e: Exception) { JSONObject() }
+        val o = retry2 { JSONObject(api("get_vod_info", "&vod_id=${Net.enc(id)}")) }
         val i = o.optJSONObject("info") ?: JSONObject()
         val backdrop = i.optJSONArray("backdrop_path")?.let { if (it.length() > 0) it.optString(0) else null }
         return VodInfo(
@@ -439,7 +442,7 @@ class Xtream(private val p: Playlist) {
     }
 
     fun episodes(seriesId: String): List<Episode> {
-        val o = try { JSONObject(api("get_series_info", "&series_id=${Net.enc(seriesId)}")) } catch (e: Exception) { JSONObject() }
+        val o = retry2 { JSONObject(api("get_series_info", "&series_id=${Net.enc(seriesId)}")) }
         val eps = o.optJSONObject("episodes") ?: return emptyList()
         val out = ArrayList<Episode>()
         eps.keys().forEach { key ->
@@ -609,8 +612,14 @@ object Repo {
         if (p.type == SourceType.STALKER) Stalker(p).movies(groupId) else Xtream(p).movies(groupId)
     }.let { l -> if (!Parental.active) l else if (groupId in Parental.blocked(p, "vod")) emptyList() else l.filter { !Parental.hides(it.name) } }
 
-    suspend fun movieInfo(p: Playlist, id: String): VodInfo = cached("mi_${p.id}_$id") {
+    suspend fun movieInfo(p: Playlist, id: String): VodInfo = keepIf("mi_${p.id}_$id", { it.plot != null || it.year != null || it.genre != null }) {
         if (p.type == SourceType.STALKER) VodInfo(null, null, null, null, null, null, null, null) else Xtream(p).movieInfo(id)
+    }
+
+    /** like cached, but an empty answer (server busy) is not kept: the next opening asks again */
+    @Suppress("UNCHECKED_CAST")
+    private suspend fun <T> keepIf(key: String, ok: (T) -> Boolean, load: () -> T): T = withContext(Dispatchers.IO) {
+        (synchronized(cache) { cache[key] } as T?) ?: load().also { if (ok(it)) synchronized(cache) { cache[key] = it as Any } }
     }
 
     suspend fun seriesGroups(p: Playlist): List<Category> =
@@ -621,7 +630,7 @@ object Repo {
         if (p.type == SourceType.STALKER) Stalker(p).series(groupId) else Xtream(p).series(groupId)
     }.let { l -> if (!Parental.active) l else if (groupId in Parental.blocked(p, "series")) emptyList() else l.filter { !Parental.hides(it.name) } }
 
-    suspend fun episodes(p: Playlist, id: String): List<Episode> = cached("ep_${p.id}_$id") {
+    suspend fun episodes(p: Playlist, id: String): List<Episode> = keepIf("ep_${p.id}_$id", { l: List<Episode> -> l.isNotEmpty() }) {
         if (p.type == SourceType.STALKER) Stalker(p).episodes(id) else Xtream(p).episodes(id)
     }
 

@@ -1,3 +1,2 @@
-Playliste: „Osvježi sada“ odmah povuče sve sa servera (i prva opcija u izboru osvježavanja)
-Novi prekidač „Raspored grupa sa servera“: osvježavanje preuzme redoslijed i grupe iz IPTV Editora; ugašene grupe nestaju, tvoje sakrivene ostaju sakrivene
-Poslije osvježavanja TV i Početna se same učitaju iznova, bez restarta
+Opisi filmova, serija i epizoda: ako server odgovori sporo, aplikacija pokuša ponovo i više ne pamti prazan odgovor
+Postavke › Plejer: polje „TMDB ključ“ – opisi, plakati i glumci na tvom jeziku i kad ih server nema

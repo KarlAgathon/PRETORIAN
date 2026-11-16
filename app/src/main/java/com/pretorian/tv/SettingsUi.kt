@@ -719,6 +719,9 @@ private fun MediaPage() {
     fun masked(v: String) = if (v.isBlank()) tr("Nije upisan") else "••••" + v.takeLast(4)
     key(rev) {
         Page("Plejer", "Zvuk, titlovi, premotavanje, eksterni plejer. Podaci o filmovima i titlovi s interneta rade bez ključeva.") {
+            Label("Opisi filmova i serija")
+            OptionRow("TMDB ključ", R.drawable.lc_film, sub = tr("opisi, plakati i glumci na tvom jeziku, i kad ih server nema · besplatno na themoviedb.org"),
+                value = if (Prefs.tmdbKey.isBlank()) tr("Nije upisan") else (if (Prefs.str("tmdb_key").isBlank()) tr("ugrađen") else masked(Prefs.str("tmdb_key")))) { edit = "tmdb" }
             Label("Titlovi")
             OptionRow("Jezici titla", R.drawable.lc_captions, value = langList(Prefs.subLangs)) { edit = "sublangs" }
             ToggleRow("Automatski uključi titl", Prefs.autoSubs, R.drawable.lc_captions,

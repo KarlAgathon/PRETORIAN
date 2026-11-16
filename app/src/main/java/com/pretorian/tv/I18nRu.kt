@@ -2122,4 +2122,7 @@ pen.|пен.
 kanali, grupe, filmovi, serije, EPG — sa servera|каналы, группы, фильмы, сериалы, EPG — с сервера
 Raspored grupa sa servera|Порядок групп с сервера
 osvježavanje preuzme redoslijed grupa i kanala sa servera (npr. IPTV Editor); sakrivene grupe ostaju sakrivene|обновление берёт порядок групп и каналов с сервера (напр. IPTV Editor); скрытые группы остаются скрытыми
+TMDB ključ|Ключ TMDB
+ugrađen|встроен
+opisi, plakati i glumci na tvom jeziku, i kad ih server nema · besplatno na themoviedb.org|описания, постеры и актёры на твоём языке, даже если на сервере их нет · бесплатно на themoviedb.org
 """.trimIndent()
