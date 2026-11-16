@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -89,6 +90,23 @@ fun nowOf(ch: Channel, wait: Long = 400): EpgItem? {
         val now = System.currentTimeMillis()
         val e = NowCache.gate.withPermit { try { Repo.epg(p, ch, 3) } catch (e: Exception) { emptyList() } }.firstOrNull { it.start <= now && it.end > now }
         NowCache.put(ch.url, e); value = e
+    }
+    return v
+}
+
+/** what is on now and the next shows of a channel (for the wide channel list); asked only after a short pause while scrolling */
+object NextCache { val m = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, List<EpgItem>>>() }
+@Composable
+fun nextOf(ch: Channel, wait: Long = 450): List<EpgItem> {
+    val ctx = LocalContext.current
+    val fresh = NextCache.m[ch.url]?.takeIf { it.first > System.currentTimeMillis() - 10 * 60_000L }?.second
+    val v by produceState(fresh ?: emptyList(), ch.url) {
+        if (fresh != null) return@produceState
+        delay(wait)
+        val p = Store.byId(ctx, ch.pid) ?: return@produceState
+        val now = System.currentTimeMillis()
+        val l = NowCache.gate.withPermit { try { Repo.epg(p, ch, 5) } catch (e: Exception) { emptyList() } }.filter { it.end > now }.take(3)
+        NextCache.m[ch.url] = System.currentTimeMillis() to l; value = l
     }
     return v
 }
@@ -277,15 +295,21 @@ fun OnyxTv(nav: Nav, onGuide: () -> Unit) {
                 }
             }
             // ---------------------------------------------------------- channels
+            // in the channels: the groups are gone, the small picture and the show sit on top, every channel shows now · next · later to the right.
+            // In the groups: channels stay dimmed on the right with the picture panel.
             val g = st.group
-            Box(Modifier.weight(1f).fillMaxHeight().glass().onPreviewKeyEvent { e ->
-                if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { backToGroups(); true } else false
-            }) {
-                if (g == null) Message("Izaberi grupu")
-                else key(g.key, st.rev) { OnyxChannels(g, nav, st, rows, enterTick, preview, { preview = it; TvMemory.preview = it }) { focusedCh = it; inChannels = true } }
+            val wide = inChannels && g != null
+            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (wide) WideHeader(preview ?: focusedCh, focusedCh)
+                Box(Modifier.weight(1f).fillMaxWidth().glass().graphicsLayer { alpha = if (!inChannels && g != null) 0.55f else 1f }.onPreviewKeyEvent { e ->
+                    if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { backToGroups(); true } else false
+                }) {
+                    if (g == null) Message("Izaberi grupu")
+                    else key(g.key, st.rev) { OnyxChannels(g, nav, st, rows, enterTick, preview, { preview = it; TvMemory.preview = it }, wide) { focusedCh = it; inChannels = true } }
+                }
             }
             // ---------------------------------------------------------- picture and programme
-            NowPanel(preview, Modifier.width(272.dp).fillMaxHeight())
+            if (!wide) NowPanel(preview, Modifier.width(272.dp).fillMaxHeight())
         }
         RecentStrip(nav)
     }
@@ -306,7 +330,7 @@ private fun TvDialogsRows(st: TvState, rows: Load<List<TRow>>) {
 }
 
 @Composable
-private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRow>>, enterTick: Int, preview: Channel?, onPreview: (Channel) -> Unit, onFocusCh: (Channel) -> Unit) {
+private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRow>>, enterTick: Int, preview: Channel?, onPreview: (Channel) -> Unit, wide: Boolean, onFocusCh: (Channel) -> Unit) {
     val ctx = LocalContext.current
     var listRev by remember { mutableIntStateOf(0) }
     val isFav = g.pid == null
@@ -345,7 +369,27 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                             Row(Modifier.fillMaxSize().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 T("${ch.num}", 11.sp, if (f) C.OnRed.copy(alpha = 0.6f) else C.Muted, modifier = Modifier.width(26.dp), align = androidx.compose.ui.text.style.TextAlign.End)
                                 ChannelLogo(ch, 34.dp, onLight = f)
-                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                                if (wide) {
+                                    // name, then now · next · later across the row
+                                    T(ovr.chName(ch), 13.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, maxLines = 2, modifier = Modifier.width(210.dp))
+                                    val nx = nextOf(ch)
+                                    val hm = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())  // i18n-ignore
+                                    Row(Modifier.weight(1f).fillMaxHeight().padding(vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        if (nx.isEmpty()) Box(Modifier.weight(1f).fillMaxHeight().clip(Rnd(8.dp)).background(if (f) Color.Black.copy(alpha = 0.12f) else C.Card), contentAlignment = Alignment.CenterStart) {
+                                            T(now?.title ?: " ", 12.sp, if (f) C.OnRed.copy(alpha = 0.7f) else C.Muted, modifier = Modifier.padding(horizontal = 10.dp))
+                                        }
+                                        nx.forEachIndexed { k, e ->
+                                            val isNow = k == 0 && e.start <= System.currentTimeMillis()
+                                            Column(Modifier.weight(if (k == 0) 1.4f else 1f).fillMaxHeight().clip(Rnd(8.dp))
+                                                .background(if (f) Color.Black.copy(alpha = if (isNow) 0.18f else 0.1f) else if (isNow) C.CardHi else C.Card).padding(horizontal = 9.dp, vertical = 3.dp),
+                                                verticalArrangement = Arrangement.Center) {
+                                                T((if (isNow) "" else hm.format(java.util.Date(e.start)) + "  ") + e.title, 12.sp,  // i18n-ignore
+                                                    if (f) C.OnRed else if (isNow) C.Text else C.Soft, if (isNow) FontWeight.SemiBold else FontWeight.Normal)
+                                                if (isNow) ThinBar(e.progress(), if (f) C.OnRed else hueOf(ch.name), Modifier.fillMaxWidth().padding(top = 3.dp))
+                                            }
+                                        }
+                                    }
+                                } else Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                                     T(ovr.chName(ch), 13.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold)
                                     T(now?.title ?: " ", 11.sp, if (f) C.OnRed.copy(alpha = 0.65f) else C.Muted)
                                     if (now != null) ThinBar(now.progress(), if (f) C.OnRed else hueOf(ch.name), Modifier.fillMaxWidth())
@@ -368,6 +412,35 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                     }
                 }
             }
+        }
+    }
+}
+
+/** Top of the wide channel list: the small picture on the left (the channel you picked with OK), the show of the channel you are on next to it. */
+@Composable
+private fun WideHeader(playing: Channel?, on: Channel?) {
+    val ctx = LocalContext.current
+    Row(Modifier.fillMaxWidth().height(132.dp).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Box(Modifier.fillMaxHeight().aspectRatio(16f / 9f).glass(14.dp)) {
+            val cc = playing
+            if (cc != null && (Look.previewMode == 2 || PreviewSel.ch?.url == cc.url || TvMemory.preview?.url == cc.url)) PreviewBox(cc, Modifier.fillMaxSize())
+            else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { if (cc != null) ChannelLogo(cc, 48.dp) else Ico(R.drawable.lc_tv, 28.dp, C.Muted) }
+            if (cc != null) Row(Modifier.align(Alignment.TopStart).padding(7.dp).clip(Rnd(7.dp)).background(Color(0xB3000000)).padding(horizontal = 7.dp, vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                Box(Modifier.size(6.dp).clip(CircleShape).background(Color(0xFFFF4D55))); T("UŽIVO", 9.sp, Color.White, FontWeight.Bold)
+            }
+        }
+        val c = on ?: playing
+        Column(Modifier.weight(1f).padding(top = 2.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (c == null) { T("OK na kanalu: slika ovdje · još jednom OK: cijeli ekran", 12.sp, C.Muted, maxLines = 2); return@Column }
+            val epg by load(c.url) { Store.byId(ctx, c.pid)?.let { Repo.epg(it, c, 4) } ?: emptyList() }
+            val nowT = System.currentTimeMillis()
+            val cur = (epg as? Load.Ok)?.value?.firstOrNull { it.start <= nowT && it.end > nowT }
+            Kicker("${c.num} · ${c.name}" + (cur?.let { " · " + it.times() } ?: ""), C.Soft)
+            T(cur?.title ?: (if (epg is Load.Loading) "Učitavam program…" else c.name), 20.sp, C.Text, FontWeight.ExtraBold, maxLines = 1)
+            cleanDesc(cur?.desc)?.let { T(it, 12.sp, C.Soft, maxLines = 2) }
+            if (cur != null) ThinBar(cur.progress(), C.Text, Modifier.fillMaxWidth(0.6f), 3.dp)
+            T("◀ grupe · OK slika gore · OK još jednom cijeli ekran", 11.sp, C.Muted, maxLines = 1)
         }
     }
 }

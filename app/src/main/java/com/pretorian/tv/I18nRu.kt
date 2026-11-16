@@ -2132,4 +2132,5 @@ Broj kanala|Номер канала
 DAN|ДЕНЬ
 VRIJEME|ВРЕМЯ
 Nema kanala %s u ovoj grupi|Нет канала %s в этой группе
+◀ grupe · OK slika gore · OK još jednom cijeli ekran|◀ группы · OK картинка сверху · ещё раз OK весь экран
 """.trimIndent()
