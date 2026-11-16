@@ -311,7 +311,7 @@ fun OnyxTv(nav: Nav, onGuide: () -> Unit) {
             // ---------------------------------------------------------- picture and programme
             if (!wide) NowPanel(preview, Modifier.width(272.dp).fillMaxHeight())
         }
-        RecentStrip(nav)
+        // "Recently watched" lives only on Home, never under TV, Movies, Series or Sports
     }
     TvDialogsRows(st, rows)
 }

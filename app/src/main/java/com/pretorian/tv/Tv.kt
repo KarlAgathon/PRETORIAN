@@ -393,7 +393,6 @@ private fun TvList(nav: Nav, onGuide: () -> Unit) {
             }
         }
     }
-    if (Look.age) RecentStrip(nav)
     }
     TvDialogs(st, rows)
 }

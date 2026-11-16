@@ -1,3 +1,4 @@
+„Zadnje gledano“ se prikazuje samo na Početnoj, više ne ispod TV-a
 TV lista: kad uđeš u kanale grupe nestanu, gore lijevo je mala slika i opis emisije, a svaki kanal pokazuje sada · sljedeće · kasnije; lijevo vraća grupe (kanali se zatamne)
 Plejer: lista kanala i grupa se više ne zaglavi (fokus se uvijek vrati na listu, i kad se lista sporo učita)
 Plejer: lista grupe (lijevo pa još lijevo) se više ne zaglavi – fokus odmah stoji na tvojoj grupi i možeš ići kroz grupe
