@@ -1,2 +1,4 @@
-Filmovi i serije bez TMDB-a: duži opis (Cinemeta + još koja rečenica sa Wikipedije), glumci, režiser, godina, trajanje i žanr – podaci sa IMDb-a, besplatno
-Opis filma se vidi do 7 redova, serije do 3
+TV vodič (mreža): traka iznad mreže – grupa, DAN (Jučer/Danas/Sutra/…) i VRIJEME (● Sada, Jutro, Podne, 18, 20, 22 h); strelica gore s prvog kanala vodi na traku
+Brojevi na daljinskom skaču na kanal (npr. 4-5 = kanal 45), CH▲▼ lista cijelu stranicu, držanje ◀ vraća na Sada
+Kanali s arhivom: lijevo ide u prošlost (↺), OK pušta emisiju iz arhive
+Grupe se sklope čim uđeš u mrežu i izađu kad lijevo dođeš do početka
