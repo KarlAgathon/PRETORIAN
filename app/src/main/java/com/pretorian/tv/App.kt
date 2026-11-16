@@ -83,7 +83,7 @@ class MainActivity : ComponentActivity() {
         Perf.init(this)
         // picture cache: limited so the disk never fills up (150 MB on weaker boxes, 400 MB otherwise)
         coil.Coil.setImageLoader(coil.ImageLoader.Builder(this)
-            .memoryCache { coil.memory.MemoryCache.Builder(this).maxSizePercent(if (Perf.lite) 0.10 else 0.20).build() }
+            .memoryCache { coil.memory.MemoryCache.Builder(this).maxSizePercent(if (Perf.lite || Lean.images) 0.10 else 0.20).build() }
             .diskCache { coil.disk.DiskCache.Builder().directory(cacheDir.resolve("images")).maxSizeBytes(if (Perf.lite) 150L shl 20 else 400L shl 20).build() }
             .build())
         CrashLog.watch(this)
@@ -258,7 +258,7 @@ fun PretorianApp() {
     LaunchedEffect(Unit) {
         delay(8_000)
         if (!Perf.lite) try { Sports.guide(ctx, Store.actives(ctx)) } catch (_: Exception) {}
-        try { SearchIndex.get(ctx) } catch (_: Exception) {}
+        if (!Lean.search) try { SearchIndex.get(ctx) } catch (_: Exception) {}
     }
     // reminders: checked every 15 seconds, wherever you are in the app
     LaunchedEffect(Unit) {

@@ -362,7 +362,11 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             }
         }
         player.addListener(l); player.addAnalyticsListener(a)
-        onDispose { saveProgress(); player.removeListener(l); player.removeAnalyticsListener(a); player.release() }
+        onDispose {
+            saveProgress(); player.removeListener(l); player.removeAnalyticsListener(a); player.release()
+            // leaving the player: big lists and pictures are let go at once (they come back from the disk when needed)
+            if (Lean.trim) { Repo.trim(true); try { coil.Coil.imageLoader(ctx).memoryCache?.trimMemory(android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) } catch (_: Exception) {} }
+        }
     }
 
     var lastIndex by remember { mutableIntStateOf(-1) }

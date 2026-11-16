@@ -135,9 +135,9 @@ fun OnyxImage(url: String?, key: String, modifier: Modifier = Modifier, maxW: In
     if (url.isNullOrBlank()) Image(fb, null, modifier, contentScale = ContentScale.Crop)
     else {
         // never decode more pixels than the screen shows; Lite also uses half the memory per pixel
-        val w = if (Perf.lite) maxW * 2 / 3 else maxW
+        val w = if (Perf.lite || Lean.posters) maxW * 2 / 3 else maxW
         val req = remember(url, w) {
-            coil.request.ImageRequest.Builder(ctx).data(url).size(w, w * 3 / 2).allowRgb565(Perf.lite).crossfade(!Perf.lite).build()
+            coil.request.ImageRequest.Builder(ctx).data(url).size(w, w * 3 / 2).allowRgb565(Perf.lite || Lean.posters).crossfade(!Perf.lite).build()
         }
         AsyncImage(model = req, contentDescription = null, contentScale = scale, modifier = modifier, error = fb, placeholder = fb)
     }

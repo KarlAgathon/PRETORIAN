@@ -378,7 +378,7 @@ object NewContent {
     suspend fun scan(ctx: Context, p: Playlist, force: Boolean = false) = withContext(Dispatchers.IO) {
         if (p.type != SourceType.XTREAM) return@withContext
         val stamp = "new_scan_${p.id}"
-        if (!force && System.currentTimeMillis() - Prefs.long(stamp) < 12 * 3600_000L) return@withContext
+        if (!force && System.currentTimeMillis() - Prefs.long(stamp) < (if (Lean.scan) 24 else 12) * 3600_000L) return@withContext
         load()
         val x = Xtream(p)
         var added = 0

@@ -2087,4 +2087,20 @@ Još nema timova|Команд пока нет
 OK: ukloni|OK: удалить
 više timova, i po imenu|несколько команд, и по названию
 isključeno u Lite modu|выключено в режиме Lite
+Štednja resursa|Экономия ресурсов
+Sve je uključeno u Lite i Full modu · isključi ono što ti ne treba|Всё включено в Lite и Full · выключи ненужное
+Manje slika odjednom|Меньше картинок сразу
+slike se drže u memoriji samo dok su na ekranu|картинки хранятся в памяти только пока на экране
+Manji TV vodič|Меньший телегид
+12 sati unaprijed umjesto 36|12 часов вперёд вместо 36
+Pretraga kad je otvoriš|Поиск при открытии
+lista se pravi tek pri prvom otvaranju|список создаётся при первом открытии
+Plakati u manjoj rezoluciji|Постеры в меньшем разрешении
+na TV-u se razlika skoro ne vidi|на ТВ разница почти незаметна
+Očisti memoriju poslije plejera|Очищать память после плеера
+velike liste i slike se oslobode|большие списки и картинки освобождаются
+Čuvar ekrana bez sekundi|Заставка без секунд
+sat se mijenja jednom u minuti|часы меняются раз в минуту
+Nove filmove i serije provjeri jednom dnevno|Проверять новые фильмы и сериалы раз в день
+umjesto svakih 12 sati|вместо каждых 12 часов
 """.trimIndent()

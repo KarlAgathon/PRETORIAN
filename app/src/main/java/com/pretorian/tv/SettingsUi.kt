@@ -2180,6 +2180,9 @@ private fun GeneralV2() {
             SetSwitch("Nove epizode serija koje gledaš", trf("svakih %s", everyStr(General.episodesEvery * 60)),
                 Prefs.bool("bg_episodes", true), onLong = { pick = "ep" }) { Prefs.put("bg_episodes", it); rev++ }
             SetSwitch("Kartica „Pratiš“ na Početnoj", "rezultat, minuta, gol i karton utakmica koje pratiš", Prefs.bool("home_sport_card", !Perf.lite)) { Prefs.put("home_sport_card", it); rev++ }
+            SetSection("Štednja resursa")
+            T(tr("Sve je uključeno u Lite i Full modu · isključi ono što ti ne treba"), 12.sp, C.Muted, maxLines = 1)
+            Lean.ALL.forEach { (k, t, sub) -> SetSwitch(t, sub, Prefs.bool(k, true)) { Prefs.put(k, it); rev++ } }
             SetSection("Mreža")
             SetRow("User-Agent", "za providere koji puštaju samo određene aplikacije", Prefs.str("net_ua").ifBlank { tr("zadani") }) { edit = "net_ua" }
             SetRow("UDP proxy (udpxy)", "za multicast IPTV od operatera, npr. 192.168.178.1:4022", Prefs.str("net_udpxy").ifBlank { tr("isključen") }) { edit = "net_udpxy" }

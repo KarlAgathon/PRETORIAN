@@ -157,7 +157,8 @@ object Saver {
 @Composable
 fun ModernScreenSaver(paused: Paused?, menus: Boolean = false) {
     var now by remember { mutableStateOf(Date()) }
-    LaunchedEffect(Unit) { while (true) { now = Date(); delay(1000) } }
+    // with the saver option the clock changes once a minute (no seconds), otherwise every second
+    LaunchedEffect(Unit) { while (true) { now = Date(); delay(if (Lean.saver) 60_000L - System.currentTimeMillis() % 60_000L else 1000L) } }
     val show = Saver.show
     // slow drift so nothing burns into the screen
     var dx by remember { mutableIntStateOf(0) }; var dy by remember { mutableIntStateOf(0) }
@@ -174,7 +175,7 @@ fun ModernScreenSaver(paused: Paused?, menus: Boolean = false) {
             Spacer(Modifier.weight(0.8f))
             Row(verticalAlignment = Alignment.Top) {
                 T(SimpleDateFormat(if (Saver.h24) "HH:mm" else "h:mm", Locale.US).format(now), 120.sp, Color.White, FontWeight.Bold)  // i18n-ignore
-                if (0 in show) T(SimpleDateFormat("ss", Locale.US).format(now), 42.sp, Color(0x99FFFFFF), modifier = Modifier.padding(top = 18.dp, start = 6.dp))  // i18n-ignore
+                if (0 in show && !Lean.saver) T(SimpleDateFormat("ss", Locale.US).format(now), 42.sp, Color(0x99FFFFFF), modifier = Modifier.padding(top = 18.dp, start = 6.dp))  // i18n-ignore
                 if (!Saver.h24) T(SimpleDateFormat("a", Locale.US).format(now), 22.sp, Color(0x99FFFFFF), modifier = Modifier.padding(top = 26.dp, start = 6.dp))  // i18n-ignore
             }
             if (1 in show) T(SimpleDateFormat("EEEE, d. MMMM yyyy", Locale(Look.lang)).format(now).replaceFirstChar { it.uppercase() }, 22.sp, Color(0xFFD5D2CC))  // i18n-ignore

@@ -28,3 +28,24 @@ class BootReceiver : BroadcastReceiver() {
         try { ctx.startActivity(Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {}
     }
 }
+
+
+/** Resource savers: on by default in every mode (Lite and Full), each one can be switched off in Settings › General. */
+object Lean {
+    val images get() = Prefs.bool("lean_images", true)     // smaller image memory: fewer pictures held at once
+    val epg get() = Prefs.bool("lean_epg", true)           // own TV guide: 12 hours ahead instead of 36
+    val search get() = Prefs.bool("lean_search", true)     // search list is built when Search is first opened
+    val posters get() = Prefs.bool("lean_posters", true)   // posters in a smaller resolution
+    val trim get() = Prefs.bool("lean_trim", true)         // memory freed when leaving the player
+    val saver get() = Prefs.bool("lean_saver", true)       // screen saver clock changes once a minute, no seconds
+    val scan get() = Prefs.bool("lean_scan", true)         // new films / series checked once a day
+    val ALL = listOf(
+        Triple("lean_images", "Manje slika odjednom", "slike se drže u memoriji samo dok su na ekranu"),
+        Triple("lean_epg", "Manji TV vodič", "12 sati unaprijed umjesto 36"),
+        Triple("lean_search", "Pretraga kad je otvoriš", "lista se pravi tek pri prvom otvaranju"),
+        Triple("lean_posters", "Plakati u manjoj rezoluciji", "na TV-u se razlika skoro ne vidi"),
+        Triple("lean_trim", "Očisti memoriju poslije plejera", "velike liste i slike se oslobode"),
+        Triple("lean_saver", "Čuvar ekrana bez sekundi", "sat se mijenja jednom u minuti"),
+        Triple("lean_scan", "Nove filmove i serije provjeri jednom dnevno", "umjesto svakih 12 sati"),
+    )
+}
