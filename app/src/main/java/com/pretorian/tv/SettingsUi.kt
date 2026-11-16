@@ -1816,6 +1816,12 @@ private fun LookV2(openSub: (String) -> Unit) {
             SetDrop("Mala slika kanala", "pregled dok stojiš na kanalu", listOf("Automatski", "Na OK", "Isključena"), 2 - Look.previewMode) {
                 Look.previewMode = 2 - it; Look.preview = Look.previewMode > 0; save(); rev++
             }
+            SetDrop("Veličina male slike", "u listi kanala · veća slika = više opisa emisije", listOf("Mala", "Srednja", "Velika"), Prefs.long("tv_mini", 1).toInt().coerceIn(0, 2)) {
+                Prefs.put("tv_mini", it.toLong()); rev++
+            }
+            SetDrop("Broj kanala na ekranu", "u listi kanala · uvijek cijeli redovi", listOf("Automatski", "4", "5", "6", "7"), Prefs.long("tv_rows", 0).toInt().let { n -> if (n in 4..7) n - 3 else 0 }) {
+                Prefs.put("tv_rows", if (it == 0) 0L else (it + 3).toLong()); rev++
+            }
             SetDrop("TV se otvara kao", null, listOf("Lista kanala", "TV vodič"), if (Prefs.str("tv_view", "list") == "guide") 1 else 0) {
                 Prefs.put("tv_view", if (it == 1) "guide" else "list"); rev++
             }

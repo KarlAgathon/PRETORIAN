@@ -504,3 +504,5 @@ dd.MM. HH:mm
 pen
 tmdb_key
 d. MMM
+tv_mini
+tv_rows

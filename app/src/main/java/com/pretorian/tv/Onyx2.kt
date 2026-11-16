@@ -338,7 +338,7 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
     val cWrap = remember { Wrap() }
     val cState = rememberLazyListState()
     WrapEffect(cWrap, cState)
-    Column(Modifier.fillMaxSize().padding(top = 12.dp, start = 12.dp, end = 12.dp)) {
+    Column(Modifier.fillMaxSize().padding(top = 12.dp, start = 12.dp, end = 12.dp, bottom = 10.dp)) {
         Row(Modifier.fillMaxWidth().padding(start = 6.dp, end = 6.dp, bottom = 6.dp)) {
             Kicker(g.cat.name, C.Soft, modifier = Modifier.weight(1f))
             (state as? Load.Ok)?.value?.size?.let { Kicker(trf("%s kanala", fmtNum(it)), C.Muted) }
@@ -349,7 +349,19 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
             is Load.Ok -> {
                 val list = s.value
                 if (list.isEmpty()) Message(if (isFav) "Nema favorita" else "Grupa je prazna", if (isFav) "Na kanalu drži OK › Dodaj u favorite" else null)
-                else LazyColumn(state = cState, verticalArrangement = Arrangement.spacedBy(3.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
+                else androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
+                    // only whole rows, never a channel cut in half: the rows share the free height exactly
+                    // (Settings › Appearance: how many channels; "Automatic" = as many as fit at the normal size)
+                    val density = androidx.compose.ui.platform.LocalDensity.current
+                    val hPx = constraints.maxHeight
+                    val gapPx = with(density) { 3.dp.roundToPx() }
+                    fun fit(rowDp: Int) = ((hPx + gapPx) / (with(density) { rowDp.dp.roundToPx() } + gapPx)).coerceAtLeast(1)
+                    val want = Prefs.long("tv_rows", 0).toInt()
+                    val nRows = if (want in 4..7) want.coerceAtMost(fit(40)) else fit(50)
+                    val rowPx = ((hPx - (nRows - 1) * gapPx) / nRows).coerceAtLeast(1)
+                    val rowH = with(density) { rowPx.toDp() }
+                    val listH = with(density) { (nRows * rowPx + (nRows - 1) * gapPx).toDp() }
+                    LazyColumn(Modifier.fillMaxWidth().height(listH), state = cState, verticalArrangement = Arrangement.spacedBy(with(density) { gapPx.toDp() })) {
                     itemsIndexed(list, key = { i, ch -> "$i${ch.url}" }) { i, ch ->
                         val ovr = remember(ch.pid, g.pid) { Ovr(ctx, ch.pid.ifBlank { g.pid ?: "" }) }
                         val locked = ovr.isChLocked(ch)
@@ -357,7 +369,7 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                         var rowFocused by remember { mutableStateOf(false) }
                         val c = if (nx.isNullOrEmpty()) 0 else cell.coerceAtMost(nx.lastIndex)
                         LaunchedEffect(rowFocused, c, nx) { if (rowFocused) onPick(nx?.getOrNull(c)?.takeIf { c > 0 }) }
-                        Focusable(modifier = Modifier.fillMaxWidth().height(50.dp).wrapKeys(i, list.size, cWrap).onPreviewKeyEvent { e ->
+                        Focusable(modifier = Modifier.fillMaxWidth().height(rowH).wrapKeys(i, list.size, cWrap).onPreviewKeyEvent { e ->
                             if (!wide || e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                             when (e.key) {
                                 Key.DirectionRight -> { if (!nx.isNullOrEmpty() && c < nx.lastIndex) cell = c + 1; true }
@@ -428,6 +440,7 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                             }
                         }
                     }
+                    }
                 }
                 LaunchedEffect(list) { if (TvMemory.restore && TvMemory.channel >= 0) { TvMemory.restore = false; cWrap.target = TvMemory.channel.coerceAtMost(list.lastIndex) } }
                 // the list always rests on a whole row: a row cut in half under the title slides out of sight
@@ -435,7 +448,7 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                     androidx.compose.runtime.snapshotFlow { cState.isScrollInProgress }.collect { moving ->
                         if (moving) return@collect
                         delay(140)   // while a button is held nothing is touched
-                        if (cState.isScrollInProgress || cState.firstVisibleItemScrollOffset <= 0 || !cState.canScrollForward) return@collect
+                        if (cState.isScrollInProgress || cState.firstVisibleItemScrollOffset <= 4 || !cState.canScrollForward) return@collect
                         val to = cState.firstVisibleItemIndex + 1
                         try { if (Perf.lite) cState.scrollToItem(to) else cState.animateScrollToItem(to) }
                         catch (e: kotlinx.coroutines.CancellationException) { kotlinx.coroutines.currentCoroutineContext().ensureActive() }   // your own scroll wins
@@ -459,7 +472,9 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
 @Composable
 private fun WideHeader(playing: Channel?, on: Channel?, pick: EpgItem?) {
     val ctx = LocalContext.current
-    Row(Modifier.fillMaxWidth().height(112.dp).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+    // Settings › Appearance › size of the small picture: a bigger picture leaves room for more of the description (and fewer channels)
+    val size = Prefs.long("tv_mini", 1).toInt().coerceIn(0, 2)
+    Row(Modifier.fillMaxWidth().height(when (size) { 0 -> 112.dp; 2 -> 190.dp; else -> 150.dp }).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Box(Modifier.fillMaxHeight().aspectRatio(16f / 9f).glass(14.dp)) {
             val cc = playing
             if (cc != null && (Look.previewMode == 2 || PreviewSel.ch?.url == cc.url || TvMemory.preview?.url == cc.url)) PreviewBox(cc, Modifier.fillMaxSize())
@@ -477,7 +492,7 @@ private fun WideHeader(playing: Channel?, on: Channel?, pick: EpgItem?) {
             val cur = pick ?: (epg as? Load.Ok)?.value?.firstOrNull { it.start <= nowT && it.end > nowT }
             Kicker("${c.num} · ${c.name}" + (cur?.let { " · " + it.times() } ?: ""), C.Soft)
             T(cur?.title ?: (if (epg is Load.Loading) "Učitavam program…" else c.name), 20.sp, C.Text, FontWeight.ExtraBold, maxLines = 1)
-            cleanDesc(cur?.desc)?.let { T(it, 12.sp, C.Soft, maxLines = 2) }
+            cleanDesc(cur?.desc)?.let { T(it, 12.sp, C.Soft, maxLines = when (size) { 0 -> 2; 2 -> 6; else -> 4 }) }
             if (cur != null && cur.start <= nowT) ThinBar(cur.progress(), C.Text, Modifier.fillMaxWidth(0.6f), 3.dp)
             T(if (pick != null) "◀ ▶ program · OK podsjeti me" else "◀ ▶ program · ◀ grupe · OK slika gore · OK još jednom cijeli ekran", 11.sp, C.Muted, maxLines = 1)
         }

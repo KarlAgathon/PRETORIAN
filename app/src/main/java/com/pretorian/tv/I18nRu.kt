@@ -1047,6 +1047,10 @@ Svjetlina boje|Яркость цвета
 Veličina i prikaz|Размер и отображение
 Veličina|Размер
 tekst, pločice i plakati zajedno|текст, плитки и постеры вместе
+Veličina male slike|Размер маленькой картинки
+u listi kanala · veća slika = više opisa emisije|в списке каналов · больше картинка = больше описания
+Broj kanala na ekranu|Каналов на экране
+u listi kanala · uvijek cijeli redovi|в списке каналов · всегда целые строки
 Mala slika kanala|Маленькая картинка канала
 pregled dok stojiš na kanalu|превью, пока вы стоите на канале
 TV se otvara kao|ТВ открывается как

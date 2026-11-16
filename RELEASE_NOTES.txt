@@ -1,3 +1,6 @@
+TV lista: nijedan kanal više nije presječen – ni gore ni dolje; redovi tačno popune prostor i uvijek se vidi cijeli naziv
+TV lista: mala slika gore lijevo je veća, a opis emisije duži (više redova)
+Postavke › Izgled: „Veličina male slike“ (mala / srednja / velika) i „Broj kanala na ekranu“ (automatski, 4–7)
 TV lista: gornji red više nikad nije presječen napola – lista uvijek stane na cijeli red
 TV lista: „sada“ uvijek ostaje u prvom polju dok strelicom desno ideš kroz kasnije emisije
 TV lista: linije napretka su iste boje u svim redovima (boja teme)
