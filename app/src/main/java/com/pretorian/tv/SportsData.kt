@@ -658,7 +658,8 @@ object OwnGuide {
         lock.lock()
         try {
             val c = caches[url]
-            if (c != null && System.currentTimeMillis() - c.at < (if (everyH > 0) everyH else 6) * 3600_000L) return c.data
+            val maxAge = (if (everyH > 0) everyH else 6) * 3600_000L
+            if (c != null && System.currentTimeMillis() - c.at < maxAge) return c.data
             val now = System.currentTimeMillis()
             val d = try { Xmltv.read(url, null, now - 3 * 3600_000L, now + 36 * 3600_000L).groupBy { it.channel } } catch (e: Exception) { emptyMap() }
             caches[url] = Cache(now, d)
