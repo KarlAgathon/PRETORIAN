@@ -1,4 +1,3 @@
-Početna: novi red „Pratiš · uživo“ – dresovi, rezultat, kartoni ispod svakog tima i zadnji događaj; uživo prvo, pa one koje uskoro počinju; ima svoj prekidač u Postavke › Početna
-Utakmice danas: „Ukloni“ sada odmah skloni red; vraća se u Postavke › Sports Center ili Početna
-Vrijeme na kartama utakmica jasno vidljivo
-Dijagnostika › Potrošeno: posebno Danas i Ukupno od reseta (TV, Serije, Filmovi)
+Sport › Uživo: samo prave utakmice koje se sada igraju, s rezultatom, minutom, kartonima, poluvremenom, produžecima i penalima
+Emisije iz TV vodiča idu u poseban dio „Sada na tvojim kanalima“ s oznakom NA TV ili SNIMAK, bez lažnog rezultata
+Broj na dugmetu „Uživo“ broji samo prave utakmice uživo

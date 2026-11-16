@@ -53,11 +53,17 @@ data class SportEvent(
     val country: String = "",
     /** TV stations ESPN lists for the match (any country) */
     val tv: List<String> = emptyList(),
+    /** a guide broadcast that is a recording / replay (snimak, repriza, or the match was played at another time) */
+    val replay: Boolean = false,
+    /** "ht" halftime, "et" extra time, "pen" penalties, from the feed's status (not translated) */
+    val stage: String = "",
 ) {
-    /** live now: "in" from the feed, but never a match that started more than 6 hours ago (a stale "in" from an old list) */
-    val live get() = state == "in" && System.currentTimeMillis() - start < 6 * 3600_000L
+    /** live now: a real match from the score feed ("in"), never a guide broadcast, never one that started more than 6 hours ago */
+    val live get() = !fromGuide && state == "in" && System.currentTimeMillis() - start < 6 * 3600_000L
+    /** a guide broadcast on your channels right now (no live score) */
+    val onAir get() = fromGuide && state == "in"
     /** finished, also a stale "live" one */
-    val over get() = state == "post" || (state == "in" && !live)
+    val over get() = state == "post" || (state == "in" && !fromGuide && !live)
 }
 
 data class League(val sport: String, val path: String, val name: String, val abbr: String)
@@ -199,11 +205,17 @@ object Sports {
         val list = (0 until cs.length()).mapNotNull { cs.optJSONObject(it) }
         val home = list.firstOrNull { it.str("homeAway") == "home" } ?: list.getOrNull(0)
         val away = list.firstOrNull { it.str("homeAway") == "away" } ?: list.getOrNull(1)
+        // penalties (shoot-out) score, when ESPN gives it
+        val pen = home?.optString("shootoutScore")?.takeIf { it.isNotBlank() && it != "null" }?.let { h ->
+            away?.optString("shootoutScore")?.takeIf { it.isNotBlank() && it != "null" }?.let { a -> h.substringBefore('.') + ":" + a.substringBefore('.') } }
+        val sName = type?.str("name") ?: ""
         val clock = when {
-            type?.str("name") == "STATUS_HALFTIME" -> tr("Poluvrijeme")
-            state == "in" && lg.sport == "football" -> st?.str("displayClock")?.ifBlank { null } ?: type?.str("shortDetail")
+            sName == "STATUS_HALFTIME" || type?.str("shortDetail") == "HT" -> tr("Poluvrijeme")
+            sName.contains("SHOOTOUT") || (state == "in" && pen != null) -> tr("Penali") + (pen?.let { " $it" } ?: "")
+            state == "in" && lg.sport == "football" -> (st?.str("displayClock")?.ifBlank { null } ?: type?.str("shortDetail")) +
+                (if (sName.contains("OVERTIME") || sName.contains("EXTRA")) " · " + tr("produžeci") else "")
             state == "in" -> type?.str("shortDetail")
-            state == "post" -> type?.str("shortDetail")?.ifBlank { null } ?: "FT"
+            state == "post" -> (type?.str("shortDetail")?.ifBlank { null } ?: "FT") + (pen?.let { " · " + tr("pen.") + " " + it } ?: "")
             else -> null
         }
         val two = lg.sport != "f1" && home != null && away != null
@@ -227,6 +239,8 @@ object Sports {
             round = comp.optJSONObject("round")?.str("displayName")?.ifBlank { null }
                 ?: comp.optJSONArray("notes")?.optJSONObject(0)?.str("headline")?.ifBlank { null },
             start = start, state = state, clock = clock,
+            stage = when { sName == "STATUS_HALFTIME" -> "ht"; sName.contains("SHOOTOUT") || (state == "in" && pen != null) -> "pen"
+                sName.contains("OVERTIME") || sName.contains("EXTRA") -> "et"; else -> "" },
             home = if (two) team(home) else null, away = if (two) team(away) else null,
             title = title, venue = comp.optJSONObject("venue")?.str("fullName")?.ifBlank { null },
         )
@@ -481,7 +495,8 @@ object Sports {
         return if (distinct.isNotEmpty()) distinct.any { it in words } else t.all { it in words }
     }
 
-    private val REPLAY = Regex("(\\(r\\)|\\(snimak\\)|snimka|snimak|reprise|highlights|sažetak|sazetak|najava|magazin|studio|emisija)", RegexOption.IGNORE_CASE)
+    /** not a match at all: previews, magazines, studio shows */
+    private val NOT_MATCH = Regex("highlights|sažetak|sazetak|najava|magazin|studio|emisija", RegexOption.IGNORE_CASE)
 
     /** Adds your channels to each match and returns extra matches found only in your guide. */
     /** Last result per day, shown at once when you come back to the Sports Center. */
@@ -491,7 +506,7 @@ object Sports {
     fun combine(events: List<SportEvent>, g: Guide, offset: Int): List<SportEvent> {
         val progs = g.progs; val chans = g.byEpg
         val from = dayStart(offset); val to = dayStart(offset + 1)
-        val day = progs.filter { it.start < to + 2 * 3600_000L && it.end > from && !REPLAY.containsMatchIn(it.title) }.sortedBy { it.start }
+        val day = progs.filter { it.start < to + 2 * 3600_000L && it.end > from && !NOT_MATCH.containsMatchIn(it.title) }.sortedBy { it.start }
         val starts = LongArray(day.size) { day[it].start }
         val normTitle = HashMap<Prog, String>(day.size * 2)
         val words = HashMap<Prog, Set<String>>(day.size * 2)
@@ -522,6 +537,8 @@ object Sports {
             used.addAll(hits)
             ev.copy(channels = hits.flatMap { chans[it.channel] ?: emptyList() }.distinctBy { it.url })
         }
+        // teams the score feed knows (today and the days already loaded): their match not in today's feed = a recording
+        val known = (withCh + lastCombined.values.flatten()).flatMap { listOfNotNull(it.home, it.away) }.map { tokens(it.name).filter { w -> w !in GENERIC }.toSet() }.filter { it.isNotEmpty() }
         // matches that only your guide knows: "Team A - Team B" on a sport channel
         val vs = Regex("^(?:(.{2,40}?):\\s*)?(.{2,40}?)\\s+(?:-|–|vs\\.?|v\\.?)\\s+(.{2,40}?)(?:\\s*[(\\[].*)?$", RegexOption.IGNORE_CASE)
         val extra = day.filter { it !in used && it.start in from until to && !NOT_SPORT.containsMatchIn(it.title) }.mapNotNull { pr ->
@@ -547,6 +564,7 @@ object Sports {
                     away = Team(ab.second, ab.second.take(3).uppercase(), null, null, null, null),
                     title = pr.title, venue = null,
                     channels = list.flatMap { chans[it.first.channel] ?: emptyList() }.distinctBy { it.url }, fromGuide = true,
+                    replay = isReplay(list.map { it.first }, ab, known),
                 )
             }
         return (withCh.map { it.copy(maybe = if (it.channels.isEmpty()) maybeFor(it, upperAll) else emptyList()) } + extra)
@@ -554,6 +572,17 @@ object Sports {
             .sortedBy { it.start }
     }
 
+    /** A guide match that is not live: the guide says so, the feed knows the team but has no such match now, or a weekday morning. */
+    private fun isReplay(progs: List<Prog>, ab: Pair<String, String>, known: List<Set<String>>): Boolean {
+        if (progs.any { REPLAY.containsMatchIn(it.title + " " + (it.category ?: "") + " " + (it.desc ?: "")) }) return true
+        val a = tokens(ab.first).filter { it !in GENERIC }; val b = tokens(ab.second).filter { it !in GENERIC }
+        if (known.any { k -> a.any { it in k } } || known.any { k -> b.any { it in k } }) return true
+        val c = java.util.Calendar.getInstance().apply { timeInMillis = progs.first().start }
+        val wd = c.get(java.util.Calendar.DAY_OF_WEEK) in java.util.Calendar.MONDAY..java.util.Calendar.FRIDAY
+        return wd && c.get(java.util.Calendar.HOUR_OF_DAY) < 14
+    }
+    /** a recording or a replay, not live */
+    private val REPLAY = Regex("snimak|snimka|repriz|reprise|replay|wiederholung|whlg|rewind|classic|klasik|\\(r\\)|\\(p\\)", RegexOption.IGNORE_CASE)  // i18n-ignore
     private val SPORT_CH = Regex("sport|arena|dazn|eurosport|espn|bein|setanta|klub|bundesliga|laliga|premier|golf|tennis|ufc|fight|nba|nfl|nhl|mlb|tsn|bt sport|tnt sport|ziggo|digi sport|polsat sport|eleven|ssc|sky sport|canal\\+ sport|movistar|match|sportitalia|sport tv|nova s|max sport|supersport", RegexOption.IGNORE_CASE)
     private val SPORT_CAT = Regex("sport|fudbal|nogomet|football|fußball|fussball|soccer|basket|košark|tenis|tennis|rukomet|handball|odbojk|volley|motor|formula", RegexOption.IGNORE_CASE)
     private val NOT_SPORT = Regex("news|vijesti|vesti|nachrichten|dnevnik|morning|jutarnj|frühstück|talk|kitchen|cooking|oxygen|shop|teleshop|infomercial|paid program|weather|vrijeme|horoskop|documentary|dokumentar|episode|epizoda|folge|staffel|season|film|movie|cartoon|crtani", RegexOption.IGNORE_CASE)

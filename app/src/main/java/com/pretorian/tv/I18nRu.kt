@@ -2114,4 +2114,9 @@ Utakmice danas na Početnoj|Матчи сегодня на главной
 „Ukloni“ na Početnoj ga isključi|«Убрать» на главной выключает это
 Pratiš · uživo na Početnoj|Следишь · в эфире на главной
 rezultat, kartoni, zadnji događaj|счёт, карточки, последнее событие
+Sada na tvojim kanalima|Сейчас на твоих каналах
+SNIMAK|ЗАПИСЬ
+NA TV|ПО ТВ
+produžeci|дополнительное время
+pen.|пен.
 """.trimIndent()
