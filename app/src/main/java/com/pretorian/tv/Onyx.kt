@@ -832,7 +832,8 @@ object HomeRows {
     var rev by mutableIntStateOf(0)
     /** "Matches today" starts off (it loads live scores) */
     /** weak box (score under 50): "Recently added" posters also start off; the user can turn them on in Settings › Home */
-    private fun offStr() = Prefs.str("home_off", if (Perf.score < 50) "today,new" else "today")
+    // first start on every box: "Newly added" (new films, series, channels) and "Matches today" are off until switched on
+    private fun offStr() = Prefs.str("home_off", "today,new")
     fun order(): List<String> {
         val saved = Prefs.str("home_rows", "fresh,cont,new,recent").split(',').filter { s -> ALL.any { it.first == s } }
         val off = offStr().split(',').toSet()
@@ -914,7 +915,9 @@ fun ModeBadges(simple: Boolean, onOpen: () -> Unit) {
             drawLine(c, androidx.compose.ui.geometry.Offset(cx, cy), androidx.compose.ui.geometry.Offset(ex, cy - w * 0.3f), strokeWidth = w * 0.12f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
         }
     }
-    if (simple) badge(Color(0xFF93C5FD)) { T("S", 13.sp, Color(0xFF93C5FD), FontWeight.ExtraBold, modifier = Modifier.align(Alignment.Center)) }  // i18n-ignore
+    // which app mode: S = simple (TV, Movies, Series only), A = normal with all options
+    val mc = if (simple) Color(0xFF93C5FD) else Color(0xFFC4B5FD)
+    badge(mc) { T(if (simple) "S" else "A", 13.sp, mc, FontWeight.ExtraBold, modifier = Modifier.align(Alignment.Center)) }  // i18n-ignore
 }
 
 

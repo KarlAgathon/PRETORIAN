@@ -1107,9 +1107,10 @@ private fun IconSetRow(name: String, about: String, selected: Boolean, previewSe
 /* ================================================================ Settings in the new look (0.7.0) */
 
 /** Osnovno shows only what everyone needs; Napredno shows everything. */
+/** Every option is always there (Lite only saves the box, it hides nothing); only simple mode has no Settings. */
 object SetMode {
-    var advanced by mutableStateOf(Prefs.bool("settings_adv", false))
-    fun set(on: Boolean) { advanced = on; Prefs.put("settings_adv", on) }
+    val advanced: Boolean get() = true
+    @Suppress("UNUSED_PARAMETER") fun set(on: Boolean) {}
 }
 
 private val SECTIONS2 = listOf(
@@ -2166,8 +2167,6 @@ private fun GeneralV2() {
     }
     key(rev) {
         SetPage("Opće", "Sve je isključeno dok ga ne uključiš.") {
-            // basic or all settings: the first thing in General, so it is there in basic mode too
-            SetSwitch("Napredne opcije", "prikaži sve sekcije i postavke", SetMode.advanced) { SetMode.set(it); rev++ }
             SetSection("Pokretanje")
             SetDrop("Kad se aplikacija otvori, prvo vidiš", "Nazad s tog ekrana vodi na Početnu",
                 listOf("Početna", "TV", "Filmovi", "Serije", "Sports Center", "Zadnji kanal"), General.start) { Prefs.put("start_screen", it.toLong()); rev++ }

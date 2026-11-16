@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -209,6 +210,8 @@ fun SportMixScreen(nav: Nav) {
     LaunchedEffect(playing) { SportUi.playing = playing }
     val previewFr = remember { FocusRequester() }
     val chipFr = remember { FocusRequester() }
+    val firstChipFr = remember { FocusRequester() }
+    var jumpTick by remember { mutableIntStateOf(0) }
     var listFocus by remember { mutableStateOf(false) }
     var favRowFocus by remember { mutableStateOf(false) }
     var focusedRow by remember { mutableStateOf<String?>(null) }
@@ -280,6 +283,7 @@ fun SportMixScreen(nav: Nav) {
     val rowFr = remember { HashMap<String, FocusRequester>() }
     var rightFocus by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    LaunchedEffect(jumpTick) { if (jumpTick > 0) { delay(250); firstChipFr.tryFocus(attempts = 6) } }
     fun focusSel() {
         val id = ev?.id ?: return
         scope.launch {
@@ -350,7 +354,9 @@ fun SportMixScreen(nav: Nav) {
                         item(key = "h" + e.league + i) { Kicker(flagEmoji(e.country) + "  " + e.league, C.Soft, modifier = Modifier.padding(top = 6.dp, start = 4.dp)) }  // i18n-ignore
                     }
                     item(key = e.id) { MatchRow(e, e.id == ev?.id, rowFr.getOrPut(e.id) { FocusRequester() }, onFocus = { focusedRow = e.id }, onMenu = { menu = e }) {
-                        if (sel != e.id) { sel = e.id; playing = null } } }
+                        if (sel != e.id) { sel = e.id; playing = null }
+                        // OK on a match: the focus goes on to its first channel on the right (Left / Back come back here)
+                        jumpTick++ } }
                 }
             }
         }
@@ -371,7 +377,7 @@ fun SportMixScreen(nav: Nav) {
                     T("slika krene tek na OK · OK OK = cijeli ekran", 11.sp, C.Muted)
                 }
             }
-            if (ev != null) MatchCard(ev, playing, chipFr, onPlay = { ch -> if (playing?.url == ch.url) { SportUi.back = "chip"; playChannels(nav, listOf(ch), 0) } else playing = ch }, onMenu = { menu = ev })
+            if (ev != null) MatchCard(ev, playing, chipFr, firstChipFr, onPlay = { ch -> if (playing?.url == ch.url) { SportUi.back = "chip"; playChannels(nav, listOf(ch), 0) } else playing = ch }, onMenu = { menu = ev })
         }
     }
     // long OK on a match: reminder, your team, watch now
@@ -493,7 +499,7 @@ private fun MatchRow(e: SportEvent, selected: Boolean, fr: FocusRequester?, onFo
 }
 
 @Composable
-private fun MatchCard(e: SportEvent, playing: Channel?, playingFr: FocusRequester, onPlay: (Channel) -> Unit, onMenu: () -> Unit) {
+private fun MatchCard(e: SportEvent, playing: Channel?, playingFr: FocusRequester, firstFr: FocusRequester, onPlay: (Channel) -> Unit, onMenu: () -> Unit) {
     Column(Modifier.fillMaxWidth().glass(16.dp).padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (e.home != null && e.away != null) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -535,9 +541,10 @@ private fun MatchCard(e: SportEvent, playing: Channel?, playingFr: FocusRequeste
         val espn = if (Prefs.bool("sport_src_espn", true)) tvNames else emptyList()
         if (rights.isNotEmpty() || espn.isNotEmpty() || aiTv.isNotEmpty()) T("📺 " + tr("TV:") + " " + (rights + espn + aiTv).distinct().take(10).joinToString(" · "), 12.sp, C.Soft, maxLines = 3)  // i18n-ignore
         else if (usual.isNotEmpty()) T("📺 " + tr("Obično prenose:") + " " + usual.take(8).joinToString(" · "), 12.sp, C.Soft, maxLines = 3)  // i18n-ignore
-        else LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(chs, key = { it.url }) { ch ->
-                Focusable(onClick = { onPlay(ch) }, onMenu = onMenu, focusRequester = if (playing?.url == ch.url) playingFr else null, shape = Pill, normal = if (playing?.url == ch.url) Color.White else C.Card, focused = C.Red, zoom = 1.04f,
+        // your channels that show it: always as buttons (OK on a match brings the focus to the first one)
+        if (chs.isNotEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            itemsIndexed(chs, key = { _, c -> c.url }) { i, ch ->
+                Focusable(onClick = { onPlay(ch) }, onMenu = onMenu, focusRequester = if (playing?.url == ch.url) playingFr else if (i == 0 && playing == null) firstFr else null, shape = Pill, normal = if (playing?.url == ch.url) Color.White else C.Card, focused = C.Red, zoom = 1.04f,
                     modifier = Modifier.height(34.dp)) { f ->
                     Row(Modifier.align(Alignment.Center).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Box(Modifier.size(7.dp).clip(CircleShape).background(C.Green))

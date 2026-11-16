@@ -1,3 +1,4 @@
-Popravljen pad aplikacije pri otvaranju Dijagnostike i O aplikaciji (1.0.8)
-Novo dodano na Početnoj: u Full modu uključeno (isključuje se u Postavke › Početna), u Lite modu uvijek isključeno
-Iza Početne jedna mirna slika pejzaža u bojama teme
+Nova instalacija: na Početnoj isključeno Novo dodano (filmovi, serije, kanali) i Utakmice danas – box se ne opterećuje; uključuje se u Postavke › Početna
+Sve opcije uvijek dostupne, i u Lite i u Full modu; prekidač Napredne opcije je uklonjen (bez opcija je samo jednostavni mod)
+Gore uz brzinomjer oznaka moda: A (normalni) ili S (jednostavni)
+Sport: OK na utakmicu odmah prebaci fokus na prvi kanal desno; kanali se uvijek vide i kad piše ko prenosi
