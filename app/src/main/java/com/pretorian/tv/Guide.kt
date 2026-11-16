@@ -404,7 +404,7 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
                                 .padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 T("${ch.num}", 12.sp, if (i == row) C.RedText else C.Muted, modifier = Modifier.width(28.dp))
                                 ChannelLogo(ch.logo, ch.name)
-                                T(ch.name, 13.sp, if (i == row) C.Text else C.Soft, if (i == row) FontWeight.SemiBold else FontWeight.Normal, maxLines = 2, modifier = Modifier.weight(1f))
+                                T(ch.name, 13.sp, if (i == row) C.Text else C.Soft, if (i == row) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, modifier = Modifier.weight(1f))
                             }
                             Box(Modifier.weight(1f).fillMaxHeight().clip(Rnd(4.dp))) {
                                 val progs = progsOf(ch).filter { it.end > viewStart && it.start < viewEnd }

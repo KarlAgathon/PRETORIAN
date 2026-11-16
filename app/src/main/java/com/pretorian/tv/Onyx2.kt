@@ -438,7 +438,7 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                                 ChannelLogo(ch, 34.dp, onLight = hl)
                                 if (wide) {
                                     // name, then now · next · later across the row
-                                    T(ovr.chName(ch), 13.sp, if (hl) C.OnRed else C.Text, FontWeight.SemiBold, maxLines = 2, modifier = Modifier.width(210.dp))
+                                    T(ovr.chName(ch), 13.sp, if (hl) C.OnRed else C.Text, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.width(210.dp))
                                     val hm = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())  // i18n-ignore
                                     Row(Modifier.weight(1f).fillMaxHeight().padding(vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                         if (nx.isNullOrEmpty()) Box(Modifier.weight(1f).fillMaxHeight().clip(Rnd(8.dp)).background(if (hl) Color.Black.copy(alpha = 0.12f) else C.Card), contentAlignment = Alignment.CenterStart) {
@@ -473,7 +473,7 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                                         }
                                     }
                                 } else Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                                    T(ovr.chName(ch), 13.sp, if (hl) C.OnRed else C.Text, FontWeight.SemiBold)
+                                    T(ovr.chName(ch), 13.sp, if (hl) C.OnRed else C.Text, FontWeight.SemiBold, maxLines = 1)
                                     T(now?.title ?: " ", 11.sp, if (hl) C.OnRed.copy(alpha = 0.65f) else C.Muted)
                                     if (now != null) ThinBar(now.progress(), if (hl) C.OnRed else C.RedText, Modifier.fillMaxWidth())
                                 }
