@@ -39,6 +39,7 @@
         <package android:name="com.liskovsoft.smarttubetv.beta" />
         <package android:name="com.liskovsoft.smarttubetv" />
         <package android:name="com.teamsmart.videomanager.tv" />
+        <package android:name="io.gh.reisxd.tizentube.cobalt" />
         <package android:name="io.gh.reisxd.tizentube" />
         <package android:name="com.reisxd.tizentube" />
         <!-- trailer apps under other names (e.g. TizenTube Cobalt builds): the TV apps on the box and the apps that open YouTube links -->

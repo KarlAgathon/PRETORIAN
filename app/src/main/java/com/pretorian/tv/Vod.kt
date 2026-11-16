@@ -602,7 +602,7 @@ object TrailerApps {
     private val FAMILIES = listOf(  // i18n-ignore
         "YouTube" to listOf("com.google.android.youtube.tv", "com.google.android.youtube"),
         "SmartTube" to listOf("com.liskovsoft.smarttubetv.beta", "com.liskovsoft.smarttubetv", "com.teamsmart.videomanager.tv"),
-        "TizenTube" to listOf("io.gh.reisxd.tizentube", "com.reisxd.tizentube"),
+        "TizenTube" to listOf("io.gh.reisxd.tizentube.cobalt", "io.gh.reisxd.tizentube", "com.reisxd.tizentube"),
     )
     private fun has(ctx: Context, pkg: String) = try { ctx.packageManager.getPackageInfo(pkg, 0); true } catch (e: Exception) { false }
     /** name and installed package (null = not installed), always in the same order */
