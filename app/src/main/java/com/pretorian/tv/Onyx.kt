@@ -111,6 +111,9 @@ object Perf {
         parts = listOf(tr("RAM") to listOf(ram, "/30").joinToString(""), tr("Procesor") to listOf(cpu, "/25").joinToString(""), "Android" to listOf(os, "/15").joinToString(""),  // i18n-ignore
             tr("Čip i grafika") to listOf(gpu, "/15").joinToString(""), tr("Test brzine") to listOf(speed, "/15").joinToString(""))
         weak = am.isLowRamDevice || ramGb < 2.8 || score < 70
+        // a new install (no playlist yet) always starts in Lite, whatever the box; the user switches to Full or Automatic later.
+        // Boxes that already had PRETORIAN keep what they had.
+        if (Prefs.long("perf_mode", -1) < 0) Prefs.put("perf_mode", if (Store.playlists(c).isEmpty()) 1L else 0L)
         mode = Prefs.long("perf_mode", 0).toInt().coerceIn(0, 2)
     }
     fun set(m: Int) { mode = m; Prefs.put("perf_mode", m.toLong()) }
