@@ -60,6 +60,11 @@ import java.util.Locale
 private const val MIN = 60_000L
 private const val HALF = 30 * MIN
 private const val DAY = 86_400_000L
+/** a later show: remind me / don't — nothing else to ask */
+private fun remindToggle(ctx: android.content.Context, ch: Channel, pr: EpgItem) {
+    val on = Reminders.toggle(Reminder("r${pr.start}${pr.title.hashCode()}", pr.title, pr.start, ch.url, ch.name, ch.logo, ch.pid, "tv"))
+    Toast.makeText(ctx, tr(if (on) "Podsjetnik postavljen" else "Podsjetnik uklonjen"), Toast.LENGTH_SHORT).show()
+}
 private fun floorHalf(t: Long) = t - (t % HALF)
 /** local midnight of the day of [t] */
 private fun dayStart(t: Long): Long = java.util.Calendar.getInstance().apply {
@@ -338,7 +343,7 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
                             } else if (pr == null || (pr.start <= t && pr.end > t)) {
                                 val i = list.indexOfFirst { it.url == ch.url }.coerceAtLeast(0)
                                 gate.run("c:${ch.url}", Ovr(ctx, ch.pid).isChLocked(ch)) { TvMemory.channel = i; TvMemory.group = g; TvMemory.restore = true; playChannels(nav, list, i) }
-                            } else remindToggle(ch, pr)
+                            } else remindToggle(ctx, ch, pr)
                             return@onPreviewKeyEvent true
                         }
                         if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
@@ -385,7 +390,7 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
                                 if (e.nativeKeyEvent.repeatCount > 0 && !longFired && ch != null) {
                                     longFired = true
                                     val pr = progsOf(ch).firstOrNull { it.start <= focusTime && it.end > focusTime }
-                                    if (pr != null && pr.start > System.currentTimeMillis()) remindToggle(ch, pr) else chMenu = ch
+                                    if (pr != null && pr.start > System.currentTimeMillis()) remindToggle(ctx, ch, pr) else chMenu = ch
                                 }
                                 true
                             }
@@ -452,12 +457,6 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
             T("Broj kanala", 11.sp, C.Muted, FontWeight.SemiBold)
             T(numBuf.toList().joinToString(" ") + " _", 34.sp, PICK, FontWeight.ExtraBold)  // i18n-ignore
         }
-    }
-
-    /** a later show: remind me / don't — nothing else to ask */
-    fun remindToggle(ch: Channel, pr: EpgItem) {
-        val on = Reminders.toggle(Reminder("r${pr.start}${pr.title.hashCode()}", pr.title, pr.start, ch.url, ch.name, ch.logo, ch.pid, "tv"))
-        Toast.makeText(ctx, tr(if (on) "Podsjetnik postavljen" else "Podsjetnik uklonjen"), Toast.LENGTH_SHORT).show()
     }
 
     fun play(ch: Channel) {
