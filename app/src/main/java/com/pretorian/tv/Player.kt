@@ -449,7 +449,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             resume != null -> { resume = null; player.seekTo(0); player.play() }
             dialog != null -> dialog = null
             bar -> { bar = false; showInfo = false }
-            side == "groups" -> side = "channels"
+            side == "channels" -> side = "groups"
+            side == "groups" -> { side = null; sideGroup = null; nav.back() }
             else -> { side = null; sideGroup = null }
         }
     }
@@ -787,7 +788,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 if (sideGroup != null) { items = list.map { c -> PlayItem(c.name, c.url, c.logo, "${c.num}", c) }; TvMemory.group = sideGroup }
                 index = i; side = null; sideGroup = null
             },
-            onBackToChannels = { side = "channels" })
+            onBackToChannels = { side = null; sideGroup = null; nav.back() })
         // ------------------------------------------------------------ live: guide on the right, picture small
         if (side == "epg") {
             val ch = item.channel
@@ -956,9 +957,9 @@ private fun SideLists(mode: String, sideGroup: GroupRef?, items: List<PlayItem>,
         Column(Modifier.fillMaxHeight().width(380.dp).background(C.Overlay).padding(horizontal = 16.dp, vertical = 20.dp)
             .onFocusChanged { has = it.hasFocus }
             .onPreviewKeyEvent { e ->
-                // Back is handled here (one step: groups → channels → picture), so it never leaves the player
+                // Back works like Left: channels → groups → out of the player to TV
                 if (e.key == Key.Back || e.key == Key.Escape) {
-                    if (e.type == KeyEventType.KeyUp) { if (mode == "groups") onBackToChannels() else onClose() }
+                    if (e.type == KeyEventType.KeyUp) { if (mode == "groups") onBackToChannels() else onGroups() }
                     return@onPreviewKeyEvent true
                 }
                 if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false

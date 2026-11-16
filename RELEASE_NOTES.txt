@@ -1,4 +1,4 @@
-Plejer: Back u listi kanala i grupa ide korak nazad (grupe → kanali → slika), više ne izbacuje iz plejera
+Plejer: Back radi kao strelica lijevo – kanali → grupe → nazad u TV
 TV lista: manji gornji dio (više kanala), prazna polja pišu „Učitavam…“ ili „Bez programa“
 „Zadnje gledano“ se prikazuje samo na Početnoj, više ne ispod TV-a
 TV lista: kad uđeš u kanale grupe nestanu, gore lijevo je mala slika i opis emisije, a svaki kanal pokazuje sada · sljedeće · kasnije; lijevo vraća grupe (kanali se zatamne)
