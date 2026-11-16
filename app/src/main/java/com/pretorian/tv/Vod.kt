@@ -611,7 +611,7 @@ object TrailerApps {
     /** a build under another package name (e.g. TizenTube Cobalt): look for it among the box's TV apps by name */
     private fun findByName(ctx: Context, vararg words: String): String? = try {
         val pm = ctx.packageManager
-        val apps = pm.queryIntentActivities(android.content.Intent(android.content.Intent.ACTION_MAIN).addCategory("android.intent.category.LEANBACK_LAUNCHER"), 0) +
+        val apps = pm.queryIntentActivities(android.content.Intent(android.content.Intent.ACTION_MAIN).addCategory(android.content.Intent.CATEGORY_LEANBACK_LAUNCHER), 0) +
             pm.queryIntentActivities(android.content.Intent(android.content.Intent.ACTION_MAIN).addCategory(android.content.Intent.CATEGORY_LAUNCHER), 0)
         apps.firstOrNull { ri ->
             val pkg = ri.activityInfo.packageName.lowercase(); val label = ri.loadLabel(pm).toString().lowercase()
