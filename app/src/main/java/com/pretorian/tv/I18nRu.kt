@@ -1952,4 +1952,8 @@ Ne pratiš nijednu utakmicu · dugi OK na utakmicu › Prati|Вы не след�
 vraća se kad ga opet staviš na Prati|вернётся, когда снова нажмёте Следить
 Prikaži više · još %s|Показать ещё · ещё %s
 Pratim|Слежу
+Države|Страны
+Nema utakmica tvojih favorita u idućih 10 dana · Države ▾ ili dugi OK › Prati tim|Нет матчей ваших избранных в ближайшие 10 дней · Страны ▾ или долгий OK › Следить за командой
+TV:|ТВ:
+Obično prenose:|Обычно показывают:
 """.trimIndent()

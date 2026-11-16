@@ -50,6 +50,8 @@ data class SportEvent(
     val details: List<MatchDetail> = emptyList(),
     /** the league's country code (flag), e.g. "de", "ba", "eu" */
     val country: String = "",
+    /** TV stations ESPN lists for the match (any country) */
+    val tv: List<String> = emptyList(),
 ) {
     val live get() = state == "in"
 }
@@ -209,8 +211,11 @@ object Sports {
             val min = x.optJSONObject("clock")?.str("displayValue") ?: ""
             MatchDetail(if (x.optJSONObject("team")?.str("id") == homeId) "h" else "a", kind + (if (x.optBoolean("penaltyKick")) "_pen" else "") + (if (x.optBoolean("ownGoal")) "_og" else ""), min, who)
         } } ?: emptyList()
+        val tvs = ArrayList<String>()
+        comp.optJSONArray("broadcasts")?.let { b -> for (i in 0 until b.length()) b.optJSONObject(i)?.optJSONArray("names")?.let { n -> for (j in 0 until n.length()) tvs += n.optString(j) } }
+        comp.optJSONArray("geoBroadcasts")?.let { b -> for (i in 0 until b.length()) b.optJSONObject(i)?.optJSONObject("media")?.str("shortName")?.let { tvs += it } }
         return SportEvent(
-            details = det, country = countryOf(lg.path),
+            details = det, country = countryOf(lg.path), tv = tvs.map { it.trim() }.filter { it.isNotBlank() }.distinct(),
             id = lg.path + "/" + comp.str("id").ifBlank { e.str("id") },
             sport = lg.sport, league = lg.name, leagueAbbr = lg.abbr,
             round = comp.optJSONObject("round")?.str("displayName")?.ifBlank { null }
@@ -222,7 +227,7 @@ object Sports {
     }
 
     private fun espn(lg: League, date: String): List<SportEvent> {
-        val o = JSONObject(http("https://site.api.espn.com/apis/site/v2/sports/${lg.path}/scoreboard?dates=$date"))
+        val o = JSONObject(http("https://site.api.espn.com/apis/site/v2/sports/${lg.path}/scoreboard?dates=$date&limit=500"))  // i18n-ignore
         val evs = o.optJSONArray("events") ?: return emptyList()
         val out = ArrayList<SportEvent>()
         for (i in 0 until evs.length()) {
@@ -349,6 +354,19 @@ object Sports {
         "ATP" to listOf("SPORT KLUB", "SPORTKLUB", "ARENA SPORT", "SKY SPORT", "EUROSPORT"),
         "WTA" to listOf("SPORT KLUB", "SPORTKLUB", "ARENA SPORT", "SKY SPORT", "EUROSPORT"),
     )
+
+    /** who usually has the rights for this league (names, for showing; not tied to your list) */
+    fun usualTv(ev: SportEvent): List<String> = (RIGHTS[ev.leagueAbbr] ?: emptyList()).map { w ->
+        w.lowercase().split(' ').joinToString(" ") { p -> if (p.length <= 3 && p.none { it.isDigit() }) p.uppercase() else p.replaceFirstChar { it.uppercase() } } }.distinct()
+
+    /** live and coming matches of the next [days] days for your favourite countries (national teams and their leagues) and teams */
+    suspend fun favorites(days: Int, codes: Set<String>): List<SportEvent> = withContext(Dispatchers.IO) {
+        val nat = setOf("WC", "EURO", "UNL", "WCQ", "FRI")
+        val lgs = (activeLeagues() + LEAGUES.filter { it.abbr in nat || countryOf(it.path) in codes }).distinctBy { it.path }
+        val range = espnDate(dayStart(0)) + "-" + espnDate(dayStart(days))
+        coroutineScope { lgs.map { lg -> async { try { espn(lg, range) } catch (e: Exception) { emptyList() } } }.awaitAll().flatten() }
+            .distinctBy { it.id }.filter { it.state != "post" }.sortedBy { it.start }
+    }
 
     private fun maybeFor(ev: SportEvent, all: List<Pair<Channel, String>>): List<Channel> {
         if (!Prefs.bool("sport_src_rights", true)) return emptyList()

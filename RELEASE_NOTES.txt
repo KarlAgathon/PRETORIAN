@@ -1,7 +1,7 @@
-Sport: nova traka Uživo · Uskoro · Završeno · Pratim · Sportovi · Regija · Favoriti · Timovi (više izbora odjednom, traži tim kucanjem)
-Sport: favoriti (države i timovi) uvijek prvi; brojevi tačno prate ono što je u listi
-Sport: jednom učitano ostaje zapamćeno – nema ponovnog učitavanja pri prelasku menija, rezultati se osvježavaju u pozadini
-Početna: kartica playliste uvijek gore, ispod najviše 2 utakmice koje pratiš i to samo dok igraju; gore ide ona gdje se upravo desio gol ili karton
-Početna: više od 2 → „Prikaži više“ vodi u Sport › Pratim
-Dugi OK na utakmicu ili novu epizodu na Početnoj: Ukloni s Početne (vraća se kad opet staviš Prati), Ne prati
-Završena utakmica posivi i nestane s Početne nakon 15 minuta; u obavještenjima je posivljena
+Sport: novi tab ★ Favoriti – sve utakmice tvojih država (reprezentacija i lige) i timova, uživo i idućih 10 dana
+Sport: buduće utakmice imaju dan i datum (Uto 20:45, 24.11. 18:00), na kartici puni datum
+Sport: ko prenosi – TV kuće bilo gdje (ESPN, AI ako imaš ključ) ili ko obično prenosi tu ligu, i kad nije na tvojoj listi
+Sport: izabrani sportovi vrijede svuda (Uživo, Uskoro, Favoriti, Pratim)
+Sport: OK na malom ekranu = cijeli ekran; Back iz cijelog ekrana vraća tačno na mali ekran ili kanal koji si pustio
+Sport: Back u listi ide na prvu utakmicu, pa na tabove, tek onda izlazi
+Sport: lista Uskoro se ponovo učita ako je prošli put bila prazna (greška mreže), i osvježi se svakih 10 min
