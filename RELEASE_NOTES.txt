@@ -1,4 +1,5 @@
-PRETORIAN 1.0.24 (beta)
+PRETORIAN 1.0.25 (beta)
+Pretraga: više ne koči dok se u pozadini čita TV vodič – čitanje vodiča je višestruko brže i lakše za box; kanali, filmovi i serije su tu odmah, emisije iz vodiča stignu zadnje
 Pomak vremena vodiča po kanalu (kao TiviMate): u playeru Više › Pomak vremena, ili drži OK na kanalu – ±5, 10, 30 min, ±1, 2, 3 h, Bez pomaka; pamti se za taj kanal
 Postavke › Izgled › „Fokus kartica“ 20–100 %: koliko je svijetlo polje na kojem stojiš, u svim temama (zamjenjuje Blaga/Jaka)
 Postavke › Izgled: „Prozirnost“ sada stvarno mijenja panele, a „Svjetlina podloge“ posvjetljuje ili zatamnjuje pozadinu u svakoj temi

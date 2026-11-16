@@ -649,7 +649,8 @@ fun OnyxSearch(nav: Nav) {
     val vodIdx by load(Unit) { SearchIndex.movies(ctx) }
     val serIdx by load(Unit) { SearchIndex.shows(ctx) }
     val wantProgs = query.length >= 3
-    val progIdx by load(wantProgs) { if (wantProgs) SearchIndex.progs(ctx) else emptyList() }
+    // shows from the TV guide come last and only once you stop typing: channels, films and series are there at once
+    val progIdx by load(wantProgs) { if (wantProgs) { delay(1500); SearchIndex.progs(ctx) } else emptyList() }
     @Composable
     fun hitsOf(idx: Load<List<SearchIndex.Item>>, max: Int): State<List<Hit>> = produceState(emptyList<Hit>(), query, idx) {
         value = if (query.length < 2) emptyList() else (idx as? Load.Ok)?.value?.let { SearchIndex.find(it, query, max) } ?: emptyList()

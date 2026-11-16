@@ -626,9 +626,32 @@ object Sports {
 /* ============================================================== XMLTV */
 
 object Xmltv {
+    /** "20261116183000 +0100" read by hand: a big guide has hundreds of thousands of times, and a date parser for each one
+     *  made the box crawl (search and menus froze while the guide was being read) */
+    private fun fastTime(t: String): Long? {
+        if (t.length < 14) return null
+        fun num(a: Int, b: Int): Int { var v = 0; for (k in a until b) { val d = t[k] - '0'; if (d < 0 || d > 9) return -1; v = v * 10 + d }; return v }
+        val y = num(0, 4); val mo = num(4, 6); val d = num(6, 8); val h = num(8, 10); val mi = num(10, 12); val sec = num(12, 14)
+        if (y < 1970 || mo !in 1..12 || d !in 1..31 || h !in 0..23 || mi !in 0..59 || sec !in 0..60) return null
+        val yy = if (mo <= 2) y - 1 else y
+        val era = yy / 400; val yoe = yy - era * 400; val mp = (mo + 9) % 12
+        val doy = (153 * mp + 2) / 5 + d - 1; val doe = yoe * 365 + yoe / 4 - yoe / 100 + doy
+        val days = era * 146097L + doe - 719468L
+        var ms = (((days * 24 + h) * 60 + mi) * 60 + sec) * 1000L
+        val z = t.substring(14).trim()
+        if (z.isEmpty()) return ms
+        if (z.length != 5 || (z[0] != '+' && z[0] != '-')) return null
+        val zh = (z[1] - '0') * 10 + (z[2] - '0'); val zm = (z[3] - '0') * 10 + (z[4] - '0')
+        if (zh !in 0..14 || zm !in 0..59) return null
+        val off = (zh * 60 + zm) * 60_000L
+        ms += if (z[0] == '+') -off else off
+        return ms
+    }
+
     private fun time(s: String?): Long? {
         if (s.isNullOrBlank()) return null
         val t = s.trim()
+        fastTime(t)?.let { return it }
         for (p in listOf("yyyyMMddHHmmss Z", "yyyyMMddHHmmss")) {
             try { return SimpleDateFormat(p, Locale.US).apply { if (!p.contains('Z')) timeZone = TimeZone.getTimeZone("UTC") }.parse(t)?.time } catch (_: Exception) {}
         }
@@ -662,9 +685,13 @@ object Xmltv {
                         tag = xp.name
                         if (tag == "programme") {
                             ch = xp.getAttributeValue(null, "channel")?.lowercase()
-                            start = time(xp.getAttributeValue(null, "start")) ?: 0L
-                            end = time(xp.getAttributeValue(null, "stop")) ?: start
-                            keep = ch != null && (channels == null || ch in channels) && end > from && start < to
+                            // channels nobody asked for are skipped before their times are even read
+                            keep = ch != null && (channels == null || ch in channels)
+                            if (keep) {
+                                start = time(xp.getAttributeValue(null, "start")) ?: 0L
+                                end = time(xp.getAttributeValue(null, "stop")) ?: start
+                                keep = end > from && start < to
+                            }
                             title = null; cat = null; desc = null
                         }
                     }
