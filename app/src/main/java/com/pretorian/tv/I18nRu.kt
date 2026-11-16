@@ -2119,4 +2119,7 @@ SNIMAK|ЗАПИСЬ
 NA TV|ПО ТВ
 produžeci|дополнительное время
 pen.|пен.
+kanali, grupe, filmovi, serije, EPG — sa servera|каналы, группы, фильмы, сериалы, EPG — с сервера
+Raspored grupa sa servera|Порядок групп с сервера
+osvježavanje preuzme redoslijed grupa i kanala sa servera (npr. IPTV Editor); sakrivene grupe ostaju sakrivene|обновление берёт порядок групп и каналов с сервера (напр. IPTV Editor); скрытые группы остаются скрытыми
 """.trimIndent()

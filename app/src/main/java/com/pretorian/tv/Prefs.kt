@@ -222,6 +222,12 @@ class Ovr(private val ctx: Context, private val pid: String) {
     fun countWatch(ch: Channel) { val w = map("watch"); w.put(ch.url, w.optInt(ch.url, 0) + 1); save() }
 
     fun resetAll() { Prefs.put(key, "{}") }
+
+    /** the playlist was refreshed: groups and channels take the server's order again (hidden, renamed, locked and your own groups stay) */
+    fun takeServerOrder() {
+        o.keys().asSequence().filter { it.startsWith("gOrder_") || it.startsWith("chOrder_") }.toList().forEach { o.remove(it) }
+        save()
+    }
 }
 
 /** group names that are for adults only */

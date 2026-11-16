@@ -816,11 +816,15 @@ object AutoRefresh {
     suspend fun run(ctx: Context, changed: () -> Unit) {
         Prefs.put("auto_refresh_at", System.currentTimeMillis())
         Repo.clear(); Repo.dropCatalogs()
+        if (ServerOrder.on) Store.playlists(ctx).forEach { Ovr(ctx, it.id).takeServerOrder() }
         Store.actives(ctx).forEach { p -> try { NewContent.scan(ctx, p, force = true) } catch (_: Exception) {} }
         EpgSources.list().filter { it.on }.forEach { try { EpgSources.refresh(it) } catch (_: Exception) {} }
         withContext(Dispatchers.Main) { changed() }
     }
 }
+
+/** Settings › Playlists: a refresh takes the group and channel order from the server (e.g. IPTV Editor) */
+object ServerOrder { val on get() = Prefs.bool("srv_order", true) }
 
 /** EPG time shift in hours (some providers are an hour early or late). */
 object EpgShift {

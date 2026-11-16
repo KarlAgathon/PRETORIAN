@@ -1600,20 +1600,27 @@ private fun PlaylistsV2(nav: Nav, openSub: (String) -> Unit) {
         SetRow("+  " + tr("Dodaj playlistu"), "Xtream, M3U link ili fajl") { EditPlaylist.target = null; nav.push(Screen.AddPlaylist) }
         SetRow("EPG izvori", "svi izvori TV programa", "● " + trf("%s aktivna", EpgSources.list().count { it.on }), valueColor = C.Green) { PlEdit.id = null; openSub("epg") }
         if (list.isNotEmpty()) {
-            SetRow(if (busy) "Osvježavam…" else "Osvježi sve", "kanali, filmovi, serije, EPG") {
-                if (busy) return@SetRow
+            // refresh now: everything read again from the server, its group order taken, TV and Home load again
+            fun refreshAll() {
+                if (busy) return
                 busy = true
                 Repo.dropCatalogs(); Sports.lastCombined.clear()
+                if (ServerOrder.on) Store.playlists(ctx).forEach { Ovr(ctx, it.id).takeServerOrder() }
                 scope.launch {
                     val updated = Store.playlists(ctx).map { pl -> try { if (pl.type == SourceType.XTREAM) pl.copy(exp = Repo.test(pl)) else { Repo.test(pl); pl } } catch (e: Exception) { pl } }
-                    Store.savePlaylists(ctx, updated); list = updated; Repo.clear()
+                    Store.savePlaylists(ctx, updated); list = updated
+                    Prefs.put("auto_refresh_at", System.currentTimeMillis())
                     EpgSources.list().filter { it.on }.forEach { try { EpgSources.refresh(it) } catch (_: Exception) {} }
+                    nav.playlistsChanged()
                     busy = false; Toast.makeText(ctx, tr("Osvježeno"), Toast.LENGTH_SHORT).show()
                 }
             }
+            SetRow(if (busy) "Osvježavam…" else "Osvježi sada", "kanali, grupe, filmovi, serije, EPG — sa servera") { refreshAll() }
             var arRev by remember { mutableIntStateOf(0) }
             key(arRev) {
-                SetDrop("Osvježi samo", "playliste i EPG, bez čekanja ujutro", AutoRefresh.OPTIONS, AutoRefresh.mode) { Prefs.put("auto_refresh", it.toLong()); arRev++ }
+                SetDrop("Osvježi samo", "playliste i EPG, bez čekanja ujutro", listOf("Osvježi sada") + AutoRefresh.OPTIONS, AutoRefresh.mode + 1) {
+                    if (it == 0) refreshAll() else Prefs.put("auto_refresh", (it - 1).toLong()); arRev++ }
+                SetSwitch("Raspored grupa sa servera", "osvježavanje preuzme redoslijed grupa i kanala sa servera (npr. IPTV Editor); sakrivene grupe ostaju sakrivene", ServerOrder.on) { Prefs.put("srv_order", it); arRev++ }
                 val shifts = (-3..3).toList()
                 SetDrop("Pomak TV programa (EPG)", "ako program kasni ili žuri", shifts.map { if (it == 0) tr("Bez pomaka") else (if (it > 0) "+" else "") + it + " h" },  // i18n-ignore
                     shifts.indexOf(EpgShift.hours).coerceAtLeast(3)) { Prefs.put("epg_shift", shifts[it].toLong()); Repo.clear(); arRev++ }
@@ -1637,6 +1644,7 @@ private fun PlaylistsV2(nav: Nav, openSub: (String) -> Unit) {
             OptionRow("📺  " + tr("EPG ove playliste"), null, sub = tr("izvori, zadani, uključi/ugasi")) { menu = null; PlEdit.id = pl.id; PlMenu.open = pl.id; openSub("epg") }  // i18n-ignore
             OptionRow("Osvježi", R.drawable.lc_refresh_cw, sub = tr("kanali, filmovi i serije")) {
                 menu = null; Repo.dropCatalogs()
+                if (ServerOrder.on) Ovr(ctx, pl.id).takeServerOrder()
                 scope.launch {
                     val up = try { if (pl.type == SourceType.XTREAM) pl.copy(exp = Repo.test(pl)) else { Repo.test(pl); pl } } catch (e: Exception) { pl }
                     Store.savePlaylists(ctx, Store.playlists(ctx).map { if (it.id == up.id) up else it }); refresh()
@@ -1693,6 +1701,7 @@ private fun PlaylistsListV2(nav: Nav) {
             }
             OptionRow("Osvježi kanale, filmove i serije", R.drawable.lc_refresh_cw) {
                 menu = null; Repo.dropCatalogs()
+                if (ServerOrder.on) Ovr(ctx, pl.id).takeServerOrder()
                 scope.launch {
                     val up = try { if (pl.type == SourceType.XTREAM) pl.copy(exp = Repo.test(pl)) else { Repo.test(pl); pl } } catch (e: Exception) { pl }
                     Store.savePlaylists(ctx, Store.playlists(ctx).map { if (it.id == up.id) up else it }); refresh()
