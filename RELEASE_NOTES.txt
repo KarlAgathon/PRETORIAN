@@ -1,2 +1,3 @@
-PRETORIAN 1.0.36 (beta)
-Unos s telefona: na ekranu Dodaj / Uredi playlistu gore desno je QR kod. Skeniraj ga telefonom, upiši server, korisničko ime, lozinku, M3U ili EPG link na telefonu i pošalji, polja na TV-u se popune sama. Radi preko kućne mreže (i na LAN kablu), samo dok je taj ekran otvoren
+PRETORIAN 1.0.37
+Čuvar ekrana se više nikad ne pali dok ide kanal uživo (ni kad stream na tren zastane): samo kad je film ili serija pauziran, ili na Home ekranu bez daljinskog
+Ako se kanal ipak zaustavi, izlazak iz čuvara ekrana ga odmah ponovo pokreće

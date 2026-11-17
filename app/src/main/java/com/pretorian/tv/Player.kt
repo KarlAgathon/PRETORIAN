@@ -523,6 +523,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                     if (e.type == KeyEventType.KeyDown) {
                         saver = false
                         if (e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter || e.key == Key.MediaPlay || e.key == Key.MediaPlayPause) player.play()
+                        // a live channel never stays frozen behind the saver: start it again
+                        if (s.live && !player.isPlaying) { player.playWhenReady = true; retryToken++ }
                     }
                     return@onPreviewKeyEvent true
                 }
@@ -756,9 +758,17 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             }
         }
         // paused and no remote for the chosen time (every key press starts the count again)
+        // only a film or an episode that YOU paused: never a live channel, never a stream that stalls or reconnects
         LaunchedEffect(playing, buffering, saver) {
             if (saver) { if (playing) saver = false; return@LaunchedEffect }
-            if (!playing && !buffering && Saver.on) while (true) { delay(1000); if (System.currentTimeMillis() - Saver.lastKey > Saver.delayMs) { saver = true; break } }
+            if (s.live || playing || buffering || !Saver.on || player.playWhenReady) return@LaunchedEffect
+            val pausedAt = System.currentTimeMillis()
+            while (true) {
+                delay(1000)
+                if (player.playWhenReady || s.live) break
+                // counted from the pause or the last key, whichever is later
+                if (System.currentTimeMillis() - maxOf(pausedAt, Saver.lastKey) > Saver.delayMs) { saver = true; break }
+            }
         }
         // "Skip intro" / "Next episode in 10 s" in the lower right corner
         skipPill?.let { k ->
