@@ -36,6 +36,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -510,10 +511,37 @@ fun AddPlaylistScreen(nav: Nav) {
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
+    // type on the phone: a QR code opens a small form served by the box; what is sent fills these fields
+    var phoneUrl by remember { mutableStateOf<String?>(null) }
+    var phoneGot by remember { mutableStateOf(false) }
+    DisposableEffect(Unit) {
+        phoneUrl = PhoneLink.start { d ->
+            tab = d.type
+            if (d.name.isNotBlank()) name = d.name
+            if (d.server.isNotBlank()) server = d.server
+            if (d.user.isNotBlank()) user = d.user
+            if (d.pass.isNotBlank()) pass = d.pass
+            if (d.url.isNotBlank()) url = d.url
+            if (d.epg.isNotBlank()) epg = d.epg
+            phoneGot = true
+        }
+        onDispose { PhoneLink.stop() }
+    }
+    val qr = remember(phoneUrl) { phoneUrl?.let { PhoneLink.qr(it) }?.asImageBitmap() }
+
     Column(Modifier.fillMaxSize()) {
         Header(if (old != null) "Uredi playlistu" else "Dodaj playlistu")
         Column(Modifier.fillMaxSize().padding(horizontal = 36.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Segmented(listOf("Xtream Codes", "M3U playlista", "Stalker portal"), tab) { tab = it }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Box(Modifier.weight(1f)) { Segmented(listOf("Xtream Codes", "M3U playlista", "Stalker portal"), tab) { tab = it } }
+                if (qr != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        T(if (phoneGot) "✓ Primljeno s telefona" else "Unesi s telefona", 15.sp, if (phoneGot) C.Green else C.Text, FontWeight.SemiBold)
+                        T("skeniraj kamerom · ista kućna mreža", 12.sp, C.Muted)
+                    }
+                    androidx.compose.foundation.Image(qr, null, Modifier.size(104.dp).clip(Rnd(10.dp)).background(Color.White).padding(4.dp))
+                }
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Field("Naziv playliste", name, { name = it }, Modifier.weight(1f))
                 when (tab) {

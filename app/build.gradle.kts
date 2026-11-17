@@ -15,8 +15,8 @@ android {
         minSdk = 24
         targetSdk = 34
         // raise both numbers for every new version (needed for updates)
-        versionCode = 87
-        versionName = "1.0.35"
+        versionCode = 88
+        versionName = "1.0.36"
         // TMDB_KEY from GitHub Secrets: posters, cast, platform and coming episodes work for everyone without typing a key
         buildConfigField("String", "TMDB_KEY", "\"" + (System.getenv("TMDB_KEY") ?: "") + "\"")
     }
@@ -61,6 +61,8 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("io.coil-kt:coil-compose:2.7.0")
+    // QR code for "type on the phone" (Add playlist): ZXing core only, no camera code
+    implementation("com.google.zxing:core:3.5.3")
     implementation("com.google.zxing:core:3.5.3")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     testImplementation("junit:junit:4.13.2")

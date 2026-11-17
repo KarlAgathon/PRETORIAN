@@ -2257,4 +2257,10 @@ Vrati slova i okvire|Сбросить текст и рамки
 kako je tema|как в теме
 tvoje podešavanje|ваша настройка
 Zadana|По умолчанию
+Ovaj QR kod više ne važi. Otvori ponovo „Dodaj playlistu“ na TV-u.|Этот QR-код больше не действует. Снова откройте «Добавить плейлист» на ТВ.
+✓ Poslano na TV. Provjeri podatke na TV-u i pritisni „Spremi i učitaj“.|✓ Отправлено на ТВ. Проверьте данные на ТВ и нажмите «Сохранить и загрузить».
+Pošalji na TV|Отправить на ТВ
+✓ Primljeno s telefona|✓ Получено с телефона
+Unesi s telefona|Ввод с телефона
+skeniraj kamerom · ista kućna mreža|сканируйте камерой · та же домашняя сеть
 """.trimIndent()

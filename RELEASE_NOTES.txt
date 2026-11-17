@@ -1,6 +1,2 @@
-PRETORIAN 1.0.35 (beta)
-Novi logo aplikacije (IPTV)
-Izgled: tema "Predvečerje" se sada zove "Zadana" · novo "Slova i okviri": debljina, svjetlina i veličina slova, svjetlina pozadine i menija, svjetlina okvira · prozirnost do skoro čistog stakla
-Utakmica koju pratiš: čim se završi, nestaje s Home ekrana i iz praćenja
-Brže i lakše za slabije boxove: M3U lista se čita liniju po liniju, pretraga filmova i serija ide direktno iz baze (ne drži sve u memoriji), nema mjerenja brzine pri prvom pokretanju
-Sigurnost: lozinka za kopije (Backup) — kopije u Download, na USB-u i prije ažuriranja su zaključane · izbačen nekorišteni Google ključ iz aplikacije
+PRETORIAN 1.0.36 (beta)
+Unos s telefona: na ekranu Dodaj / Uredi playlistu gore desno je QR kod. Skeniraj ga telefonom, upiši server, korisničko ime, lozinku, M3U ili EPG link na telefonu i pošalji, polja na TV-u se popune sama. Radi preko kućne mreže (i na LAN kablu), samo dok je taj ekran otvoren
