@@ -105,7 +105,7 @@ object Updater {
 
     /** Settings into Download/PRETORIAN before the new version goes in (when chosen). */
     fun backupBefore(ctx: Context, tag: String): Boolean = try {
-        PublicFiles.save(ctx, "backup-$tag.json", Backup.export(ctx, null).toByteArray()); true
+        PublicFiles.save(ctx, "backup-$tag.json", Backup.export(ctx, Backup.pass.ifBlank { null }).toByteArray()); true
     } catch (e: Exception) { false }
 
     fun installedCode(ctx: Context): Long {
@@ -406,7 +406,7 @@ object Rollback {
     suspend fun prepare(ctx: Context, r: Release): String? = withContext(Dispatchers.IO) {
         try {
             busy = true
-            PublicFiles.save(ctx, "backup-za-${r.name}.json", Backup.export(ctx, null).toByteArray())
+            PublicFiles.save(ctx, "backup-za-${r.name}.json", Backup.export(ctx, Backup.pass.ifBlank { null }).toByteArray())
             val f = File(ctx.cacheDir, "old.apk")
             val c = URL(r.apk).openConnection() as HttpURLConnection
             c.instanceFollowRedirects = true; c.connectTimeout = 15_000; c.readTimeout = 60_000

@@ -2235,4 +2235,10 @@ Automatski = koliko stane na ekran|Автоматически = сколько �
 Kanal u EPG mreži|Канал в сетке EPG
 Logo i ime|Логотип и название
 Samo logo|Только логотип
+Lozinka za kopije|Пароль для копий
+nema: lozinke playlista su u fajlu čitljive|нет: пароли плейлистов читаемы в файле
+kopije u Download i na USB-u su zaključane|копии в Download и на USB заблокированы
+Postavi|Задать
+Promijeni|Изменить
+Lozinka (prazno = bez lozinke)|Пароль (пусто = без пароля)
 """.trimIndent()

@@ -25,7 +25,9 @@ object Backup {
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences("pretorian", Context.MODE_PRIVATE)
     /** stay on this device: sign-in, chosen external player and file manager */
-    private val DEVICE_ONLY = setOf("ext_player", "file_app", "profile_skip_ask")
+    private val DEVICE_ONLY = setOf("ext_player", "file_app", "profile_skip_ask", "backup_pass")
+    /** Settings › Backup › Password for copies: copies in Download / on USB are encrypted with it (empty = readable file) */
+    val pass get() = Prefs.str("backup_pass")
 
     /** which part of the backup a setting belongs to (see "Šta uključiti"); -1 = always */
     private fun part(k: String): Int = when {
@@ -184,7 +186,7 @@ object Backup {
 
     /** saves straight to the chosen place; returns where it went */
     fun saveNow(ctx: Context, usb: Boolean, parts: Set<Int>): String {
-        val name = fileName(); val text = export(ctx, null, parts)
+        val name = fileName(); val text = export(ctx, pass.ifBlank { null }, parts)
         if (usb) {
             val d = usbDirs().firstOrNull() ?: throw java.io.IOException(tr("USB nije priključen"))
             val dir = File(d, "PRETORIAN").apply { mkdirs() }

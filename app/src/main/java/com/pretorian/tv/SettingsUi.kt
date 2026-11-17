@@ -1092,7 +1092,7 @@ private fun ProfilePage() {
 private fun AboutPage() {
     Page("O aplikaciji") {
         androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.logo_full), contentDescription = "PRETORIAN",
-            modifier = Modifier.size(180.dp))
+            modifier = Modifier.width(270.dp).height(86.dp))
         OptionRow("PRETORIAN ${BuildInfo.VERSION}", R.drawable.lc_info, "IPTV player za Android TV") {}
         OptionRow("Izvorni kod", R.drawable.lc_link, "github.com/KarlAgathon/PRETORIAN · MIT licenca") {}
         OptionRow("Ikone i font", R.drawable.lc_type, "Lucide (ISC) · Inter (OFL) · Media3 (Apache 2.0)") {}
@@ -2402,6 +2402,11 @@ private fun BackupV2(nav: Nav) {
             val usbIn = Backup.usbDirs().isNotEmpty()
             val usb = Prefs.str("backup_where", "0") == "2" && usbIn
             // one OK: saved straight to the chosen place, no folder window
+            // a copy in Download / USB can be read by other apps: with a password it is locked (AES), and so are the copies before an update
+            var passDlg by remember { mutableStateOf(false) }
+            SetRow("Lozinka za kopije", if (Backup.pass.isBlank()) tr("nema: lozinke playlista su u fajlu čitljive") else tr("kopije u Download i na USB-u su zaključane"),
+                tr(if (Backup.pass.isBlank()) "Postavi" else "Promijeni"), valueColor = if (Backup.pass.isBlank()) C.Amber else C.Green) { passDlg = true }
+            if (passDlg) TextDialog("Lozinka za kopije", "Lozinka (prazno = bez lozinke)", onDismiss = { passDlg = false }) { v -> Prefs.put("backup_pass", v.trim()); passDlg = false; rev++ }
             SetRow("Napravi kopiju sada", done, arrow = "›", valueColor = C.Green) {
                 done = try { trf("✓ Spremljeno u %s", Backup.saveNow(ctx, usb, parts)) } catch (e: Exception) { e.message ?: tr("Nije uspjelo") }
                 rev++
@@ -2434,7 +2439,7 @@ private fun BackupV2(nav: Nav) {
     }
     when (step) {
         "browse" -> FileBrowser("Izaberi folder", emptySet(), pickDir = true, onDismiss = { step = null }) { dir ->
-            try { java.io.File(dir, Backup.fileName()).writeText(Backup.export(ctx, null, parts)); Toast.makeText(ctx, trf("Spremljeno: %s", dir.path + "/" + Backup.fileName()), Toast.LENGTH_LONG).show() }
+            try { java.io.File(dir, Backup.fileName()).writeText(Backup.export(ctx, Backup.pass.ifBlank { null }, parts)); Toast.makeText(ctx, trf("Spremljeno: %s", dir.path + "/" + Backup.fileName()), Toast.LENGTH_LONG).show() }
             catch (e: Exception) { Toast.makeText(ctx, tr("U taj folder se ne može pisati. Izaberi drugi ili PRETORIAN folder."), Toast.LENGTH_LONG).show() }
             step = null
         }
