@@ -1822,12 +1822,27 @@ private fun LookV2(openSub: (String) -> Unit) {
             // these themes have their own colour (white or black focus): the dots would change nothing
             if (Look.theme != "glass") T("Ova tema ima svoju boju fokusa. Boje rade u temi Glass.", 12.sp, C.Muted, maxLines = 2)
             else ColorDots { rev++ }
-            val transp = (100 - Look.opacity).coerceIn(0, 50)
+            val transp = (100 - Look.opacity).coerceIn(0, 85)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.weight(1f)) { SetSlider("Prozirnost", "0 – 50 %, korak 5 %", transp, 0, 50, 5, { "$it %" }) { Look.opacity = 100 - it; save() } }
+                Box(Modifier.weight(1f)) { SetSlider("Prozirnost", "0 = puno · 85 = skoro čisto staklo", transp, 0, 85, 5, { "$it %" }) { Look.opacity = 100 - it; save() } }
                 Box(Modifier.weight(1f)) { SetSlider("Svjetlina podloge", "tamnije ◀ ▶ svjetlije, korak 5 %", Look.shade, -2, 2, 1, { (if (it > 0) "+" else "") + "${it * 5} %" }) { Look.shade = it; save() } }
             }
             SetSlider("Fokus kartica", "koliko je svijetlo polje na kojem stojiš · u svim temama · manje = blaže za oči · OK pa ◀ ▶", FocusCard.pct, 20, 100, 5, { "$it %" }) { FocusCard.set(it); rev++ }
+            // your own fine tuning, on top of any theme: text and the boxes around groups, channels and cards
+            SetSection("Slova i okviri")
+            fun sgn(v: Int) = (if (v > 0) "+" else "") + v
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.weight(1f)) { SetSlider("Debljina slova", "0 = kako je tema · OK pa ◀ ▶", Tune.weight, 0, 3, 1, { if (it == 0) tr("normalno") else "+$it" }) { Tune.weight = it; Tune.save() } }
+                Box(Modifier.weight(1f)) { SetSlider("Svjetlina slova", "tamnije ◀ ▶ svjetlije", Tune.textLight, -3, 3, 1, { sgn(it) }) { Tune.textLight = it; Tune.save() } }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.weight(1f)) { SetSlider("Veličina slova", "samo tekst · 90 – 120 %", Tune.textSize, 90, 120, 5, { "$it %" }) { Tune.textSize = it; Tune.save() } }
+                Box(Modifier.weight(1f)) { SetSlider("Svjetlina pozadine i menija", "noću tamnije, danju svjetlije", Tune.bgLight, -3, 3, 1, { sgn(it) }) { Tune.bgLight = it; Tune.save() } }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.weight(1f)) { SetSlider("Svjetlina okvira", "kućice grupa, kanala i kartica", Tune.boxLight, -3, 3, 1, { sgn(it) }) { Tune.boxLight = it; Tune.save() } }
+                Box(Modifier.weight(1f)) { SetRow("Vrati slova i okvire", if (Tune.isDefault) tr("kako je tema") else tr("tvoje podešavanje"), tr("Vrati")) { Tune.reset(); rev++ } }
+            }
             SetSection("Veličina i prikaz")
             SetDrop("Veličina", "tekst, pločice i plakati zajedno", listOf("Mala", "Srednja", "Velika"), Look.posterSize) {
                 Look.posterSize = it; Look.tileSize = it; Look.rowSize = it; save(); rev++

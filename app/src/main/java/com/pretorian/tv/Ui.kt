@@ -95,7 +95,7 @@ fun T(
     Text(
         text = tr(text),
         modifier = modifier,
-        style = TextStyle(fontFamily = Inter, fontSize = size, color = color, fontWeight = weight, lineHeight = size * 1.35f),
+        style = TextStyle(fontFamily = Inter, fontSize = size * (Tune.textSize / 100f), color = color, fontWeight = Tune.font(weight), lineHeight = size * (Tune.textSize / 100f) * 1.35f),
         maxLines = maxLines,
         overflow = TextOverflow.Ellipsis,
         textAlign = align,

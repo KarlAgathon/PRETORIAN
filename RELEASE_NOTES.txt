@@ -1,10 +1,6 @@
-PRETORIAN 1.0.34 (beta)
-Zvuk: ugrađeni FFmpeg dekoder (AC3, E-AC3, MP2, DTS) kad box nema svoj · Pomak zvuka u plejeru (Više › Pomak zvuka), pamti se po kanalu
-Slika: automatska frekvencija AFR (24/25/50/60 Hz, isključeno dok je ne uključiš) · izbor dekodera Automatski / Hardverski / Softverski
-Kanal ne radi: sam prelazi na isti kanal iz druge liste (rezervni stream) · jasna poruka: VPN blokiran, DNS / NextDNS, server ne odgovara
-Uživo: pauza (Play/Pause na daljinskom) · ◀◀ / ▶▶ po 5 minuta kroz arhivu na kanalima s arhivom
-Arhiva radi i za M3U liste koje je imaju (catchup)
-EPG mreža se sama prilagođava ekranu: širina kolone, sati na ekranu; u Izgledu: veličina, sati, samo logo
-TizenTube je zadani za trailere kad je instaliran
-Baza na boxu se sama čisti i jednom sedmično sabije · Dijagnostika › Dugi rad: memorija, procesor i brzina pokretanja (uključi u Postavke › Plejer)
-Svaka nova opcija ima svoj prekidač u Postavke › Plejer
+PRETORIAN 1.0.35 (beta)
+Novi logo aplikacije (IPTV)
+Izgled: tema "Predvečerje" se sada zove "Zadana" · novo "Slova i okviri": debljina, svjetlina i veličina slova, svjetlina pozadine i menija, svjetlina okvira · prozirnost do skoro čistog stakla
+Utakmica koju pratiš: čim se završi, nestaje s Home ekrana i iz praćenja
+Brže i lakše za slabije boxove: M3U lista se čita liniju po liniju, pretraga filmova i serija ide direktno iz baze (ne drži sve u memoriji), nema mjerenja brzine pri prvom pokretanju
+Sigurnost: lozinka za kopije (Backup) — kopije u Download, na USB-u i prije ažuriranja su zaključane · izbačen nekorišteni Google ključ iz aplikacije

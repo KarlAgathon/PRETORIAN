@@ -41,7 +41,7 @@ object Look {
         "Narandžasta" to Color(0xFFEA580C), "Ljubičasta" to Color(0xFF9333EA), "Tirkizna" to Color(0xFF0891B2),
         "Roza" to Color(0xFFDB2777), "Zlatna" to Color(0xFFCA8A04),
     )
-    val THEMES = listOf("vece" to "Predvečerje", "bw" to "Crno-bijela", "pijesak" to "Pijesak",
+    val THEMES = listOf("vece" to "Zadana", "bw" to "Crno-bijela", "pijesak" to "Pijesak",
         "liquid" to "Liquid", "classic" to "Classic", "oled" to "OLED crna", "kino" to "Kino", "reddawn" to "Red Dawn", "papir" to "Papir")
     /** themes with their own focus colour: accent and the text on it */
     val FIXED = mapOf(
@@ -104,14 +104,53 @@ private data class Palette(
 
 private fun alpha(c: Color, pct: Int) = c.copy(alpha = (pct.coerceIn(0, 100) / 100f))
 
+/**
+ * Settings › Appearance › Text and boxes: your own fine tuning on top of any theme
+ * (text weight, brightness and size; brightness of the background/menus and of the boxes). 0 = the theme as it is.
+ */
+object Tune {
+    var weight by mutableIntStateOf(Prefs.long("tune_tw", 0).toInt())          // 0 as designed … 3 much bolder
+    var textLight by mutableIntStateOf(Prefs.long("tune_tb", 0).toInt())       // -3 darker … +3 brighter
+    var textSize by mutableIntStateOf(Prefs.long("tune_ts", 100).toInt())      // 90 … 120 %
+    var bgLight by mutableIntStateOf(Prefs.long("tune_mb", 0).toInt())         // background and menus, -3 … +3
+    var boxLight by mutableIntStateOf(Prefs.long("tune_cb", 0).toInt())        // boxes around groups, channels, cards, -3 … +3
+    fun save() {
+        Prefs.put("tune_tw", weight.toLong()); Prefs.put("tune_tb", textLight.toLong()); Prefs.put("tune_ts", textSize.toLong())
+        Prefs.put("tune_mb", bgLight.toLong()); Prefs.put("tune_cb", boxLight.toLong())
+    }
+    fun reset() { weight = 0; textLight = 0; textSize = 100; bgLight = 0; boxLight = 0; save() }
+    val isDefault get() = weight == 0 && textLight == 0 && textSize == 100 && bgLight == 0 && boxLight == 0
+    /** a colour moved toward white (+) or black (−), keeping its own transparency */
+    fun shift(c: Color, steps: Int, per: Float): Color {
+        if (steps == 0) return c
+        val t = (kotlin.math.abs(steps) * per).coerceIn(0f, 1f)
+        val to = if (steps > 0) 1f else 0f
+        return Color(c.red + (to - c.red) * t, c.green + (to - c.green) * t, c.blue + (to - c.blue) * t, c.alpha)
+    }
+    fun font(w: androidx.compose.ui.text.font.FontWeight) =
+        if (weight == 0) w else androidx.compose.ui.text.font.FontWeight((w.weight + weight * 100).coerceAtMost(900))
+}
+
 private fun palette(): Palette {
+    val p = basePalette()
+    if (Tune.isDefault) return p
+    // boxes: brighter = more light colour and a little more solid; darker = toward black
+    fun box(c: Color) = Tune.shift(c, Tune.boxLight, 0.12f).let { x -> if (Tune.boxLight > 0) x.copy(alpha = (x.alpha + Tune.boxLight * 0.05f).coerceAtMost(1f)) else x }
+    return p.copy(
+        bg = Tune.shift(p.bg, Tune.bgLight, 0.06f), rail = Tune.shift(p.rail, Tune.bgLight, 0.07f),
+        card = box(p.card), tile = box(p.tile), line = Tune.shift(p.line, Tune.boxLight, 0.10f),
+        text = Tune.shift(p.text, Tune.textLight, 0.14f), muted = Tune.shift(p.muted, Tune.textLight, 0.14f), soft = Tune.shift(p.soft, Tune.textLight, 0.14f),
+    )
+}
+
+private fun basePalette(): Palette {
     val o = Look.opacity
     return when (Look.theme) {
         "light" -> Palette(Color(0xFFF2F3F6), alpha(Color.White, o), Color(0x0F000000), Color(0x1A000000),
             Color(0xFF14171D), Color(0xFF555C68), Color(0xFF2B3039), Color.White, true)
         "bw" -> Palette(Color(0xFF050505), alpha(Color(0xFF0A0A0C), o.coerceAtLeast(55)), Color(0x14FFFFFF), Color(0x1FFFFFFF),
             Color(0xFFFAFAFA), Color(0xFF8A8A8A), Color(0xFFC4C4C4), Color(0xFF151515), false)
-        "vece" -> Palette(Color(0xFF0A0F1F), alpha(Color(0xFF121B33), (o * 0.56f).toInt().coerceIn(30, 90)), Color(0x14FFFFFF), Color(0x1FFFFFFF),
+        "vece" -> Palette(Color(0xFF0A0F1F), alpha(Color(0xFF121B33), (o * 0.56f).toInt().coerceIn(8, 90)), Color(0x14FFFFFF), Color(0x1FFFFFFF),
             Color(0xFFFAFAFA), Color(0xFF8C94A8), Color(0xFFC8CDD8), Color(0xFF16203A), false)
         "staklo" -> Palette(Color(0xFFF7F7F8), alpha(Color.White, o.coerceAtMost(75)), Color(0x0F000000), Color(0x1A000000),
             Color(0xFF0B0B0F), Color(0xFF5A5A66), Color(0xFF2A2A33), Color(0xFFE9E9EE), true)

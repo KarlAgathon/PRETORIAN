@@ -2241,4 +2241,20 @@ kopije u Download i na USB-u su zaključane|копии в Download и на USB �
 Postavi|Задать
 Promijeni|Изменить
 Lozinka (prazno = bez lozinke)|Пароль (пусто = без пароля)
+0 = puno · 85 = skoro čisto staklo|0 = непрозрачно · 85 = почти прозрачное стекло
+Slova i okviri|Текст и рамки
+Debljina slova|Толщина шрифта
+0 = kako je tema · OK pa ◀ ▶|0 = как в теме · OK, затем ◀ ▶
+Svjetlina slova|Яркость текста
+tamnije ◀ ▶ svjetlije|темнее ◀ ▶ светлее
+Veličina slova|Размер текста
+samo tekst · 90 – 120 %|только текст · 90 – 120 %
+Svjetlina pozadine i menija|Яркость фона и меню
+noću tamnije, danju svjetlije|ночью темнее, днём светлее
+Svjetlina okvira|Яркость рамок
+kućice grupa, kanala i kartica|блоки групп, каналов и карточек
+Vrati slova i okvire|Сбросить текст и рамки
+kako je tema|как в теме
+tvoje podešavanje|ваша настройка
+Zadana|По умолчанию
 """.trimIndent()
