@@ -1046,7 +1046,8 @@ fun FollowRow(nav: Nav, h: Dp) {
     }
     val hidden = remember(tick, GoalNote.lastRev) { HomeHide.list() }
     val live = remember(GoalNote.followed.toList(), GoalNote.lastRev, tick) {
-        GoalNote.followed.filter { it.id !in hidden && (it.live || (it.over && !GoalNote.endedLongAgo(it.id))) }
+        // a finished match leaves Home at once (and is no longer followed)
+        GoalNote.followed.filter { it.id !in hidden && it.live }
     }
     val soon = remember(tick, MyTeams.rev, MatchFollow.rev, SportCache.rev) {
         (Sports.lastCombined[0] ?: SportCache.today ?: emptyList()).filter { e ->

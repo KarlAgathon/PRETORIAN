@@ -151,7 +151,9 @@ object GoalNote {
         val merged = (f + followed.filter { o -> f.none { it.id == o.id } && (o.id in ms || mine.any { t -> t.equals(o.home?.name, true) || t.equals(o.away?.name, true) }) })
             .sortedWith(compareBy({ it.state != "in" }, { it.state == "post" }, { it.start })).take(6)
         merged.filter { it.state == "post" }.forEach { endedAt.putIfAbsent(it.id, System.currentTimeMillis()) }
-        followed.clear(); followed.addAll(merged)
+        // finished (or stale "live" from hours ago): no longer followed and gone from Home at once; the "end" note is still sent below
+        evs.filter { it.id in ms && it.over }.forEach { MatchFollow.drop(it.id) }
+        followed.clear(); followed.addAll(merged.filter { !it.over })
         val today = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date())
         var anyLive = false
         evs.forEach { e ->
@@ -615,7 +617,7 @@ fun FollowCard(nav: Nav, width: androidx.compose.ui.unit.Dp) {
     LaunchedEffect(Unit) { while (true) { delay(60_000); tick++ } }
     val all = remember(GoalNote.followed.toList(), GoalNote.lastRev, tick) {
         val hidden = HomeHide.list()
-        GoalNote.followed.filter { it.id !in hidden && (it.live || (it.state == "post" && !GoalNote.endedLongAgo(it.id))) }
+        GoalNote.followed.filter { it.id !in hidden && it.live }
             .sortedWith(compareBy({ it.state == "post" }, { -GoalNote.lastEventAt(it.id) }))
     }
     var menu by remember { mutableStateOf<SportEvent?>(null) }
