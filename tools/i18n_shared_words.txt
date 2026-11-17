@@ -4,3 +4,5 @@ ffmpeg
 dns
 afr
 nextdns
+max
+min

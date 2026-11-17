@@ -1937,6 +1937,9 @@ private fun PlayerV2(openSub: (String) -> Unit) {
             SetSwitch("Pauza živog kanala", "pauza čuva ono što dolazi u memoriji plejera", Tech.livePause, new = true) { Prefs.put("tech_pause", it); rev++ }
             SetSwitch("Premotavanje unazad", "◀◀ na kanalima s arhivom (od providera)", Tech.rewind, new = true) { Prefs.put("tech_rewind", it); rev++ }
             SetSwitch("Arhiva za M3U liste", "kad lista ima catchup oznake", Tech.m3uCatchup, new = true) { Prefs.put("tech_m3ucatch", it); rev++ }
+            SetSection("Održavanje")
+            SetSwitch("Čišćenje baze", "stari program i obrisane liste se brišu sami · jednom sedmično se baza sabije", Tech.dbClean, new = true) { Prefs.put("tech_dbclean", it); rev++ }
+            SetSwitch("Praćenje dugog rada", "memorija i procesor svake minute · Dijagnostika › Dugi rad · troši malo resursa", Tech.monitor, new = true) { Prefs.put("tech_monitor", it); rev++ }
             SetSection("Stream i bafer")
             SetSwitch("Automatski oporavak", "zamrznut ili prekinut stream se tiho ponovo spoji", Recover.on) { Prefs.put("recover_on", it); rev++ }
             if (Recover.on) SetDrop("Reaguj nakon", if (Recover.choice == 0) tr("Automatski") + ": " + (NetProfile.autoWait / 1000) + " s · " + NetProfile.why() else "bez slike, vremena ili podataka",

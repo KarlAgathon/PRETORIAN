@@ -2212,4 +2212,18 @@ kad lista ima catchup oznake|когда в списке есть метки catc
 Ovaj kanal nema arhivu za premotavanje|У этого канала нет архива для перемотки
 ◀◀ %s min iza uživo|◀◀ на %s мин позади эфира
 Kanal ne radi · prebacujem na rezervni: %s|Канал не работает · переключаю на резервный: %s
+Dugi rad|Длительная работа
+Memorija sada|Память сейчас
+Održavanje|Обслуживание
+Čišćenje baze|Очистка базы
+stari program i obrisane liste se brišu sami · jednom sedmično se baza sabije|старая программа и удалённые списки удаляются сами · раз в неделю база сжимается
+Praćenje dugog rada|Наблюдение за длительной работой
+memorija i procesor svake minute · Dijagnostika › Dugi rad · troši malo resursa|память и процессор каждую минуту · Диагностика › Длительная работа · требует немного ресурсов
+Pokretanje do prvog ekrana|Запуск до первого экрана
+Praćenje|Наблюдение
+skuplja podatke (svake minute)|собирает данные (каждую минуту)
+Praćeno|Наблюдалось
+Memorija min / max|Память мин / макс
+Rast memorije|Рост памяти
+Procesor prosjek / max|Процессор среднее / макс
 """.trimIndent()

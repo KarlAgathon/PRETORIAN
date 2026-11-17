@@ -168,7 +168,8 @@ object Import {
                  (EpgSources.providerOn(it.id) && !GuideDb.has(GuideDb.srcOf(it)))) }.forEach { run(it) }
         } catch (_: Throwable) {}
         GuideSync.start(ctx)
-        GuideSync.later(ctx)
+        // old guides are brought up to date a little after the start, so the first screens come quickly
+        GuideSync.laterAfter(ctx, 45_000)
     }
 
     fun run(p: Playlist, reset: Boolean = false, onDone: () -> Unit = {}) { runWith(p, reset, onDone) }
@@ -436,6 +437,8 @@ object GuideSync {
             } finally { lock.unlock() }
         }
     }
+
+    fun laterAfter(ctx: Context, ms: Long) { val app = ctx.applicationContext; bg.launch { delay(ms); later(app) } }
 
     /** every half hour: is a guide older than a day? */
     fun start(ctx: Context) {

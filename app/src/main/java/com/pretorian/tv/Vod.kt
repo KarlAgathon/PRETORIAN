@@ -620,12 +620,12 @@ object TrailerApps {
     } catch (e: Exception) { null }
     fun installed(ctx: Context): List<Pair<String, String>> = slots(ctx).mapNotNull { (n, p) -> p?.let { it to n } }
 
-    /** The app picked in Settings, or the first installed one: YouTube, then SmartTube, then TizenTube. */
+    /** The app picked in Settings, or by default: TizenTube first (no ads), then SmartTube, then YouTube. */
     fun chosen(ctx: Context): String? {
-        val list = installed(ctx).map { it.first }
+        val all = installed(ctx)
         val pref = Prefs.str("trailer_app")
-        if (pref.isNotBlank() && pref in list) return pref
-        return list.firstOrNull()
+        if (pref.isNotBlank() && all.any { it.first == pref }) return pref
+        return (all.firstOrNull { it.second == "TizenTube" } ?: all.firstOrNull { it.second == "SmartTube" } ?: all.firstOrNull())?.first  // i18n-ignore
     }
 }
 

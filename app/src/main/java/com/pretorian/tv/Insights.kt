@@ -794,6 +794,11 @@ private fun deviceCards(ctx: Context): List<DevCard> {
     out += DevCard(tr("Sistem"), listOf(tvOs, " · Android ", Build.VERSION.RELEASE).joinToString(""), listOf("API ", Build.VERSION.SDK_INT).joinToString(""), R.drawable.lc_smartphone, 0xFF22C55E, null,  // i18n-ignore
         listOf(tr("Operativni sistem") to tvOs, "Android" to Build.VERSION.RELEASE, "API" to Build.VERSION.SDK_INT.toString(), tr("Build") to Build.DISPLAY,  // i18n-ignore
             tr("Kernel") to (System.getProperty("os.version") ?: "—")))
+    // Settings › Player › Long-run check: memory and CPU over hours (and how long the start took)
+    Monitor.summary().let { rows ->
+        out += DevCard(tr("Dugi rad"), rows.firstOrNull { it.first == tr("Memorija sada") }?.second ?: rows.first().second, rows.getOrNull(1)?.let { it.first + ": " + it.second },
+            R.drawable.lc_gauge2, 0xFF38BDF8, null, rows)
+    }
     val patch = Build.VERSION.SECURITY_PATCH
     val patchNice = try { SimpleDateFormat("d. MMMM yyyy", Locale(Look.lang)).format(SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(patch)!!) } catch (e: Exception) { patch }  // i18n-ignore
     out += DevCard(tr("Sigurnosna zakrpa"), patchNice, null, R.drawable.lc_shield_check, 0xFFEF4444, null, listOf(tr("Sigurnosna zakrpa") to patch))

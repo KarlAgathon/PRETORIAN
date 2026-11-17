@@ -76,6 +76,7 @@ class MainActivity : ComponentActivity() {
         Repo.diskDir = cacheDir
         CatalogDb.init(applicationContext)
         Import.missing(this)
+        Upkeep.start(this); Monitor.start()
         Profiles.onStart(this)
         SportsAI.dir = cacheDir
         AutoTranslate.dir = filesDir
@@ -175,6 +176,8 @@ object BuildInfo { const val VERSION = "1.0.33" }
 @Composable
 fun PretorianApp() {
     val ctx = LocalContext.current
+    // Diagnostics › Long run: how long the start took, up to the first screen
+    LaunchedEffect(Unit) { if (Monitor.startMs == 0L) Monitor.startMs = android.os.SystemClock.uptimeMillis() - android.os.Process.getStartUptimeMillis() }
     val stack = remember {
         mutableStateListOf<Screen>(if (Store.playlists(ctx).isEmpty()) Screen.AddPlaylist else Screen.Home)
     }
