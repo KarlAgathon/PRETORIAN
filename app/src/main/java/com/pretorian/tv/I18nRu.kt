@@ -2226,4 +2226,13 @@ Praćeno|Наблюдалось
 Memorija min / max|Память мин / макс
 Rast memorije|Рост памяти
 Procesor prosjek / max|Процессор среднее / макс
+Veličina EPG mreže|Размер сетки EPG
+Automatski se prilagođava ekranu · ovo samo pomjera mjeru|сама подстраивается под экран · это лишь меняет масштаб
+Kompaktno|Компактно
+Veliko|Крупно
+Sati u EPG mreži|Часы в сетке EPG
+Automatski = koliko stane na ekran|Автоматически = сколько помещается на экране
+Kanal u EPG mreži|Канал в сетке EPG
+Logo i ime|Логотип и название
+Samo logo|Только логотип
 """.trimIndent()

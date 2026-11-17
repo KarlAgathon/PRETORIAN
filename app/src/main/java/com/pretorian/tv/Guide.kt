@@ -218,9 +218,11 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
     }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val nameW = 300.dp
-        val ppm = 4.5f  // dp per minute
+        // the grid fits the screen: name column as wide as the space allows, hours shown by width (or as set)
+        val nameW = if (GridLook.logoOnly) 100.dp else (maxWidth * 0.24f).coerceIn(190.dp, 300.dp)
         val gridW = maxWidth - nameW - 16.dp
+        val hours = GridLook.hours.takeIf { it > 0 }?.toFloat() ?: when { gridW > 1000.dp -> 3.5f; gridW > 820.dp -> 3f; gridW > 600.dp -> 2.5f; else -> 2f }
+        val ppm = gridW.value / (hours * 60f)  // dp per minute
         val spanMin = (gridW.value / ppm).toLong()
         val viewEnd = viewStart + spanMin * MIN
 
@@ -400,12 +402,12 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
                     }.focusable(interactionSource = src)) {
                     itemsIndexed(list, key = { i, c -> "$i${c.url}" }) { i, ch ->
                         val sel = i == row && focused
-                        Row(Modifier.fillMaxWidth().height(if (ListStyle.tivimate) 38.dp else 46.dp).padding(vertical = if (ListStyle.tivimate) 1.5.dp else 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().height(GridLook.rowH()).padding(vertical = if (GridLook.size == 0) 1.5.dp else 2.dp), verticalAlignment = Alignment.CenterVertically) {
                             Row(Modifier.width(nameW).fillMaxHeight().clip(Rnd(10.dp)).background(if (i == row) C.CardFocus else Color.Transparent)
                                 .padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 T("${ch.num}", 12.sp, if (i == row) C.RedText else C.Muted, modifier = Modifier.width(28.dp))
                                 ChannelLogo(ch.logo, ch.name)
-                                T(ch.name, 13.sp, if (i == row) C.Text else C.Soft, if (i == row) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, modifier = Modifier.weight(1f))
+                                if (!GridLook.logoOnly) T(ch.name, GridLook.font(), if (i == row) C.Text else C.Soft, if (i == row) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, modifier = Modifier.weight(1f))
                             }
                             Box(Modifier.weight(1f).fillMaxHeight().clip(Rnd(4.dp))) {
                                 val progs = progsOf(ch).filter { it.end > viewStart && it.start < viewEnd }
@@ -429,7 +431,8 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
                                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                                             if (isPast && ch.archive > 0) Ico(R.drawable.lc_history, 12.dp, if (isFocus) C.Text else C.Muted)
                                             if (Reminders.has(pr.title, pr.start)) Ico(R.drawable.lc_bell, 12.dp, C.Amber)
-                                            T(pr.title, 13.sp, if (isFocus) C.Text else if (isPast) C.Muted else C.Soft, if (isNow) FontWeight.SemiBold else FontWeight.Normal)
+                                            // short shows: the start of the title, cut with … (never two lines)
+                                            T(pr.title, GridLook.font(), if (isFocus) C.Text else if (isPast) C.Muted else C.Soft, if (isNow) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1)
                                         }
                                     }
                                 }
@@ -510,4 +513,16 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
     val enter0 = remember { enter }
     // the grid takes focus only at start or after OK on a group, never while the groups are being browsed
     LaunchedEffect(list.isNotEmpty(), enter) { if (list.isNotEmpty() && (Chrome.rail == 0 || enter != enter0)) fr.tryFocus() }
+}
+
+
+/** Settings › Appearance › TV guide grid: size, hours shown, channel column. Defaults adapt to the screen. */
+object GridLook {
+    /** 0 compact, 1 normal, 2 large; a new install follows the channel list style (TiviMate style = compact) */
+    val size get() = Prefs.long("grid_size", if (ListStyle.tivimate || ListStyle.mode == 0) 0L else 1L).toInt().coerceIn(0, 2)
+    /** 0 = automatic by width, else 2 / 3 / 4 hours */
+    val hours get() = Prefs.long("grid_hours", 0).toInt().let { if (it in 2..4) it else 0 }
+    val logoOnly get() = Prefs.bool("grid_logo_only", false)
+    fun rowH() = when (size) { 0 -> 38.dp; 2 -> 54.dp; else -> 46.dp }
+    fun font() = when (size) { 0 -> 12.sp; 2 -> 15.sp; else -> 13.sp }
 }

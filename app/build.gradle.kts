@@ -5,6 +5,8 @@ plugins {
 }
 
 android {
+    // unit tests on GitHub: Android calls give plain defaults instead of failing
+    testOptions { unitTests.isReturnDefaultValues = true }
     namespace = "com.pretorian.tv"
     compileSdk = 35
 
@@ -13,8 +15,8 @@ android {
         minSdk = 24
         targetSdk = 34
         // raise both numbers for every new version (needed for updates)
-        versionCode = 85
-        versionName = "1.0.33"
+        versionCode = 86
+        versionName = "1.0.34"
         // Google sign-in for Drive sync ("TVs and Limited Input devices" client), from the GitHub secrets
         // GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET. Empty: the app asks for them in Settings.
         // TMDB_KEY from GitHub Secrets: posters, cast, platform and coming episodes work for everyone without typing a key
@@ -65,6 +67,7 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("com.google.zxing:core:3.5.3")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    testImplementation("junit:junit:4.13.2")
     implementation("androidx.media3:media3-exoplayer:1.5.0")
     implementation("androidx.media3:media3-exoplayer-hls:1.5.0")
     implementation("androidx.media3:media3-ui:1.5.0")

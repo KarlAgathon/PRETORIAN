@@ -28,7 +28,15 @@ jobs:
           echo "$KS" | base64 -d > app/release.keystore
       - name: Translation check
         run: python3 tools/check_i18n.py
-      - run: gradle assembleRelease --no-daemon
+      - name: Source sanity check
+        # a broken edit can blow a source file up (it happened once): stop before a build hangs on it
+        run: |
+          big=$(find app/src -name '*.kt' ! -name 'I18n*.kt' -size +400k)
+          if [ -n "$big" ]; then echo "::error::Suspiciously large source files: $big"; exit 1; fi
+          big=$(find app/src -name 'I18n*.kt' -size +1500k)
+          if [ -n "$big" ]; then echo "::error::Suspiciously large translation files: $big"; exit 1; fi
+      # automatic tests first (titles, M3U lists, archive), then the app
+      - run: gradle testReleaseUnitTest assembleRelease --no-daemon
         env:
           LEAD_KEY_PASSWORD: ${{ secrets.LEAD_KEY_PASSWORD }}
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}

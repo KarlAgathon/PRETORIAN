@@ -6,3 +6,4 @@ afr
 nextdns
 max
 min
+logo
