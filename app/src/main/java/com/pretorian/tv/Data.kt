@@ -488,8 +488,24 @@ object M3u {
         return r.find(line)?.groupValues?.get(1)?.orNullIfBlank()
     }
 
-    fun parse(text: String): List<Channel> {
+    fun parse(text: String): List<Channel> = parse(text.lineSequence())
+
+    /**
+     * Reads the list line by line straight from the link or file, never the whole file in memory
+     * (a 200 MB list on a 1–2 GB box would not fit twice over as one text).
+     */
+    fun load(url: String, pid: String): List<Channel> {
+        val read: (java.io.InputStream) -> List<Channel> = { input ->
+            input.bufferedReader(Charsets.UTF_8).useLines { parse(it, pid) }
+        }
+        return if (url.startsWith("file://")) java.io.FileInputStream(url.removePrefix("file://")).use(read) else Net.open(url, read)
+    }
+
+    fun parse(lines: Sequence<String>, pid: String = ""): List<Channel> {
         val out = ArrayList<Channel>()
+        // the same group name is kept once, not once per channel
+        val groups = HashMap<String, String>()
+        var first: String? = null
         var name = ""
         var logo: String? = null
         var epgId: String? = null
@@ -497,8 +513,9 @@ object M3u {
         var pending = false
         var cuKind: String? = null; var cuSrc: String? = null; var cuDays = 0
         var headKind: String? = null; var headSrc: String? = null; var headDays = 0
-        text.lineSequence().forEach { raw ->
+        lines.forEach { raw ->
             val line = raw.trim()
+            if (first == null && line.isNotEmpty()) first = line
             if (line.startsWith("#EXTM3U", true)) {
                 // catch-up for the whole list (some lists put it in the header)
                 headKind = (attr(line, "catchup") ?: attr(line, "catchup-type"))?.lowercase()
@@ -512,16 +529,16 @@ object M3u {
                 name = if (comma >= 0) line.substring(comma + 1).trim() else line
                 logo = attr(line, "tvg-logo")
                 epgId = attr(line, "tvg-id")
-                group = attr(line, "group-title") ?: "Ostalo"
+                group = (attr(line, "group-title") ?: "Ostalo").let { g -> groups.getOrPut(g) { g } }
                 pending = true
             } else if (line.isNotEmpty() && !line.startsWith("#") && pending) {
                 val cu = cuKind?.takeIf { it.isNotBlank() && it != "none" }?.let { k -> k + "|" + (cuSrc ?: "") }
-                out.add(Channel(out.size.toString(), out.size + 1, name, logo, group, line, epgId,
+                out.add(Channel(out.size.toString(), out.size + 1, name, logo, group, line, epgId, pid,
                     archive = if (cu != null) cuDays.coerceIn(1, 14) else 0, catchup = cu))
                 pending = false
             }
         }
-        if (out.isEmpty() && !text.trimStart().startsWith("#EXTM3U")) throw IOException("Link ne vraća M3U listu")
+        if (out.isEmpty() && first?.startsWith("#EXTM3U") != true) throw IOException("Link ne vraća M3U listu")
         return out
     }
 }
@@ -552,7 +569,7 @@ object Repo {
     }
 
     private fun m3uChannels(p: Playlist): List<Channel> {
-        if (m3uFor != p.id) { m3u = M3u.parse(m3uText(p.url.trim())).map { it.copy(pid = p.id) }; m3uFor = p.id }
+        if (m3uFor != p.id) { m3u = M3u.load(p.url.trim(), p.id); m3uFor = p.id }
         return m3u
     }
 
@@ -685,7 +702,7 @@ object Repo {
     suspend fun test(p: Playlist): String = withContext(Dispatchers.IO) {
         if (p.type == SourceType.XTREAM) Xtream(p).login()
         else if (p.type == SourceType.STALKER) Stalker(p).login()
-        else { val n = M3u.parse(m3uText(p.url.trim())).size; trf("%s kanala", n) }
+        else { val n = M3u.load(p.url.trim(), p.id).size; trf("%s kanala", n) }
     }
 }
 

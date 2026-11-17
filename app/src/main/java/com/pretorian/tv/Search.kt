@@ -86,7 +86,8 @@ private fun norm(s: String) = Sports.norm(s)
 
 /** Everything you can search, split in parts that load one after another: channels, movies, series, programmes. */
 object SearchIndex {
-    class Item(val n: String, val hit: Hit, val num: String? = null)
+    /** [db] set = not a real entry: this part is searched in the box's database (movies / series), nothing is kept in memory */
+    class Item(val n: String, val hit: Hit, val num: String? = null, val db: String? = null)
     private val parts = HashMap<String, Pair<String, List<Item>>>()
     fun clear() = synchronized(parts) { parts.clear() }
 
@@ -105,11 +106,13 @@ object SearchIndex {
             .map { Item(norm(it.name), Hit.Ch(it), it.num.toString()) }
     }
     suspend fun movies(ctx: android.content.Context) = part(ctx, "vod") { pls ->
+        if (inDb(pls, "vod")) return@part listOf(Item("", Hit.Movie(Vod("", "", null, null, "")), db = "vod"))
         pls.flatMap { p -> val o = Ovr(ctx, p.id); try { Repo.catalog(p, "vod").filter { !o.isHidden("vod", it.str("c")) && !Parental.hides(it.str("n")) } } catch (e: Throwable) { emptyList() } }.map {
             Item(norm(it.str("n")), Hit.Movie(Vod(it.str("id"), it.str("n"), it.str("i").orNullIfBlank(), it.str("r").orNullIfBlank(), it.str("u"))))
         }
     }
     suspend fun shows(ctx: android.content.Context) = part(ctx, "series") { pls ->
+        if (inDb(pls, "series")) return@part listOf(Item("", Hit.Show(SeriesItem("", "", null, null, null)), db = "series"))
         pls.flatMap { p -> val o = Ovr(ctx, p.id); try { Repo.catalog(p, "series").filter { !o.isHidden("series", it.str("c")) && !Parental.hides(it.str("n")) } } catch (e: Throwable) { emptyList() } }.map {
             Item(norm(it.str("n")), Hit.Show(SeriesItem(it.str("id"), it.str("n"), it.str("i").orNullIfBlank(), null, it.str("r").orNullIfBlank())))
         }
@@ -122,11 +125,31 @@ object SearchIndex {
     /** prepare everything quietly (called once after start) */
     suspend fun get(ctx: android.content.Context) { channels(ctx); movies(ctx); shows(ctx) }
 
+    /** every playlist with movies / series has them in the box's database (downloaded now if needed) */
+    private suspend fun inDb(pls: List<Playlist>, kind: String): Boolean {
+        val xs = pls.filter { it.type == SourceType.XTREAM && (if (kind == "vod") it.vod else it.series) }
+        if (xs.isEmpty() || xs.size != pls.count { it.type == SourceType.XTREAM }) return false
+        return try { xs.all { CatalogDb.prepare(it, kind) } } catch (e: Throwable) { false }
+    }
+
+    /** search in the database: hidden categories and parental filter as before, names that start with the text first */
+    private fun findDb(kind: String, words: List<String>, max: Int): List<Hit> {
+        val ctx = NewContent.appCtx ?: return emptyList()
+        val pls = Store.actives(ctx).filter { it.type == SourceType.XTREAM }
+        val ovr = pls.associate { it.id to Ovr(ctx, it.id) }
+        val rows = CatalogDb.search(pls.map { it.id }, kind, words, max * 6)
+            .filter { r -> ovr[r.pl]?.isHidden(kind, r.c) != true && !Parental.hides(r.n) }
+        return rows.sortedBy { if (it.k.startsWith(words[0])) 0 else 1 }.take(max).map { r ->
+            if (kind == "vod") Hit.Movie(Vod(r.id, r.n, r.i, r.r, r.u)) else Hit.Show(SeriesItem(r.id, r.n, r.i, null, r.r))
+        }
+    }
+
     /** Runs on a background thread. Exact channel number first, then names that start with the text, then the rest. */
     suspend fun find(list: List<Item>, q: String, max: Int = 60): List<Hit> = withContext(Dispatchers.Default) {
         val t = q.trim()
         val words = norm(t).split(' ').filter { it.isNotBlank() }
         if (words.isEmpty()) return@withContext emptyList()
+        list.singleOrNull()?.db?.let { kind -> return@withContext try { withContext(Dispatchers.IO) { findDb(kind, words, max) } } catch (e: Throwable) { emptyList() } }
         val exact = ArrayList<Hit>(); val starts = ArrayList<Hit>(); val other = ArrayList<Hit>()
         for (it in list) {
             if (it.num != null && it.num == t) { exact.add(it.hit); continue }

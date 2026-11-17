@@ -101,13 +101,15 @@ object Perf {
         // short speed test: 15 points
         // measured once (best of 5 runs, so a busy moment doesn't lower it) and kept: the score stays the same on every start
         var ms = Prefs.long("perf_speed_ms", -1)
-        if (ms < 0) {
+        // the speed test only runs when the mode is "Automatic" (or on "Measure again"): a new install starts in Lite
+        // without spending its first seconds on a benchmark
+        if (ms < 0 && (Prefs.long("perf_mode", -1) == 0L || forceMeasure)) {
             ms = Long.MAX_VALUE
             repeat(5) { val t0 = System.nanoTime(); var x = 0L; for (i in 0 until 3_000_000) x += (i xor (i shr 3)).toLong()
                 ms = minOf(ms, (System.nanoTime() - t0) / 1_000_000 + (x and 0)) }
             Prefs.put("perf_speed_ms", ms)
         }
-        val speed = when { ms < 12 -> 15; ms < 20 -> 11; ms < 35 -> 7; ms < 60 -> 3; else -> 0 }
+        val speed = when { ms < 0 -> 7; ms < 12 -> 15; ms < 20 -> 11; ms < 35 -> 7; ms < 60 -> 3; else -> 0 }
         score = (ram + cpu + os + gpu + speed).coerceIn(0, 100)
         parts = listOf(tr("RAM") to listOf(ram, "/30").joinToString(""), tr("Procesor") to listOf(cpu, "/25").joinToString(""), "Android" to listOf(os, "/15").joinToString(""),  // i18n-ignore
             tr("Čip i grafika") to listOf(gpu, "/15").joinToString(""), tr("Test brzine") to listOf(speed, "/15").joinToString(""))
@@ -119,7 +121,8 @@ object Perf {
     }
     fun set(m: Int) { mode = m; Prefs.put("perf_mode", m.toLong()) }
     /** About › Box score › Measure again */
-    fun remeasure(c: Context) { Prefs.remove("perf_speed_ms"); init(c) }
+    private var forceMeasure = false
+    fun remeasure(c: Context) { Prefs.remove("perf_speed_ms"); forceMeasure = true; init(c); forceMeasure = false }
     val MODES = listOf("Automatski", "Lite", "Full")
 }
 

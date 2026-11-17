@@ -35,10 +35,10 @@ object CatalogDb {
 
     fun init(ctx: Context) {
         if (helper != null) return
-        helper = object : SQLiteOpenHelper(ctx, "catalog.db", null, 2) { // i18n-ignore
+        helper = object : SQLiteOpenHelper(ctx, "catalog.db", null, 3) { // i18n-ignore
             override fun onConfigure(db: SQLiteDatabase) { db.enableWriteAheadLogging() }
             override fun onCreate(db: SQLiteDatabase) {
-                db.execSQL("CREATE TABLE items(pl TEXT, kind TEXT, id TEXT, c TEXT, n TEXT, i TEXT, r TEXT, u TEXT)") // i18n-ignore
+                db.execSQL("CREATE TABLE items(pl TEXT, kind TEXT, id TEXT, c TEXT, n TEXT, i TEXT, r TEXT, u TEXT, k TEXT)") // i18n-ignore
                 db.execSQL("CREATE INDEX items_pk ON items(pl, kind)") // i18n-ignore
                 db.execSQL("CREATE TABLE meta(pl TEXT, kind TEXT, at INTEGER, n INTEGER, PRIMARY KEY(pl, kind))") // i18n-ignore
                 guideTables(db)
@@ -46,6 +46,8 @@ object CatalogDb {
             override fun onUpgrade(db: SQLiteDatabase, o: Int, n: Int) {
                 // version 2 adds the TV guide; movies and series already on the box stay
                 if (o < 2) guideTables(db)
+                // version 3: the search key (name without accents, lower case) next to every movie / series; filled later in the background
+                if (o < 3) try { db.execSQL("ALTER TABLE items ADD COLUMN k TEXT") } catch (_: Throwable) {} // i18n-ignore
             }
         }
     }
@@ -96,11 +98,12 @@ object CatalogDb {
         d.beginTransactionNonExclusive()
         try {
             d.delete("items", "pl=? AND kind=?", arrayOf(p.id, kind)) // i18n-ignore
-            val st = d.compileStatement("INSERT INTO items(pl, kind, id, c, n, i, r, u) VALUES(?,?,?,?,?,?,?,?)") // i18n-ignore
+            val st = d.compileStatement("INSERT INTO items(pl, kind, id, c, n, i, r, u, k) VALUES(?,?,?,?,?,?,?,?,?)") // i18n-ignore
             Xtream(p).catalogEach(kind, bytes = { r, t -> lastBytes = r; total = t; progress?.invoke(n, r, t) }) { o ->
                 st.clearBindings()
                 st.bindString(1, p.id); st.bindString(2, kind); st.bindString(3, o.str("id")); st.bindString(4, o.str("c"))
                 st.bindString(5, o.str("n")); st.bindString(6, o.str("i")); st.bindString(7, o.str("r")); st.bindString(8, o.str("u"))
+                st.bindString(9, Sports.norm(o.str("n")))
                 st.executeInsert()
                 n++
                 if (n % 500 == 0) progress?.invoke(n, lastBytes, total)
@@ -114,6 +117,53 @@ object CatalogDb {
     }
 
     private fun lock(key: String) = synchronized(locks) { locks.getOrPut(key) { Mutex() } }
+
+    /** downloads a part when it was never downloaded, without reading it into memory (search asks the database itself) */
+    suspend fun prepare(p: Playlist, kind: String): Boolean {
+        if (helper == null) return false
+        lock(p.id + "_" + kind).withLock { if (meta(p.id, kind) == null) download(p, kind) }
+        return meta(p.id, kind) != null
+    }
+
+    class Row(val pl: String, val id: String, val c: String, val n: String, val i: String?, val r: String?, val u: String, val k: String)
+
+    /** Search straight in the database: every word must be in the name; at most [limit] rows. */
+    fun search(pls: List<String>, kind: String, words: List<String>, limit: Int): List<Row> {
+        val d = db() ?: return emptyList()
+        if (pls.isEmpty() || words.isEmpty()) return emptyList()
+        val where = StringBuilder("kind=? AND pl IN (" + pls.joinToString(",") { "?" } + ")") // i18n-ignore
+        val args = ArrayList<String>().apply { add(kind); addAll(pls) }
+        // rows from before version 3 may not have their key yet: their lower-case name is used meanwhile
+        words.forEach { w -> where.append(" AND COALESCE(k, lower(n)) LIKE ?"); args += "%" + w.replace("%", "").replace("_", "") + "%" } // i18n-ignore
+        return d.rawQuery("SELECT pl, id, c, n, i, r, u, k FROM items WHERE $where LIMIT $limit", args.toTypedArray()).use { c -> // i18n-ignore
+            val out = ArrayList<Row>()
+            while (c.moveToNext()) out += Row(c.getString(0) ?: "", c.getString(1) ?: "", c.getString(2) ?: "", c.getString(3) ?: "",
+                c.getString(4)?.ifBlank { null }, c.getString(5)?.ifBlank { null }, c.getString(6) ?: "", c.getString(7) ?: (c.getString(3) ?: "").lowercase())
+            out
+        }
+    }
+
+    /** fills the search key of rows saved by older versions, a little at a time, never while the app starts */
+    fun backfill() {
+        bg.launch {
+            delay(90_000)
+            try {
+                while (true) {
+                    val d = db() ?: break
+                    val rows = d.rawQuery("SELECT rowid, n FROM items WHERE k IS NULL LIMIT 2000", null).use { c -> // i18n-ignore
+                        val l = ArrayList<Pair<Long, String>>(); while (c.moveToNext()) l += c.getLong(0) to (c.getString(1) ?: ""); l }
+                    if (rows.isEmpty()) break
+                    d.beginTransactionNonExclusive()
+                    try {
+                        val st = d.compileStatement("UPDATE items SET k=? WHERE rowid=?") // i18n-ignore
+                        rows.forEach { (id, n) -> st.clearBindings(); st.bindString(1, Sports.norm(n)); st.bindLong(2, id); st.executeUpdateDelete() }
+                        d.setTransactionSuccessful()
+                    } finally { d.endTransaction() }
+                    delay(200)
+                }
+            } catch (_: Throwable) {}
+        }
+    }
     fun lockFor(pl: String, kind: String) = lock(pl + "_" + kind)
 
     /** the playlist part from the database; downloads it first when it was never downloaded. Old data → refreshed in the background. */

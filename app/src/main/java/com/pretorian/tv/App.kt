@@ -75,8 +75,7 @@ class MainActivity : ComponentActivity() {
         NewContent.appCtx = applicationContext
         Repo.diskDir = cacheDir
         CatalogDb.init(applicationContext)
-        Import.missing(this)
-        Upkeep.start(this); Monitor.start()
+        CatalogDb.backfill()
         Profiles.onStart(this)
         SportsAI.dir = cacheDir
         AutoTranslate.dir = filesDir
@@ -84,6 +83,9 @@ class MainActivity : ComponentActivity() {
         Look.load(this)
         onyxMigrate(this)
         Perf.init(this)
+        // after Perf (Lite / Full decides how far ahead the guide goes)
+        Import.missing(this)
+        Upkeep.start(this); Monitor.start()
         // picture cache: limited so the disk never fills up (150 MB on weaker boxes, 400 MB otherwise)
         coil.Coil.setImageLoader(coil.ImageLoader.Builder(this)
             .memoryCache { coil.memory.MemoryCache.Builder(this).maxSizePercent(if (Perf.lite || Lean.images) 0.10 else 0.20).build() }
