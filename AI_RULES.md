@@ -1,191 +1,194 @@
+# PRETORIAN – SHARED AI DEVELOPMENT RULES
 
-# PRETORIAN – AI DEVELOPMENT RULES
+**Project:** PRETORIAN  
+**Repository:** KarlAgathon/PRETORIAN  
+**Project type:** Free and open-source Android TV IPTV application.
+
+These rules apply equally to ChatGPT Codex, Claude Code and any other AI development agent working on Pretorian.
+
+Both agents must read and follow this document before starting any development task.
+
+---
 
 ## 1. PROJECT IDENTITY
 
-Project: PRETORIAN
-Type: Free and open-source Android TV IPTV application.
-Repository: KarlAgathon/PRETORIAN
+Pretorian is a personal and community-oriented open-source project.
 
-Pretorian is a personal and community-oriented project.
-It is permanently free and is not intended as a commercial product.
+- Pretorian is permanently free.
+- It is not a commercial product.
+- The project is intended to help users enjoy a better television experience.
+- Development priorities are quality, simplicity, reliability and accessibility.
 
-The main objective is to provide an excellent Android TV experience with:
-- Modern and professional interface.
+The goal is to deliver a professional application experience comparable to modern streaming platforms such as Netflix, Apple TV and Disney+.
+
+---
+
+## 2. CORE PROJECT PHILOSOPHY
+
+The two most important project priorities are:
+
+### Modern design
+
+- Professional and contemporary interface.
+- Consistent visual identity.
+- Carefully selected colors and typography.
+- Clean layouts and balanced spacing.
+- Responsive layouts for different TV resolutions.
+- No unnecessary visual clutter.
+- Consistent design across all application sections.
+
+### Excellent user experience (UX)
+
 - Simple and intuitive navigation.
-- Reliable playback.
-- Low resource consumption.
-- Excellent remote-control experience.
-- Compatibility with different Android TV devices.
+- Logical Back button behavior.
+- Optimized Android TV remote-control navigation.
+- Minimal unnecessary navigation steps.
+- Predictable focus behavior.
+- Clear visual feedback for user actions.
+- Fast access to frequently used functions.
+- Intelligent presentation of relevant information.
+- The application should anticipate user needs whenever possible.
 
-## 2. CORE DEVELOPMENT PRINCIPLES
+The user should never have to fight the interface to find something.
 
+---
+
+## 3. PRESERVE EXISTING FUNCTIONALITY
+
+- Always inspect existing code before making changes.
 - Preserve the existing application architecture.
-- Never rewrite working functionality unnecessarily.
-- Never remove existing features without approval.
-- Avoid unnecessary dependencies.
-- Prioritize stability, performance and reliability.
-- Keep the application lightweight.
-- Avoid unnecessary background processes.
-- Optimize memory and CPU usage.
-- Maintain backward compatibility whenever possible.
+- Never remove working functionality without explicit approval.
+- Never rewrite entire files unnecessarily.
+- Avoid duplicating existing functionality.
+- Respect existing naming conventions and coding patterns.
+- Maintain compatibility with existing features.
+- Avoid unnecessary dependencies and complexity.
 
-## 3. USER EXPERIENCE (UX)
+Existing working functionality takes priority over unnecessary refactoring.
 
-User experience is one of the highest priorities.
+---
 
-The interface should follow modern design principles inspired by premium streaming platforms.
+## 4. ANDROID TV COMPATIBILITY
 
-Requirements:
-- Simple and logical navigation.
-- Consistent visual language.
-- Clear typography and readable text.
-- Consistent spacing and component sizing.
-- Appropriate contrast and colors.
-- No unnecessary menus or navigation steps.
-- Predictable Back button behavior.
-- No accidental focus loss.
-- No overlapping or clipped UI elements.
+Android TV is the primary target platform.
 
-The application should anticipate user needs and minimize unnecessary interaction.
+Every implementation must consider:
 
-## 4. ANDROID TV AND REMOTE CONTROL
-
-Android TV compatibility is essential.
-
-Always consider:
 - D-pad navigation.
 - Focus management.
-- OK / Select behavior.
+- Remote-control interaction.
 - Back button behavior.
-- Long-press interactions.
-- Focus indicators.
 - Different screen resolutions.
 - Different aspect ratios.
-- TV overscan and safe areas.
+- TV overscan and safe areas where applicable.
+- Performance on lower-powered TV devices.
+- Memory and CPU consumption.
 
-Never introduce changes that make remote navigation less intuitive.
+The interface must remain usable without a touchscreen or mouse.
 
-Every interactive element must be accessible using a TV remote.
+Never introduce navigation that requires touch interaction.
 
-## 5. PERFORMANCE AND STABILITY
+---
 
-- Avoid memory leaks.
-- Avoid unnecessary object allocations.
-- Avoid blocking the main thread.
-- Optimize image loading and caching.
+## 5. UI/UX DESIGN RULES
+
+- Maintain consistent visual styling.
+- Preserve the established Pretorian design language.
+- Use existing components whenever possible.
+- Avoid inconsistent margins, padding and element sizes.
+- Ensure text remains readable from normal TV viewing distances.
+- Prevent clipping, overlapping and truncated content where avoidable.
+- Ensure focus indicators are clearly visible.
+- Keep animations smooth and purposeful.
+- Avoid excessive animations and visual effects.
+
+Any significant design change must be evaluated across the relevant application screens.
+
+---
+
+## 6. PERFORMANCE AND RELIABILITY
+
+- Optimize resource consumption.
+- Avoid unnecessary background operations.
+- Prevent memory leaks.
+- Avoid unnecessary network requests.
+- Use efficient data processing.
+- Keep navigation and playback responsive.
 - Handle network errors gracefully.
-- Prevent application crashes.
-- Avoid unnecessary recompositions or UI updates.
-- Preserve smooth scrolling and navigation.
-- Consider low-memory Android TV devices.
+- Avoid blocking the main UI thread.
+- Preserve playback stability.
 
-Stability is more important than adding unnecessary visual effects.
+Performance improvements must not compromise existing functionality.
 
-## 6. IPTV FUNCTIONALITY
+---
 
-Preserve existing functionality related to:
-- M3U and Xtream playlists.
-- Live TV.
-- Movies.
-- Series.
-- EPG.
-- Channel groups.
-- Favorites.
-- Search.
-- Reminders.
-- Video playback.
-- Audio and subtitle selection.
-- External players.
+## 7. CODE QUALITY
 
-Do not change existing playback behavior without understanding its dependencies.
+- Write clean, maintainable and readable code.
+- Follow the existing project architecture.
+- Use meaningful names.
+- Avoid unnecessary abstractions.
+- Handle exceptions properly.
+- Avoid duplicated logic.
+- Keep implementations focused.
+- Document complex logic when necessary.
 
-## 7. VISUAL DESIGN
+Do not introduce technical complexity without a clear benefit.
 
-Maintain Pretorian's established visual identity.
+---
 
-Design priorities:
-- Modern streaming-platform appearance.
-- Clean and professional layout.
-- Consistent component design.
-- Appropriate use of colors.
-- Smooth and subtle animations.
-- Responsive layouts.
-- Clear information hierarchy.
+## 8. DEVELOPMENT AND GIT RULES
 
-Do not redesign existing screens unless specifically requested.
+- Never develop directly on the main branch.
+- Use separate feature or bug-fix branches.
+- Never overwrite unfinished changes from another agent.
+- Never force-push without explicit approval.
+- Never delete branches containing unfinished work without approval.
+- Keep commits focused and descriptive.
+- Review changes before committing.
+- Do not commit secrets, API keys, passwords or private user data.
 
-## 8. CODE MODIFICATIONS
+Before editing files, check the current Git state and existing modifications.
 
-Before modifying code:
+If another agent has uncommitted changes, do not overwrite them.
 
-1. Inspect the relevant files.
-2. Understand existing implementation.
-3. Identify dependencies.
-4. Determine possible side effects.
-5. Propose a solution when changes are substantial.
-
-When modifying code:
-- Make focused changes.
-- Avoid unrelated modifications.
-- Preserve existing naming conventions.
-- Follow existing coding patterns.
-- Document important architectural decisions.
-
-Never replace entire files unnecessarily.
+---
 
 ## 9. BUILD AND TESTING
 
-- Inspect existing Gradle configuration before changing it.
-- Preserve current SDK and dependency configuration.
-- Do not upgrade Gradle or Android dependencies without justification.
-- Run appropriate tests after modifications.
-- Verify APK build whenever possible.
-- Report build errors honestly.
-- Never claim a successful build without verification.
+After implementation:
 
-## 10. GIT AND COLLABORATION
+1. Run relevant tests.
+2. Check for compilation errors.
+3. Verify affected functionality.
+4. Check Android TV navigation where applicable.
+5. Verify that existing features still work.
+6. Run the Android build when possible.
+7. Report the actual build and test results.
 
-- Never commit directly to main during feature development.
-- Use separate branches for development tasks.
-- Keep commits focused and descriptive.
-- Never overwrite another agent's unfinished work.
-- Review changes before merging.
-- Use Pull Requests for significant changes.
-- Require human approval before merging into main.
+Never claim that a build or test succeeded unless it was actually executed and verified.
 
-## 11. AI COLLABORATION
+---
 
-Both ChatGPT Codex and Claude must follow these rules.
+## 10. AI COLLABORATION RULES
 
-When working on the same project:
+Pretorian uses a combined AI development workflow.
 
-- Inspect existing work before starting.
-- Communicate assumptions and findings.
-- Avoid duplicate implementation.
-- Do not overwrite another agent's changes.
-- Review each other's code when requested.
-- Identify potential regressions.
-- Explain important technical decisions.
+### ChatGPT Codex
 
-One agent's suggestions must not automatically be treated as correct.
+Primary implementation agent.
 
-## 12. SECURITY
+Responsible for:
+- Writing and modifying code.
+- Implementing features.
+- Fixing bugs.
+- Optimizing performance.
+- Running tests and builds.
 
-- Never expose passwords, API keys or access tokens.
-- Never commit private credentials.
-- Do not introduce unnecessary network permissions.
-- Preserve existing security mechanisms.
-- Handle user data responsibly.
+### Claude Code
 
-## 13. FINAL DEVELOPMENT RULE
+Architecture, research and review agent.
 
-Pretorian is built around three fundamental priorities:
-
-1. USER EXPERIENCE
-2. STABILITY
-3. PERFORMANCE
-
-Every development decision should respect these priorities.
-
-Do not sacrifice reliability for unnecessary complexity or visual effects.
+Responsible for:
+- Analyzing application architecture.
+- Researching
