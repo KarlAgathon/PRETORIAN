@@ -2263,4 +2263,18 @@ Pošalji na TV|Отправить на ТВ
 ✓ Primljeno s telefona|✓ Получено с телефона
 Unesi s telefona|Ввод с телефона
 skeniraj kamerom · ista kućna mreža|сканируйте камерой · та же домашняя сеть
+Nikad|Никогда
+Siva|Серый
+Kao tema|Как в теме
+pokušavam ponovo svakih 20 s|повтор каждые 20 с
+−%s min iza uživo|−%s мин от эфира
+Kanal trenutno ne šalje sliku · pokušavam ponovo…|Канал сейчас не передаёт картинку · пробую снова…
+EPG|EPG
+Boja EPG-a|Цвет EPG
+polja s emisijama|ячейки передач
+Veličina slova EPG-a|Размер текста EPG
+Prozirnost EPG-a|Прозрачность EPG
+0 = kao tema · 80 = skoro providno|0 = как в теме · 80 = почти прозрачно
+Svjetlina EPG-a|Яркость EPG
+Vrati izgled EPG-a|Сбросить вид EPG
 """.trimIndent()

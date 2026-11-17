@@ -1,3 +1,6 @@
-PRETORIAN 1.0.37
-Čuvar ekrana se više nikad ne pali dok ide kanal uživo (ni kad stream na tren zastane): samo kad je film ili serija pauziran, ili na Home ekranu bez daljinskog
-Ako se kanal ipak zaustavi, izlazak iz čuvara ekrana ga odmah ponovo pokreće
+PRETORIAN 1.0.38
+Kanal koji zamrzne više ne ostaje tiho stajati: poslije 4 pokušaja uzima rezervni stream, a ako ga nema, javlja poruku i pokušava ponovo svakih 20 s
+Kanali s arhivom: u traci playera dugmad "◀◀ 5 min" i "Uživo", a u uglu piše koliko si iza uživo
+Izgled › EPG: boja, veličina slova, prozirnost i svjetlina programa (EPG mreža, vodič u playeru, lista kanala)
+Nova instalacija: hardverski dekoder i skrivene kategorije za odrasle, XXX, LGBT i trans (otvara ih PIN)
+Zapis streamova: "Nikad" je preveden

@@ -1871,6 +1871,17 @@ private fun LookV2(openSub: (String) -> Unit) {
                 Box(Modifier.weight(1f)) { SetSlider("Svjetlina okvira", "kućice grupa, kanala i kartica", Tune.boxLight, -3, 3, 1, { sgn(it) }) { Tune.boxLight = it; Tune.save() } }
                 Box(Modifier.weight(1f)) { SetRow("Vrati slova i okvire", if (Tune.isDefault) tr("kako je tema") else tr("tvoje podešavanje"), tr("Vrati")) { Tune.reset(); rev++ } }
             }
+            // the programme guide on its own: EPG grid, guide in the player, programmes in the TV list
+            SetSection("EPG")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.weight(1f)) { SetDrop("Boja EPG-a", "polja s emisijama", EpgLook.COLORS, EpgLook.color, new = true) { EpgLook.color = it; EpgLook.save(); rev++ } }
+                Box(Modifier.weight(1f)) { SetSlider("Veličina slova EPG-a", "80 – 140 %", EpgLook.size, 80, 140, 10, { "$it %" }) { EpgLook.size = it; EpgLook.save() } }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.weight(1f)) { SetSlider("Prozirnost EPG-a", "0 = kao tema · 80 = skoro providno", EpgLook.transp, 0, 80, 10, { "$it %" }) { EpgLook.transp = it; EpgLook.save() } }
+                Box(Modifier.weight(1f)) { SetSlider("Svjetlina EPG-a", "tamnije ◀ ▶ svjetlije", EpgLook.light, -3, 3, 1, { sgn(it) }) { EpgLook.light = it; EpgLook.save() } }
+            }
+            SetRow("Vrati izgled EPG-a", if (EpgLook.isDefault) tr("kako je tema") else tr("tvoje podešavanje"), tr("Vrati")) { EpgLook.reset(); rev++ }
             SetSection("Veličina i prikaz")
             SetDrop("Veličina", "tekst, pločice i plakati zajedno", listOf("Mala", "Srednja", "Velika"), Look.posterSize) {
                 Look.posterSize = it; Look.tileSize = it; Look.rowSize = it; save(); rev++

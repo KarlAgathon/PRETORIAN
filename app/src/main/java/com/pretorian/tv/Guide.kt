@@ -425,7 +425,7 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
                                     val isNow = pr.start <= now && pr.end > now
                                     val isPast = pr.end <= now
                                     Box(Modifier.offset(x = x.dp).width((w - 3).coerceAtLeast(2f).dp).fillMaxHeight().clip(Rnd(8.dp))
-                                        .background(when { isFocus -> C.Red.copy(alpha = ListStyle.strength); isNow -> C.CardHi; isPast -> C.Card.copy(alpha = 0.55f); else -> C.Card })
+                                        .background(when { isFocus -> C.Red.copy(alpha = ListStyle.strength); isNow -> EpgLook.cell(C.CardHi, true); isPast -> EpgLook.cell(C.Card).let { it.copy(alpha = it.alpha * 0.55f) }; else -> EpgLook.cell(C.Card) })
                                         .then(if (isFocus) Modifier.border(2.dp, C.Red, Rnd(8.dp)) else Modifier).padding(horizontal = 8.dp),
                                         contentAlignment = Alignment.CenterStart) {
                                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -517,6 +517,29 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
 
 
 /** Settings › Appearance › TV guide grid: size, hours shown, channel column. Defaults adapt to the screen. */
+/** your own look of the programme guide (EPG grid, guide in the player, programmes in the TV list): colour, size, transparency, brightness */
+object EpgLook {
+    val COLORS = listOf("Kao tema", "Plava", "Zelena", "Narandžasta", "Ljubičasta", "Siva")
+    private val tints = listOf(Color.Unspecified, Color(0xFF2563EB), Color(0xFF16A34A), Color(0xFFEA580C), Color(0xFF7C3AED), Color(0xFF64748B))
+    var color by mutableIntStateOf(Prefs.long("epg_color", 0).toInt().coerceIn(0, 5))
+    var size by mutableIntStateOf(Prefs.long("epg_size", 100).toInt().coerceIn(80, 140))       // text %, 80 … 140
+    var transp by mutableIntStateOf(Prefs.long("epg_transp", 0).toInt().coerceIn(0, 80))      // 0 = as the theme … 80 % see-through
+    var light by mutableIntStateOf(Prefs.long("epg_light", 0).toInt().coerceIn(-3, 3))        // cells darker ◀ ▶ brighter
+    fun save() { Prefs.put("epg_color", color.toLong()); Prefs.put("epg_size", size.toLong()); Prefs.put("epg_transp", transp.toLong()); Prefs.put("epg_light", light.toLong()) }
+    fun reset() { color = 0; size = 100; transp = 0; light = 0; save() }
+    val isDefault get() = color == 0 && size == 100 && transp == 0 && light == 0
+    /** a programme cell: theme colour or your tint (stronger for "now"), then brightness and transparency */
+    fun cell(base: Color, now: Boolean = false): Color {
+        if (isDefault) return base
+        val t = tints[color]
+        var c = if (t == Color.Unspecified) base else Color(t.red, t.green, t.blue, base.alpha.coerceAtLeast(if (now) 0.55f else 0.32f)).let { x ->
+            if (now) x else Tune.shift(x, -1, 0.35f) }
+        c = Tune.shift(c, light, 0.12f)
+        return c.copy(alpha = c.alpha * (1f - transp / 100f))
+    }
+    fun sp(v: androidx.compose.ui.unit.TextUnit) = if (size == 100) v else (v.value * size / 100f).sp
+}
+
 object GridLook {
     /** 0 compact, 1 normal, 2 large; a new install follows the channel list style (TiviMate style = compact) */
     val size get() = Prefs.long("grid_size", if (ListStyle.tivimate || ListStyle.mode == 0) 0L else 1L).toInt().coerceIn(0, 2)
@@ -524,5 +547,5 @@ object GridLook {
     val hours get() = Prefs.long("grid_hours", 0).toInt().let { if (it in 2..4) it else 0 }
     val logoOnly get() = Prefs.bool("grid_logo_only", false)
     fun rowH() = when (size) { 0 -> 38.dp; 2 -> 54.dp; else -> 46.dp }
-    fun font() = when (size) { 0 -> 12.sp; 2 -> 15.sp; else -> 13.sp }
+    fun font() = EpgLook.sp(when (size) { 0 -> 12.sp; 2 -> 15.sp; else -> 13.sp })
 }

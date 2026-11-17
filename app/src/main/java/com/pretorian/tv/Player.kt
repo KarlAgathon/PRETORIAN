@@ -241,6 +241,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     var reconnect by remember { mutableIntStateOf(0) }          // live: attempt 1..3 of getting the stream back
     val backupTried = remember { HashSet<String>() }             // links already tried as backup for this channel
     var shiftFrom by remember { mutableLongStateOf(0L) }          // live: ◀◀ in the archive, 0 = live
+    var gaveUp by remember { mutableStateOf(false) }              // 4 quiet tries did not bring the picture back
+    var frozenMsg by remember { mutableStateOf(false) }           // no backup either: say so and keep trying every 20 s
     var digits by remember { mutableStateOf("") }              // channel number typed on the remote
     var digitTick by remember { mutableIntStateOf(0) }
     var prevIndex by remember { mutableIntStateOf(-1) }
@@ -366,6 +368,25 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         Toast.makeText(ctx, trf("◀◀ %s min iza uživo", ((now - to) / 60_000).toInt()), Toast.LENGTH_SHORT).show()
     }
 
+    /** the quiet tries are used up: the same channel from elsewhere (backup stream), otherwise a clear message — never a silent freeze */
+    fun giveUp(e: PlaybackException?) {
+        val cur = items.getOrNull(index)
+        fun fail() { if (e != null) error = errorText(e, s.live) else frozenMsg = true }
+        if (s.live && Tech.backup && cur?.channel != null && shiftFrom == 0L) {
+            backupTried += cur.url
+            playerScope.launch {
+                val alt = try { StreamBackup.find(ctx, cur.channel, backupTried) } catch (_: Exception) { null }
+                if (alt != null) {
+                    backupTried += alt.url
+                    Toast.makeText(ctx, trf("Kanal ne radi · prebacujem na rezervni: %s", alt.name), Toast.LENGTH_LONG).show()
+                    items = items.toMutableList().also { l -> l[index] = cur.copy(url = alt.url, channel = alt) }
+                    reconnect = 0; gaveUp = false; frozenMsg = false
+                    loadMedia(items[index], null, 0L)
+                } else fail()
+            }
+        } else fail()
+    }
+
     DisposableEffect(Unit) {
         val l = object : Player.Listener {
             override fun onPlayerError(e: PlaybackException) {
@@ -373,23 +394,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 if (Recover.on && reconnect < 4) { reconnect++; Stats.recovery(); StreamLog.event(if (reconnect == 1) "freeze" else "x", items.getOrNull(index)?.title ?: ""); StreamLog.event("try", items.getOrNull(index)?.title ?: ""); StreamLog.add(listOf(items.getOrNull(index)?.title ?: "", " · ", e.errorCodeName.removePrefix("ERROR_CODE_"), " · ", trf("spajam ponovo (%s/4)", reconnect)).joinToString("")); retryToken++ }  // i18n-ignore
                 else if (!Recover.on && s.live && reconnect < 3) { reconnect++; retryToken++ }
                 else if (!Recover.on && !s.live && !retried) { retried = true; retryToken++ }
-                else {
-                    reconnect = 0
-                    val cur = items.getOrNull(index)
-                    // Settings › Player › Backup stream: the same channel from another playlist (or another copy in this one)
-                    if (s.live && Tech.backup && cur?.channel != null && shiftFrom == 0L) {
-                        backupTried += cur.url
-                        playerScope.launch {
-                            val alt = try { StreamBackup.find(ctx, cur.channel, backupTried) } catch (_: Exception) { null }
-                            if (alt != null) {
-                                backupTried += alt.url
-                                Toast.makeText(ctx, trf("Kanal ne radi · prebacujem na rezervni: %s", alt.name), Toast.LENGTH_LONG).show()
-                                items = items.toMutableList().also { l -> l[index] = cur.copy(url = alt.url, channel = alt) }
-                                loadMedia(items[index], null, 0L)
-                            } else error = errorText(e, s.live)
-                        }
-                    } else error = errorText(e, s.live)
-                }
+                else { reconnect = 0; giveUp(e) }
             }
             override fun onPlaybackStateChanged(state: Int) {
                 buffering = state == Player.STATE_BUFFERING
@@ -491,17 +496,29 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             val dataStuck = buf == lastBuf && player.totalBufferedDuration < 800 && (dur <= 0 || buf < dur - 3000)
             if (active && (timeStuck || picStuck || dataStuck)) {
                 stuck += 500; why = if (picStuck && !timeStuck) "slika stoji" else if (timeStuck) "vrijeme stoji" else "ne stižu podaci"
-            } else stuck = 0
+            } else {
+                stuck = 0
+                // the picture moves again: back to normal
+                if ((gaveUp || frozenMsg) && pos != last && last >= 0) { gaveUp = false; frozenMsg = false; reconnect = 0 }
+            }
             last = pos; lastFrames = frames; lastBuf = buf
             if (stuck >= Recover.waitMs && reconnect < 4) {
                 stuck = 0; reconnect++; Stats.recovery()
                 (items.getOrNull(index)?.title ?: "").let { t -> if (reconnect == 1) StreamLog.event("freeze", t); StreamLog.event("try", t) }
                 StreamLog.add(listOf(items.getOrNull(index)?.title ?: "", " · ", tr(why), " · ", trf("spajam ponovo (%s/4)", reconnect)).joinToString(""))  // i18n-ignore
                 retryToken++
+            } else if (stuck >= Recover.waitMs && reconnect >= 4) {
+                // 4 tries did not help: backup stream once, then a new try every 20 s with a message on screen
+                if (!gaveUp) { gaveUp = true; stuck = 0; giveUp(null) }
+                else if (stuck >= 20_000L) {
+                    stuck = 0; frozenMsg = true
+                    StreamLog.add(listOf(items.getOrNull(index)?.title ?: "", " · ", tr("pokušavam ponovo svakih 20 s")).joinToString(""))  // i18n-ignore
+                    retryToken++
+                }
             }
         }
     }
-    LaunchedEffect(index) { if (!s.live) while (true) { delay(15_000); if (player.isPlaying) saveProgress() } }
+    LaunchedEffect(index) { gaveUp = false; frozenMsg = false; if (!s.live) while (true) { delay(15_000); if (player.isPlaying) saveProgress() } }
 
     BackHandler(enabled = dialog != null || side != null || resume != null || bar) {
         when {
@@ -780,6 +797,25 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 }
             }
         }
+        // watching behind live through the archive: how far, in the corner
+        if (s.live && shiftFrom > 0 && error == null) Box(Modifier.fillMaxSize().padding(top = 28.dp, end = 32.dp), contentAlignment = Alignment.TopEnd) {
+            var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+            LaunchedEffect(shiftFrom) { while (true) { now = System.currentTimeMillis(); delay(30_000) } }
+            val mins = ((now - (shiftFrom + player.currentPosition.coerceAtLeast(0))) / 60_000).toInt().coerceAtLeast(1)
+            Row(Modifier.clip(Pill).background(Color(0xCC000000)).padding(horizontal = 14.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Ico(R.drawable.lc_rotate_ccw, 15.dp, Color.White)
+                T(trf("−%s min iza uživo", mins), 14.sp, Color.White, FontWeight.SemiBold)
+            }
+        }
+        // the stream sends no picture and no backup was found: say it plainly (a new try runs every 20 s)
+        if (frozenMsg && error == null && !saver) Box(Modifier.fillMaxSize().padding(bottom = 70.dp), contentAlignment = Alignment.BottomCenter) {
+            Row(Modifier.clip(Pill).background(Color(0xCC000000)).padding(horizontal = 18.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                androidx.compose.material3.CircularProgressIndicator(Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
+                T("Kanal trenutno ne šalje sliku · pokušavam ponovo…", 15.sp, Color.White, FontWeight.SemiBold)
+            }
+        }
         if (saver) ModernScreenSaver(if (s.live) null else Paused(if (item.season != null) "Serija" else "Film", item.search?.let { cleanTitle(it).first } ?: item.title,
             listOfNotNull(item.season?.let { trf("Sezona %s", it) }, item.episode?.let { trf("Epizoda %s", it) }, item.subtitle).joinToString(" · ").ifBlank { null },
             item.logo, null, position, duration))
@@ -835,7 +871,10 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                             audioCount = tracksOf(player, MC.TRACK_TYPE_AUDIO).size, format = FORMATS[resize],
                             onPause = { if (player.isPlaying) player.pause() else player.play() },
                             onLong = { a2 -> bar = false; dialog = when (a2) { "fav" -> "fav"; "subs" -> "subs"; else -> null } },
+                            rewind = Tech.rewind && ch != null && Catchups.has(p, ch), behind = shiftFrom > 0,
                             onAction = { a2 -> when (a2) {
+                                "rew" -> liveShift(-1)
+                                "tolive" -> { shiftFrom = 0L; loadMedia(items[index], null, 0L) }
                                 // one OK: on or off at once, no window (the star turns yellow)
                                 "fav" -> ch?.let { c ->
                                     val lists = Favs.lists(ctx)
@@ -1004,11 +1043,14 @@ private val FORMATS = listOf("Fit", "Zoom", "Razvuci", "16:9", "4:3")
  *  Subtitles only when the stream has subtitle tracks, Audio only with 2 or more tracks. */
 @Composable
 private fun PlayerBar(live: Boolean, playing: Boolean, hasChannel: Boolean, favOn: Boolean, hasSubs: Boolean, subsOn: Boolean, audioCount: Int, format: String,
-                      onPause: () -> Unit, onLong: (String) -> Unit, onAction: (String) -> Unit) {
+                      onPause: () -> Unit, onLong: (String) -> Unit, onAction: (String) -> Unit, rewind: Boolean = false, behind: Boolean = false) {
     val first = remember { FocusRequester() }
     data class B(val id: String, val label: String, val icon: Int, val tint: Color? = null)
     val list = buildList {
         add(B("pause", if (playing) "Pauza" else "Pusti", if (playing) R.drawable.lc_pause else R.drawable.lc_play))
+        // channels with archive: back in time without ◀◀ keys on the remote, and straight back to live
+        if (live && rewind) add(B("rew", "◀◀ 5 min", R.drawable.lc_rotate_ccw))
+        if (live && rewind && behind) add(B("tolive", "Uživo", R.drawable.lc_radio, Color(0xFFEF4444)))
         if (live && hasChannel) add(B("fav", "Favorit", R.drawable.lc_star, if (favOn) Color(0xFFFBBF24) else null))
         if (hasSubs || !live) add(B("subs", "Titlovi", R.drawable.lc_captions, if (subsOn) Color(0xFF22C55E) else null))
         if (audioCount > 1) add(B("audio", "Audio", R.drawable.lc_volume))

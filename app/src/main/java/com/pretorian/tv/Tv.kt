@@ -1165,15 +1165,15 @@ fun EpgList(ch: Channel, limit: Int = 12, modifier: Modifier = Modifier) {
                         val on = Reminders.toggle(Reminder("r${e.start}${e.title.hashCode()}", e.title, e.start, ch.url, ch.name, ch.logo, ch.pid, "tv"))
                         Toast.makeText(ctx, tr(if (on) "Podsjetnik postavljen" else "Podsjetnik uklonjen"), Toast.LENGTH_SHORT).show()
                     }
-                }, normal = if (now) C.CardFocus else C.Card, shape = Rnd(12.dp), zoom = 1.01f) { _ ->
+                }, normal = if (now) EpgLook.cell(C.CardFocus, true) else EpgLook.cell(C.Card), shape = Rnd(12.dp), zoom = 1.01f) { _ ->
                     Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            T(e.times(), 12.sp, if (now) C.RedText else C.Muted, FontWeight.SemiBold)
+                            T(e.times(), EpgLook.sp(12.sp), if (now) C.RedText else C.Muted, FontWeight.SemiBold)
                             if (now) Chip("SADA", C.Red, C.OnRed)
                             if (rem) { Ico(R.drawable.lc_bell, 14.dp, C.Amber); T("OK = ukloni podsjetnik", 11.sp, C.Amber) }
                             if (!now && !rem && Hints.always) T("OK = podsjeti me", 11.sp, C.Muted)
                         }
-                        T(e.title, 15.sp, C.Text, FontWeight.Medium, maxLines = 2)
+                        T(e.title, EpgLook.sp(15.sp), C.Text, FontWeight.Medium, maxLines = 2)
                         if (now) {
                             Box(Modifier.fillMaxWidth().height(4.dp).clip(Rnd(2.dp)).background(C.CardHi)) {
                                 Box(Modifier.fillMaxWidth(e.progress()).height(4.dp).background(C.Red))

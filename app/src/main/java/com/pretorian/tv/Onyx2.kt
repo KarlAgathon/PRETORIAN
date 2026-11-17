@@ -470,12 +470,12 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                                                 ((e.end - from) / 1_800_000f).coerceIn(1f, 2.2f)   // never so narrow that the title is lost
                                             } else if (kk == 0) 1.4f else 1f
                                             Column(Modifier.weight(w).fillMaxHeight().clip(Rnd(8.dp))
-                                                .background(if (isSel && !solid) C.Red.copy(alpha = ListStyle.strength) else if (isSel) C.Bg.copy(alpha = 0.85f) else if (hl) Color.Black.copy(alpha = if (isNow) 0.18f else 0.1f) else if (isNow) C.CardHi else C.Card)
+                                                .background(if (isSel && !solid) C.Red.copy(alpha = ListStyle.strength) else if (isSel) C.Bg.copy(alpha = 0.85f) else if (hl) Color.Black.copy(alpha = if (isNow) 0.18f else 0.1f) else if (isNow) EpgLook.cell(C.CardHi, true) else EpgLook.cell(C.Card))
                                                 .then(if (isSel && solid) Modifier.border(2.dp, C.Bg, Rnd(8.dp)) else Modifier).padding(horizontal = 9.dp, vertical = 3.dp),
                                                 verticalArrangement = Arrangement.Center) {
                                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                                     if (Reminders.has(e.title, e.start)) Ico(R.drawable.lc_bell, 11.dp, if (isSel) C.Amber else if (hl) C.OnRed else C.Amber)
-                                                    T((if (isNow) "" else hm.format(java.util.Date(e.start)) + "  ") + e.title, 12.sp,  // i18n-ignore
+                                                    T((if (isNow) "" else hm.format(java.util.Date(e.start)) + "  ") + e.title, EpgLook.sp(12.sp),  // i18n-ignore
                                                         if (isSel && !solid) ListStyle.onPick else if (isSel) C.Text else if (hl) C.OnRed else if (isNow) C.Text else C.Soft, if (isNow || isSel) FontWeight.SemiBold else FontWeight.Normal)
                                                 }
                                                 if (isNow) ThinBar(e.progress(), if (hl) C.OnRed else C.RedText, Modifier.fillMaxWidth().padding(top = 3.dp))

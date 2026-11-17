@@ -687,7 +687,9 @@ fun PosterCard(title: String, image: String?, key: String, progress: Float?, mod
 fun onyxMigrate(c: Context) {
     val p = c.getSharedPreferences("pretorian", Context.MODE_PRIVATE)
     // brand new install: hide adult groups and start in simple mode (TV, Movies, Series); "Napredni mod" is one click away
-    if (p.getInt("look_v", 0) == 0 && !p.contains("look_theme")) p.edit().putBoolean("hide_adult_default", true).putBoolean("simple_mode", true).apply()
+    if (p.getInt("look_v", 0) == 0 && !p.contains("look_theme")) p.edit().putBoolean("hide_adult_default", true).putBoolean("simple_mode", true)
+        // 1.0.38: a new box starts with the hardware decoder and with adult, XXX, LGBT and trans categories hidden (PIN opens them)
+        .putLong("tech_decoder", 1L).putBoolean("par_adult", true).putBoolean("par_lgbt", true).putBoolean("par_trans", true).apply()
     if (p.getInt("look_v", 0) < 7) {   // 0.6.4: "Predvečerje" becomes the look for everyone once
         Look.theme = "vece"; Look.layout = 2
         p.edit().putInt("look_v", 7).putString("look_theme", "vece").putInt("look_layout", 2).apply()
