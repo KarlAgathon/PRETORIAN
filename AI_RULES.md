@@ -191,4 +191,77 @@ Architecture, research and review agent.
 
 Responsible for:
 - Analyzing application architecture.
-- Researching
+- Researching technical solutions and Android TV compatibility.
+- Planning complex features before implementation.
+- Reviewing code changes made by Codex.
+- Identifying bugs, regressions and performance issues.
+- Evaluating UI/UX and remote-control navigation.
+- Providing independent technical recommendations.
+
+Claude should not implement the same task simultaneously with Codex.
+
+### Collaboration workflow
+
+1. Claude analyzes and prepares technical recommendations.
+2. Codex implements approved changes.
+3. Claude reviews the implementation when requested.
+4. Codex addresses identified problems.
+5. Final changes are tested and verified.
+
+Both agents must follow the same project rules.
+
+---
+
+## 11. SECURITY
+
+- Never expose API keys, passwords or private credentials.
+- Never commit secrets or sensitive user information.
+- Validate external data.
+- Use secure network communication whenever possible.
+- Avoid unnecessary permissions.
+- Preserve user privacy.
+
+---
+
+## 12. CHANGE MANAGEMENT
+
+- Understand existing functionality before changing it.
+- Explain significant architectural changes before implementation.
+- Prefer small, focused changes.
+- Preserve backward compatibility where possible.
+- Obtain approval before removing existing functionality.
+- Avoid unnecessary dependencies.
+
+---
+
+## 13. REPORTING
+
+After every implementation task, report:
+
+- Files modified.
+- Changes implemented.
+- Tests performed.
+- Build status.
+- Known issues.
+- Potential regressions.
+- Recommended next steps.
+
+Reports must distinguish verified results from assumptions.
+
+---
+
+## 14. FINAL PROJECT PRINCIPLE
+
+Every development decision must prioritize:
+
+- Excellent user experience.
+- Modern and consistent design.
+- Reliability and stability.
+- Android TV compatibility.
+- Performance and resource efficiency.
+- Maintainable architecture.
+- Accessibility and intuitive remote navigation.
+
+Pretorian must remain permanently free and open source.
+
+The project exists to provide useful technology and help its community.
