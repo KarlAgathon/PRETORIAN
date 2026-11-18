@@ -2368,6 +2368,11 @@ New Age|New Age|New Age|New Age|New Age|New Age|New Age|New Age|New Age|New Age
 New Era|New Era|New Era|New Era|New Era|New Era|New Era|New Era|New Era|New Era
 New Era: tri stalna panela — kategorije providera, kanali i EPG.|New Era: three fixed panels — provider categories, channels and EPG.|New Era: drei feste Bereiche — Provider-Kategorien, Sender und EPG.|New Era: tri stalna panela — kategorije providera, kanali i EPG.|New Era: три стална панела — категорије провајдера, канали и ЕПГ.|New Era: три постоянни панела — категории на доставчика, канали и EPG.|New Era: trei panouri fixe — categorii furnizor, canale și EPG.|New Era: sağlayıcı kategorileri, kanallar ve EPG için üç sabit panel.|New Era: tre pannelli fissi — categorie del provider, canali ed EPG.|New Era: ثلاث لوحات ثابتة — فئات المزوّد والقنوات ودليل البرامج.
 New Age: postojeći TV prikaz.|New Age: existing TV layout.|New Age: bisherige TV-Ansicht.|New Age: postojeći TV prikaz.|New Age: постојећи ТВ приказ.|New Age: съществуващ ТВ изглед.|New Age: aspectul TV existent.|New Age: mevcut TV görünümü.|New Age: visualizzazione TV esistente.|New Age: عرض التلفاز الحالي.
+Regije|Regions|Regionen|Regije|Регије|Региони|Regiuni|Bölgeler|Regioni|المناطق
+Favoriti – države|Favourite countries|Lieblingsländer|Omiljene države|Омиљене државе|Любими държави|Țări favorite|Favori ülkeler|Paesi preferiti|الدول المفضلة
+countries|countries|Länder|države|државе|държави|țări|ülkeler|paesi|الدول
+teams|teams|Teams|timovi|فرق|отбори|echipe|takımlar|squadre|الفرق
+Odaberi države za Favoriti|Choose countries for Favourites|Länder für Favoriten auswählen|Odaberi države za favorite|Изабери државе за омиљене|Избери държави за любими|Alege țările favorite|Favoriler için ülke seç|Scegli i paesi preferiti|اختر الدول للمفضلة
 """.trimIndent()
 
 private val DICT: Map<String, Map<String, String>> by lazy {
