@@ -78,8 +78,8 @@ object Preview {
 }
 
 /** Row heights from Settings › Appearance › Row size. */
-/** Style of the channel lists (TV and the list in the player): 0 compact (default), 1 normal, 2 large,
- *  3 TiviMate mode (TV opens as the guide grid: groups left, channels with their shows by time, no small picture). */
+/** Style of the channel lists (TV and the list in the player): 0 compact (default), 1 normal, 2 large.
+ * The separate full-screen TV Guide/TiviMate mode is retired in BETA12. */
 object ListStyle {
     val mode get() = Prefs.long("tv_density", 0).toInt().coerceIn(0, 2)
     val tivimate get() = false
