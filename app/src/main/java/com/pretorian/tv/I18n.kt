@@ -2361,6 +2361,7 @@ Protok, brzina, stabilnost i zapisi|Traffic, speed, stability and logs|Datenverk
 Sačuvaj ili vrati postavke|Save or restore settings|Einstellungen sichern oder wiederherstellen|Spremi ili vrati postavke|Сачувај или врати подешавања|Запази или възстанови настройките|Salvează sau restaurează setările|Ayarları kaydet veya geri yükle|Salva o ripristina le impostazioni|حفظ الإعدادات أو استعادتها
 Nova verzija i kanal ažuriranja|New version and update channel|Neue Version und Update-Kanal|Nova verzija i kanal ažuriranja|Нова верзија и канал ажурирања|Нова версия и канал за актуализации|Versiune nouă și canal de actualizare|Yeni sürüm ve güncelleme kanalı|Nuova versione e canale aggiornamenti|الإصدار الجديد وقناة التحديث
 Uređaj, kontakt i licence|Device, contact and licenses|Gerät, Kontakt und Lizenzen|Uređaj, kontakt i licence|Уређај, контакт и лиценце|Устройство, контакт и лицензи|Dispozitiv, contact și licențe|Cihaz, iletişim ve lisanslar|Dispositivo, contatti e licenze|الجهاز وجهة الاتصال والتراخيص
+Kategorije|Categories|Kategorien|Kategorije|Категорије|Категории|Categorii|Kategoriler|Categorie|الفئات
 """.trimIndent()
 
 private val DICT: Map<String, Map<String, String>> by lazy {
