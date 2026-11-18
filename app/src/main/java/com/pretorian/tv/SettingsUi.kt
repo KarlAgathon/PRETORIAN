@@ -634,13 +634,7 @@ private fun LookPage() {
     Page("Izgled", "Promjene se vide odmah.") {
         Label(tr("TV prikaz"))
         T(tr("New Era — jedini TV layout za sada. Ostali layouti dolaze kasnije."), 13.sp, C.Text, FontWeight.SemiBold, maxLines = 2)
-        Label("Kako se otvara TV")
-        var tvView by remember { mutableStateOf(Prefs.str("tv_view", "list")) }
-        Segmented(listOf("Lista kanala", "TV vodič (mreža)"), if (tvView == "guide") 1 else 0) {
-            tvView = if (it == 1) "guide" else "list"; Prefs.put("tv_view", tvView)
-        }
-        T(if (tvView == "guide") "TV vodič: kanali odozgo prema dolje, emisije vodoravno po vremenu (kao TiviMate)."
-          else "Lista kanala: grupe lijevo, kanali u sredini, mali pregled slike i program desno.", 12.sp, C.Muted, maxLines = 2)
+        T("TV: kategorije lijevo, kanali u sredini, mali player i EPG desno.", 12.sp, C.Muted, maxLines = 2)
         Label("Oblik ivica")
         Segmented(listOf("Zaobljene", "Blago zaobljene", "Oštre"), Look.corner) { Look.corner = it; save() }
         Label("Set ikona")
@@ -1942,9 +1936,8 @@ private fun LookV2(openSub: (String) -> Unit) {
             SetDrop("Veličina male slike", "u listi kanala · veća slika = više opisa emisije", listOf("Mala", "Srednja", "Velika"), Prefs.long("tv_mini", 1).toInt().coerceIn(0, 2)) {
                 Prefs.put("tv_mini", it.toLong()); rev++
             }
-            SetDrop("Prikaz liste kanala", "u TV-u i u listi u playeru · TiviMate mod = grupe lijevo, kanali s programom po satima", listOf("Kompaktni", "Normalni", "Veliki", "TiviMate mod"), ListStyle.mode, new = true) {
-                Prefs.put("tv_density", it.toLong())
-                Prefs.put("tv_view", if (it == 3) "guide" else "list"); rev++
+            SetDrop("Prikaz liste kanala", "u TV-u i u listi u playeru", listOf("Kompaktni", "Normalni", "Veliki"), ListStyle.mode, new = true) {
+                Prefs.put("tv_density", it.toLong().coerceIn(0, 2)); rev++
             }
             SetDrop("Veličina EPG mreže", "Automatski se prilagođava ekranu · ovo samo pomjera mjeru", listOf("Kompaktno", "Normalno", "Veliko"), GridLook.size, new = true) { Prefs.put("grid_size", it.toLong()); rev++ }
             SetDrop("Sati u EPG mreži", "Automatski = koliko stane na ekran", listOf("Automatski", "2 h", "3 h", "4 h"), GridLook.hours.let { if (it == 0) 0 else it - 1 }, new = true) { Prefs.put("grid_hours", if (it == 0) 0L else (it + 1).toLong()); rev++ }
@@ -1965,9 +1958,6 @@ private fun LookV2(openSub: (String) -> Unit) {
             }
             SetDrop("Oznake u gornjoj traci", "Lite/Full i A/S pored Postavki", listOf("Samo ikone", "Obojeni kvadrati"), Prefs.long("bar_badges", 0).toInt().coerceIn(0, 1), new = true) {
                 Prefs.put("bar_badges", it.toLong()); rev++
-            }
-            SetDrop("TV se otvara kao", null, listOf("Lista kanala", "TV vodič"), if (Prefs.str("tv_view", "list") == "guide") 1 else 0) {
-                Prefs.put("tv_view", if (it == 1) "guide" else "list"); rev++
             }
             var stdMsg by remember { mutableStateOf<String?>(null) }
             SetRow("Snimi kao standardni prikaz", "ovaj izgled za svaku novu instalaciju i profil · fajl u Download/PRETORIAN", stdMsg ?: tr("Snimi"), new = true) {
