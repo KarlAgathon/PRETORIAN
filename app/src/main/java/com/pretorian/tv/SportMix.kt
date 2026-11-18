@@ -496,7 +496,7 @@ private fun MatchRow(e: SportEvent, selected: Boolean, fr: FocusRequester?, onFo
     val title = if (e.home != null && e.away != null) e.home.name + " – " + e.away.name else e.title
     val reminded = e.state == "pre" && Reminders.has(title, e.start)
     Focusable(onClick = onClick, onMenu = onMenu, onFocus = onFocus, focusRequester = fr, shape = Rnd(12.dp),
-        normal = if (selected) C.Red.copy(alpha = 0.16f) else C.Card, focused = C.Red, zoom = 1.01f,
+        normal = if (selected) C.CardFocus else C.Card, focused = C.Red, zoom = 1.01f,
         modifier = Modifier.fillMaxWidth().height(46.dp).then(if (reminded) Modifier.border(1.5.dp, C.Amber, Rnd(12.dp)) else Modifier)) { f ->
         Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             T(when { e.onAir -> tr(if (e.replay) "SNIMAK" else "NA TV"); e.state == "in" -> e.clock ?: tr("UŽIVO"); e.state == "post" -> "FT"; else -> whenShort(e.start) },  // i18n-ignore
