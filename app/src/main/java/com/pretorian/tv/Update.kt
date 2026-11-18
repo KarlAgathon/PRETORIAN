@@ -32,7 +32,7 @@ object Updater {
     /** Beta: test versions, published as the release "beta" (only for whoever chose the Beta channel) */
     private const val BETA_URL = "https://github.com/KarlAgathon/PRETORIAN/releases/download/beta/update.json"
     /** "stable" or "beta" */
-    private val betaBuild get() = BuildConfig.APPLICATION_ID.endsWith(".beta")
+    private val betaBuild get() = BuildConfig.APPLICATION_ID.endsWith(".beta")  // i18n-ignore
     // A beta APK must never switch to the Stable feed: Android treats Stable and Beta as
     // different packages, so offering the Stable APK here produces a failed install.
     val beta get() = betaBuild || Prefs.str("upd_channel", "stable") == "beta"  // i18n-ignore
