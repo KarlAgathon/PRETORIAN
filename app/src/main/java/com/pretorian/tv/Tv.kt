@@ -1184,8 +1184,7 @@ fun PreviewBox(ch: Channel?, modifier: Modifier) {
     }
 }
 
-/** EPG list of one channel (programme guide); OK on a coming show sets a reminder. */
-@Composable
+/** Compact now-playing EPG text shown inside a channel row. */
 @Composable
 private fun ChannelEpgLine(ch: Channel) {
     val ctx = LocalContext.current
