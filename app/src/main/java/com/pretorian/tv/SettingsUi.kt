@@ -1891,6 +1891,14 @@ private fun LookV2(openSub: (String) -> Unit) {
     var rev by remember { mutableIntStateOf(0) }
     key(rev) {
         SetPage("Izgled", "Promjene se vide odmah.") {
+            // Keep the TV layout selector visible at the top of Appearance in the modern settings.
+            SetSection("TV prikaz")
+            Segmented(listOf(tr("New Age"), tr("New Era")), Look.tvDesign) {
+                Look.tvDesign = it
+                save()
+            }
+            T(if (Look.tvDesign == 1) tr("New Era: tri stalna panela — kategorije providera, kanali i EPG.")
+              else tr("New Age: postojeći TV prikaz."), 12.sp, C.Muted, maxLines = 2)
             SetSection("Tema")
             ThemeCards { rev++ }
             SetSection("Boja")
