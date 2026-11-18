@@ -113,6 +113,8 @@ fun Focusable(
     focused: Color? = null,
     zoom: Float = 1.03f,
     focusRequester: FocusRequester? = null,
+    focusBorderColor: Color? = null,
+    borderColor: Color? = null,
     onFocus: (() -> Unit)? = null,
     onMenu: (() -> Unit)? = null,
     content: @Composable BoxScope.(Boolean) -> Unit,
@@ -147,7 +149,7 @@ fun Focusable(
         m.graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(shape)
             .background(if (isFocused) (focused ?: C.CardFocus) else normal)
-            .border(1.5.dp, if (isFocused) C.Red.copy(alpha = (0.45f + FocusCard.pct / 180f).coerceIn(0.5f, 1f)) else Color.Transparent, shape)
+            .border(1.5.dp, if (isFocused) (focusBorderColor ?: C.Red.copy(alpha = (0.45f + FocusCard.pct / 180f).coerceIn(0.5f, 1f))) else (borderColor ?: Color.Transparent), shape)
             .combinedClickable(interactionSource = src, indication = null, onClick = onClick, onLongClick = null),
         content = { content(isFocused) },
     )
