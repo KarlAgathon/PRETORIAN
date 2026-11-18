@@ -2329,4 +2329,9 @@ Nova verzija i kanal ažuriranja|Новая версия и канал обно�
 Uređaj, kontakt i licence|Устройство, контакты и лицензии
 Kategorije|Категории
 SLIJEDI|СЛЕДУЮЩЕЕ
+TV prikaz|Представление ТВ
+New Age|New Age
+New Era|New Era
+New Era: tri stalna panela — kategorije providera, kanali i EPG.|New Era: три постоянные панели — категории провайдера, каналы и EPG.
+New Age: postojeći TV prikaz.|New Age: существующий вид ТВ.
 """.trimIndent()
