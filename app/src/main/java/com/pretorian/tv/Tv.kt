@@ -215,19 +215,24 @@ fun GroupColumn(
             is Load.Err -> Message("Greška", rows.message)
             is Load.Ok -> {
                 val list = rows.value
-                val firstFocusable = list.indexOfFirst { it is GRow.Group || it is GRow.Header || it is GRow.NewFav || it is GRow.NewGroup }
-                val lastFocusable = list.indexOfLast { it is GRow.Group || it is GRow.Header || it is GRow.NewFav || it is GRow.NewGroup }
-                LazyColumn(state = state, verticalArrangement = Arrangement.spacedBy(4.dp), contentPadding = PaddingValues(bottom = 24.dp, top = 2.dp)) {
+                val focusedIndex = list.indexOfFirst { it.id == focusKey }
+                val boundaryKeys = if (containVerticalFocus) Modifier.onPreviewKeyEvent { e ->
+                    if (e.type != KeyEventType.KeyDown) false
+                    else when {
+                        e.key == Key.DirectionUp && focusedIndex == 0 -> true
+                        e.key == Key.DirectionDown && focusedIndex == list.lastIndex -> true
+                        else -> false
+                    }
+                } else Modifier
+                LazyColumn(
+                    modifier = boundaryKeys,
+                    state = state,
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    contentPadding = PaddingValues(bottom = 24.dp, top = 2.dp),
+                ) {
                     itemsIndexed(list, key = { _, r -> r.id }) { i, r ->
-                        val edgeNavigation = if (containVerticalFocus) Modifier.onPreviewKeyEvent { e ->
-                            if (e.type != KeyEventType.KeyDown) false
-                            else when {
-                                e.key == Key.DirectionUp && i == firstFocusable -> true
-                                e.key == Key.DirectionDown && i == lastFocusable -> true
-                                else -> false
-                            }
-                        } else Modifier.wrapKeys(i, list.size, wrap)
-                        val m = Modifier.fillMaxWidth().height(Rows.group).then(edgeNavigation)
+                        val m = Modifier.fillMaxWidth().height(Rows.group)
+                            .then(if (containVerticalFocus) Modifier else Modifier.wrapKeys(i, list.size, wrap))
                         val fr = wrap.requester(i, if (r.id == focusKey) focusFr else null)
                         when (r) {
                             is GRow.Group -> {
