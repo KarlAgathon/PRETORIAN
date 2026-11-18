@@ -2363,6 +2363,11 @@ Nova verzija i kanal ažuriranja|New version and update channel|Neue Version und
 Uređaj, kontakt i licence|Device, contact and licenses|Gerät, Kontakt und Lizenzen|Uređaj, kontakt i licence|Уређај, контакт и лиценце|Устройство, контакт и лицензи|Dispozitiv, contact și licențe|Cihaz, iletişim ve lisanslar|Dispositivo, contatti e licenze|الجهاز وجهة الاتصال والتراخيص
 Kategorije|Categories|Kategorien|Kategorije|Категорије|Категории|Categorii|Kategoriler|Categorie|الفئات
 SLIJEDI|NEXT|ALS NÄCHSTES|SLIJEDI|СЛЕДИ|СЛЕДВА|URMĂTORUL|SIRADAKİ|PROSSIMO|التالي
+TV prikaz|TV layout|TV-Ansicht|TV prikaz|ТВ приказ|ТВ изглед|Aspect TV|TV görünümü|Visualizzazione TV|عرض التلفاز
+New Age|New Age|New Age|New Age|New Age|New Age|New Age|New Age|New Age|New Age
+New Era|New Era|New Era|New Era|New Era|New Era|New Era|New Era|New Era|New Era
+New Era: tri stalna panela — kategorije providera, kanali i EPG.|New Era: three fixed panels — provider categories, channels and EPG.|New Era: drei feste Bereiche — Provider-Kategorien, Sender und EPG.|New Era: tri stalna panela — kategorije providera, kanali i EPG.|New Era: три стална панела — категорије провајдера, канали и ЕПГ.|New Era: три постоянни панела — категории на доставчика, канали и EPG.|New Era: trei panouri fixe — categorii furnizor, canale și EPG.|New Era: sağlayıcı kategorileri, kanallar ve EPG için üç sabit panel.|New Era: tre pannelli fissi — categorie del provider, canali ed EPG.|New Era: ثلاث لوحات ثابتة — فئات المزوّد والقنوات ودليل البرامج.
+New Age: postojeći TV prikaz.|New Age: existing TV layout.|New Age: bisherige TV-Ansicht.|New Age: postojeći TV prikaz.|New Age: постојећи ТВ приказ.|New Age: съществуващ ТВ изглед.|New Age: aspectul TV existent.|New Age: mevcut TV görünümü.|New Age: visualizzazione TV esistente.|New Age: عرض التلفاز الحالي.
 """.trimIndent()
 
 private val DICT: Map<String, Map<String, String>> by lazy {
