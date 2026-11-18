@@ -326,20 +326,9 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
         if (kind == "series") nav.push(Screen.SeriesDetail(SeriesItem(o.optString("id"), o.optString("n"), o.optString("i").ifBlank { null }, null, o.optString("r").ifBlank { null })))
         else nav.push(Screen.MovieDetail(Vod(o.optString("id"), o.optString("n"), o.optString("i").ifBlank { null }, o.optString("r").ifBlank { null }, o.optString("u"))))
     }
-    val hero: Hero? = cont.firstOrNull()?.let { pr ->
-        val left = ((pr.dur - pr.pos) / 60_000L).coerceAtLeast(1)
-        Hero(pr.url, tr(if (pr.series != null) "NASTAVI GLEDANJE · SERIJA" else "NASTAVI GLEDANJE · FILM"), cleanTitle(pr.series ?: pr.title).first,
-            if (pr.next) trf("Sljedeća: S%sE%s", pr.season ?: 1, pr.episode ?: 1)
-            else (if (pr.season != null) "S${pr.season} E${pr.episode} · " else "") + trf("ostalo %s min", left),
-            pr.poster, tr("Nastavi"), if (pr.next) null else pr.fraction, playOf(pr))
-    } ?: newest.firstOrNull()?.let { (kind, o) ->
-        Hero(o.optString("id"), tr(if (kind == "series") "NOVO KOD PROVIDERA · SERIJA" else "NOVO KOD PROVIDERA · FILM"),
-            cleanTitle(o.optString("n")).first, cleanTitle(o.optString("n")).second ?: "", o.optString("i").ifBlank { null }, tr("Gledaj"), null) { openNew(kind, o) }
-    }
+    val hero: Hero? = null // Informational Home: no poster hero or recommendations.
     Box(Modifier.fillMaxSize()) {
-        OnyxBackdrop(hero?.image, hero?.key ?: "home")
-        // one calm picture behind Home (no film posters): fades into the theme's own background, so the text stays easy to read
-        HomeScenery()
+        Box(Modifier.fillMaxSize().background(C.BgBrush))
         Column(Modifier.fillMaxSize()) {
             OnyxTopBar(Screen.Home, nav, simple)
             // everything sits higher and bigger: no empty half screen, nothing cut at the bottom of the TV
@@ -855,13 +844,12 @@ fun AdvancedGate(nav: Nav) {
 /** Settings › Home: which rows the home screen shows and in which order. */
 object HomeRows {
     // "Newly added": on in Full (can be switched off here), never in Lite
-    val ALL = listOf("fresh" to "Nove epizode", "cont" to "Nastavi gledati", "mylist" to "Moja lista", "new" to "Novo dodano",
-        "today" to "Utakmice danas", "follow" to "Pratiš · uživo", "recent" to "Nedavno gledani kanali")
+    val ALL = listOf("cont" to "Nastavi gledati", "recent" to "Nedavno gledani kanali", "follow" to "Pratiš · uživo")
     var rev by mutableIntStateOf(0)
     /** "Matches today" starts off (it loads live scores) */
     /** weak box (score under 50): "Recently added" posters also start off; the user can turn them on in Settings › Home */
     // first start on every box: "Newly added" (new films, series, channels) and "Matches today" are off until switched on
-    private fun offStr() = Prefs.str("home_off", "today,new,follow")
+    private fun offStr() = Prefs.str("home_off", "fresh,mylist,new,today")
     private fun savedOrder(): List<String> {
         val saved = Prefs.str("home_rows", "fresh,cont,new,recent").split(',').filter { s -> ALL.any { it.first == s } }.toMutableList()
         if ("follow" !in saved) { val i = saved.indexOf("today"); if (i >= 0) saved.add(i + 1, "follow") else saved.add("follow") }
