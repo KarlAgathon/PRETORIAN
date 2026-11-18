@@ -1,3 +1,10 @@
+PRETORIAN 1.0.48-beta20
+Classic TV: prevent the preview video from exceeding its top-left panel and overlapping the groups area
+Classic TV: align group and channel row typography to the same font size and consistent row proportions
+Classic TV: reserve separate bounded areas for preview, Groups heading, selected group title, channel names and inline EPG
+Classic TV: improve EPG readability while keeping all text clipped to its own row/column
+Default layout and Stable main remain unchanged
+
 PRETORIAN 1.0.47-beta19
 Classic TV: accordion navigation — channel browsing collapses the group column; LEFT/BACK expands one level at a time
 Classic TV: LEFT/BACK from the expanded groups reveals the main app navigation
