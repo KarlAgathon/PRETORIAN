@@ -11,12 +11,12 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.pretorian.tv.beta"
+        applicationId = "com.pretorian.tv"
         minSdk = 24
         targetSdk = 34
         // raise both numbers for every new version (needed for updates)
-        versionCode = 24
-        versionName = "1.0.49-beta21"
+        versionCode = 91
+        versionName = "1.0.49"
         // TMDB_KEY from GitHub Secrets: posters, cast, platform and coming episodes work for everyone without typing a key
         buildConfigField("String", "TMDB_KEY", "\"" + (System.getenv("TMDB_KEY") ?: "") + "\"")
     }
