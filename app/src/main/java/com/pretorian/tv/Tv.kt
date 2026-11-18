@@ -671,7 +671,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                         if (isFav) "Na kanalu drži OK › Dodaj u favorite" else "Kanale možeš prebaciti ovamo preko opcija kanala")
                 } else {
                     LazyColumn(state = cState, verticalArrangement = Arrangement.spacedBy(4.dp), contentPadding = PaddingValues(bottom = 30.dp)) {
-                        itemsIndexed(list, key = { i, ch -> "$i${ch.url}" }) { i, ch ->
+                        itemsIndexed(list, key = { _, ch -> "${ch.pid}|${ch.id}|${ch.url}" }) { i, ch ->
                             val ovr = remember(ch.pid, g.pid) { Ovr(ctx, ch.pid.ifBlank { g.pid ?: "" }) }
                             val locked = ovr.isChLocked(ch)
                             Focusable(
