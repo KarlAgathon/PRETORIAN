@@ -719,6 +719,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                     qualityOf(ch.name)?.let { Chip(it, C.Card, C.Soft) }
                                     if (locked) Ico(R.drawable.lc_lock, 16.dp, C.Muted)
                                     if (!isFav && Favs.inAny(ctx, ch)) T("★", 17.sp, C.Amber)
+                                    if (active) Dot(C.Green, 8.dp)
                                 }
                             }
                         }
