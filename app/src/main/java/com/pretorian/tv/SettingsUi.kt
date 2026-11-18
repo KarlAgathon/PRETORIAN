@@ -717,13 +717,7 @@ private fun LookPage() {
         Label("Rezolucija u uglu plejera")
         Segmented(listOf("Isključeno", "Pri pokretanju", "Uvijek"), Look.resBadge) { Look.resBadge = it; save() }
         Label("Kanali")
-        Label("Pregled kanala (mala slika)")
-        Segmented(listOf("Isključen", "Na OK", "Automatski"), Look.previewMode) { Look.previewMode = it; Look.preview = it > 0; save() }
-        T(when (Look.previewMode) {
-            0 -> "Nema male slike. OK na kanalu ga odmah pušta preko cijelog ekrana."
-            1 -> "U TV listi: pregled se pokreće potvrdom OK. Dok listaš, ništa se ne pušta."
-            else -> "Mala slika se pušta sama kad staneš na kanal."
-        }, 12.sp, C.Muted, maxLines = 2)
+        T("Mini-player se pokreće samo nakon prvog OK. Drugi OK na istom kanalu otvara cijeli ekran. Pregled kategorija i kanala nikada ne pokreće reprodukciju.", 12.sp, C.Muted, maxLines = 3)
         ToggleRow("Najgledaniji na vrhu grupe", Look.mostWatched, R.drawable.lc_arrow_up, "Kanali koje najčešće gledaš sami idu gore (kad nema ručnog redoslijeda)") {
             Look.mostWatched = it; save()
         }
@@ -891,7 +885,7 @@ fun setAppLang(ctx: android.content.Context, code: String) {
 private fun RemindersPage(nav: Nav) {
     var rev by remember { mutableIntStateOf(0) }
     key(rev, Reminders.rev) {
-        Page("Podsjetnici", "U TV vodiču ili Sports Centeru: OK na emisiji ili utakmici koja još nije počela › Podsjeti me.") {
+        Page("Podsjetnici", "U EPG programu ili Sports Centeru: OK na emisiji ili utakmici koja još nije počela › Podsjeti me.") {
             Label("Podsjeti prije početka (minuta)")
             Segmented(listOf("0", "1", "5", "10", "15"), listOf(0, 1, 5, 10, 15).indexOf(Reminders.before).coerceAtLeast(0)) { Reminders.before = listOf(0, 1, 5, 10, 15)[it]; rev++ }
             Label("Koliko dugo poruka stoji (sekundi)")
@@ -1929,9 +1923,6 @@ private fun LookV2(openSub: (String) -> Unit) {
                 Look.posterSize = it; Look.tileSize = it; Look.rowSize = it; save(); rev++
             }
             SetSlider("Veličina svega", "slova, polja i slike zajedno · OK pa ◀ ▶", Look.uiScale, 0, 100, 5) { Look.uiScale = it; save() }
-            SetDrop("Mala slika kanala", "pregled dok stojiš na kanalu", listOf("Automatski", "Na OK", "Isključena"), 2 - Look.previewMode) {
-                Look.previewMode = 2 - it; Look.preview = Look.previewMode > 0; save(); rev++
-            }
             SetDrop("Veličina male slike", "u listi kanala · veća slika = više opisa emisije", listOf("Mala", "Srednja", "Velika"), Prefs.long("tv_mini", 1).toInt().coerceIn(0, 2)) {
                 Prefs.put("tv_mini", it.toLong()); rev++
             }
