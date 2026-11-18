@@ -1,3 +1,9 @@
+PRETORIAN 1.0.60 STABLE
+Classic TV: keep preview stopped while moving focus; only OK confirms the channel and starts preview/playback
+Classic TV: RIGHT from the focused group opens its channel list; LEFT returns to groups and LEFT again reveals main navigation
+Classic TV: resize the HD/FHD quality badge so it remains fully visible inside the preview panel
+Default layout remains unchanged
+
 PRETORIAN 1.0.59 STABLE
 Classic TV: hide the main navigation rail and category column while browsing channels, giving the preview and channel list the full screen workspace
 Classic TV: LEFT from the channel list returns to categories; LEFT from categories reveals the main navigation
