@@ -69,7 +69,7 @@ object Look {
         mostWatched = p.getBoolean("look_mostwatched", true)
         overlay = p.getInt("look_overlay", 0)
         preview = p.getBoolean("look_preview", true)
-        previewMode = p.getInt("look_previewmode", 2)
+        previewMode = p.getInt("look_previewmode", 1)
         menuOpacity = p.getInt("look_menuopacity", 94)
         rowSize = p.getInt("look_rowsize", 1)
         lang = p.getString("app_lang", null) ?: "en"   // a new install starts in English
