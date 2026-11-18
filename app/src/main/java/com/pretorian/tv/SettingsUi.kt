@@ -1939,9 +1939,6 @@ private fun LookV2(openSub: (String) -> Unit) {
             SetDrop("Prikaz liste kanala", "u TV-u i u listi u playeru", listOf("Kompaktni", "Normalni", "Veliki"), ListStyle.mode, new = true) {
                 Prefs.put("tv_density", it.toLong().coerceIn(0, 2)); rev++
             }
-            SetDrop("Veličina EPG mreže", "Automatski se prilagođava ekranu · ovo samo pomjera mjeru", listOf("Kompaktno", "Normalno", "Veliko"), GridLook.size, new = true) { Prefs.put("grid_size", it.toLong()); rev++ }
-            SetDrop("Sati u EPG mreži", "Automatski = koliko stane na ekran", listOf("Automatski", "2 h", "3 h", "4 h"), GridLook.hours.let { if (it == 0) 0 else it - 1 }, new = true) { Prefs.put("grid_hours", if (it == 0) 0L else (it + 1).toLong()); rev++ }
-            SetDrop("Kanal u EPG mreži", null, listOf("Logo i ime", "Samo logo"), if (GridLook.logoOnly) 1 else 0, new = true) { Prefs.put("grid_logo_only", it == 1); rev++ }
             SetDrop("Broj kanala na ekranu", "Automatski = prema prikazu liste · uvijek cijeli redovi", listOf("Automatski", "4", "5", "6", "7", "8", "9"), Prefs.long("tv_rows", 0).toInt().let { n -> if (n in 4..9) n - 3 else 0 }) {
                 Prefs.put("tv_rows", if (it == 0) 0L else (it + 3).toLong()); rev++
             }
