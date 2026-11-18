@@ -401,7 +401,7 @@ private fun TvList(nav: Nav) {
                 Box(Modifier.weight(0.42f).fillMaxHeight(), contentAlignment = Alignment.Center) {
                     if (previewCh != null) PreviewBox(previewCh, Modifier.fillMaxWidth())
                     else Box(Modifier.fillMaxSize().clip(Rnd(14.dp)).background(C.Rail), contentAlignment = Alignment.Center) {
-                        T("Izaberi kanal za pregled", 14.sp, C.Muted)
+                        T(tr("Izaberi kanal za pregled"), 14.sp, C.Muted)
                     }
                 }
                 Column(
@@ -410,14 +410,14 @@ private fun TvList(nav: Nav) {
                 ) {
                     val selected = focusedCh ?: previewCh
                     if (selected == null) {
-                        T("Informacije o programu", 17.sp, C.Text, FontWeight.Bold)
-                        T("Potvrdi kanal tipkom OK da pokreneš mini-player.", 13.sp, C.Muted)
+                        T(tr("Informacije o programu"), 17.sp, C.Text, FontWeight.Bold)
+                        T(tr("Potvrdi kanal tipkom OK da pokreneš mini-player."), 13.sp, C.Muted)
                     } else {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             ChannelLogo(selected.logo, selected.name)
                             Column(Modifier.weight(1f)) {
                                 T(selected.name, 17.sp, C.Text, FontWeight.Bold, maxLines = 1)
-                                T("TV · EPG", 11.sp, C.Muted)
+                                T(tr("TV · EPG"), 11.sp, C.Muted)
                             }
                             qualityOf(selected.name)?.let { Chip(it, C.Card, C.Soft) }
                         }
