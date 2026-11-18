@@ -184,6 +184,7 @@ fun PretorianApp() {
         mutableStateListOf<Screen>(if (Store.playlists(ctx).isEmpty()) Screen.AddPlaylist else Screen.Home)
     }
     var version by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Look.layout) { Chrome.rail = if (Look.layout == 0) 2 else 3 }
     val nav = remember {
         Nav(
             push = { stack.add(it) },
@@ -460,7 +461,7 @@ fun Rail(current: Screen, nav: Nav) {
         else -> current
     }
     // one look everywhere: icon with the name under it
-    val width = 96.dp
+    val width = if (mode == 2) 220.dp else 96.dp
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     // the menu can vanish while it holds the focus (a channel starts): never leave "in the menu" behind, it blocks every focus request
     androidx.compose.runtime.DisposableEffect(Unit) { onDispose { Chrome.inRail = false } }
