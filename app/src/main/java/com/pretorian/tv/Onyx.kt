@@ -411,26 +411,33 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                 }
                         }
                         "cont" -> {
-                if (cont.isNotEmpty()) {
-                    RowTitle("NASTAVI GLEDANJE")
-                    // round trip: ▶ on the last card goes to the first, ◀ on the first goes to the last
-                    val cState = androidx.compose.foundation.lazy.rememberLazyListState()
-                    val cScope = rememberCoroutineScope()
-                    val cFirst = remember { FocusRequester() }; val cLast = remember { FocusRequester() }
-                    LazyRow(state = cState, horizontalArrangement = Arrangement.spacedBy(18.dp), contentPadding = PaddingValues(end = 40.dp, top = 6.dp, bottom = 6.dp)) {
-                        itemsIndexed(cont, key = { _, it -> it.url }) { i, pr ->
-                            WideCard(pr.series ?: pr.title, if (pr.season != null) "S${pr.season} E${pr.episode}" else fmtTime(pr.dur), pr.poster, pr.url,
-                                if (pr.next) null else pr.fraction, onMenu = { contMenu = pr }, height = cardH,
-                                fr = if (i == 0) cFirst else if (i == cont.lastIndex) cLast else null,
-                                keys = Modifier.onPreviewKeyEvent { e ->
-                                    if (e.type != KeyEventType.KeyDown || cont.size < 2) false
-                                    else if (i == cont.lastIndex && e.key == Key.DirectionRight) { cScope.launch { cState.scrollToItem(0); delay(30); cFirst.tryFocus() }; true }
-                                    else if (i == 0 && e.key == Key.DirectionLeft) { cScope.launch { cState.scrollToItem(cont.lastIndex); delay(30); cLast.tryFocus() }; true }
-                                    else false
-                                }, onClick = playOf(pr))
+                val movieProgress = cont.filter { it.series == null }
+                val showProgress = cont.filter { it.series != null }
+                @Composable fun progressRow(title: String, entries: List<Progress>) {
+                    if (entries.isEmpty()) return
+                    RowTitle(title)
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(end = 40.dp, top = 6.dp, bottom = 8.dp)) {
+                        items(entries, key = { it.url }) { pr ->
+                            Focusable(onClick = playOf(pr), onMenu = { contMenu = pr }, shape = Rnd(14.dp),
+                                normal = C.Rail, focused = C.CardHi, zoom = 1.02f,
+                                modifier = Modifier.width(300.dp).height(66.dp).border(1.dp, C.Line, Rnd(14.dp))) { f ->
+                                Column(Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 8.dp), verticalArrangement = Arrangement.Center) {
+                                    T(pr.series ?: pr.title, 14.sp, C.Text, FontWeight.SemiBold, maxLines = 1)
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        T(if (pr.season != null) "S" + pr.season + " E" + pr.episode else fmtTime(pr.dur), 11.sp, C.Muted, maxLines = 1)
+                                        Spacer(Modifier.weight(1f))
+                                        if (!pr.next) T((pr.fraction * 100).toInt().toString() + "%", 11.sp, C.Soft)
+                                    }
+                                    if (!pr.next) Box(Modifier.fillMaxWidth().padding(top = 4.dp).height(3.dp).clip(Pill).background(C.Line)) {
+                                        Box(Modifier.fillMaxWidth(pr.fraction).fillMaxHeight().background(C.Red.copy(alpha = 0.75f)))
+                                    }
+                                }
+                            }
                         }
                     }
                 }
+                progressRow("CONTINUE WATCHING · MOVIES", movieProgress)
+                progressRow("CONTINUE WATCHING · TV SHOWS", showProgress)
                         }
                         "mylist" -> {
                 // films and series you saved with "+ My list"
