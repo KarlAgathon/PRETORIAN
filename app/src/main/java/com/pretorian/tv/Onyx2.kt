@@ -295,7 +295,7 @@ fun OnyxTv(nav: Nav, onGuide: () -> Unit) {
                                         TvFold.toggle(row.p.id); if (row.open && st.group?.pid == row.p.id) st.group = null
                                         if (!row.open) Store.open(ctx, row.p.id)
                                         st.focusKey = row.id; st.rev++; st.refocus++
-                                    }, onFocus = { st.focusKey = row.id; groupFocusIndex = rowIndex }, focusRequester = if (row.id == st.focusKey) gFr else null,
+                                    }, onFocus = { st.focusKey = row.id; groupFocusIndex = rowIndex }, focusRequester = null,
                                         normal = if (row.open) C.CardHi else Color.Transparent, focused = C.Red, zoom = 1f) { f ->
                                         Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                             T(if (row.open) "▼" else "▶", 11.sp, if (f) C.OnRed else C.Muted)  // i18n-ignore
@@ -303,7 +303,7 @@ fun OnyxTv(nav: Nav, onGuide: () -> Unit) {
                                         }
                                     }
                                     TRow.NewFav -> Focusable(modifier = Modifier.fillMaxWidth().height(30.dp).focusRequester(groupRequesters[rowIndex]).then(if (row.id == st.focusKey) Modifier.focusRequester(gFr) else Modifier), shape = Rnd(10.dp), onClick = { st.newFav = true },
-                                        onFocus = { st.focusKey = row.id }, focusRequester = if (row.id == st.focusKey) gFr else null, normal = Color.Transparent, focused = C.Red, zoom = 1f) { f ->
+                                        onFocus = { st.focusKey = row.id; groupFocusIndex = rowIndex }, focusRequester = null, normal = Color.Transparent, focused = C.Red, zoom = 1f) { f ->
                                         Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                             Ico(R.drawable.lc_plus, 12.dp, if (f) C.OnRed else C.Muted); T("Nova lista favorita", 12.sp, if (f) C.OnRed else C.Muted)
                                         }
