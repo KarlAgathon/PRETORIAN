@@ -171,6 +171,8 @@ fun OnyxTv(nav: Nav, onGuide: () -> Unit) {
         value = try { val all = Repo.allChannels(p); all.groupingBy { it.group }.eachCount() + (ALL_GROUP to all.size) } catch (e: Exception) { emptyMap() }
     }
     val gState = rememberLazyListState()
+    // Keep repeated DPAD movement inside the category list at its first and last focusable rows.
+    var groupFocusIndex by remember { mutableIntStateOf(-1) }
     val coming = remember { TvMemory.restore && TvMemory.group != null && TvMemory.channel >= 0 }
     var inChannels by remember { mutableStateOf(coming) }
     // three columns (groups · channels · panel) while you choose; the wide view (small picture on top, guide per channel)
@@ -227,8 +229,22 @@ fun OnyxTv(nav: Nav, onGuide: () -> Unit) {
                     when (val r = rows) {
                         is Load.Loading -> Loading("")
                         is Load.Err -> Message("Greška", r.message)
-                        is Load.Ok -> LazyColumn(state = gState, contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            items(r.value, key = { it.id }) { row ->
+                        is Load.Ok -> {
+                            val focusableGroupRows = r.value.indices.filter { i -> r.value[i] is TRow.Grp || r.value[i] is TRow.Pl || r.value[i] is TRow.NewFav }
+                            LazyColumn(
+                                state = gState,
+                                modifier = Modifier.onPreviewKeyEvent { e ->
+                                    if (e.type != KeyEventType.KeyDown) false
+                                    else when (e.key) {
+                                        Key.DirectionUp -> groupFocusIndex == focusableGroupRows.firstOrNull()
+                                        Key.DirectionDown -> groupFocusIndex == focusableGroupRows.lastOrNull()
+                                        else -> false
+                                    }
+                                },
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                            itemsIndexed(r.value, key = { _, row -> row.id }) { rowIndex, row ->
                                 when (row) {
                                     is TRow.Title -> Kicker(row.t, modifier = Modifier.padding(start = 10.dp, top = 8.dp, bottom = 4.dp))
                                     is TRow.Grp -> {
@@ -242,7 +258,7 @@ fun OnyxTv(nav: Nav, onGuide: () -> Unit) {
                                         }
                                         Focusable(modifier = Modifier.fillMaxWidth().height(34.dp), shape = Rnd(10.dp),
                                             onClick = { openGroup(ctx, st, g); inChannels = true; enterTick++ },
-                                            onFocus = { st.focusKey = row.id; focusedGroup = g; inChannels = false },
+                                            onFocus = { st.focusKey = row.id; groupFocusIndex = rowIndex; focusedGroup = g; inChannels = false },
                                             onMenu = if (Lock.simple || g.cat.id == ALL_GROUP || g.cat.id == RECENT_GROUP) null else ({ st.focusKey = row.id; st.groupMenu = g }),
                                             focusRequester = if (row.id == st.focusKey) gFr else null,
                                             normal = if (sel) C.CardHi else Color.Transparent, focused = C.Red.copy(alpha = 0.48f), zoom = 1f) { f ->
@@ -258,7 +274,7 @@ fun OnyxTv(nav: Nav, onGuide: () -> Unit) {
                                         TvFold.toggle(row.p.id); if (row.open && st.group?.pid == row.p.id) st.group = null
                                         if (!row.open) Store.open(ctx, row.p.id)
                                         st.focusKey = row.id; st.rev++; st.refocus++
-                                    }, onFocus = { st.focusKey = row.id }, focusRequester = if (row.id == st.focusKey) gFr else null,
+                                    }, onFocus = { st.focusKey = row.id; groupFocusIndex = rowIndex }, focusRequester = if (row.id == st.focusKey) gFr else null,
                                         normal = if (row.open) C.CardHi else Color.Transparent, focused = C.Red, zoom = 1f) { f ->
                                         Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                             T(if (row.open) "▼" else "▶", 11.sp, if (f) C.OnRed else C.Muted)  // i18n-ignore
@@ -273,6 +289,7 @@ fun OnyxTv(nav: Nav, onGuide: () -> Unit) {
                                     }
                                 }
                             }
+                            }
                         }
                     }
                 }
@@ -285,12 +302,12 @@ fun OnyxTv(nav: Nav, onGuide: () -> Unit) {
                     if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { backToGroups(); true } else false
                 }) {
                     if (g == null) Message("Izaberi grupu")
-                    else key(g.key, st.rev) { OnyxChannels(g, nav, st, rows, enterTick, preview, { preview = it; TvMemory.preview = it; wideOn = true }, true, { pick = it }) { focusedCh = it; inChannels = true } }
+                    else key(g.key, st.rev) { OnyxChannels(g, nav, st, rows, enterTick, preview, { preview = it; TvMemory.preview = it; wideOn = true }, true, { pick = it }) { focusedCh = it } }
                 }
             }
             // ---------------------------------------------------------- picture and programme
-            // the panel only tells what is on the channel you stand on; no picture plays here
-            NowPanel(if (inChannels) focusedCh else null, Modifier.width(300.dp).fillMaxHeight())
+            // Focus only moves the highlight. The right panel changes only after OK selects a channel.
+            NowPanel(preview, Modifier.width(300.dp).fillMaxHeight())
         }
         // "Recently watched" lives only on Home, never under TV, Movies, Series or Sports
     }
