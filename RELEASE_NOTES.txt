@@ -1,3 +1,9 @@
+PRETORIAN 1.0.58 (STABLE)
+Classic Layout: persistent left-side section navigation, matching the reference IPTV workspace
+Classic TV: keep the navigation rail visible while browsing categories, channels and EPG
+Classic Layout: use a wider labeled navigation rail consistently across Home, TV, Movies, Series, Sports, Search and Settings
+Default Layout and existing playback behavior remain unchanged
+
 PRETORIAN 1.0.57 (STABLE)
 Default Home: move active playlist status to the top-right above the welcome content
 Active playlist status: compact single-line display with playlist name and days remaining only
