@@ -5,7 +5,7 @@ internal val RU_TABLE = """
 Nema gledanih kanala.|Нет просмотренных каналов.
 Lista posljednjih gledanih kanala bit će obrisana.|Список недавно просмотренных каналов будет очищен.
 Historija · %s/10|История · %s/10
-Izvorno|Исходный
+Izvorno|Оригинал
 Početna|Главная
 TV|ТВ
 Filmovi|Фильмы
