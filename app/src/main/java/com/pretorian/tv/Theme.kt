@@ -32,7 +32,8 @@ object Look {
     var groupFrame by mutableStateOf(true)     // thin accent frame around TV groups
     var resBadge by mutableIntStateOf(1)       // resolution in the player corner: 0 off, 1 on start, 2 always
     var bigText by mutableStateOf(false)      // larger text everywhere (for parents, far sofas)
-    var layout by mutableIntStateOf(1)         // 0 classic, 1 New Wave (full-width grids, chips, hint bar), 2 New Age (top menu, poster rows)
+    var layout by mutableIntStateOf(2)         // 0 classic, 1 New Wave, 2 New Age
+    var tvDesign by mutableIntStateOf(0)       // 0 New Age, 1 New Era (three-panel TV browser)
     val wave get() = layout >= 1
     val age get() = layout == 2
 
@@ -77,7 +78,8 @@ object Look {
         corner = p.getInt("look_corner", 0)
         groupFrame = p.getBoolean("look_groupframe", true)
         resBadge = p.getInt("look_resbadge", 1)
-        layout = 2   // the new look is the only one now (old layouts could be switched on by accident)
+        layout = p.getInt("look_layout", 2).coerceIn(0, 2)
+        tvDesign = p.getInt("look_tvdesign", 0).coerceIn(0, 1)
         bigText = false   // replaced by the size slider, which grows everything together
         // 0.3: the new modern home tiles become the default once
         if (p.getInt("look_v", 0) < 3) { tileStyle = 3; p.edit().putInt("look_v", 3).putInt("look_tilestyle", 3).apply() }
@@ -93,7 +95,7 @@ object Look {
             .putInt("look_overlay", overlay).putBoolean("look_preview", preview).putInt("look_previewmode", previewMode)
             .putInt("look_menuopacity", menuOpacity).putInt("look_rowsize", rowSize).putString("app_lang", lang)
             .putString("look_iconset", iconSet).putInt("look_iconstyle", iconStyle).putInt("look_corner", corner)
-            .putBoolean("look_groupframe", groupFrame).putInt("look_resbadge", resBadge).putInt("look_layout", layout).putBoolean("look_bigtext", bigText).putInt("look_scale", uiScale).apply()
+            .putBoolean("look_groupframe", groupFrame).putInt("look_resbadge", resBadge).putInt("look_layout", layout).putInt("look_tvdesign", tvDesign).putBoolean("look_bigtext", bigText).putInt("look_scale", uiScale).apply()
     }
 }
 
