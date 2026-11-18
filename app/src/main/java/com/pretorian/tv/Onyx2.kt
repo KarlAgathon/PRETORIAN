@@ -653,9 +653,6 @@ fun OnyxSearch(nav: Nav) {
     val chIdx by load(Unit) { SearchIndex.channels(ctx) }
     val vodIdx by load(Unit) { SearchIndex.movies(ctx) }
     val serIdx by load(Unit) { SearchIndex.shows(ctx) }
-    val wantProgs = query.length >= 3
-    // shows from the TV guide come last and only once you stop typing: channels, films and series are there at once
-    val progIdx by load(wantProgs) { if (wantProgs) { delay(1500); SearchIndex.progs(ctx) } else emptyList() }
     @Composable
     fun hitsOf(idx: Load<List<SearchIndex.Item>>, max: Int): State<List<Hit>> = produceState(emptyList<Hit>(), query, idx) {
         value = if (query.length < 2) emptyList() else (idx as? Load.Ok)?.value?.let { SearchIndex.find(it, query, max) } ?: emptyList()
@@ -663,24 +660,21 @@ fun OnyxSearch(nav: Nav) {
     val chHits by hitsOf(chIdx, 30)
     val vodHits by hitsOf(vodIdx, 30)
     val serHits by hitsOf(serIdx, 30)
-    val progHits by hitsOf(progIdx, 30)
-    val progs = remember(progHits) { progHits.sortedBy { (it as Hit.Prog).e.start } }
-    val vs = remember(vodHits, serHits) { vodHits + serHits }
-    val busy = chIdx is Load.Loading || vodIdx is Load.Loading || serIdx is Load.Loading || (wantProgs && progIdx is Load.Loading)
-    LaunchedEffect(jump, chHits.isNotEmpty() || vs.isNotEmpty() || progs.isNotEmpty()) { if (jump > 0) firstFr.tryFocus() }
+    val busy = chIdx is Load.Loading || vodIdx is Load.Loading || serIdx is Load.Loading
+    LaunchedEffect(jump, chHits.isNotEmpty() || vodHits.isNotEmpty() || serHits.isNotEmpty()) { if (jump > 0) firstFr.tryFocus() }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 28.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         // the big search field, with the microphone
-        Row(Modifier.fillMaxWidth().padding(top = 6.dp).height(52.dp).clip(Pill).background(if (C.IsLight) Color.White else Color(0xF2F5F5F7)),
+        Row(Modifier.fillMaxWidth().padding(top = 6.dp).height(52.dp).clip(Pill).background(C.Rail).border(1.dp, C.Line, Pill),
             verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.padding(start = 18.dp)) { Ico(R.drawable.lc_search, 18.dp, Color(0xFF0A0A0A)) }
             androidx.compose.foundation.text.BasicTextField(q, { q = it }, singleLine = true,
-                textStyle = TextStyle(fontFamily = Inter, fontSize = 18.sp, color = Color(0xFF0A0A0A), fontWeight = FontWeight.SemiBold),
-                cursorBrush = androidx.compose.ui.graphics.SolidColor(Color(0xFF0A0A0A)),
+                textStyle = TextStyle(fontFamily = Inter, fontSize = 18.sp, color = C.Text, fontWeight = FontWeight.SemiBold),
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(C.RedText),
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search, autoCorrectEnabled = false),
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { query = q.trim(); SearchHistory.add(q); keyboard?.hide(); jump++ }),
                 modifier = Modifier.weight(1f).padding(horizontal = 14.dp).focusRequesterSafe(fr),
-                decorationBox = { inner -> Box { if (q.isEmpty()) T("Kanal, film, serija, emisija ili broj", 16.sp, Color(0xFF6B7280)); inner() } })
+                decorationBox = { inner -> Box { if (q.isEmpty()) T("TV channel, movie, series or team", 16.sp, C.Muted); inner() } })
             // clear the search
             if (q.isNotEmpty()) Focusable(onClick = { SearchHistory.add(q); q = ""; query = ""; SearchMem.clear(); try { fr.requestFocus() } catch (_: Exception) {} }, shape = Pill, normal = Color.Transparent, focused = Color(0x1F000000),
                 zoom = 1f, modifier = Modifier.height(40.dp)) { _ ->
@@ -707,19 +701,19 @@ fun OnyxSearch(nav: Nav) {
         // sport: matches already loaded in Sport (live scores) and sport broadcasts in the TV guide
         val sportHits by produceState(emptyList<SportEvent>(), query) {
             val nq = Sports.norm(query)
-            value = if (!SearchScope.on("sport") || nq.length < 2) emptyList() else withContext(Dispatchers.Default) {
+            value = if (nq.length < 2) emptyList() else withContext(Dispatchers.Default) {
                 Sports.lastCombined.values.flatten().distinctBy { it.id }.filter { e ->
                     Sports.norm(listOfNotNull(e.home?.name, e.away?.name, e.title, e.league).joinToString(" ")).let { t -> nq.split(' ').all { w -> t.contains(w) } }
                 }.sortedWith(compareBy({ !it.live }, { it.start })).take(30)
             }
         }
-        val tvList = (if (SearchScope.on("tv")) chHits + progs else emptyList())
-        val movies = if (SearchScope.on("vod")) vodHits else emptyList()
-        val shows = if (SearchScope.on("series")) serHits else emptyList()
+        val tvList = chHits
+        val movies = vodHits
+        val shows = serHits
         if (!busy && tvList.isEmpty() && movies.isEmpty() && shows.isEmpty() && sportHits.isEmpty()) { T("Ništa nije pronađeno", 15.sp, C.Soft); return@Column }
         // four columns side by side: the one you are in opens wide, the others get narrow
         val cols = buildList {
-            if (SearchScope.on("tv")) add("tv"); if (SearchScope.on("vod")) add("vod"); if (SearchScope.on("series")) add("series"); if (SearchScope.on("sport")) add("sport")
+            add("tv"); add("vod"); add("series"); add("sport")
         }
         var open by remember { mutableStateOf(SearchMem.open) }
         LaunchedEffect(open) { SearchMem.open = open }
@@ -728,7 +722,7 @@ fun OnyxSearch(nav: Nav) {
         Row(Modifier.fillMaxWidth().weight(1f).padding(bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             cols.forEach { c ->
                 val w by androidx.compose.animation.core.animateFloatAsState(if (c == wide) 3.2f else 1f, label = "col")
-                val (title, n) = when (c) { "tv" -> "TV" to tvList.size; "vod" -> "Filmovi" to movies.size; "series" -> "Serije" to shows.size; else -> "Sport" to sportHits.size }
+                val (title, n) = when (c) { "tv" -> "TV CHANNELS" to tvList.size; "vod" -> "MOVIES" to movies.size; "series" -> "SERIES" to shows.size; else -> "SPORTS" to sportHits.size }
                 val big = c == wide
                 Column(Modifier.weight(w).fillMaxHeight().glass(16.dp).onFocusChanged { if (it.hasFocus) open = c }.padding(10.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)) {
