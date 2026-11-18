@@ -1,3 +1,7 @@
+PRETORIAN 1.0.55 (STABLE)
+Home Continue Watching: recover missing movie and series posters from active Xtream catalogs for older playback-history entries
+Home Continue Watching: preserve existing progress, playback position and history while restoring poster artwork
+
 PRETORIAN 1.0.54 (STABLE)
 Continue Watching: larger, clearer movie and series poster cards on Home
 Continue Watching: show uncropped poster artwork with a film/series icon fallback when artwork is unavailable
