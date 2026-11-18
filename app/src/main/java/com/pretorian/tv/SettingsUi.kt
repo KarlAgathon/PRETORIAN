@@ -1914,9 +1914,40 @@ private fun LookV2(openSub: (String) -> Unit) {
     var rev by remember { mutableIntStateOf(0) }
     key(rev) {
         SetPage("Izgled", "Promjene se vide odmah.") {
-            // Keep the TV layout selector visible at the top of Appearance in the modern settings.
+            // TV layout selector: separate from the visual theme cards below.
             SetSection("TV prikaz")
-            T(tr("New Era — jedini TV layout za sada. Ostali layouti dolaze kasnije."), 13.sp, C.Text, FontWeight.SemiBold, maxLines = 2)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(
+                    Triple(2, tr("Zadana"), tr("New Age: meni gore, redovi postera po kategorijama, velike kartice epizoda.")),
+                    Triple(0, tr("Klasični"), tr("Klasični: meni lijevo, kategorije u koloni."))
+                ).forEach { (layoutId, title, description) ->
+                    val active = Look.layout == layoutId
+                    Focusable(
+                        modifier = Modifier.weight(1f).height(132.dp)
+                            .border(2.dp, if (active) C.Green else C.Line, Rnd(16.dp)),
+                        onClick = { Look.layout = layoutId; save(); rev++ },
+                        shape = Rnd(16.dp),
+                        normal = if (active) C.Green.copy(alpha = 0.10f) else C.Card,
+                        focused = C.CardFocus,
+                        zoom = 1.01f
+                    ) { focused ->
+                        Column(Modifier.fillMaxSize().padding(12.dp)) {
+                            T(title, 16.sp, if (focused) C.OnRed else C.Text, FontWeight.Bold, maxLines = 1)
+                            T(description, 11.sp, if (focused) C.OnRed.copy(alpha = 0.85f) else C.Muted, maxLines = 3)
+                            Spacer(Modifier.weight(1f))
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                if (active) {
+                                    Ico(R.drawable.lc_circle_check, 18.dp, C.Green)
+                                    T(tr("Uključeno"), 12.sp, C.Green, FontWeight.Bold)
+                                } else {
+                                    Ico(R.drawable.lc_circle_slash, 18.dp, C.Muted)
+                                    T(tr("Izaberi"), 12.sp, C.Muted, FontWeight.SemiBold)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             SetSection("Tema")
             ThemeCards { rev++ }
             SetSection("Boja")
