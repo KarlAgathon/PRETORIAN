@@ -1201,6 +1201,7 @@ private fun ChannelEpgLine(ch: Channel) {
     }
 }
 
+@Composable
 fun EpgList(ch: Channel, limit: Int = 12, modifier: Modifier = Modifier) {
     val ctx = LocalContext.current
     // the list is not loaded again when a reminder changes: the focus stays on the show
