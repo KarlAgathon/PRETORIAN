@@ -354,9 +354,9 @@ fun SportMixScreen(nav: Nav) {
         Row(Modifier.weight(1f).fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         // ------------------------------------------------ left rail: Sport navigation and competitions
         Column(Modifier.width(190.dp).fillMaxHeight().glassSide(18.dp).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            T("SPORT", 17.sp, C.Text, FontWeight.ExtraBold)
-            T("MATCH CENTER", 10.sp, C.Muted, FontWeight.Bold)
-            listOf("live" to "Live Matches", "soon" to "Today Matches", "soon" to "Upcoming", "fav" to "Favorites", "mine" to "Following").forEachIndexed { i, item ->
+            T("SPORT", 17.sp, C.Text, FontWeight.ExtraBold)  // i18n-ignore
+            T("MATCH CENTER", 10.sp, C.Muted, FontWeight.Bold)  // i18n-ignore
+            listOf("live" to "Live Matches", "soon" to "Today Matches", "soon" to "Upcoming", "fav" to "Favorites", "mine" to "Following")  // i18n-ignore.forEachIndexed { i, item ->
                 val (id, label) = item
                 Focusable(onClick = { tab = id }, shape = Rnd(11.dp),
                     normal = if (tab == id) C.CardFocus else C.Card, focused = C.Red, zoom = 1.02f,
@@ -369,9 +369,9 @@ fun SportMixScreen(nav: Nav) {
                 }
             }
             Spacer(Modifier.height(4.dp))
-            Kicker("COMPETITIONS", C.Soft)
+            Kicker("COMPETITIONS", C.Soft)  // i18n-ignore
             val competitions = remember(withCh) { withCh.map { it.league }.filter { it.isNotBlank() }.distinct().sorted() }
-            if (competitions.isEmpty()) T("Takmičenja će se prikazati uz dostupne utakmice", 11.sp, C.Muted, maxLines = 3)
+            if (competitions.isEmpty()) T("Takmičenja će se prikazati uz dostupne utakmice", 11.sp, C.Muted, maxLines = 3)  // i18n-ignore
             else LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 items(competitions.take(16), key = { it }) { league ->
                     val active = selectedLeagues.size == 1 && league in selectedLeagues
