@@ -927,7 +927,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                                 "menu" -> { bar = false; dialog = "menu" }
                             } })
                     }
-                    else T(if (s.live) "▲ ▼ kanal · ◀ lista kanala · ▶ TV vodič · OK još jednom = dugmad"
+                    else T(if (s.live) "▲ ▼ kanal · ◀ lista kanala · ▶ EPG · OK još jednom = dugmad"
                       else trf("OK pauza · ◀ ▶ %s s · ▼ = dugmad (audio, titlovi, format slike)", Prefs.seekStep), 13.sp, Color(0xFFB6BCC6))
                 }
             }
