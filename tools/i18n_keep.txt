@@ -529,3 +529,7 @@ par_trans
 ◀◀ 5 min
 epg_sources
 /sys/devices/system/cpu/cpu$i/cpufreq/cpuinfo_max_freq
+sm_teams
+sm_countries
+sm_sports
+sm_leagues
