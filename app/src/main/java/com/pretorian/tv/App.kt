@@ -618,33 +618,40 @@ fun HomeScreen(nav: Nav) {
     LaunchedEffect(Unit) { first.tryFocus() }
 }
 
-/** "Continue watching": started movies and episodes, and the next episode of a series. */
+/** "Continue watching": large, uncropped movie / series artwork with readable progress. */
 @Composable
 fun ContinueRow(list: List<Progress>, nav: Nav, modifier: Modifier = Modifier) {
     val ctx = LocalContext.current
     var menu by remember { mutableStateOf<Progress?>(null) }
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Ico(R.drawable.lc_history, 18.dp, C.RedText); T("Nastavi gledati", 17.sp, C.Text, FontWeight.SemiBold)
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Ico(R.drawable.lc_history, 21.dp, C.RedText)
+            T(tr("Nastavi gledati").uppercase(), 19.sp, C.Text, FontWeight.Bold, maxLines = 1)
         }
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(end = 36.dp)) {
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(end = 36.dp)) {
             items(list, key = { it.url }) { pr ->
-                Focusable(modifier = Modifier.width(280.dp).height(86.dp), onClick = {
+                Focusable(modifier = Modifier.width(326.dp).height(142.dp), onClick = {
                     val why = Watch.blocked(ctx, pr)
                     if (why != null) android.widget.Toast.makeText(ctx, why, android.widget.Toast.LENGTH_LONG).show()
                     else Watch.playable(ctx, pr).let { q -> nav.push(Screen.Player(listOf(PlayItem(q.title, q.url, q.poster, null, null, q.series, q.season, q.episode)), 0, live = false)) }
-                }, onMenu = { menu = pr }, normal = C.Card, shape = Rnd(14.dp), zoom = 1.04f) { _ ->
-                    Row(Modifier.fillMaxSize().padding(8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Box(Modifier.width(48.dp).fillMaxHeight().clip(Rnd(8.dp)).background(C.Tile)) {
-                            if (pr.poster != null) AsyncImage(model = pr.poster, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                }, onMenu = { menu = pr }, normal = C.Card, shape = Rnd(15.dp), zoom = 1.035f) { focused ->
+                    Row(Modifier.fillMaxSize().padding(8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Box(Modifier.width(88.dp).fillMaxHeight().clip(Rnd(9.dp)).background(C.Tile), contentAlignment = Alignment.Center) {
+                            if (!pr.poster.isNullOrBlank()) {
+                                AsyncImage(model = pr.poster, contentDescription = pr.title, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+                            } else {
+                                Ico(if (pr.series != null) R.drawable.lc_monitor else R.drawable.lc_film, 34.dp, C.Muted)
+                            }
                         }
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            T(pr.title, 14.sp, C.Text, FontWeight.SemiBold, maxLines = 2)
-                            if (pr.next) T(trf("Sljedeća: S%sE%s", pr.season ?: 1, pr.episode ?: 1), 12.sp, C.Green)
-                            else {
-                                T(trf("Stao si na %s od %s", fmtTime(pr.pos), fmtTime(pr.dur)), 11.sp, C.Muted)
-                                Box(Modifier.fillMaxWidth().height(4.dp).clip(Rnd(2.dp)).background(C.CardHi)) {
-                                    Box(Modifier.fillMaxWidth(pr.fraction).height(4.dp).background(C.Red))
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            T(pr.title, 15.sp, C.Text, FontWeight.Bold, maxLines = 2)
+                            T(tr(if (pr.series != null) "Serija" else "Film").uppercase(), 10.sp, C.Muted, FontWeight.Bold, maxLines = 1)
+                            if (pr.next) {
+                                T(trf("Sljedeća: S%sE%s", pr.season ?: 1, pr.episode ?: 1), 12.sp, C.Green, FontWeight.SemiBold)
+                            } else {
+                                T(trf("Stao si na %s od %s", fmtTime(pr.pos), fmtTime(pr.dur)), 11.sp, C.Muted, maxLines = 1)
+                                Box(Modifier.fillMaxWidth().height(5.dp).clip(Rnd(3.dp)).background(C.CardHi)) {
+                                    Box(Modifier.fillMaxWidth(pr.fraction).height(5.dp).background(if (focused) C.RedText else C.Red))
                                 }
                             }
                         }
