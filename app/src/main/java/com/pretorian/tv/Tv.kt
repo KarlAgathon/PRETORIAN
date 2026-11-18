@@ -672,7 +672,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                         ovr.countWatch(ch)
                                         TvMemory.channel = i; TvMemory.group = g; TvMemory.restore = true
                                         // First OK selects and starts the small preview. A second OK on the same channel opens fullscreen.
-                                        if (Look.previewMode == 1 && PreviewSel.ch?.url != ch.url) {
+                                        if (Look.previewMode == 1 && (PreviewSel.ch?.url != ch.url || Preview.player == null)) {
                                             PreviewSel.ch = ch
                                         } else {
                                             PreviewSel.ch = ch
