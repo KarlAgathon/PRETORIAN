@@ -39,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
@@ -422,9 +423,9 @@ private fun TvList(nav: Nav) {
         LaunchedEffect(Unit) { Chrome.driven = true; Chrome.rail = 0 }
         DisposableEffect(Unit) { onDispose { Chrome.driven = false; Chrome.rail = 3 } }
         Column(Modifier.fillMaxSize()) {
-            Row(Modifier.fillMaxWidth().weight(0.24f).padding(start = 10.dp, end = 12.dp, top = 6.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth().weight(0.24f).clipToBounds().padding(start = 10.dp, end = 12.dp, top = 6.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 val previewCh = PreviewSel.ch
-                Box(Modifier.weight(0.40f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                Box(Modifier.weight(0.40f).fillMaxHeight().clipToBounds(), contentAlignment = Alignment.Center) {
                     if (previewCh != null) PreviewBox(previewCh, Modifier.fillMaxSize())
                     else Box(Modifier.fillMaxSize().clip(Rnd(12.dp)).background(C.Rail), contentAlignment = Alignment.Center) { T(tr("Izaberi kanal za pregled"), 12.sp, C.Muted) }
                 }
@@ -437,7 +438,7 @@ private fun TvList(nav: Nav) {
                             Column(Modifier.weight(1f)) { T(selected.name, 14.sp, C.Text, FontWeight.Bold, maxLines = 1); T(tr("TV · EPG"), 10.sp, C.Muted) }
                             qualityOf(selected.name)?.let { Chip(it, C.Card, C.Soft) }
                         }
-                        EpgList(selected, limit = 4, modifier = Modifier.fillMaxWidth(), compact = true)
+                        EpgList(selected, limit = 4, modifier = Modifier.fillMaxWidth().weight(1f), compact = true)
                     }
                 }
             }
@@ -445,7 +446,7 @@ private fun TvList(nav: Nav) {
                 Box(Modifier.onPreviewKeyEvent { e ->
                     if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft && !inChannels) { revealMainRail(); true } else false
                 }) {
-                GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, if (inChannels) 54.dp else 220.dp, if (inChannels) "" else "Grupe", null,
+                GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, if (inChannels) 54.dp else 240.dp, if (inChannels) "" else "Grupe", null,
                     onFocusGroup = { Chrome.rail = 0 }, onOpen = { openGroup(ctx, st, it); enterTick++; inChannels = true },
                     onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
                     onHeader = { p -> TvFold.toggle(p.id); if (p.id in TvFold.open) Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
@@ -764,14 +765,14 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                 normal = if (active) C.Green.copy(alpha = 0.10f) else C.Card,
                                 zoom = 1.01f,
                             ) { f ->
-                                Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Row(Modifier.fillMaxSize().clipToBounds().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                     T("${ch.num}", if (Look.layout == 0) 11.sp else 13.sp, C.Muted, modifier = Modifier.width(if (Look.layout == 0) 26.dp else 34.dp))
                                     ChannelLogo(ch.logo, ch.name)
                                     if (Look.layout == 0) {
                                         T(ch.name, Rows.font, if (f) C.Text else C.Soft, if (f) FontWeight.SemiBold else FontWeight.Normal,
-                                            maxLines = 1, modifier = Modifier.weight(0.30f))
-                                        ChannelEpgLine(ch, Modifier.weight(0.70f))
+                                            maxLines = 1, modifier = Modifier.weight(0.34f))
+                                        ChannelEpgLine(ch, Modifier.weight(0.66f))
                                     } else {
                                         T(ch.name, Rows.font, if (f) C.Text else C.Soft, if (f) FontWeight.SemiBold else FontWeight.Normal,
                                             maxLines = 1, modifier = Modifier.weight(1f))
@@ -1260,13 +1261,13 @@ fun EpgList(ch: Channel, limit: Int = 12, modifier: Modifier = Modifier, compact
                 val now = e.start <= System.currentTimeMillis() && e.end > System.currentTimeMillis()
                 val next = e.start == nextStart
                 val rem = remember(remRev) { Reminders.has(e.title, e.start) }
-                Focusable(modifier = Modifier.fillMaxWidth(), onClick = {
+                Focusable(modifier = Modifier.fillMaxWidth().then(if (compact) Modifier.fillParentMaxHeight(1f / s.value.size.coerceAtLeast(1)) else Modifier), onClick = {
                     if (!now) {
                         val on = Reminders.toggle(Reminder("r${e.start}${e.title.hashCode()}", e.title, e.start, ch.url, ch.name, ch.logo, ch.pid, "tv"))
                         Toast.makeText(ctx, tr(if (on) "Podsjetnik postavljen" else "Podsjetnik uklonjen"), Toast.LENGTH_SHORT).show()
                     }
                 }, normal = if (now) EpgLook.cell(C.CardFocus, true) else EpgLook.cell(C.Card), shape = Rnd(12.dp), zoom = 1.01f) { _ ->
-                    Column(Modifier.fillMaxWidth().padding(if (compact) 5.dp else 12.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 1.dp else 4.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(if (compact) 8.dp else 12.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 4.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             T(e.times(), EpgLook.sp(if (compact) 11.sp else 12.sp), if (now) C.RedText else C.Muted, FontWeight.SemiBold)
                             if (now) Chip("SADA", C.Red, C.OnRed) else if (next) Chip("SLIJEDI", C.Card, C.Soft)
