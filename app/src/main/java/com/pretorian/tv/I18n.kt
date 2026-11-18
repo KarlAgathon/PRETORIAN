@@ -36,6 +36,12 @@ private const val COLS = "bs|en|de|hr|sr|bg|ro|tr|it|ar"
 
 /* One line per text: bs | en | de | hr | sr | bg | ro | tr | it | ar.  "=" means the same as Bosnian. */
 private val TABLE = """
+Dodaj u listu|Add to list|Zur Liste hinzufügen|Dodaj na popis|Додај на листу|Добави в списък|Adaugă în listă|Listeye ekle|Aggiungi alla lista|أضف إلى القائمة
+Ukloni iz %s|Remove from %s|Aus %s entfernen|Ukloni s popisa %s|Уклони са листе %s|Премахни от %s|Elimină din %s|%s listesinden kaldır|Rimuovi da %s|أزل من %s
+Dodaj u %s|Add to %s|Zu %s hinzufügen|Dodaj na %s|Додај на %s|Добави в %s|Adaugă în %s|%s listesine ekle|Aggiungi a %s|أضف إلى %s
+Nova lista|New list|Neue Liste|Novi popis|Нова листа|Нов списък|Listă nouă|Yeni liste|Nuova lista|قائمة جديدة
+Naziv liste već postoji ili nije ispravan|List name already exists or is invalid|Listenname existiert bereits oder ist ungültig|Naziv popisa već postoji ili nije valjan|Назив листе већ постоји или није исправан|Името на списъка вече съществува или е невалидно|Numele listei există deja sau este invalid|Liste adı zaten var veya geçersiz|Il nome della lista esiste già o non è valido|اسم القائمة موجود بالفعل أو غير صالح
+Dodaj u Moje liste|Add to My Lists|Zu Meine Listen hinzufügen|Dodaj na Moje popise|Додај у Моје листе|Добави в Моите списъци|Adaugă în Listele mele|Listelerime ekle|Aggiungi a Le mie liste|أضف إلى قوائمي
 ZOOM|ZOOM|ZOOM|ZOOM|ЗУМ|МАЩАБИРАНЕ|ZOOM|YAKINLAŞTIR|ZOOM|تكبير
 Prilagodi širinu|Fit Width|Breite anpassen|Prilagodi širinu|Прилагоди ширину|Напасни ширината|Potrivește lățimea|Genişliğe sığdır|Adatta larghezza|ملاءمة العرض
 Zoom|Zoom|Zoom|Zoom|Зум|Мащабиране|Zoom|Yakınlaştır|Zoom|تكبير
