@@ -338,7 +338,11 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
             // the card height follows the free space, so hero, Continue watching and Recent channels all fit without scrolling
             val cardH = (maxHeight - 372.dp).coerceIn(84.dp, 140.dp)
             val fullW = maxWidth
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 28.dp, end = 28.dp, top = 14.dp, bottom = 12.dp)) {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 28.dp, end = 28.dp, top = 8.dp, bottom = 12.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    SubscriptionCard()
+                }
+                Spacer(Modifier.height(8.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
                 Column(Modifier.weight(1f)) {
                 if (hero != null) {
@@ -407,8 +411,6 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                 }
                 }
                 Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    // playlist always on top; under it at most 2 live matches you follow, then new episodes
-                    SubscriptionCard()
                     HomeAlerts(nav, (fullW * 0.34f).coerceIn(250.dp, 380.dp))
                 }
                 }
