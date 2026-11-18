@@ -296,6 +296,9 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
     val ctx = LocalContext.current
     val first = remember { FocusRequester() }
     val cont = remember(Watch.rev) { Watch.continueList(ctx) }
+    // Default Layout is OnyxHome: restore artwork here as well as in the legacy HomeScreen.
+    // Watch.rev is bumped after enrichment, so the Continue Watching rows redraw with posters.
+    LaunchedEffect(Unit) { try { Watch.enrichMissingPosters(ctx) } catch (_: Exception) {} }
     var contMenu by remember { mutableStateOf<Progress?>(null) }
     val p = remember { Store.active(ctx) }
     val homeScope = rememberCoroutineScope()
@@ -439,16 +442,21 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                         items(entries, key = { it.url }) { pr ->
                             Focusable(onClick = playOf(pr), onMenu = { contMenu = pr }, shape = Rnd(14.dp),
                                 normal = C.Rail, focused = C.CardHi, zoom = 1.02f,
-                                modifier = Modifier.width(300.dp).height(66.dp).border(1.dp, C.Line, Rnd(14.dp))) { f ->
-                                Column(Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 8.dp), verticalArrangement = Arrangement.Center) {
-                                    T(pr.series ?: pr.title, 14.sp, C.Text, FontWeight.SemiBold, maxLines = 1)
-                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                        T(if (pr.season != null) "S" + pr.season + " E" + pr.episode else fmtTime(pr.dur), 11.sp, C.Muted, maxLines = 1)
-                                        Spacer(Modifier.weight(1f))
-                                        if (!pr.next) T((pr.fraction * 100).toInt().toString() + "%", 11.sp, C.Soft)
-                                    }
-                                    if (!pr.next) Box(Modifier.fillMaxWidth().padding(top = 4.dp).height(3.dp).clip(Pill).background(C.Line)) {
-                                        Box(Modifier.fillMaxWidth(pr.fraction).fillMaxHeight().background(C.Red.copy(alpha = 0.75f)))
+                                modifier = Modifier.width(300.dp).height(76.dp).border(1.dp, C.Line, Rnd(14.dp))) { f ->
+                                Row(Modifier.fillMaxSize().padding(horizontal = 9.dp, vertical = 7.dp),
+                                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    OnyxImage(pr.poster, "continue_" + pr.url, Modifier.width(43.dp).fillMaxHeight().clip(Rnd(8.dp)),
+                                        maxW = 150, scale = ContentScale.Fit)
+                                    Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Center) {
+                                        T(pr.series ?: pr.title, 14.sp, C.Text, FontWeight.SemiBold, maxLines = 1)
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                            T(if (pr.season != null) "S" + pr.season + " E" + pr.episode else fmtTime(pr.dur), 11.sp, C.Muted, maxLines = 1)
+                                            Spacer(Modifier.weight(1f))
+                                            if (!pr.next) T((pr.fraction * 100).toInt().toString() + "%", 11.sp, C.Soft)
+                                        }
+                                        if (!pr.next) Box(Modifier.fillMaxWidth().padding(top = 4.dp).height(3.dp).clip(Pill).background(C.Line)) {
+                                            Box(Modifier.fillMaxWidth(pr.fraction).fillMaxHeight().background(C.Red.copy(alpha = 0.75f)))
+                                        }
                                     }
                                 }
                             }
