@@ -205,6 +205,9 @@ fun GroupColumn(
     extra: (@Composable () -> Unit)? = null, containVerticalFocus: Boolean = false,
 ) {
     val ctx = LocalContext.current
+    val listForFocus = (rows as? Load.Ok)?.value ?: emptyList()
+    val rowRequesters = remember(listForFocus) { List(listForFocus.size) { FocusRequester() } }
+    val focusScope = rememberCoroutineScope()
     Column(Modifier.width(width).fillMaxHeight().padding(start = 14.dp, end = 10.dp, top = if (title.isEmpty()) 8.dp else 22.dp)) {
         // no title (TV guide): the groups start right under the top bar
         if (title.isNotEmpty()) T(title, 26.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 8.dp, bottom = 2.dp))
@@ -222,14 +225,34 @@ fun GroupColumn(
                 ) {
                     itemsIndexed(list, key = { _, r -> r.id }) { i, r ->
                         val m = Modifier.fillMaxWidth().height(Rows.group)
-                            // Let Compose handle normal row-to-row focus movement, exactly like ChannelList.
-                            // Intercept only DOWN at the final row; scheduling scrollToItem/requestFocus
-                            // for every key repeat caused category focus to jump and flicker while held.
                             .then(if (containVerticalFocus) Modifier.onPreviewKeyEvent { e ->
-                                e.type == KeyEventType.KeyDown &&
-                                    e.key == Key.DirectionDown && i == list.lastIndex
+                                if (e.type != KeyEventType.KeyDown) false
+                                else when (e.key) {
+                                    Key.DirectionUp -> if (i == 0) false else {
+                                        val target = i - 1
+                                        focusScope.launch {
+                                            state.scrollToItem(target)
+                                            delay(45)
+                                            rowRequesters[target].requestFocus()
+                                        }
+                                        true
+                                    }
+                                    Key.DirectionDown -> {
+                                        val target = if (i == list.lastIndex) 0 else i + 1
+                                        focusScope.launch {
+                                            state.scrollToItem(target)
+                                            delay(45)
+                                            rowRequesters[target].requestFocus()
+                                        }
+                                        true
+                                    }
+                                    else -> false
+                                }
                             } else Modifier.wrapKeys(i, list.size, wrap))
                         val fr = wrap.requester(i, if (r.id == focusKey) focusFr else null)
+                        val rowModifier = if (containVerticalFocus) {
+                            m.focusRequester(rowRequesters[i]).then(if (r.id == focusKey) Modifier.focusRequester(focusFr) else Modifier)
+                        } else m
                         when (r) {
                             is GRow.Group -> {
                                 val g = r.ref
@@ -237,13 +260,13 @@ fun GroupColumn(
                                 val locked = g.pid?.let { Ovr(ctx, it).isLocked("live", g.cat.id) } ?: false
                                 val shape = Rnd(12.dp)
                                 Focusable(
-                                    modifier = m.then(if (Look.groupFrame) Modifier.border(if (selected) 1.5.dp else 1.dp,
+                                    modifier = rowModifier.then(if (Look.groupFrame) Modifier.border(if (selected) 1.5.dp else 1.dp,
                                         C.Red.copy(alpha = if (selected) 0.9f else 0.28f), shape) else Modifier),
                                     shape = shape,
                                     onClick = { onOpen(g) },
                                     onFocus = { onFocusRow(r.id); onFocusGroup(g) },
                                     onMenu = if (Lock.simple || g.cat.id == ALL_GROUP || g.cat.id == RECENT_GROUP) null else ({ onMenu(g) }),
-                                    focusRequester = fr,
+                                    focusRequester = if (containVerticalFocus) null else fr,
                                     normal = if (selected) C.Red.copy(alpha = 0.28f) else Color.Transparent,
                                     zoom = 1.0f,
                                 ) { _ ->
@@ -256,8 +279,8 @@ fun GroupColumn(
                                     }
                                 }
                             }
-                            is GRow.Header -> Focusable(modifier = m.height(Rows.group + 6.dp), onClick = { onHeader(r.p) },
-                                onFocus = { onFocusRow(r.id) }, focusRequester = fr, normal = C.Card, zoom = 1f) { _ ->
+                            is GRow.Header -> Focusable(modifier = rowModifier.height(Rows.group + 6.dp), onClick = { onHeader(r.p) },
+                                onFocus = { onFocusRow(r.id) }, focusRequester = if (containVerticalFocus) null else fr, normal = C.Card, zoom = 1f) { _ ->
                                 Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Ico(if (r.open) R.drawable.lc_chevron_down else R.drawable.lc_chevron_right, 16.dp, C.RedText)
@@ -265,14 +288,14 @@ fun GroupColumn(
                                     expiryText(r.p.exp)?.let { T(it.first, 11.sp, if (it.second > 0) C.Amber else C.Muted) }
                                 }
                             }
-                            is GRow.NewFav -> Focusable(modifier = m, onClick = onNewFav, onFocus = { onFocusRow(r.id) }, focusRequester = fr,
+                            is GRow.NewFav -> Focusable(modifier = rowModifier, onClick = onNewFav, onFocus = { onFocusRow(r.id) }, focusRequester = if (containVerticalFocus) null else fr,
                                 normal = Color.Transparent, zoom = 1f) { _ ->
                                 Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Ico(R.drawable.lc_plus, 15.dp, C.Muted); T("Nova lista favorita", 13.sp, C.Muted)
                                 }
                             }
-                            is GRow.NewGroup -> Focusable(modifier = m, onClick = { onNewGroup(r.pid) }, onFocus = { onFocusRow(r.id) }, focusRequester = fr,
+                            is GRow.NewGroup -> Focusable(modifier = rowModifier, onClick = { onNewGroup(r.pid) }, onFocus = { onFocusRow(r.id) }, focusRequester = if (containVerticalFocus) null else fr,
                                 normal = Color.Transparent, zoom = 1f) { _ ->
                                 Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
