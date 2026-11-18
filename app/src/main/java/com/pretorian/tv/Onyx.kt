@@ -296,7 +296,6 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
     val ctx = LocalContext.current
     val first = remember { FocusRequester() }
     val cont = remember(Watch.rev) { Watch.continueList(ctx) }
-    LaunchedEffect(Unit) { try { Watch.findAlternatives(ctx) } catch (_: Exception) {} }
     var contMenu by remember { mutableStateOf<Progress?>(null) }
     val p = remember { Store.active(ctx) }
     val homeScope = rememberCoroutineScope()
