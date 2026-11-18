@@ -1230,6 +1230,12 @@ fun SettingsScreen2(nav: Nav) {
     }
     var inPage by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    // Settings uses the selected Modern Dark Blue accent without changing the user's app-wide preference.
+    DisposableEffect(Unit) {
+        val previousAccent = Look.accent
+        Look.accent = 1
+        onDispose { if (Look.accent == 1) Look.accent = previousAccent }
+    }
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     // like Search: inside a section the list shrinks to a narrow rail of icons and the page gets the room
     val railW by androidx.compose.animation.core.animateDpAsState(if (inPage) 74.dp else 270.dp, label = "rail")
@@ -1303,7 +1309,6 @@ fun SettingsScreen2(nav: Nav) {
                         SetPage(if (epl != null) trf("EPG · %s", epl.name) else tr("EPG izvori"), "OK: meni · desno: uključi/ugasi · ▲ ▼ redoslijed") { EpgSourcesBlock(epl) } }
                     "plists" -> PlaylistsListV2(nav)
                     "lookmore" -> LookPage()
-                    "player" -> MediaPage()
                     "device" -> DeviceV2()
                     "profiles" -> ProfilesV2()
                     "simple" -> SimpleV2(nav)
