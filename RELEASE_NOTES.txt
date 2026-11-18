@@ -7,3 +7,9 @@ PRETORIAN 1.0.39-beta6
 TV kategorije: držanje UP pomjera fokus red po red i ne dozvoljava prerani izlazak na gornju traku; izlazak je moguć tek iz prve kategorije
 TV kategorije: DOWN ostaje unutar liste i na posljednjoj kategoriji
 Mini pregled: postojeća potvrda tipkom OK ostaje nepromijenjena
+
+
+PRETORIAN 1.0.39-beta7
+TV kategorije: prirodno pomjeranje fokusa red po red, kao na kanalima; držanje UP/DOWN prati ponavljanje daljinskog bez skakanja i treperenja
+TV kategorije: DOWN na posljednjoj kategoriji ostaje unutar liste
+Mini pregled i beta6 zaštita granica ostaju nepromijenjeni
