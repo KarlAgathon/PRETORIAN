@@ -1287,7 +1287,10 @@ private fun ChannelEpgCells(ch: Channel, modifier: Modifier = Modifier) {
             } else {
                 Row(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     entries.forEachIndexed { index, item ->
-                        Column(Modifier.weight(1f).fillMaxHeight().clip(Rnd(8.dp)).background(if (index == 0 && current != null) C.CardFocus else C.Card)
+                        val cellWeight = if (current != null && entries.size > 1) {
+                            if (index == 0) 0.28f else 0.72f / (entries.size - 1)
+                        } else 1f / entries.size.coerceAtLeast(1)
+                        Column(Modifier.weight(cellWeight).fillMaxHeight().clip(Rnd(8.dp)).background(if (index == 0 && current != null) C.CardFocus else C.Card)
                             .padding(horizontal = 10.dp, vertical = 6.dp), verticalArrangement = Arrangement.Center) {
                             T(item.times(), 10.sp, if (index == 0 && current != null) C.RedText else C.Muted, FontWeight.SemiBold, maxLines = 1)
                             T(item.title, 13.sp, C.Text, FontWeight.Medium, maxLines = 1)
