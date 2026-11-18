@@ -2395,6 +2395,11 @@ New Era — jedini TV layout za sada. Ostali layouti dolaze kasnije.|New Era is 
 Utakmice, timovi i TV prenosi|Matches, teams and TV broadcasts|Spiele, Teams und TV-Übertragungen|Utakmice, timovi i TV prijenosi|Утакмице, тимови и ТВ преноси|Мачове, отбори и ТВ излъчвания|Meciuri, echipe și transmisiuni TV|Maçlar, takımlar ve TV yayınları|Partite, squadre e trasmissioni TV|المباريات والفرق والبث التلفزيوني
 Sportski centar|SPORTS CENTER|Sportzentrum|Sportski centar|Спортски центар|Спортен център|Centru sportiv|Spor Merkezi|Centro sportivo|المركز الرياضي
 Utakmice|Matches|Spiele|Utakmice|Утакмице|Мачове|Meciuri|Maçlar|Partite|المباريات
+GRUPE|GROUPS|GRUPPEN|GRUPE|ГРУПЕ|ГРУПИ|GRUPURI|GRUPLAR|GRUPPI|المجموعات
+%s KANALA|%s CHANNELS|%s SENDER|%s KANALA|%s КАНАЛА|%s КАНАЛА|%s CANALE|%s KANAL|%s CANALI|%s قناة
+Učitavam EPG…|Loading EPG…|EPG wird geladen…|Učitavam EPG…|Учитавање EPG-а…|Зареждане на EPG…|Se încarcă EPG…|EPG yükleniyor…|Caricamento EPG…|جارٍ تحميل دليل البرامج…
+EPG nije dostupan|EPG unavailable|EPG nicht verfügbar|EPG nije dostupan|EPG није доступан|EPG не е наличен|EPG indisponibil|EPG mevcut değil|EPG non disponibile|دليل البرامج غير متاح
+Nema EPG vodiča|No EPG guide|Kein EPG-Programm|Nema EPG vodiča|Нема EPG водича|Няма EPG справочник|Nu există ghid EPG|EPG rehberi yok|Nessuna guida EPG|لا يوجد دليل برامج
 """.trimIndent()
 
 private val DICT: Map<String, Map<String, String>> by lazy {
