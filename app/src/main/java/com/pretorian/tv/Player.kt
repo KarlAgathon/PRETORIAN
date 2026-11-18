@@ -228,7 +228,7 @@ private fun errorText(e: PlaybackException, live: Boolean): String {
 }
 
 private object PlayerChannelHistory {
-    private const val KEY = "player_channel_history"
+    private const val KEY = "player_channel_recent"
     var rev by androidx.compose.runtime.mutableIntStateOf(0)
     fun list(): List<Channel> = try {
         val a = org.json.JSONArray(Prefs.str(KEY, "[]"))
@@ -903,14 +903,14 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                                     val wasFavorite = Favs.inAny(ctx, c)
                                     if (wasFavorite) lists.forEach { l -> if (Favs.contains(l.id, c)) Favs.toggle(l.id, c) }
                                     else (lists.firstOrNull() ?: Favs.addList(ctx, tr("Favoriti"))).let { Favs.toggle(it.id, c) }
-                                    Toast.makeText(ctx, tr(if (wasFavorite) "Uklonjeno iz favorite" else "Dodano u favorite"), Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(ctx, tr(if (wasFavorite) "Uklonjeno iz favorita" else "Dodano u favorite"), Toast.LENGTH_SHORT).show()
                                 }
                                 "subs" -> { bar = false; dialog = "subs" }
                                 "zoom" -> { bar = false; dialog = "zoom" }
                                 "audio" -> { bar = false; dialog = "audio" }
                                 "video" -> { bar = false; dialog = "video" }
                                 "epg" -> { bar = false; side = "epg" }
-                                "history" -> { bar = false; dialog = "history" }
+                                "recent" -> { bar = false; dialog = "recent" }
                             }
                         })
                     }
@@ -980,18 +980,18 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         "epgshift" -> item.channel?.let { EpgShiftPopup(it) { dialog = null } }
         "zoom" -> Popup("Zoom", onDismiss = { dialog = null }) {
             FORMATS.forEachIndexed { i, label ->
-                OptionRow(label, R.drawable.lc_maximize, selected = resize == i) {
+                OptionRow(tr(label), R.drawable.lc_maximize, selected = resize == i) {
                     resize = i
                     item.channel?.let { Prefs.put("fmt_" + it.url.hashCode(), resize.toLong()) }
                     dialog = null
                 }
             }
         }
-        "history" -> {
+        "recent" -> {
             @Suppress("UNUSED_VARIABLE") val historyRev = PlayerChannelHistory.rev
             val history = PlayerChannelHistory.list()
-            Popup("History · ${history.size}/10", onDismiss = { dialog = null }, width = 700.dp) {
-                if (history.isEmpty()) T("Nema gledanih kanala.", 14.sp, C.Muted)
+            Popup(trf("Historija · %s/10", history.size), onDismiss = { dialog = null }, width = 700.dp) {
+                if (history.isEmpty()) T(tr("Nema gledanih kanala."), 14.sp, C.Muted)
                 history.forEach { c ->
                     OptionRow("${c.num}. ${c.name}", R.drawable.lc_history, sub = c.group.takeIf { it.isNotBlank() },
                         selected = c.url == item.url) {
@@ -999,13 +999,13 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                         index = 0; dialog = null; side = null; bar = false
                     }
                 }
-                if (history.isNotEmpty()) OptionRow("Clear History", R.drawable.lc_trash_2, color = C.Danger) { dialog = "history_clear" }
+                if (history.isNotEmpty()) OptionRow(tr("Obriši historiju"), R.drawable.lc_trash_2, color = C.Danger) { dialog = "recent_clear" }
             }
         }
-        "history_clear" -> Popup("Obrisati History?", onDismiss = { dialog = "history" }) {
-            T("Lista posljednjih gledanih kanala bit će obrisana.", 13.sp, C.Muted)
-            OptionRow("Obriši historiju", R.drawable.lc_trash_2, color = C.Danger) { PlayerChannelHistory.clear(); dialog = "history" }
-            OptionRow("Odustani", R.drawable.lc_x) { dialog = "history" }
+        "recent_clear" -> Popup(tr("Obrisati historiju?"), onDismiss = { dialog = "recent" }) {
+            T(tr("Lista posljednjih gledanih kanala bit će obrisana."), 13.sp, C.Muted)
+            OptionRow("Obriši historiju", R.drawable.lc_trash_2, color = C.Danger) { PlayerChannelHistory.clear(); dialog = "recent" }
+            OptionRow("Odustani", R.drawable.lc_x) { dialog = "recent" }
         }
         "adelay" -> AudioDelayPopup(item.url) { dialog = null }
         "ext" -> ExternalPicker(item.url, item.title, player.currentPosition, onDismiss = { dialog = null })
@@ -1113,7 +1113,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     LaunchedEffect(item.url) { resize = item.channel?.let { Prefs.long("fmt_" + it.url.hashCode(), 0).toInt().coerceIn(0, FORMATS.lastIndex) } ?: resize }
 }
 
-private val FORMATS = listOf("Default / Auto", "4:3", "16:9", "Fit", "Stretch", "Original")
+private val FORMATS = listOf("Automatski", "4:3", "16:9", "Prilagodi", "Rastegni", "Izvorno")
 
 /** Buttons at the bottom of the player, in one row (no scrolling): Pause · ★ · [CC] · [Audio] · Format · Guide · Group · More.
  *  Subtitles only when the stream has subtitle tracks, Audio only with 2 or more tracks. */
@@ -1128,7 +1128,7 @@ private fun PlayerBar(favOn: Boolean, onAction: (String) -> Unit) {
         B("audio", "AUDIO", R.drawable.lc_volume),
         B("video", "VIDEO", R.drawable.lc_monitor),
         B("epg", "EPG", R.drawable.lc_calendar_clock),
-        B("history", "HISTORY", R.drawable.lc_history),
+        B("recent", "HISTORY", R.drawable.lc_history),
     )
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         list.forEachIndexed { i, b ->
