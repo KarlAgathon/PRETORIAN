@@ -389,43 +389,91 @@ private fun TvList(nav: Nav) {
     var enterTick by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(focusedCh) { val c = focusedCh ?: return@LaunchedEffect; delay(500); Dusk.set(c.logo, c.name) }
-    Column(Modifier.fillMaxSize()) {
-    Row(Modifier.weight(1f).fillMaxWidth()) {
-        GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, 260.dp, "Kategorije", null,
-            onFocusGroup = { /* focus never changes the selected group */ },
-            onOpen = { openGroup(ctx, st, it); enterTick++ },
-            onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
-            onHeader = { p -> TvFold.toggle(p.id); if (p.id in TvFold.open) Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
-            onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it },
-            onFocusRow = { st.focusKey = it },
-            containVerticalFocus = false)
-        Box(Modifier.width(1.dp).fillMaxHeight().background(C.Line))
-        // Keep all three areas visible: provider categories, channels and the selected channel's EPG.
-        LaunchedEffect(st.refocus, rows is Load.Ok) {
-            val list = (rows as? Load.Ok)?.value ?: return@LaunchedEffect
-            if (st.refocus == 0) return@LaunchedEffect
-            if (st.focusKey.isEmpty() || list.none { it.id == st.focusKey }) {
-                st.focusKey = st.group?.let { g -> "g:" + g.key }?.takeIf { k -> list.any { it.id == k } } ?: list.firstOrNull()?.id ?: ""
+    if (Look.layout == 0) {
+        // Classic / TV-Mate-inspired composition: preview and programme info above,
+        // wide groups and channel rows below. Default layout remains untouched.
+        Column(Modifier.fillMaxSize()) {
+            Row(
+                Modifier.fillMaxWidth().weight(0.36f).padding(start = 16.dp, end = 18.dp, top = 12.dp, bottom = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                val previewCh = PreviewSel.ch
+                Box(Modifier.weight(0.42f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                    if (previewCh != null) PreviewBox(previewCh, Modifier.fillMaxWidth())
+                    else Box(Modifier.fillMaxSize().clip(Rnd(14.dp)).background(C.Rail), contentAlignment = Alignment.Center) {
+                        T("Izaberi kanal za pregled", 14.sp, C.Muted)
+                    }
+                }
+                Column(
+                    Modifier.weight(0.58f).fillMaxHeight().background(C.Rail, Rnd(14.dp)).padding(horizontal = 18.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val selected = focusedCh ?: previewCh
+                    if (selected == null) {
+                        T("Informacije o programu", 17.sp, C.Text, FontWeight.Bold)
+                        T("Potvrdi kanal tipkom OK da pokreneš mini-player.", 13.sp, C.Muted)
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            ChannelLogo(selected.logo, selected.name)
+                            Column(Modifier.weight(1f)) {
+                                T(selected.name, 17.sp, C.Text, FontWeight.Bold, maxLines = 1)
+                                T("TV · EPG", 11.sp, C.Muted)
+                            }
+                            qualityOf(selected.name)?.let { Chip(it, C.Card, C.Soft) }
+                        }
+                        EpgList(selected, limit = 2, modifier = Modifier.fillMaxWidth())
+                    }
+                }
             }
-            val idx = list.indexOfFirst { it.id == st.focusKey }.coerceAtLeast(0)
-            if (gState.layoutInfo.visibleItemsInfo.none { it.index == idx }) gState.scrollToItem((idx - 3).coerceAtLeast(0))
-            st.focusFr.tryFocus()
-        }
-        Box(Modifier.weight(1f).fillMaxHeight()) {
-            val g = st.group
-            if (g == null) Message("Izaberi grupu", "Drži OK na grupi za opcije")
-            else Row(Modifier.fillMaxSize()) {
+            Row(Modifier.fillMaxWidth().weight(0.64f)) {
+                GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, 250.dp, "Grupe", null,
+                    onFocusGroup = { },
+                    onOpen = { openGroup(ctx, st, it); enterTick++ },
+                    onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
+                    onHeader = { p -> TvFold.toggle(p.id); if (p.id in TvFold.open) Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
+                    onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it },
+                    onFocusRow = { st.focusKey = it },
+                    containVerticalFocus = false)
+                Box(Modifier.width(1.dp).fillMaxHeight().background(C.Line))
                 Box(Modifier.weight(1f).fillMaxHeight().onPreviewKeyEvent { e ->
                     if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { backToGroups(); true } else false
                 }) {
-                    key(g.key, st.rev) {
+                    val g = st.group
+                    if (g == null) Message("Izaberi grupu", "Drži OK na grupi za opcije")
+                    else key(g.key, st.rev) {
                         ChannelList(g, nav, st.gate, rows, enterTick, onFocusCh = { focusedCh = it; inChannels = true }) { st.rev++ }
                     }
                 }
-                EpgPanel(focusedCh, Modifier.width(330.dp))
             }
         }
-    }
+    } else {
+        Column(Modifier.fillMaxSize()) {
+            Row(Modifier.weight(1f).fillMaxWidth()) {
+                GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, 260.dp, "Kategorije", null,
+                    onFocusGroup = { },
+                    onOpen = { openGroup(ctx, st, it); enterTick++ },
+                    onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
+                    onHeader = { p -> TvFold.toggle(p.id); if (p.id in TvFold.open) Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
+                    onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it },
+                    onFocusRow = { st.focusKey = it },
+                    containVerticalFocus = false)
+                Box(Modifier.width(1.dp).fillMaxHeight().background(C.Line))
+                Box(Modifier.weight(1f).fillMaxHeight()) {
+                    val g = st.group
+                    if (g == null) Message("Izaberi grupu", "Drži OK na grupi za opcije")
+                    else Row(Modifier.fillMaxSize()) {
+                        Box(Modifier.weight(1f).fillMaxHeight().onPreviewKeyEvent { e ->
+                            if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { backToGroups(); true } else false
+                        }) {
+                            key(g.key, st.rev) {
+                                ChannelList(g, nav, st.gate, rows, enterTick, onFocusCh = { focusedCh = it; inChannels = true }) { st.rev++ }
+                            }
+                        }
+                        EpgPanel(focusedCh, Modifier.width(330.dp))
+                    }
+                }
+            }
+        }
     }
     TvDialogs(st, rows)
 }
