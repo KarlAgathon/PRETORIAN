@@ -266,15 +266,10 @@ fun HitActions(h: Hit, nav: Nav, onDismiss: () -> Unit) {
     val ctx = LocalContext.current
     var fav by remember { mutableStateOf<Channel?>(null) }
     if (fav != null) { FavPicker(fav!!) { fav = null; onDismiss() }; return }
-    fun guide(ch: Channel) {
-        TvMemory.group = GroupRef(ch.pid, Category(ALL_GROUP, tr("Svi kanali"))); TvMemory.channel = -1
-        Prefs.put("tv_view", "guide"); onDismiss(); nav.root(Screen.Tv)
-    }
     when (h) {
         is Hit.Ch -> Popup(h.ch.name, onDismiss) {
             OptionRow("Gledaj sada", R.drawable.lc_play, color = C.Green) { onDismiss(); playChannels(nav, listOf(h.ch), 0) }
             OptionRow("Dodaj u favorite", R.drawable.lc_star, color = C.Amber) { fav = h.ch }
-            OptionRow("Prikaži u vodiču", R.drawable.lc_calendar_clock) { guide(h.ch) }
             val ovr = Ovr(ctx, h.ch.pid)
             OptionRow(if (ovr.isChHidden(h.ch)) "Prikaži kanal" else "Sakrij kanal", R.drawable.lc_eye_off) {
                 ovr.toggleChHidden(h.ch); Toast.makeText(ctx, tr("Spremljeno"), Toast.LENGTH_SHORT).show(); onDismiss()
@@ -292,7 +287,6 @@ fun HitActions(h: Hit, nav: Nav, onDismiss: () -> Unit) {
                     Toast.makeText(ctx, tr(if (on) "Podsjetnik postavljen" else "Podsjetnik uklonjen"), Toast.LENGTH_SHORT).show(); onDismiss()
                 }
             }
-            OptionRow("Prikaži u vodiču", R.drawable.lc_calendar_clock) { guide(h.ch) }
             OptionRow("Dodaj kanal u favorite", R.drawable.lc_star) { fav = h.ch }
         }
         is Hit.Movie -> Popup(h.v.name, onDismiss) { OptionRow("Otvori", R.drawable.lc_info) { onDismiss(); nav.push(Screen.MovieDetail(h.v)) } }

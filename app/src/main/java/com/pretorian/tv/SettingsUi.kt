@@ -634,13 +634,7 @@ private fun LookPage() {
     Page("Izgled", "Promjene se vide odmah.") {
         Label(tr("TV prikaz"))
         T(tr("New Era — jedini TV layout za sada. Ostali layouti dolaze kasnije."), 13.sp, C.Text, FontWeight.SemiBold, maxLines = 2)
-        Label("Kako se otvara TV")
-        var tvView by remember { mutableStateOf(Prefs.str("tv_view", "list")) }
-        Segmented(listOf("Lista kanala", "TV vodič (mreža)"), if (tvView == "guide") 1 else 0) {
-            tvView = if (it == 1) "guide" else "list"; Prefs.put("tv_view", tvView)
-        }
-        T(if (tvView == "guide") "TV vodič: kanali odozgo prema dolje, emisije vodoravno po vremenu (kao TiviMate)."
-          else "Lista kanala: grupe lijevo, kanali u sredini, mali pregled slike i program desno.", 12.sp, C.Muted, maxLines = 2)
+        T("TV: kategorije lijevo, kanali u sredini, mali player i EPG desno.", 12.sp, C.Muted, maxLines = 2)
         Label("Oblik ivica")
         Segmented(listOf("Zaobljene", "Blago zaobljene", "Oštre"), Look.corner) { Look.corner = it; save() }
         Label("Set ikona")
@@ -728,7 +722,7 @@ private fun LookPage() {
         Segmented(listOf("Isključen", "Na OK", "Automatski"), Look.previewMode) { Look.previewMode = it; Look.preview = it > 0; save() }
         T(when (Look.previewMode) {
             0 -> "Nema male slike. OK na kanalu ga odmah pušta preko cijelog ekrana."
-            1 -> "U TV vodiču: OK na emisiji › Pregled u malom prozoru. Dok listaš, ništa se ne pušta."
+            1 -> "U programu kanala: OK na emisiji › Pregled u malom prozoru. Dok listaš, ništa se ne pušta."
             else -> "Mala slika se pušta sama kad staneš na kanal."
         }, 12.sp, C.Muted, maxLines = 2)
         ToggleRow("Najgledaniji na vrhu grupe", Look.mostWatched, R.drawable.lc_arrow_up, "Kanali koje najčešće gledaš sami idu gore (kad nema ručnog redoslijeda)") {
@@ -898,7 +892,7 @@ fun setAppLang(ctx: android.content.Context, code: String) {
 private fun RemindersPage(nav: Nav) {
     var rev by remember { mutableIntStateOf(0) }
     key(rev, Reminders.rev) {
-        Page("Podsjetnici", "U TV vodiču ili Sports Centeru: OK na emisiji ili utakmici koja još nije počela › Podsjeti me.") {
+        Page("Podsjetnici", "U programu kanala ili Sports Centeru: OK na emisiji ili utakmici koja još nije počela › Podsjeti me.") {
             Label("Podsjeti prije početka (minuta)")
             Segmented(listOf("0", "1", "5", "10", "15"), listOf(0, 1, 5, 10, 15).indexOf(Reminders.before).coerceAtLeast(0)) { Reminders.before = listOf(0, 1, 5, 10, 15)[it]; rev++ }
             Label("Koliko dugo poruka stoji (sekundi)")
@@ -1942,13 +1936,9 @@ private fun LookV2(openSub: (String) -> Unit) {
             SetDrop("Veličina male slike", "u listi kanala · veća slika = više opisa emisije", listOf("Mala", "Srednja", "Velika"), Prefs.long("tv_mini", 1).toInt().coerceIn(0, 2)) {
                 Prefs.put("tv_mini", it.toLong()); rev++
             }
-            SetDrop("Prikaz liste kanala", "u TV-u i u listi u playeru · TiviMate mod = grupe lijevo, kanali s programom po satima", listOf("Kompaktni", "Normalni", "Veliki", "TiviMate mod"), ListStyle.mode, new = true) {
-                Prefs.put("tv_density", it.toLong())
-                Prefs.put("tv_view", if (it == 3) "guide" else "list"); rev++
+            SetDrop("Prikaz liste kanala", "u TV-u i u listi u playeru", listOf("Kompaktni", "Normalni", "Veliki"), ListStyle.mode, new = true) {
+                Prefs.put("tv_density", it.toLong().coerceIn(0, 2)); rev++
             }
-            SetDrop("Veličina EPG mreže", "Automatski se prilagođava ekranu · ovo samo pomjera mjeru", listOf("Kompaktno", "Normalno", "Veliko"), GridLook.size, new = true) { Prefs.put("grid_size", it.toLong()); rev++ }
-            SetDrop("Sati u EPG mreži", "Automatski = koliko stane na ekran", listOf("Automatski", "2 h", "3 h", "4 h"), GridLook.hours.let { if (it == 0) 0 else it - 1 }, new = true) { Prefs.put("grid_hours", if (it == 0) 0L else (it + 1).toLong()); rev++ }
-            SetDrop("Kanal u EPG mreži", null, listOf("Logo i ime", "Samo logo"), if (GridLook.logoOnly) 1 else 0, new = true) { Prefs.put("grid_logo_only", it == 1); rev++ }
             SetDrop("Broj kanala na ekranu", "Automatski = prema prikazu liste · uvijek cijeli redovi", listOf("Automatski", "4", "5", "6", "7", "8", "9"), Prefs.long("tv_rows", 0).toInt().let { n -> if (n in 4..9) n - 3 else 0 }) {
                 Prefs.put("tv_rows", if (it == 0) 0L else (it + 3).toLong()); rev++
             }
@@ -1965,9 +1955,6 @@ private fun LookV2(openSub: (String) -> Unit) {
             }
             SetDrop("Oznake u gornjoj traci", "Lite/Full i A/S pored Postavki", listOf("Samo ikone", "Obojeni kvadrati"), Prefs.long("bar_badges", 0).toInt().coerceIn(0, 1), new = true) {
                 Prefs.put("bar_badges", it.toLong()); rev++
-            }
-            SetDrop("TV se otvara kao", null, listOf("Lista kanala", "TV vodič"), if (Prefs.str("tv_view", "list") == "guide") 1 else 0) {
-                Prefs.put("tv_view", if (it == 1) "guide" else "list"); rev++
             }
             var stdMsg by remember { mutableStateOf<String?>(null) }
             SetRow("Snimi kao standardni prikaz", "ovaj izgled za svaku novu instalaciju i profil · fajl u Download/PRETORIAN", stdMsg ?: tr("Snimi"), new = true) {
@@ -2185,7 +2172,7 @@ private fun SportV2() {
                 SetDrop("Mala slika utakmice", null, listOf("Na OK", "Isključena"), if (Prefs.bool("sport_preview", true)) 0 else 1) { Prefs.put("sport_preview", it == 0); rev++ }
                 SetSection("Ko prenosi")
                 val srcKeys = listOf("sport_src_rights", "sport_src_espn", "sport_src_ai")
-                SetMulti("Izvori", "tvoji kanali (TV vodič) uvijek", listOf("Prava po ligi", "ESPN", "AI"),
+                SetMulti("Izvori", "tvoji TV kanali uvijek", listOf("Prava po ligi", "ESPN", "AI"),
                     srcKeys.indices.filter { Prefs.bool(srcKeys[it], true) }.toSet(), all = false) { s2 -> srcKeys.forEachIndexed { i, k -> Prefs.put(k, i in s2) }; changed() }
                 var afDlg by remember { mutableStateOf(false) }
                 SetRow("API-Football ključ", "brži rezultati uživo · besplatno 100 upita dnevno", if (ApiFootball.on) tr("upisan") else tr("nema"),
@@ -2249,7 +2236,7 @@ private fun RemindersV2(nav: Nav) {
         SetPage("Podsjetnici") {
             val all = Reminders.all().filter { it.start > System.currentTimeMillis() - 3600_000L }.sortedBy { it.start }
             SetSection(trf("Nadolazeći · %s", all.size))
-            if (all.isEmpty()) T("Nema podsjetnika. U TV vodiču ili Sportu: OK na emisiji › Podsjeti me.", 12.sp, C.Muted, maxLines = 2)
+            if (all.isEmpty()) T("Nema podsjetnika. U programu kanala ili Sportu: OK na emisiji › Podsjeti me.", 12.sp, C.Muted, maxLines = 2)
             all.forEach { r ->
                 SetRow(r.title, java.text.SimpleDateFormat("EEE d. M. HH:mm", java.util.Locale(Look.lang)).format(java.util.Date(r.start)) + (r.channelName?.let { " · $it" } ?: ""), arrow = "›",
                     onLong = { menu = r }) { menu = r }
