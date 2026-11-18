@@ -2682,7 +2682,7 @@ private fun UpdateV2() {
             Updater.status?.let { T(it, 12.sp, C.Amber, maxLines = 2) }
             // ---- channel
             SetSection("Verzija ažuriranja")
-            val betaBuild = BuildConfig.APPLICATION_ID.endsWith(".beta")
+            val betaBuild = BuildConfig.APPLICATION_ID.endsWith(".beta")  // i18n-ignore
             SetDrop("Kanal", if (Updater.beta) "probne verzije odmah, prije svih" else "samo provjerene verzije",
                 if (betaBuild) listOf("Beta") else listOf("Stable", "Beta"),
                 if (betaBuild) 0 else if (Updater.beta) 1 else 0) {
