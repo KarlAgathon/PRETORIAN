@@ -1,3 +1,15 @@
+PRETORIAN 1.0.63 STABLE
+New Dawn is now the only layout (Default and Classic removed, no layout choice); every box switches to it, new installs start in it
+Themes: Midnight blue (default) and Black and white
+Home is the menu only: all 8 sections always fit (Settings no longer cut off), active playlists with days left, latest match and app notices
+Movies and Series: categories with how many titles each has, search inside (titles and category names), sort (newest, A–Z, Z–A, rating)
+Series page: season tiles coloured by progress (done, started, not started, not out yet) and how much you have watched
+Search: filters with counts on the left (All, TV channels, Movies, Series, Sport) and one clear result list with type labels
+Sport: drop-down style filters (sports, teams, countries, regions, competitions), Following button, follow switch per match with alert types (goals, red cards, penalties, extra time, match end)
+Sport: a match started from Sport that freezes 2 s is reconnected up to 2 times, then switched to another of your channels showing the same match
+Catch-up: channels with archive (all / favourites, search), days up to today, past shows, preview on first OK, full screen on second OK, Watch from start, Restart, Live TV
+Translations checked in all 11 languages; 22 missing Russian texts added
+
 PRETORIAN 1.0.62 STABLE
 New Dawn redesign: misty night background with a glowing street lamp behind every screen (drawn, sharp on every TV)
 New Dawn: start screen is the menu alone (Home, TV, Movies, Series, Sports, Catch-up, Search, Settings); Home opens like every other section

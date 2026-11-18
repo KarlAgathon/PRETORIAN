@@ -2431,6 +2431,9 @@ Prati ovu utakmicu|Follow this match|Dieses Spiel verfolgen|Prati ovu utakmicu|�
 Obavijesti uživo na Početnoj|Live notices on Home|Live-Hinweise auf der Startseite|Obavijesti uživo na Početnoj|Обавештења уживо на Почетној|Известия на живо на Начало|Notificări live pe Acasă|Ana sayfada canlı bildirimler|Avvisi live nella Home|إشعارات مباشرة في الرئيسية
 Golovi|Goals|Tore|Golovi|Голови|Голове|Goluri|Goller|Gol|الأهداف
 Crveni kartoni|Red cards|Rote Karten|Crveni kartoni|Црвени картони|Червени картони|Cartonașe roșii|Kırmızı kartlar|Cartellini rossi|البطاقات الحمراء
+sada|now|jetzt|sada|сада|сега|acum|şimdi|ora|الآن
+prije %s min|%s min ago|vor %s Min.|prije %s min|пре %s мин|преди %s мин|acum %s min|%s dk önce|%s min fa|قبل %s د
+prije %s h|%s h ago|vor %s Std.|prije %s h|пре %s ч|преди %s ч|acum %s h|%s sa önce|%s h fa|قبل %s س
 """.trimIndent()
 
 private val DICT: Map<String, Map<String, String>> by lazy {

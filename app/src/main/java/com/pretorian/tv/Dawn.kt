@@ -181,7 +181,7 @@ private fun DawnMenu(nav: Nav) {
                     onClick = {
                         Chrome.inRail = false
                         Dawn.last = it.screen
-                        if (it.screen == Screen.Home) Dawn.homeOpen = true else nav.root(it.screen)
+                        if (it.screen != Screen.Home) nav.root(it.screen)   // Home is this screen
                     },
                     focusRequester = frs[i],
                     shape = Rnd(12.dp),
@@ -201,8 +201,41 @@ private fun DawnMenu(nav: Nav) {
             }
         }
     }
+    DawnNotes(nav, Modifier.align(Alignment.TopEnd).padding(end = 38.dp, top = 6.dp).width(520.dp))
     DawnPlaylists(Modifier.align(Alignment.BottomEnd).padding(end = 38.dp, bottom = 10.dp))
     }
+}
+
+/** Home notices (goals, cards, match end, reminders, new version): the newest few, OK opens them. Nothing when there are none. */
+@Composable
+private fun DawnNotes(nav: Nav, modifier: Modifier) {
+    val notes = Notes.list.filter { System.currentTimeMillis() - it.time < 6 * 3600_000L }.take(4)
+    if (notes.isEmpty()) return
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        notes.forEach { n ->
+            val tone = when {
+                n.text.startsWith("⚽") -> Color(0xFF22C55E)
+                n.text.startsWith("🟥") -> Color(0xFFEF4444)
+                n.text.startsWith("🟨") -> Color(0xFFFBBF24)
+                n.kind == "update" -> Color(0xFF60A5FA)
+                else -> Color(0xFFD5DBE3)
+            }
+            Focusable(onClick = { openNote(nav, n) }, shape = Rnd(12.dp), normal = Color(0x8C0E1724), focused = Dawn.pill, focusBorderColor = Color.Transparent,
+                zoom = 1f, modifier = Modifier.fillMaxWidth().height(46.dp).border(1.dp, tone.copy(alpha = 0.55f), Rnd(12.dp))) { f ->
+                Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Box(Modifier.width(4.dp).height(22.dp).clip(Rnd(2.dp)).background(tone))
+                    T(n.text, 14.sp, if (f) Dawn.onPill else Color.White, FontWeight.Medium, modifier = Modifier.weight(1f))
+                    T(whenAgo(n.time), 12.sp, if (f) Dawn.onPill else Color(0xFF9AA6B5))
+                }
+            }
+        }
+    }
+}
+
+/** "sada", "2 min", "1 h" */
+private fun whenAgo(t: Long): String {
+    val m = ((System.currentTimeMillis() - t) / 60_000L).toInt()
+    return when { m < 1 -> tr("sada"); m < 60 -> trf("prije %s min", m); else -> trf("prije %s h", m / 60) }
 }
 
 /** Active playlists and how many days they still have, small and calm (amber under 7 days, red when expired). */
