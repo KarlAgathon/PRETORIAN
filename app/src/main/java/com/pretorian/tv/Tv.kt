@@ -404,7 +404,7 @@ private fun TvList(nav: Nav) {
     }
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     fun revealMainRail() {
-        Chrome.rail = 1
+        Chrome.rail = if (Look.layout == 0) 2 else 1
         focusScope.launch {
             delay(80)
             runCatching { focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Left) }
@@ -420,8 +420,8 @@ private fun TvList(nav: Nav) {
     LaunchedEffect(focusedCh) { val c = focusedCh ?: return@LaunchedEffect; delay(500); Dusk.set(c.logo, c.name) }
     if (Look.layout == 0) {
         // Classic TV: full-screen workspace; the app rail appears only on LEFT/BACK.
-        LaunchedEffect(Unit) { Chrome.driven = true; Chrome.rail = 0 }
-        DisposableEffect(Unit) { onDispose { Chrome.driven = false; Chrome.rail = 3 } }
+        LaunchedEffect(Unit) { Chrome.driven = true; Chrome.rail = 2 }
+        DisposableEffect(Unit) { onDispose { Chrome.driven = false; Chrome.rail = if (Look.layout == 0) 2 else 3 } }
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().weight(0.30f).clipToBounds()
                 .padding(start = 12.dp, end = 14.dp, top = 8.dp, bottom = 8.dp),
@@ -464,7 +464,7 @@ private fun TvList(nav: Nav) {
                         } else false
                     }) {
                     GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, groupsWidth, "", null,
-                        onFocusGroup = { Chrome.rail = 0 },
+                        onFocusGroup = { Chrome.rail = 2 },
                         onOpen = { focusedCh = null; openGroup(ctx, st, it); enterTick++; inChannels = true },
                         onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
                         onHeader = { p ->
@@ -473,7 +473,7 @@ private fun TvList(nav: Nav) {
                             st.focusKey = "h:" + p.id; st.rev++; st.refocus++
                         },
                         onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it },
-                        onFocusRow = { st.focusKey = it; inChannels = false; Chrome.rail = 0 },
+                        onFocusRow = { st.focusKey = it; inChannels = false; Chrome.rail = 2 },
                         containVerticalFocus = false, classicStyle = true)
                 }
                 Box(Modifier.width(1.dp).fillMaxHeight().background(C.Line))
@@ -487,7 +487,7 @@ private fun TvList(nav: Nav) {
                         Message("Izaberi grupu", "Pritisni OK na grupi za prikaz kanala")
                     } else key(g.key, st.rev) {
                         ChannelList(g, nav, st.gate, rows, enterTick,
-                            onFocusCh = { focusedCh = it; inChannels = true; Chrome.rail = 0 },
+                            onFocusCh = { focusedCh = it; inChannels = true; Chrome.rail = 2 },
                             onBackToGroups = { backToGroups() }, onChanged = { st.rev++ },
                             fullWidthClassic = true)
                     }
