@@ -2373,6 +2373,8 @@ Favoriti – države|Favourite countries|Lieblingsländer|Omiljene države|Ом�
 countries|countries|Länder|države|државе|държави|țări|ülkeler|paesi|الدول
 teams|teams|Teams|timovi|فرق|отбори|echipe|takımlar|squadre|الفرق
 Odaberi države za Favoriti|Choose countries for Favourites|Länder für Favoriten auswählen|Odaberi države za favorite|Изабери државе за омиљене|Избери държави за любими|Alege țările favorite|Favoriler için ülke seç|Scegli i paesi preferiti|اختر الدول للمفضلة
+TV kanali, film, serija ili tim|TV channel, movie, series or team|TV-Sender, Film, Serie oder Team|TV kanali, film, serija ili tim|ТВ канали, филм, серија или тим|ТВ канали, филм, сериал или отбор|Canal TV, film, serial sau echipă|TV kanalı, film, dizi veya takım|Canale TV, film, serie o squadra|قناة تلفزيونية أو فيلم أو مسلسل أو فريق
+New Era — jedini TV layout za sada. Ostali layouti dolaze kasnije.|New Era is the only TV layout for now. Other layouts will be added later.|New Era ist vorerst das einzige TV-Layout. Weitere Layouts folgen später.|New Era — jedini TV prikaz za sada. Ostali prikazi dolaze kasnije.|New Era је за сада једини ТВ приказ. Остали прикази стижу касније.|New Era е единственият ТВ изглед засега. Други ще бъдат добавени по-късно.|New Era este singurul aspect TV deocamdată. Alte variante vor fi adăugate ulterior.|Şimdilik tek TV düzeni New Era. Diğer düzenler daha sonra eklenecek.|Per ora New Era è l'unico layout TV. Altri layout arriveranno in seguito.|New Era هو تخطيط التلفزيون الوحيد حاليًا. ستُضاف تخطيطات أخرى لاحقًا.
 """.trimIndent()
 
 private val DICT: Map<String, Map<String, String>> by lazy {
@@ -2400,5 +2402,3 @@ fun tr(s: String): String {
 
 /** Description language for TMDB: the chosen one, or the app language. */
 fun metaLanguage(): String = Prefs.metaLang.ifBlank { "auto" }.let { if (it == "auto") Look.lang else it }
-TV kanali, film, serija ili tim|TV channel, movie, series or team|TV-Sender, Film, Serie oder Team|TV kanali, film, serija ili tim|ТВ канали, филм, серија или тим|ТВ канали, филм, сериал или отбор|Canal TV, film, serial sau echipă|TV kanalı, film, dizi veya takım|Canale TV, film, serie o squadra|قناة تلفزيونية أو فيلم أو مسلسل أو فريق
-New Era — jedini TV layout za sada. Ostali layouti dolaze kasnije.|New Era is the only TV layout for now. Other layouts will be added later.|New Era ist vorerst das einzige TV-Layout. Weitere Layouts folgen später.|New Era — jedini TV prikaz za sada. Ostali prikazi dolaze kasnije.|New Era је за сада једини ТВ приказ. Остали прикази стижу касније.|New Era е единственият ТВ изглед засега. Други ще бъдат добавени по-късно.|New Era este singurul aspect TV deocamdată. Alte variante vor fi adăugate ulterior.|Şimdilik tek TV düzeni New Era. Diğer düzenler daha sonra eklenecek.|Per ora New Era è l'unico layout TV. Altri layout arriveranno in seguito.|New Era هو تخطيط التلفزيون الوحيد حاليًا. ستُضاف تخطيطات أخرى لاحقًا.
