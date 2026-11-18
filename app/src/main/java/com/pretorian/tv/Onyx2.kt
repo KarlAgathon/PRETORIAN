@@ -399,6 +399,8 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                     itemsIndexed(list, key = { i, ch -> "$i${ch.url}" }) { i, ch ->
                         val ovr = remember(ch.pid, g.pid) { Ovr(ctx, ch.pid.ifBlank { g.pid ?: "" }) }
                         val locked = ovr.isChLocked(ch)
+                        val active = preview?.url == ch.url || TvMemory.preview?.url == ch.url ||
+                            (TvMemory.group?.key == g.key && TvMemory.channel == i)
                         val nx = if (wide) nextOf(ch) else null
                         var rowFocused by remember { mutableStateOf(false) }
                         val c = if (nx.isNullOrEmpty()) 0 else cell.coerceAtMost(nx.lastIndex)
@@ -410,7 +412,7 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                                 Key.DirectionLeft -> if (c > 0) { cell = c - 1; true } else false
                                 else -> false
                             }
-                        }, shape = Rnd(12.dp),
+                        }.then(if (active) Modifier.border(1.dp, C.Green.copy(alpha = 0.48f), Rnd(12.dp)) else Modifier), shape = Rnd(12.dp),
                             onClick = {
                                 val sel = nx?.getOrNull(c)
                                 if (wide && c > 0 && sel != null) {
@@ -428,7 +430,8 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                             },
                             onMenu = { val sel = nx?.getOrNull(c); if (wide && c > 0 && sel != null) showMenu = ch to sel else menu = ch },
                             onFocus = { rowFocused = true; focusedIdx = i; onFocusCh(ch) }, focusRequester = cWrap.requester(i),
-                            normal = Color.Transparent, focused = if (solid) C.Red.copy(alpha = ListStyle.strength) else C.Red.copy(alpha = ListStyle.strength * 0.22f), zoom = 1.01f) { f ->
+                            normal = if (active) C.Green.copy(alpha = 0.10f) else Color.Transparent,
+                            focused = if (solid) C.Red.copy(alpha = ListStyle.strength) else C.Red.copy(alpha = ListStyle.strength * 0.22f), zoom = 1.01f) { f ->
                             // "frame" look (default): a calm, lightly tinted row with a thin theme-colour frame; "full colour" fills the row.
                             // How strong the colour is: Settings › Appearance (every theme, 10–100 %)
                             val hl = f && solid && ListStyle.strength >= 0.65f
@@ -478,7 +481,7 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                                     T(now?.title ?: " ", 11.sp, if (hl) C.OnRed.copy(alpha = 0.65f) else C.Muted)
                                     if (now != null) ThinBar(now.progress(), if (hl) C.OnRed else C.RedText, Modifier.fillMaxWidth())
                                 }
-                                if (preview?.url == ch.url) Ico(R.drawable.lc_play, 13.dp, if (hl) C.OnRed else C.Green)
+                                if (active) Dot(C.Green, 8.dp)
                                 if (locked) Ico(R.drawable.lc_lock, 13.dp, if (hl) C.OnRed else C.Muted)
                                 // the channel has an archive (catch-up): you can go back in time
                                 if (archMark && ch.archive > 0) T("↺", 14.sp, if (hl) C.OnRed else C.Soft, FontWeight.Bold)
