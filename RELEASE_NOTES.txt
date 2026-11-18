@@ -1,3 +1,11 @@
+PRETORIAN 1.0.52
+Classic TV: replace the permanent left groups column with a full-width group selection view opened using LEFT
+Classic TV: show the selected group name and channel count above one full-width channel list
+Classic TV: align channel number, logo, channel name and three EPG programme cells in consistent rows
+Classic TV: keep the mini-player at the upper left and use the wider upper-right EPG area for NOW and upcoming programmes
+Classic TV: clip the mini-player panel so text and content cannot overlap outside its bounds
+Default layout, player controls and playback confirmation behavior remain unchanged
+
 PRETORIAN 1.0.51
 Classic TV: clip the upper mini-player area so channel/group text cannot spill over the preview
 Classic TV: distribute compact NOW/NEXT EPG cards across the available panel height
