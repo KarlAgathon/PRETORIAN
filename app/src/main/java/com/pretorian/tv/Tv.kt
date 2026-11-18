@@ -30,6 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -206,8 +207,6 @@ fun GroupColumn(
 ) {
     val ctx = LocalContext.current
     val listForFocus = (rows as? Load.Ok)?.value ?: emptyList()
-    val rowRequesters = remember(listForFocus) { List(listForFocus.size) { FocusRequester() } }
-    val focusScope = rememberCoroutineScope()
     Column(Modifier.width(width).fillMaxHeight().padding(start = 14.dp, end = 10.dp, top = if (title.isEmpty()) 8.dp else 22.dp)) {
         // no title (TV guide): the groups start right under the top bar
         if (title.isNotEmpty()) T(title, 26.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 8.dp, bottom = 2.dp))
@@ -219,40 +218,18 @@ fun GroupColumn(
             is Load.Ok -> {
                 val list = rows.value
                 LazyColumn(
+                    modifier = if (containVerticalFocus) Modifier.focusGroup() else Modifier,
                     state = state,
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                     contentPadding = PaddingValues(bottom = 24.dp, top = 2.dp),
                 ) {
                     itemsIndexed(list, key = { _, r -> r.id }) { i, r ->
+                        // Let Compose move focus naturally inside this focus group. Manual scroll/focus
+                        // coroutines here used to race on DPAD key-repeat and made rows jump/flicker.
                         val m = Modifier.fillMaxWidth().height(Rows.group)
-                            .then(if (containVerticalFocus) Modifier.onPreviewKeyEvent { e ->
-                                if (e.type != KeyEventType.KeyDown) false
-                                else when (e.key) {
-                                    Key.DirectionUp -> if (i == 0) false else {
-                                        val target = i - 1
-                                        focusScope.launch {
-                                            state.scrollToItem(target)
-                                            delay(45)
-                                            rowRequesters[target].requestFocus()
-                                        }
-                                        true
-                                    }
-                                    Key.DirectionDown -> {
-                                        val target = if (i == list.lastIndex) 0 else i + 1
-                                        focusScope.launch {
-                                            state.scrollToItem(target)
-                                            delay(45)
-                                            rowRequesters[target].requestFocus()
-                                        }
-                                        true
-                                    }
-                                    else -> false
-                                }
-                            } else Modifier.wrapKeys(i, list.size, wrap))
+                            .then(if (containVerticalFocus) Modifier else Modifier.wrapKeys(i, list.size, wrap))
                         val fr = wrap.requester(i, if (r.id == focusKey) focusFr else null)
-                        val rowModifier = if (containVerticalFocus) {
-                            m.focusRequester(rowRequesters[i]).then(if (r.id == focusKey) Modifier.focusRequester(focusFr) else Modifier)
-                        } else m
+                        val rowModifier = if (containVerticalFocus && r.id == focusKey) m.focusRequester(focusFr) else m
                         when (r) {
                             is GRow.Group -> {
                                 val g = r.ref
@@ -703,7 +680,12 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                     Message(if (isFav) "Nema favorita" else "Grupa je prazna",
                         if (isFav) "Na kanalu drži OK › Dodaj u favorite" else "Kanale možeš prebaciti ovamo preko opcija kanala")
                 } else {
-                    LazyColumn(state = cState, verticalArrangement = Arrangement.spacedBy(4.dp), contentPadding = PaddingValues(bottom = 30.dp)) {
+                    LazyColumn(
+                        modifier = Modifier.focusGroup(),
+                        state = cState,
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        contentPadding = PaddingValues(bottom = 30.dp)
+                    ) {
                         itemsIndexed(list, key = { _, ch -> "${ch.pid}|${ch.id}|${ch.url}" }) { i, ch ->
                             val ovr = remember(ch.pid, g.pid) { Ovr(ctx, ch.pid.ifBlank { g.pid ?: "" }) }
                             val locked = ovr.isChLocked(ch)
@@ -711,7 +693,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                             val active = PreviewSel.ch?.url == ch.url || TvMemory.preview?.url == ch.url ||
                                 (TvMemory.group?.key == g.key && TvMemory.channel == i)
                             Focusable(
-                                modifier = Modifier.fillMaxWidth().height(Rows.channel).wrapKeys(i, list.size, cWrap)
+                                modifier = Modifier.fillMaxWidth().height(Rows.channel)
                                     .then(if (active) Modifier.border(1.dp, C.Green.copy(alpha = 0.48f), Rnd(12.dp)) else Modifier),
                                 onClick = {
                                     gate.run("c:${ch.url}", locked) {

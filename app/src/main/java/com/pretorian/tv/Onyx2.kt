@@ -4,6 +4,7 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -172,7 +173,6 @@ fun OnyxTv(nav: Nav, onGuide: () -> Unit) {
     }
     val gState = rememberLazyListState()
     // Keep repeated DPAD movement inside the category list at its first and last focusable rows.
-    var groupFocusIndex by remember { mutableIntStateOf(-1) }
     val coming = remember { TvMemory.restore && TvMemory.group != null && TvMemory.channel >= 0 }
     var inChannels by remember { mutableStateOf(coming) }
     // three columns (groups · channels · panel) while you choose; the wide view (small picture on top, guide per channel)
@@ -183,7 +183,6 @@ fun OnyxTv(nav: Nav, onGuide: () -> Unit) {
     var enterTick by remember { mutableIntStateOf(0) }
     var pick by remember { mutableStateOf<EpgItem?>(null) }
     val gFr = remember { FocusRequester() }
-    val groupFocusScope = rememberCoroutineScope()
     LaunchedEffect(Unit) { if (!coming) { TvMemory.restore = false; st.refocus++ } }
     // opening TV: the last group comes back at once (lists are kept on the disk); groups of folded playlists wait for your OK
     remember {
@@ -231,37 +230,9 @@ fun OnyxTv(nav: Nav, onGuide: () -> Unit) {
                         is Load.Loading -> Loading("")
                         is Load.Err -> Message("Greška", r.message)
                         is Load.Ok -> {
-                            val focusableGroupRows = r.value.indices.filter { i -> r.value[i] is TRow.Grp || r.value[i] is TRow.Pl || r.value[i] is TRow.NewFav }
-                            val groupRequesters = remember(r.value) { List(r.value.size) { FocusRequester() } }
                             LazyColumn(
                                 state = gState,
-                                modifier = Modifier.onPreviewKeyEvent { e ->
-                                    if (e.type != KeyEventType.KeyDown) false
-                                    else {
-                                        val position = focusableGroupRows.indexOf(groupFocusIndex)
-                                        when (e.key) {
-                                            Key.DirectionUp -> if (position <= 0) false else {
-                                                val target = focusableGroupRows[position - 1]
-                                                groupFocusScope.launch {
-                                                    gState.scrollToItem(target)
-                                                    delay(45)
-                                                    groupRequesters[target].requestFocus()
-                                                }
-                                                true
-                                            }
-                                            Key.DirectionDown -> if (position < 0 || focusableGroupRows.isEmpty()) false else {
-                                                val target = focusableGroupRows[if (position == focusableGroupRows.lastIndex) 0 else position + 1]
-                                                groupFocusScope.launch {
-                                                    gState.scrollToItem(target)
-                                                    delay(45)
-                                                    groupRequesters[target].requestFocus()
-                                                }
-                                                true
-                                            }
-                                            else -> false
-                                        }
-                                    }
-                                },
+                                modifier = Modifier.focusGroup(),
                                 contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
                                 verticalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
@@ -277,9 +248,9 @@ fun OnyxTv(nav: Nav, onGuide: () -> Unit) {
                                             g.pid == null -> Favs.channels(favListId(g.cat.id)).size
                                             else -> counts[g.cat.id]
                                         }
-                                        Focusable(modifier = Modifier.fillMaxWidth().height(34.dp).focusRequester(groupRequesters[rowIndex]).then(if (row.id == st.focusKey) Modifier.focusRequester(gFr) else Modifier), shape = Rnd(10.dp),
+                                        Focusable(modifier = Modifier.fillMaxWidth().height(34.dp).then(if (row.id == st.focusKey) Modifier.focusRequester(gFr) else Modifier), shape = Rnd(10.dp),
                                             onClick = { openGroup(ctx, st, g); inChannels = true; enterTick++ },
-                                            onFocus = { st.focusKey = row.id; groupFocusIndex = rowIndex; focusedGroup = g; inChannels = false },
+                                            onFocus = { st.focusKey = row.id; focusedGroup = g; inChannels = false },
                                             onMenu = if (Lock.simple || g.cat.id == ALL_GROUP || g.cat.id == RECENT_GROUP) null else ({ st.focusKey = row.id; st.groupMenu = g }),
                                             focusRequester = null,
                                             normal = if (sel) C.CardHi else Color.Transparent, focused = C.Red.copy(alpha = 0.48f), zoom = 1f) { f ->
@@ -290,20 +261,20 @@ fun OnyxTv(nav: Nav, onGuide: () -> Unit) {
                                             }
                                         }
                                     }
-                                    is TRow.Pl -> Focusable(modifier = Modifier.fillMaxWidth().height(36.dp).focusRequester(groupRequesters[rowIndex]).then(if (row.id == st.focusKey) Modifier.focusRequester(gFr) else Modifier), shape = Rnd(10.dp), onClick = {
+                                    is TRow.Pl -> Focusable(modifier = Modifier.fillMaxWidth().height(36.dp).then(if (row.id == st.focusKey) Modifier.focusRequester(gFr) else Modifier), shape = Rnd(10.dp), onClick = {
                                         // fold / unfold; folding the playlist of the open group closes the group too
                                         TvFold.toggle(row.p.id); if (row.open && st.group?.pid == row.p.id) st.group = null
                                         if (!row.open) Store.open(ctx, row.p.id)
                                         st.focusKey = row.id; st.rev++; st.refocus++
-                                    }, onFocus = { st.focusKey = row.id; groupFocusIndex = rowIndex }, focusRequester = null,
+                                    }, onFocus = { st.focusKey = row.id }, focusRequester = null,
                                         normal = if (row.open) C.CardHi else Color.Transparent, focused = C.Red, zoom = 1f) { f ->
                                         Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                             T(if (row.open) "▼" else "▶", 11.sp, if (f) C.OnRed else C.Muted)  // i18n-ignore
                                             T(row.p.name, 13.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
                                         }
                                     }
-                                    TRow.NewFav -> Focusable(modifier = Modifier.fillMaxWidth().height(30.dp).focusRequester(groupRequesters[rowIndex]).then(if (row.id == st.focusKey) Modifier.focusRequester(gFr) else Modifier), shape = Rnd(10.dp), onClick = { st.newFav = true },
-                                        onFocus = { st.focusKey = row.id; groupFocusIndex = rowIndex }, focusRequester = null, normal = Color.Transparent, focused = C.Red, zoom = 1f) { f ->
+                                    TRow.NewFav -> Focusable(modifier = Modifier.fillMaxWidth().height(30.dp).then(if (row.id == st.focusKey) Modifier.focusRequester(gFr) else Modifier), shape = Rnd(10.dp), onClick = { st.newFav = true },
+                                        onFocus = { st.focusKey = row.id }, focusRequester = null, normal = Color.Transparent, focused = C.Red, zoom = 1f) { f ->
                                         Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                             Ico(R.drawable.lc_plus, 12.dp, if (f) C.OnRed else C.Muted); T("Nova lista favorita", 12.sp, if (f) C.OnRed else C.Muted)
                                         }
@@ -410,7 +381,7 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                     if (typed.isNotEmpty()) Box(Modifier.align(Alignment.TopEnd).padding(8.dp).zIndex(2f).clip(Rnd(10.dp)).background(C.Red).padding(horizontal = 14.dp, vertical = 6.dp)) {
                         T(typed, 22.sp, C.OnRed, FontWeight.ExtraBold)
                     }
-                    LazyColumn(Modifier.fillMaxWidth().height(listH).onPreviewKeyEvent { e ->
+                    LazyColumn(Modifier.fillMaxWidth().height(listH).focusGroup().onPreviewKeyEvent { e ->
                         if (!digitsOn || e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                         val d = when (e.key) { Key.Zero, Key.NumPad0 -> 0; Key.One, Key.NumPad1 -> 1; Key.Two, Key.NumPad2 -> 2; Key.Three, Key.NumPad3 -> 3
                             Key.Four, Key.NumPad4 -> 4; Key.Five, Key.NumPad5 -> 5; Key.Six, Key.NumPad6 -> 6; Key.Seven, Key.NumPad7 -> 7
@@ -426,7 +397,7 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                         var rowFocused by remember { mutableStateOf(false) }
                         val c = if (nx.isNullOrEmpty()) 0 else cell.coerceAtMost(nx.lastIndex)
                         LaunchedEffect(rowFocused, c, nx) { if (rowFocused) onPick(nx?.getOrNull(c)?.takeIf { c > 0 }) }
-                        Focusable(modifier = Modifier.fillMaxWidth().height(rowH).wrapKeys(i, list.size, cWrap).onPreviewKeyEvent { e ->
+                        Focusable(modifier = Modifier.fillMaxWidth().height(rowH).onPreviewKeyEvent { e ->
                             if (!wide || e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                             when (e.key) {
                                 Key.DirectionRight -> { if (!nx.isNullOrEmpty() && c < nx.lastIndex) cell = c + 1; true }
