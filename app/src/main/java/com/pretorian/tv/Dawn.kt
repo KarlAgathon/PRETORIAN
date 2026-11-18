@@ -365,3 +365,78 @@ private fun DawnTracks(type: Int, onDismiss: () -> Unit) {
         }
     }
 }
+
+/** New Dawn search results: filters with counts on the left (All, TV channels, Movies, Series, Sport), one clear list on the right. */
+@Composable
+fun DawnSearchResults(
+    query: String, tv: List<Hit>, movies: List<Hit>, shows: List<Hit>, sport: List<SportEvent>, first: FocusRequester,
+    onHit: (Hit) -> Unit, onMenu: (Hit) -> Unit, onSport: (SportEvent) -> Unit, modifier: Modifier,
+) {
+    var filt by remember { mutableStateOf(SearchMem.open ?: "all") }
+    LaunchedEffect(filt) { SearchMem.open = filt }
+    val filters = listOf(
+        Triple("all", "Svi rezultati", tv.size + movies.size + shows.size + sport.size),
+        Triple("tv", "TV kanali", tv.size), Triple("vod", "Filmovi", movies.size),
+        Triple("series", "Serije", shows.size), Triple("sport", "Sport", sport.size),
+    )
+    val icons = mapOf("all" to R.drawable.lc_search, "tv" to R.drawable.lc_tv, "vod" to R.drawable.lc_film, "series" to R.drawable.lc_layers, "sport" to R.drawable.lc_trophy)
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(Modifier.width(270.dp).fillMaxHeight().dawnGlass().padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            filters.forEach { (id, label, n) ->
+                Focusable(onClick = { filt = id }, onFocus = { filt = id }, shape = Rnd(12.dp), normal = if (filt == id) Color(0x26FFFFFF) else Color.Transparent,
+                    focused = Dawn.pill, focusBorderColor = Color.Transparent, zoom = 1f, modifier = Modifier.fillMaxWidth().height(50.dp)) { f ->
+                    Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Ico(icons[id] ?: R.drawable.lc_search, 22.dp, if (f) Dawn.onPill else Color(0xFFEFF2F6))
+                        T(label, 16.sp, if (f) Dawn.onPill else Color(0xFFEFF2F6), if (f || filt == id) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
+                        T("($n)", 14.sp, if (f) Dawn.onPill else Color(0xFF9AA6B5))
+                    }
+                }
+            }
+        }
+        Column(Modifier.weight(1f).fillMaxHeight()) {
+            T(trf("Rezultati za: „%s“", query), 16.sp, Color(0xFFD5DBE3), FontWeight.SemiBold, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
+            val rows: List<Any> = when (filt) {
+                "tv" -> tv; "vod" -> movies; "series" -> shows; "sport" -> sport
+                else -> buildList { addAll(shows.take(20)); addAll(movies.take(20)); addAll(tv.take(20)); addAll(sport.take(10)) }
+            }
+            if (rows.isEmpty()) { T("Ništa nije pronađeno", 15.sp, C.Soft); return@Column }
+            androidx.compose.foundation.lazy.LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(rows.size) { i ->
+                    val r = rows[i]
+                    Focusable(onClick = { if (r is Hit) onHit(r) else if (r is SportEvent) onSport(r) }, onMenu = { if (r is Hit) onMenu(r) },
+                        focusRequester = if (i == 0) first else null, shape = Rnd(12.dp), normal = Color(0x590E1724), focused = Dawn.pill,
+                        focusBorderColor = Color.Transparent, zoom = 1f, modifier = Modifier.fillMaxWidth().height(76.dp)) { f ->
+                        val main = if (f) Dawn.onPill else Color.White
+                        val sub = if (f) Dawn.onPill.copy(alpha = 0.7f) else Color(0xFFC3CCD8)
+                        Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            val (title, line, type) = when (r) {
+                                is Hit.Show -> Triple(cleanTitle(r.s.name).first, tr("Serija"), "Serija")
+                                is Hit.Movie -> Triple(cleanTitle(r.v.name).first, tr("Film"), "Film")
+                                is Hit.Ch -> Triple(r.ch.name, nowOf(r.ch, 600)?.title ?: (tr("Kanal") + " ${r.ch.num}"), "TV")
+                                is Hit.Prog -> Triple(r.e.title, r.ch.name + " · " + r.e.times(), "TV")
+                                is SportEvent -> Triple(if (r.home != null && r.away != null) r.home.name + " – " + r.away.name else r.title, r.league, "Sport")
+                                else -> Triple("", "", "")
+                            }
+                            val img = when (r) { is Hit.Show -> r.s.cover; is Hit.Movie -> r.v.poster; else -> null }
+                            Box(Modifier.width(104.dp).height(60.dp).clip(Rnd(8.dp)).background(Color(0x33000000)), contentAlignment = Alignment.Center) {
+                                when {
+                                    img != null -> OnyxImage(img, title, Modifier.fillMaxSize(), maxW = 220)
+                                    r is Hit.Ch -> ChannelLogo(r.ch, 40.dp)
+                                    r is Hit.Prog -> ChannelLogo(r.ch, 40.dp)
+                                    else -> Ico(R.drawable.lc_trophy, 26.dp, main)
+                                }
+                            }
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                T(title, 16.sp, main, FontWeight.SemiBold)
+                                T(line, 13.sp, sub)
+                            }
+                            Box(Modifier.clip(Rnd(10.dp)).border(1.dp, if (f) Dawn.onPill.copy(alpha = 0.5f) else Color(0x4DFFFFFF), Rnd(10.dp)).padding(horizontal = 12.dp, vertical = 5.dp)) {
+                                T(type, 12.sp, main, FontWeight.Medium)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -723,6 +723,16 @@ fun OnyxSearch(nav: Nav) {
         val movies = vodHits
         val shows = serHits
         if (!busy && tvList.isEmpty() && movies.isEmpty() && shows.isEmpty() && sportHits.isEmpty()) { T("Ništa nije pronađeno", 15.sp, C.Soft); return@Column }
+        // New Dawn: filters with counts on the left, one list of results on the right
+        if (Look.dawn) {
+            DawnSearchResults(query, tvList, movies, shows, sportHits, firstFr,
+                onHit = { h -> when (h) { is Hit.Ch -> playChannels(nav, listOf(h.ch), 0); is Hit.Movie -> nav.push(Screen.MovieDetail(h.v)); is Hit.Show -> nav.push(Screen.SeriesDetail(h.s)); else -> pick = h } },
+                onMenu = { pick = it },
+                onSport = { e -> val ch = (e.channels + e.ai + e.maybe).firstOrNull(); if (ch != null) playMatch(nav, e, ch) else nav.root(Screen.Sports) },
+                modifier = Modifier.fillMaxWidth().weight(1f).padding(bottom = 8.dp))
+            if (busy) T(tr("učitavam…"), 11.sp, C.Muted)
+            return@Column
+        }
         // four columns side by side: the one you are in opens wide, the others get narrow
         val cols = buildList {
             add("tv"); add("vod"); add("series"); add("sport")

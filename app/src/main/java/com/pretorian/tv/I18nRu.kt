@@ -2358,4 +2358,14 @@ Otvori grupu|Открыть группу
 Meni|Меню
 Istekla|Истекла
 još %s dana|осталось %s дн.
+Catch-up / Vraćanje programa|Catch-up / Перемотка ТВ
+Gledaj od početka|Смотреть с начала
+Ispočetka|Заново
+Program koji sada ide nije poznat|Текущая передача неизвестна
+Rezultati za: „%s“|Результаты для: «%s»
+Traži seriju ili kategoriju|Искать сериал или категорию
+Traži film ili kategoriju|Искать фильм или категорию
+Nema rezultata|Нет результатов
+Ništa za „%s“ u ovoj kategoriji|Ничего по «%s» в этой категории
+Svi rezultati|Все результаты
 """.trimIndent()

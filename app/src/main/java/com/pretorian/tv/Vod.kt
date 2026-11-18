@@ -76,6 +76,8 @@ object VodMemory {
     var returning = false
     /** the category a title was opened from (a provider category like "NETFLIX SERIJE" tells the platform) */
     val catOf = HashMap<String, String>()
+    /** New Dawn: the search typed in Movies / Series, kept while you open a title and come back */
+    val query = HashMap<String, String>()
 }
 
 private const val G_CONTINUE = "__continue__"
@@ -285,14 +287,23 @@ private fun VodClassic(nav: Nav, series: Boolean) {
         if (cont.isNotEmpty()) out.add(VRow.Group(Category(G_CONTINUE, tr("Nastavi gledati")), cont.size))
         val my = MyList.items(kind).size
         if (Look.age && my > 0) out.add(VRow.Group(Category(G_MYLIST, tr("Moja lista")), my))   // shown only when something is on it
+        // New Dawn: every category with how many titles it has (from the catalog on the box)
+        val totals = if (Look.dawn) CatalogDb.counts(p.id, kind) else emptyMap()
         if (p.type != SourceType.M3U) ovr.groups(kind, if (series) Repo.seriesGroups(p) else Repo.vodGroups(p))
-            .forEach { out.add(VRow.Group(it, NewContent.countCat(p.id, kind, it.id))) }
+            .forEach { out.add(VRow.Group(it, totals[it.id] ?: NewContent.countCat(p.id, kind, it.id))) }
         pls.drop(1).forEach { out.add(VRow.Header(it, false)) }
         out
     }
     var focusedGroup by remember { mutableStateOf<Category?>(null) }
     var group by remember { mutableStateOf<Category?>(null) }
     var groupMenu by remember { mutableStateOf<Category?>(null) }
+    // New Dawn: search inside Movies/Series (titles of the open category and category names) and sort
+    var query by remember { mutableStateOf(VodMemory.query[kind] ?: "") }
+    LaunchedEffect(query) { VodMemory.query[kind] = query }
+    var askQuery by remember { mutableStateOf(false) }
+    var sort by remember { mutableIntStateOf(Prefs.long("vod_sort", 0).toInt().coerceIn(0, SORTS.size - 1)) }
+    var sortMenu by remember { mutableStateOf(false) }
+    fun hit(name: String) = query.isBlank() || Sports.norm(name).contains(Sports.norm(query))
     val gate = remember { PinGate() }
     val firstGroup = remember { FocusRequester() }
     val gWrap = remember { Wrap() }
@@ -321,7 +332,9 @@ private fun VodClassic(nav: Nav, series: Boolean) {
                 is Load.Loading -> Loading("Učitavam kategorije…")
                 is Load.Err -> Message("Greška", s.message)
                 is Load.Ok -> {
-                    val all = s.value
+                    // a search also finds categories by name (the open one always stays)
+                    val all = if (query.isBlank()) s.value else s.value.filter { it !is VRow.Group || it.cat.id == group?.id || hit(it.cat.name) ||
+                        it.cat.id == G_CONTINUE || it.cat.id == G_NEW }
                     val firstIdx = all.indexOfFirst { it !is VRow.Title }.coerceAtLeast(0)
                     LazyColumn(state = gState, verticalArrangement = Arrangement.spacedBy(if (Look.age) 2.dp else 4.dp), contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp)) {
                         itemsIndexed(all, key = { _, r -> r.id }) { i, r ->
@@ -410,13 +423,52 @@ private fun VodClassic(nav: Nav, series: Boolean) {
                         else Repo.movies(p, g.id).map { v -> Poster(v.id, v.name, v.poster, v.rating, v.url, NewContent.isNew(p.id, kind, v.id), open = { nav.push(Screen.MovieDetail(v)) }, play = { nav.push(Screen.Player(listOf(PlayItem(v.name, v.url, v.poster, null, null, v.name)), 0, live = false)) }, added = v.added) }
                     }
                 }
-                when (val s = state) {
+                if (Look.dawn) Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 34.dp, top = 6.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    T(g.name, 20.sp, C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                    Focusable(onClick = { askQuery = true }, onMenu = { query = "" }, shape = Pill, normal = Color(0x26FFFFFF), focused = Dawn.pill,
+                        focusBorderColor = Color.Transparent, zoom = 1f, modifier = Modifier.height(38.dp)) { f ->
+                        Row(Modifier.align(Alignment.Center).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Ico(R.drawable.lc_search, 16.dp, if (f) Dawn.onPill else C.Text)
+                            T(query.ifBlank { tr(if (series) "Traži seriju ili kategoriju" else "Traži film ili kategoriju") }, 14.sp, if (f) Dawn.onPill else C.Text, maxLines = 1)
+                            if (query.isNotBlank()) Ico(R.drawable.lc_x, 14.dp, if (f) Dawn.onPill else C.Muted)
+                        }
+                    }
+                    Focusable(onClick = { sortMenu = true }, shape = Pill, normal = Color(0x26FFFFFF), focused = Dawn.pill,
+                        focusBorderColor = Color.Transparent, zoom = 1f, modifier = Modifier.height(38.dp)) { f ->
+                        Row(Modifier.align(Alignment.Center).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Ico(R.drawable.lc_list, 16.dp, if (f) Dawn.onPill else C.Text)
+                            T(tr(SORTS[sort]), 14.sp, if (f) Dawn.onPill else C.Text, maxLines = 1)
+                            Ico(R.drawable.lc_chevron_down, 14.dp, if (f) Dawn.onPill else C.Muted)
+                        }
+                    }
+                }
+                val shown = (state as? Load.Ok)?.value?.let { v ->
+                    val f = if (query.isBlank()) v else v.filter { hit(it.name) }
+                    when (sort) {
+                        1 -> f.sortedByDescending { it.added }
+                        2 -> f.sortedBy { cleanTitle(it.name).first.lowercase() }
+                        3 -> f.sortedByDescending { cleanTitle(it.name).first.lowercase() }
+                        4 -> f.sortedByDescending { it.rating?.toDoubleOrNull() ?: 0.0 }
+                        else -> f
+                    }
+                }
+                when (val s = if (shown != null && Look.dawn) Load.Ok(shown) else state) {
                     is Load.Loading -> Loading()
                     is Load.Err -> Message("Nije se učitalo", s.message)
-                    is Load.Ok -> if (s.value.isEmpty()) Message(if (g.id == G_MYLIST) "Lista je prazna" else "Kategorija je prazna", if (g.id == G_MYLIST) "Drži OK na filmu ili seriji i izaberi Dodaj na Moju listu" else null)
-                        else if (Look.age) OnyxPosters(g.name, s.value, kind, p.id, cont = g.id == G_CONTINUE) { onPosters = true }
+                    is Load.Ok -> if (s.value.isEmpty() && query.isNotBlank()) Message("Nema rezultata", trf("Ništa za „%s“ u ovoj kategoriji", query))
+                        else if (s.value.isEmpty()) Message(if (g.id == G_MYLIST) "Lista je prazna" else "Kategorija je prazna", if (g.id == G_MYLIST) "Drži OK na filmu ili seriji i izaberi Dodaj na Moju listu" else null)
+                        else if (Look.age) OnyxPosters(if (Look.dawn) "" else g.name, s.value, kind, p.id, cont = g.id == G_CONTINUE) { onPosters = true }
                         else PosterGrid(g.name, s.value, g.id == G_NEW, kind, p.id)
                 }
+            }
+        }
+    }
+    if (askQuery) TextDialog(if (series) "Traži seriju ili kategoriju" else "Traži film ili kategoriju", "Naziv", query, onDismiss = { askQuery = false }) { t -> query = t.trim(); askQuery = false }
+    if (sortMenu) Popup("Sortiraj", { sortMenu = false }) {
+        SORTS.forEachIndexed { i, label ->
+            OptionRow(label, if (i == sort) R.drawable.lc_check else R.drawable.lc_list, color = if (i == sort) C.Green else null) {
+                sort = i; Prefs.put("vod_sort", i.toLong()); sortMenu = false
             }
         }
     }

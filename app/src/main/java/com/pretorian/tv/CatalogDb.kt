@@ -68,6 +68,12 @@ object CatalogDb {
     } catch (e: Throwable) { null }
 
     fun count(pl: String, kind: String): Int = meta(pl, kind)?.second ?: -1
+    /** how many titles each category has (New Dawn shows the number next to every category) */
+    fun counts(pl: String, kind: String): Map<String, Int> = try {
+        db()?.rawQuery("SELECT c, COUNT(*) FROM items WHERE pl=? AND kind=? GROUP BY c", arrayOf(pl, kind))?.use { c -> // i18n-ignore
+            val m = HashMap<String, Int>(); while (c.moveToNext()) m[c.getString(0) ?: ""] = c.getInt(1); m
+        } ?: emptyMap()
+    } catch (e: Throwable) { emptyMap() }
     fun has(pl: String, kind: String) = meta(pl, kind) != null
 
     /** "Refresh": everything counts as old, so it is downloaded again in the background (the old data stays until then) */
