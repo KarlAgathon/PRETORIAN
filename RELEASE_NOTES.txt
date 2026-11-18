@@ -1,3 +1,11 @@
+PRETORIAN 1.0.42-beta14
+Appearance: add a live Default / Classic layout selector; Default remains selected for new installations and Classic is available as an alternative
+Default uses the modern top navigation and poster-row layout; Classic uses the left navigation and category-column layout
+Only one layout can be active at a time; selection is saved immediately
+Fullscreen live-channel options remain identical in both layouts: FAVORITES, SUBS, ZOOM, AUDIO, VIDEO, EPG and HISTORY
+Channel history retains the latest 10 channels and includes Clear History with confirmation
+All existing BETA12 functionality is retained; Stable main is unchanged
+
 PRETORIAN 1.0.42-beta12
 TV Guide preko cijelog ekrana je uklonjen iz TV navigacije, pretrage i postavki; ostaje stari prikaz kategorije · kanali · mali player · EPG
 DPAD navigacija u kategorijama i kanalima je kružna: UP na prvoj stavci vodi na posljednju, DOWN na posljednjoj vodi na prvu
