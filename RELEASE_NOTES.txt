@@ -1,4 +1,4 @@
-PRETORIAN 1.0.49-beta21
+PRETORIAN 1.0.49
 Classic TV: compact the top NOW/NEXT programme cards with smaller text, padding and vertical gaps
 Classic TV: reduce the Groups heading size, group row height and spacing for a tighter left column
 Classic TV: preserve the existing preview/channel proportions and all navigation behavior
