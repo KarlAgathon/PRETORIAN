@@ -1,3 +1,8 @@
+PRETORIAN 1.0.44-beta16
+Classic TV layout redesign inspired by the TV Mate reference: mini-player and selected-channel programme information in the upper area; wider groups and channel list in the lower area
+Classic layout uses a wider channel area to reduce truncated channel names; Default layout is unchanged
+TV Mate-inspired arrangement uses PRETORIAN styling and existing channel confirmation/playback behavior
+
 PRETORIAN 1.0.43-beta15
 Fix: add the Default / Classic TV layout selector to the modern Appearance (LookV2) screen actually used by Settings
 The selector is shown under Appearance → TV Layout, separately from visual Theme cards; selecting a layout saves the choice immediately
