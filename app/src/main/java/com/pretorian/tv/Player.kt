@@ -296,7 +296,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     var resume by remember { mutableStateOf<Progress?>(null) }
     var bar by remember { mutableStateOf(false) }   // button bar at the bottom
     var subFile by remember { mutableStateOf(s.items.getOrNull(index)?.subFile) }
-    // picture format: 0 Fit, 1 Zoom, 2 Stretch, 3 16:9, 4 4:3 — remembered per channel
+    // picture format: 0 Auto, 1 4:3, 2 16:9, 3 Fit, 4 Stretch, 5 Original — remembered per channel
     var resize by remember { mutableIntStateOf(0) }
     val player = remember { Preview.stop(); buildPlayer(ctx) }
     val playerScope = rememberCoroutineScope()
@@ -893,10 +893,10 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                     val v = player.videoFormat; val a = player.audioFormat
                     if (v != null) T(listOfNotNull("${v.width}×${v.height}", v.sampleMimeType?.substringAfter('/')?.uppercase(), if (v.frameRate > 0) "${v.frameRate.toInt()} fps" else null,
                         a?.let { (it.sampleMimeType?.substringAfter('/')?.uppercase() ?: "") + " " + if (it.channelCount >= 6) "5.1" else "Stereo" }).joinToString(" · "), 12.sp, Color(0xFF9AA4B2))
-                    if (bar) {
+                    if (bar && s.live) {
                         val ch = item.channel
                         @Suppress("UNUSED_VARIABLE") val favRev = Favs.rev
-                        PlayerBar(favOn = ch != null && Favs.inAny(ctx, ch), onAction = { action ->
+                        ChannelOptionsBar(favOn = ch != null && Favs.inAny(ctx, ch), onAction = { action ->
                             when (action) {
                                 "favorites" -> ch?.let { c ->
                                     val lists = Favs.lists(ctx)
@@ -913,6 +913,19 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                                 "recent" -> { bar = false; dialog = "recent" }
                             }
                         })
+                    } else if (bar) {
+                        val subT = tracksOf(player, MC.TRACK_TYPE_TEXT)
+                        val subsOn = subFile != null || (!player.trackSelectionParameters.disabledTrackTypes.contains(MC.TRACK_TYPE_TEXT) && subT.any { it.selected })
+                        VodPlayerBar(false, playing, false, favOn = false, hasSubs = subT.isNotEmpty(), subsOn = subsOn,
+                            audioCount = tracksOf(player, MC.TRACK_TYPE_AUDIO).size, format = FORMATS[resize],
+                            onPause = { if (player.isPlaying) player.pause() else player.play() },
+                            onLong = { bar = false; dialog = "subs" },
+                            onAction = { action -> when (action) {
+                                "subs" -> { bar = false; dialog = "subs" }
+                                "audio" -> { bar = false; dialog = "audio" }
+                                "format" -> { resize = (resize + 1) % FORMATS.size }
+                                "menu" -> { bar = false; dialog = "menu" }
+                            } })
                     }
                     else T(if (s.live) "▲ ▼ kanal · ◀ lista kanala · ▶ TV vodič · OK još jednom = dugmad"
                       else trf("OK pauza · ◀ ▶ %s s · ▼ = dugmad (audio, titlovi, format slike)", Prefs.seekStep), 13.sp, Color(0xFFB6BCC6))
@@ -1118,7 +1131,7 @@ private val FORMATS = listOf("Automatski", "4:3", "16:9", "Prilagodi", "Rastegni
 /** Buttons at the bottom of the player, in one row (no scrolling): Pause · ★ · [CC] · [Audio] · Format · Guide · Group · More.
  *  Subtitles only when the stream has subtitle tracks, Audio only with 2 or more tracks. */
 @Composable
-private fun PlayerBar(favOn: Boolean, onAction: (String) -> Unit) {
+private fun ChannelOptionsBar(favOn: Boolean, onAction: (String) -> Unit) {
     val first = remember { FocusRequester() }
     data class B(val id: String, val label: String, val icon: Int)
     val list = listOf(
@@ -1152,6 +1165,39 @@ private fun PlayerBar(favOn: Boolean, onAction: (String) -> Unit) {
     }
     LaunchedEffect(Unit) { delay(80); first.tryFocus() }
 }
+@Composable
+private fun VodPlayerBar(live: Boolean, playing: Boolean, hasChannel: Boolean, favOn: Boolean, hasSubs: Boolean, subsOn: Boolean, audioCount: Int, format: String,
+                      onPause: () -> Unit, onLong: (String) -> Unit, onAction: (String) -> Unit, rewind: Boolean = false, behind: Boolean = false) {
+    val first = remember { FocusRequester() }
+    data class B(val id: String, val label: String, val icon: Int, val tint: Color? = null)
+    val list = buildList {
+        add(B("pause", if (playing) "Pauza" else "Pusti", if (playing) R.drawable.lc_pause else R.drawable.lc_play))
+        // channels with archive: back in time without ◀◀ keys on the remote, and straight back to live
+        if (live && rewind) add(B("rew", "◀◀ 5 min", R.drawable.lc_rotate_ccw))
+        if (live && rewind && behind) add(B("tolive", "Uživo", R.drawable.lc_radio, Color(0xFFEF4444)))
+        if (live && hasChannel) add(B("fav", "Favorit", R.drawable.lc_star, if (favOn) Color(0xFFFBBF24) else null))
+        if (hasSubs || !live) add(B("subs", "Titlovi", R.drawable.lc_captions, if (subsOn) Color(0xFF22C55E) else null))
+        if (audioCount > 1) add(B("audio", "Audio", R.drawable.lc_volume))
+        add(B("format", format, R.drawable.lc_maximize))
+        if (live) { add(B("epg", "Vodič", R.drawable.lc_calendar_clock)); add(B("channels", "Grupa", R.drawable.lc_list)) }
+        add(B("menu", "Više", R.drawable.lc_layout_grid))
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        list.forEachIndexed { i, b ->
+            Focusable(onClick = { if (b.id == "pause") onPause() else onAction(b.id) }, onMenu = if (b.id == "fav" || b.id == "subs") ({ onLong(b.id) }) else null,
+                focusRequester = if (i == 0) first else null,
+                normal = Color(0x33FFFFFF), focused = C.Red, shape = Rnd(12.dp), zoom = 1.05f, modifier = Modifier.height(42.dp)) { f ->
+                Row(Modifier.align(Alignment.Center).padding(horizontal = 11.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // an "on" button keeps its colour also with focus (dark amber on the yellow focus, so it stays visible)
+                    Ico(b.icon, 17.dp, if (b.tint != null && f) Color(0xFF92400E) else b.tint ?: if (f) C.OnRed else Color.White)
+                    T(b.label, 13.sp, if (f) C.OnRed else Color.White, FontWeight.SemiBold, maxLines = 1)
+                }
+            }
+        }
+    }
+    LaunchedEffect(Unit) { delay(80); first.tryFocus() }
+}
+
 /** Live: the channels of the group (Left again: the groups) over the picture. */
 @Composable
 private fun SideLists(mode: String, sideGroup: GroupRef?, items: List<PlayItem>, index: Int, p: Playlist?,
