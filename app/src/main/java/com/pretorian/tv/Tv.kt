@@ -82,6 +82,8 @@ object Preview {
  *  Channel list density: compact, normal or large. The full-screen TV guide is disabled. */
 object ListStyle {
     val mode get() = Prefs.long("tv_density", 0).toInt().coerceIn(0, 2)
+    // Legacy renderer remains compiled but cannot be selected anywhere in BETA11.
+    val tivimate get() = false
     val sideRow get() = when (mode) { 1 -> 52.dp; 2 -> 62.dp; else -> 42.dp }
     /** how strong the colour of the picked channel / show is, in every theme (Settings › Appearance, 10–100 %, default 40) */
     val strength get() = Prefs.long("tv_focus_pct", 40).toInt().coerceIn(10, 100) / 100f
