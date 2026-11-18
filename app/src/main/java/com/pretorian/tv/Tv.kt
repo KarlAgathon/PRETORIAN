@@ -224,8 +224,7 @@ fun GroupColumn(
                     contentPadding = PaddingValues(bottom = 24.dp, top = 2.dp),
                 ) {
                     itemsIndexed(list, key = { _, r -> r.id }) { i, r ->
-                        // Let Compose move focus naturally inside this focus group. Manual scroll/focus
-                        // coroutines here used to race on DPAD key-repeat and made rows jump/flicker.
+                        // Keep focus inside the list and wrap explicitly at both ends, including long DPAD holds.
                         val m = Modifier.fillMaxWidth().height(Rows.group)
                             .wrapKeys(i, list.size, wrap)
                         val fr = wrap.requester(i, if (r.id == focusKey) focusFr else null)
@@ -257,7 +256,7 @@ fun GroupColumn(
                                 }
                             }
                             is GRow.Header -> Focusable(modifier = rowModifier.height(Rows.group + 6.dp), onClick = { onHeader(r.p) },
-                                onFocus = { onFocusRow(r.id) }, focusRequester = if (containVerticalFocus) null else fr, normal = C.Card, zoom = 1f) { _ ->
+                                onFocus = { onFocusRow(r.id) }, focusRequester = fr, normal = C.Card, zoom = 1f) { _ ->
                                 Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Ico(if (r.open) R.drawable.lc_chevron_down else R.drawable.lc_chevron_right, 16.dp, C.RedText)
