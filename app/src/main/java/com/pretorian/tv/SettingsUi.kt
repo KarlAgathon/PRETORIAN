@@ -1245,7 +1245,7 @@ fun SettingsScreen2(nav: Nav) {
             verticalArrangement = Arrangement.spacedBy(2.dp)) {
             if (!slim) {
                 Row(Modifier.fillMaxWidth().padding(start = 8.dp, top = 2.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                    Ico(R.drawable.lc_shield, 25.dp, Color(0xFF19AFFF))
+                    Ico(R.drawable.lc_shield_check, 25.dp, Color(0xFF19AFFF))
                     Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
                         T("PRETORIAN", 16.sp, C.Text, FontWeight.ExtraBold, maxLines = 1)
                         T("POSTAVKE", 9.sp, Color(0xFF19AFFF), FontWeight.Bold, maxLines = 1)
