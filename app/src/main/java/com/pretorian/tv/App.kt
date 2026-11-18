@@ -239,7 +239,7 @@ fun PretorianApp() {
             }
         }
     }
-    LaunchedEffect(AppHome.tick) { if (AppHome.tick > 0 && Store.playlists(ctx).isNotEmpty()) { Preview.stop(); stack.clear(); stack.add(Screen.Home) } }
+    LaunchedEffect(AppHome.tick) { if (AppHome.tick > 0 && Store.playlists(ctx).isNotEmpty()) { Preview.stop(); Dawn.homeOpen = false; stack.clear(); stack.add(Screen.Home) } }
 
     // new version at start and every 6 hours; "new" movies and series once in 12 hours; weekly backup
     LaunchedEffect(Unit) {

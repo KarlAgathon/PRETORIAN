@@ -2348,4 +2348,12 @@ New Dawn: jedan nivo na ekranu, prethodni nestaje. Tamno plava.|New Dawn: оди
 Ponoćno plava|Полночный синий
 OK ili ▶ otvara grupu · ◀ meni|OK или ▶ открывает группу · ◀ меню
 Cijeli ekran|Весь экран
+Slijedi:|Далее:
+Prvo pritisni OK na kanalu za pregled.|Сначала нажми OK на канале для предпросмотра.
+Ovaj kanal nema titlova.|У этого канала нет субтитров.
+Ovaj kanal ima samo jedan zvuk.|У этого канала только одна звуковая дорожка.
+Navigacija|Навигация
+Odaberi|Выбрать
+Otvori grupu|Открыть группу
+Meni|Меню
 """.trimIndent()

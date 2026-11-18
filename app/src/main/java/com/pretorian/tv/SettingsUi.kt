@@ -1692,7 +1692,7 @@ private val THEME_SWATCH = mapOf("vece" to (Color(0xFF0C1428) to Color(0xFF1C2A4
     "staklo" to (Color(0xFFF7F7F8) to Color.White), "pijesak" to (Color(0xFF1E140A) to Color(0xFF8A6A3A)), "dark" to (Color(0xFF0B0D12) to Color(0xFF1A1F2A)),
     "light" to (Color(0xFFF2F3F6) to Color.White), "glass" to (Color(0xFF1B3346) to Color(0x66FFFFFF)), "dew" to (Color(0xFF221B36) to Color(0xFF3A2F55)),
     "liquid" to (Color(0xFF243B52) to Color(0x66FFFFFF)), "classic" to (Color(0xFF1C2735) to Color(0xFF3B4E66)),
-    "oled" to (Color(0xFF000000) to Color(0xFFD4A537)), "kino" to (Color(0xFF111214) to Color(0xFFE11D2A)), "papir" to (Color(0xFFEEF0F3) to Color.White), "reddawn" to (Color(0xFF18181B) to Color(0xFFDC2626)), "ponoc" to (Color(0xFF0C1630) to Color(0xFF6FA3FF)))
+    "oled" to (Color(0xFF000000) to Color(0xFFD4A537)), "kino" to (Color(0xFF111214) to Color(0xFFE11D2A)), "papir" to (Color(0xFFEEF0F3) to Color.White), "reddawn" to (Color(0xFF18181B) to Color(0xFFDC2626)), "ponoc" to (Color(0xFF1B2A3D) to Color(0xFFFFD696)))
 
 /** Themes as small pictures. */
 @Composable

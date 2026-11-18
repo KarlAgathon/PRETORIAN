@@ -52,7 +52,7 @@ object Look {
         "oled" to (Color(0xFFD4A537) to Color(0xFF120D00)),
         "kino" to (Color(0xFFE11D2A) to Color.White),
         "papir" to (Color(0xFF111827) to Color.White), "reddawn" to (Color(0xFFDC2626) to Color.White),
-        "ponoc" to (Color(0xFFE8EFFF) to Color(0xFF0B1730)),
+        "ponoc" to (Color(0xFFD5DBE3) to Color(0xFF111A26)),
     )
     /** size of everything together, 0–100 (Settings › Look › Size): 100 is about 35 % bigger */
     var uiScale by mutableIntStateOf(0)
@@ -183,9 +183,9 @@ private fun basePalette(): Palette {
         // Red Dawn: soft black, grey, white and red
         "reddawn" -> Palette(Color(0xFF18181B), Color(0xFF111113), Color(0xFF2F2F33), Color(0xFF3A3A40),
             Color(0xFFF4F4F5), Color(0xFFA1A1AA), Color(0xFFD4D4D8), Color(0xFF27272A), false)
-        // Midnight blue (New Dawn): deep navy, frosted blue glass, white focus with a soft blue glow
-        "ponoc" -> Palette(Color(0xFF070D1C), alpha(Color(0xFF0F1D3A), (o * 0.75f).toInt().coerceIn(40, 92)), Color(0x1A9CBCFF), Color(0x2694B4FF),
-            Color(0xFFF2F6FF), Color(0xFF8A9BBD), Color(0xFFC3CEE6), Color(0xFF13203D), false)
+        // Midnight blue (New Dawn): misty night blue-grey, frosted panels, light grey focus with dark text
+        "ponoc" -> Palette(Color(0xFF16243A), alpha(Color(0xFF0E1724), (o * 0.7f).toInt().coerceIn(45, 90)), Color(0x14FFFFFF), Color(0x1FFFFFFF),
+            Color(0xFFF3F5F8), Color(0xFF9AA6B5), Color(0xFFCBD3DD), Color(0xFF1A2636), false)
         "dew" -> Palette(Color(0xFF221B36), alpha(Color(0xFF2A2340), (o * 0.55f).toInt().coerceAtLeast(25)), Color(0x1CFFFFFF), Color(0x2EFFFFFF),
             Color(0xFFF7F4FA), Color(0xFFB9B0C8), Color(0xFFE2DCEA), Color(0x26FFFFFF), false)
         else -> Palette(Color(0xFF0B0D12), alpha(Color(0xFF0E1117), o.coerceAtLeast(60)), Color(0x0FFFFFFF), Color(0x14FFFFFF),
@@ -217,8 +217,10 @@ object C {
         else if (Look.theme == "reddawn") androidx.compose.ui.graphics.Brush.linearGradient(
             listOf(Color(0xFF18181B), Color(0xFF1F1F23), Color(0xFF2A0D0F)),
             start = androidx.compose.ui.geometry.Offset(0f, 0f), end = androidx.compose.ui.geometry.Offset(2400f, 1400f))
+        // New Dawn draws its misty lamp background behind every screen: screens stay see-through over it
+        else if (Look.theme == "ponoc" && Look.dawn) androidx.compose.ui.graphics.SolidColor(Color.Transparent)
         else if (Look.theme == "ponoc") androidx.compose.ui.graphics.Brush.linearGradient(
-            listOf(Color(0xFF0C1630), Color(0xFF081022), Color(0xFF050912)),
+            listOf(Color(0xFF16243A), Color(0xFF24364C), Color(0xFF0D1622)),
             start = androidx.compose.ui.geometry.Offset(0f, 0f), end = androidx.compose.ui.geometry.Offset(1400f, 2400f))
         else if (Look.theme == "dew") androidx.compose.ui.graphics.Brush.linearGradient(
             listOf(Color(0xFF1C2140), Color(0xFF2E2347), Color(0xFF4A2A48), Color(0xFF5C3045)),
@@ -231,7 +233,7 @@ object C {
     private fun softened(c: Color): Color = if (!soft) c else lerp(palette().bg, c, FocusCard.pct / 100f)
 
     /** accent colour with the chosen shade; black-and-white theme uses white */
-    val Red: Color get() = softened(pureRed)
+    val Red: Color get() = if (Look.theme == "ponoc") pureRed else softened(pureRed)
     private val pureRed: Color
         get() {
             if (Look.theme == "bw" || Look.theme == "vece") return Color.White
@@ -249,7 +251,7 @@ object C {
     val OnRed get() = if (soft) (if (Red.luminance() > 0.4f) Color(0xFF111111) else Color.White)
         else Look.FIXED[Look.theme]?.second ?: if (Look.theme == "bw" || Look.theme == "vece" || Look.theme == "pijesak") Color.Black else Color.White  // staklo/pijesak: black accent, white text
     val RedText get() = if (Look.theme == "classic" || Look.theme == "papir") (if (IsLight) Color(0xFF1E3A8A) else Color.White) else if (Look.FIXED.containsKey(Look.theme)) Red else if (Look.theme == "bw" || Look.theme == "vece") Color.White else if (Look.theme == "pijesak") Color(0xFFE0B25C) else lerp(Red, if (IsLight) Color.Black else Color.White, if (IsLight) 0.2f else 0.35f)
-    val CardFocus get() = if (Look.theme == "dew") Color(0x40FFFFFF) else Red.copy(alpha = 0.18f)
+    val CardFocus get() = if (Look.theme == "dew") Color(0x40FFFFFF) else if (Look.theme == "ponoc") Color(0x40D5DBE3) else Red.copy(alpha = 0.18f)
     val Green get() = if (IsLight) Color(0xFF15803D) else Color(0xFF4ADE80)
     val Amber get() = if (IsLight) Color(0xFFB45309) else Color(0xFFFBBF24)
     val Danger = Color(0xFFEF4444)

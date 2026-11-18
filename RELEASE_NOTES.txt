@@ -1,3 +1,12 @@
+PRETORIAN 1.0.62 STABLE
+New Dawn redesign: misty night background with a glowing street lamp behind every screen (drawn, sharp on every TV)
+New Dawn: start screen is the menu alone (Home, TV, Movies, Series, Sports, Catch-up, Search, Settings); Home opens like every other section
+New Dawn: frosted grey-blue panels, light grey focus with dark text, "PRETORIAN TV" top bar with path, 3 / 124, date and time
+New Dawn: remote hints at the bottom of every screen (▲▼ / OK / Back)
+New Dawn TV: groups as a clean list; channels with number, logo and name; preview box, now/next with progress and "Next"; buttons Favourite, EPG, Audio, Subtitles, Options
+Midnight blue theme retuned to the misty blue-grey look, so Settings, Search, Movies and Series match
+Default and Classic layouts remain unchanged
+
 PRETORIAN 1.0.61 STABLE
 New layout: New Dawn (Settings › Appearance › TV layout) — one level on screen at a time: menu › groups › channels › full screen
 New Dawn: the previous level disappears completely; Back and LEFT go exactly one level back, with focus on where you came from

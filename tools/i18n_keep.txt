@@ -549,3 +549,6 @@ Potvrdi kanal tipkom OK da pokreneš mini-player.
 TV · EPG
 EPG …
 New Dawn
+EEE, d MMM
+%03d
+PRETORIAN TV
