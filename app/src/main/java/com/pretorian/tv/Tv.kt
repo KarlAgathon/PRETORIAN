@@ -694,11 +694,10 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                     gate.run("c:${ch.url}", locked) {
                                         ovr.countWatch(ch)
                                         TvMemory.channel = i; TvMemory.group = g
-                                        // First OK starts the small preview; a second OK on that channel opens fullscreen.
-                                        if (Look.previewMode in 1..2 && PreviewSel.ch?.url != ch.url) {
+                                        // First OK confirms this channel in the mini-player; second OK on the same channel opens fullscreen.
+                                        if (PreviewSel.ch?.url != ch.url) {
                                             PreviewSel.ch = ch
                                         } else {
-                                            PreviewSel.ch = ch
                                             TvMemory.restore = true
                                             playChannels(nav, list, i)
                                         }
@@ -1219,7 +1218,7 @@ fun EpgPanel(ch: Channel?, modifier: Modifier) {
     LaunchedEffect(ch?.url) { delay(150); shown = ch }
     Column(modifier.fillMaxHeight().background(C.Rail).padding(horizontal = 18.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         val c = shown
-        if (Look.previewMode in 1..2) PreviewSel.ch?.let { PreviewBox(it, Modifier.fillMaxWidth()) }
+        PreviewSel.ch?.let { PreviewBox(it, Modifier.fillMaxWidth()) }
         if (c == null) { T("Stani na kanal da vidiš program", 14.sp, C.Muted); return@Column }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             ChannelLogo(c.logo, c.name)
