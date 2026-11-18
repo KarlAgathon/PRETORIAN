@@ -215,24 +215,26 @@ fun GroupColumn(
             is Load.Err -> Message("Greška", rows.message)
             is Load.Ok -> {
                 val list = rows.value
-                val focusedIndex = list.indexOfFirst { it.id == focusKey }
-                val boundaryKeys = if (containVerticalFocus) Modifier.onPreviewKeyEvent { e ->
-                    if (e.type != KeyEventType.KeyDown) false
-                    else when {
-                        e.key == Key.DirectionUp && focusedIndex == 0 -> true
-                        e.key == Key.DirectionDown && focusedIndex == list.lastIndex -> true
-                        else -> false
-                    }
-                } else Modifier
                 LazyColumn(
-                    modifier = boundaryKeys,
                     state = state,
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                     contentPadding = PaddingValues(bottom = 24.dp, top = 2.dp),
                 ) {
                     itemsIndexed(list, key = { _, r -> r.id }) { i, r ->
                         val m = Modifier.fillMaxWidth().height(Rows.group)
-                            .then(if (containVerticalFocus) Modifier else Modifier.wrapKeys(i, list.size, wrap))
+                            .then(if (containVerticalFocus) Modifier.onPreviewKeyEvent { e ->
+                                if (e.type != KeyEventType.KeyDown) false
+                                else when {
+                                    // Move explicitly between category rows so rapid/held UP cannot escape early.
+                                    e.key == Key.DirectionUp && i > 0 -> { wrap.target = i - 1; true }
+                                    // At the first category, allow normal focus search to move to the top bar.
+                                    e.key == Key.DirectionUp && i == 0 -> false
+                                    e.key == Key.DirectionDown && i < list.lastIndex -> { wrap.target = i + 1; true }
+                                    // DOWN at the final row stays inside the category list.
+                                    e.key == Key.DirectionDown && i == list.lastIndex -> true
+                                    else -> false
+                                }
+                            } else Modifier.wrapKeys(i, list.size, wrap))
                         val fr = wrap.requester(i, if (r.id == focusKey) focusFr else null)
                         when (r) {
                             is GRow.Group -> {

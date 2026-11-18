@@ -2,3 +2,8 @@ PRETORIAN 1.0.39-beta5
 TV kanali: mali pregled se pokreće tek nakon prvog OK; drugi OK na istom kanalu otvara cijeli ekran
 TV kategorije: UP na prvom redu i DOWN na posljednjem redu ostaju unutar liste, uključujući brzo ponavljanje tipke
 Home, Sport i Stable nisu mijenjani
+
+PRETORIAN 1.0.39-beta6
+TV kategorije: držanje UP pomjera fokus red po red i ne dozvoljava prerani izlazak na gornju traku; izlazak je moguć tek iz prve kategorije
+TV kategorije: DOWN ostaje unutar liste i na posljednjoj kategoriji
+Mini pregled: postojeća potvrda tipkom OK ostaje nepromijenjena
