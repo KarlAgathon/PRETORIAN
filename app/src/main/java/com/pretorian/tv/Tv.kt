@@ -422,62 +422,60 @@ private fun TvList(nav: Nav) {
         // Classic TV: full-screen workspace; the app rail appears only on LEFT/BACK.
         LaunchedEffect(Unit) { Chrome.driven = true; Chrome.rail = 2 }
         DisposableEffect(Unit) { onDispose { Chrome.driven = false; Chrome.rail = if (Look.layout == 0) 2 else 3 } }
-        Column(Modifier.fillMaxSize()) {
-            Row(Modifier.fillMaxWidth().weight(0.30f).clipToBounds()
-                .padding(start = 12.dp, end = 14.dp, top = 8.dp, bottom = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                val previewCh = PreviewSel.ch
-                Box(Modifier.weight(0.30f).fillMaxHeight().clipToBounds(), contentAlignment = Alignment.Center) {
-                    if (previewCh != null) PreviewBox(previewCh, Modifier.fillMaxSize())
-                    else Box(Modifier.fillMaxSize().clip(Rnd(12.dp)).background(C.Rail), contentAlignment = Alignment.Center) {
-                        T(tr("Izaberi kanal za pregled"), 12.sp, C.Muted)
-                    }
-                }
-                Column(Modifier.weight(0.70f).fillMaxHeight().clip(Rnd(12.dp)).background(C.Rail)
-                    .padding(horizontal = 14.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    val selected = focusedCh ?: previewCh
-                    if (selected == null) {
-                        T("TV · EPG", 13.sp, C.Muted, FontWeight.SemiBold)
-                        T(tr("Potvrdi kanal tipkom OK da pokreneš mini-player."), 12.sp, C.Soft)
-                    } else {
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            ChannelLogo(selected.logo, selected.name)
-                            Column(Modifier.weight(1f)) {
-                                T(selected.name, 15.sp, C.Text, FontWeight.Bold, maxLines = 1)
-                                T(tr("TV · EPG"), 10.sp, C.Muted, maxLines = 1)
-                            }
-                            qualityOf(selected.name)?.let { Chip(it, C.Card, C.Soft) }
-                        }
-                        EpgList(selected, limit = 3, modifier = Modifier.fillMaxWidth().weight(1f), compact = true)
-                    }
-                }
+        Row(Modifier.fillMaxSize().padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Reference layout: persistent category column on the left; preview and EPG workspace on the right.
+            val groupsWidth = 232.dp
+            Box(Modifier.width(groupsWidth).fillMaxHeight().clip(Rnd(12.dp)).background(C.Rail)
+                .border(1.dp, C.Line, Rnd(12.dp))
+                .onPreviewKeyEvent { e ->
+                    if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { revealMainRail(); true } else false
+                }) {
+                GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, groupsWidth, "", null,
+                    onFocusGroup = { Chrome.rail = 2 },
+                    onOpen = { focusedCh = null; openGroup(ctx, st, it); enterTick++; inChannels = true },
+                    onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
+                    onHeader = { p ->
+                        TvFold.toggle(p.id)
+                        if (p.id in TvFold.open) Store.open(ctx, p.id)
+                        st.focusKey = "h:" + p.id; st.rev++; st.refocus++
+                    },
+                    onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it },
+                    onFocusRow = { st.focusKey = it; inChannels = false; Chrome.rail = 2 },
+                    containVerticalFocus = false, classicStyle = true)
             }
-            Row(Modifier.fillMaxWidth().weight(0.70f).padding(start = 10.dp, end = 10.dp, top = 2.dp, bottom = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                val groupsWidth = if (inChannels) 72.dp else 232.dp
-                Box(Modifier.width(groupsWidth).fillMaxHeight().clip(Rnd(12.dp)).background(C.Rail)
-                    .border(1.dp, C.Line, Rnd(12.dp))
-                    .onPreviewKeyEvent { e ->
-                        if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft && !inChannels) {
-                            revealMainRail(); true
-                        } else false
-                    }) {
-                    GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, groupsWidth, "", null,
-                        onFocusGroup = { Chrome.rail = 2 },
-                        onOpen = { focusedCh = null; openGroup(ctx, st, it); enterTick++; inChannels = true },
-                        onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
-                        onHeader = { p ->
-                            TvFold.toggle(p.id)
-                            if (p.id in TvFold.open) Store.open(ctx, p.id)
-                            st.focusKey = "h:" + p.id; st.rev++; st.refocus++
-                        },
-                        onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it },
-                        onFocusRow = { st.focusKey = it; inChannels = false; Chrome.rail = 2 },
-                        containVerticalFocus = false, classicStyle = true)
+            Box(Modifier.width(1.dp).fillMaxHeight().background(C.Line))
+            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                val previewCh = focusedCh ?: PreviewSel.ch
+                Row(Modifier.fillMaxWidth().weight(0.34f).clipToBounds(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Box(Modifier.weight(0.43f).fillMaxHeight().clip(Rnd(12.dp)), contentAlignment = Alignment.Center) {
+                        if (previewCh != null) PreviewBox(previewCh, Modifier.fillMaxSize())
+                        else Box(Modifier.fillMaxSize().clip(Rnd(12.dp)).background(C.Rail), contentAlignment = Alignment.Center) {
+                            T(tr("Izaberi kanal za pregled"), 12.sp, C.Muted)
+                        }
+                    }
+                    Column(Modifier.weight(0.57f).fillMaxHeight().clip(Rnd(12.dp)).background(C.Rail)
+                        .border(1.dp, C.Line, Rnd(12.dp)).padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (previewCh == null) {
+                            T("TV · EPG", 13.sp, C.Muted, FontWeight.SemiBold)
+                            T(tr("Potvrdi kanal tipkom OK da pokreneš mini-player."), 12.sp, C.Soft)
+                        } else {
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                ChannelLogo(previewCh.logo, previewCh.name)
+                                Column(Modifier.weight(1f)) {
+                                    T(previewCh.name, 15.sp, C.Text, FontWeight.Bold, maxLines = 1)
+                                    T(tr("TV · EPG"), 10.sp, C.Muted, maxLines = 1)
+                                }
+                                qualityOf(previewCh.name)?.let { Chip(it, C.Card, C.Soft) }
+                            }
+                            EpgList(previewCh, limit = 3, modifier = Modifier.fillMaxWidth().weight(1f), compact = true)
+                        }
+                    }
                 }
-                Box(Modifier.width(1.dp).fillMaxHeight().background(C.Line))
-                Box(Modifier.weight(1f).fillMaxHeight().clip(Rnd(12.dp)).background(C.Rail)
+                Box(Modifier.fillMaxWidth().weight(0.66f).clip(Rnd(12.dp)).background(C.Rail)
                     .border(1.dp, C.Line, Rnd(12.dp))
                     .onPreviewKeyEvent { e ->
                         if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { backToGroups(); true } else false
