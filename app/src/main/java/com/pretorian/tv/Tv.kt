@@ -190,6 +190,7 @@ fun TvScreen(nav: Nav) {
     if (Store.actives(ctx).isEmpty()) { NoPlaylist(nav); return }
     var guide by remember { mutableStateOf(ListStyle.tivimate || Prefs.str("tv_view", "list") == "guide") }
     if (guide) TvGuide(nav) { guide = false; Prefs.put("tv_view", "list") }
+    else if (Look.tvDesign == 1) TvList(nav) { guide = true; Prefs.put("tv_view", "guide") }
     else if (Look.age) OnyxTv(nav) { guide = true; Prefs.put("tv_view", "guide") }
     else TvList(nav) { guide = true; Prefs.put("tv_view", "guide") }
 }
