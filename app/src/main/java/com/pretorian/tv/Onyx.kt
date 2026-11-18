@@ -369,15 +369,35 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                     Text(tr("DOBRO DOŠAO"), style = TextStyle(fontFamily = Inter, fontSize = 12.sp, color = C.Soft, fontWeight = FontWeight.SemiBold, letterSpacing = 3.sp))
                     Text(tr("Šta gledamo danas?"), style = TextStyle(fontFamily = Inter, fontSize = 34.sp, color = C.Text, fontWeight = FontWeight.ExtraBold),
                         modifier = Modifier.padding(top = 2.dp))
-                    Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        listOf(Triple(Screen.Tv, R.drawable.lc_tv, "TV uživo"), Triple(Screen.Movies, R.drawable.lc_film, "Filmovi"),
-                            Triple(Screen.Series, R.drawable.lc_monitor, "Serije"), Triple(Screen.Sports, R.drawable.lc_ball, "Sport")).forEachIndexed { i, (scr, ic, lb) ->
-                            if (simple && scr == Screen.Sports) return@forEachIndexed
-                            Focusable(onClick = { nav.root(scr) }, focusRequester = if (i == 0) first else null, shape = Pill, normal = if (i == 0) C.Text else C.CardHi,
-                                focused = C.Red, zoom = 1.06f, modifier = Modifier.height(42.dp)) { f ->
-                                Row(Modifier.align(Alignment.Center).padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    val col = if (f) C.OnRed else if (i == 0) C.Bg else C.Text
-                                    Ico(ic, 15.dp, col); T(lb, 14.sp, col, FontWeight.Bold)
+                    val nCh = NewContent.count("tv")
+                    val nVod = NewContent.count("vod")
+                    val nSer = NewContent.count("series")
+                    val liveFollowed = GoalNote.followed.count { it.live }
+                    Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        val tiles = listOf(
+                            Triple(Screen.Tv, R.drawable.lc_tv, "LIVE TV") to (if (nCh > 0) "NEW CHANNELS: " + nCh else "TV kanali"),
+                            Triple(Screen.Movies, R.drawable.lc_film, "MOVIES") to (if (nVod > 0) "NEW MOVIES: " + nVod else "Filmovi"),
+                            Triple(Screen.Series, R.drawable.lc_monitor, "SERIES") to (if (nSer > 0) "NEW SERIES: " + nSer else "Serije"),
+                            Triple(Screen.Sports, R.drawable.lc_ball, "SPORTS") to (if (liveFollowed > 0) "LIVE: " + liveFollowed else "")
+                        )
+                        tiles.forEachIndexed { i, pair ->
+                            val item = pair.first
+                            val sub = pair.second
+                            if (simple && item.first == Screen.Sports) return@forEachIndexed
+                            Focusable(onClick = { nav.root(item.first) }, focusRequester = if (i == 0) first else null,
+                                shape = Rnd(15.dp), normal = C.Rail, focused = C.CardHi, zoom = 1.025f,
+                                modifier = Modifier.weight(1f).height(84.dp).border(1.dp, C.Line, Rnd(15.dp))) { f ->
+                                Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Ico(item.second, 25.dp, if (f) C.RedText else C.Soft)
+                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        T(item.third, 14.sp, C.Text, FontWeight.Bold, maxLines = 1)
+                                        if (sub.isNotBlank()) T(sub, 10.sp, C.Muted, FontWeight.Medium, maxLines = 1)
+                                    }
+                                    val badge = when (i) { 0 -> nCh; 1 -> nVod; 2 -> nSer; else -> 0 }
+                                    if (badge > 0) Box(Modifier.clip(CircleShape).background(C.CardHi).padding(horizontal = 7.dp, vertical = 3.dp)) {
+                                        T(badge.toString(), 10.sp, C.Text, FontWeight.Bold)
+                                    }
                                 }
                             }
                         }
