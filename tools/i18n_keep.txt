@@ -527,3 +527,5 @@ par_adult
 par_lgbt
 par_trans
 ◀◀ 5 min
+epg_sources
+/sys/devices/system/cpu/cpu$i/cpufreq/cpuinfo_max_freq
