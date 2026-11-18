@@ -655,9 +655,9 @@ private fun LookPage() {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                             if (active) {
                                 Ico(R.drawable.lc_circle_check, 18.dp, C.Green)
-                                T(tr("Aktivan"), 12.sp, C.Green, FontWeight.Bold)
+                                T(tr("Uključeno"), 12.sp, C.Green, FontWeight.Bold)
                             } else {
-                                Ico(R.drawable.lc_circle, 18.dp, C.Muted)
+                                Ico(R.drawable.lc_circle_slash, 18.dp, C.Muted)
                                 T(tr("Izaberi"), 12.sp, C.Muted, FontWeight.SemiBold)
                             }
                         }
