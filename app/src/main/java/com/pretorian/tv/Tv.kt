@@ -264,14 +264,14 @@ fun GroupColumn(
                                     expiryText(r.p.exp)?.let { T(it.first, 11.sp, if (it.second > 0) C.Amber else C.Muted) }
                                 }
                             }
-                            is GRow.NewFav -> Focusable(modifier = rowModifier, onClick = onNewFav, onFocus = { onFocusRow(r.id) }, focusRequester = if (containVerticalFocus) null else fr,
+                            is GRow.NewFav -> Focusable(modifier = rowModifier, onClick = onNewFav, onFocus = { onFocusRow(r.id) }, focusRequester = fr,
                                 normal = Color.Transparent, zoom = 1f) { _ ->
                                 Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Ico(R.drawable.lc_plus, 15.dp, C.Muted); T("Nova lista favorita", 13.sp, C.Muted)
                                 }
                             }
-                            is GRow.NewGroup -> Focusable(modifier = rowModifier, onClick = { onNewGroup(r.pid) }, onFocus = { onFocusRow(r.id) }, focusRequester = if (containVerticalFocus) null else fr,
+                            is GRow.NewGroup -> Focusable(modifier = rowModifier, onClick = { onNewGroup(r.pid) }, onFocus = { onFocusRow(r.id) }, focusRequester = fr,
                                 normal = Color.Transparent, zoom = 1f) { _ ->
                                 Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
