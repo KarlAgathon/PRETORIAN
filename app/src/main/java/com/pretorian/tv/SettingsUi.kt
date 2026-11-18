@@ -633,8 +633,7 @@ private fun LookPage() {
     var rev by remember { mutableIntStateOf(0) }
     Page("Izgled", "Promjene se vide odmah.") {
         Label(tr("TV prikaz"))
-        Segmented(listOf(tr("New Age"), tr("New Era")), Look.tvDesign) { Look.tvDesign = it; save() }
-        T(if (Look.tvDesign == 1) tr("New Era: tri stalna panela — kategorije providera, kanali i EPG.") else tr("New Age: postojeći TV prikaz."), 12.sp, C.Muted, maxLines = 2)
+        T(tr("New Era — jedini TV layout za sada. Ostali layouti dolaze kasnije."), 13.sp, C.Text, FontWeight.SemiBold, maxLines = 2)
         Label("Kako se otvara TV")
         var tvView by remember { mutableStateOf(Prefs.str("tv_view", "list")) }
         Segmented(listOf("Lista kanala", "TV vodič (mreža)"), if (tvView == "guide") 1 else 0) {
@@ -1893,12 +1892,7 @@ private fun LookV2(openSub: (String) -> Unit) {
         SetPage("Izgled", "Promjene se vide odmah.") {
             // Keep the TV layout selector visible at the top of Appearance in the modern settings.
             SetSection("TV prikaz")
-            Segmented(listOf(tr("New Age"), tr("New Era")), Look.tvDesign) {
-                Look.tvDesign = it
-                save()
-            }
-            T(if (Look.tvDesign == 1) tr("New Era: tri stalna panela — kategorije providera, kanali i EPG.")
-              else tr("New Age: postojeći TV prikaz."), 12.sp, C.Muted, maxLines = 2)
+            T(tr("New Era — jedini TV layout za sada. Ostali layouti dolaze kasnije."), 13.sp, C.Text, FontWeight.SemiBold, maxLines = 2)
             SetSection("Tema")
             ThemeCards { rev++ }
             SetSection("Boja")
