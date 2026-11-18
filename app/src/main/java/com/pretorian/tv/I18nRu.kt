@@ -2,6 +2,10 @@ package com.pretorian.tv
 
 /** Russian: one line per text, "bosnian|russian" (kept apart so the 10-column table and its tools stay as they are). */
 internal val RU_TABLE = """
+Nema gledanih kanala.|Нет просмотренных каналов.
+Lista posljednjih gledanih kanala bit će obrisana.|Список недавно просмотренных каналов будет очищен.
+Historija · %s/10|История · %s/10
+Izvorno|Исходный
 Početna|Главная
 TV|ТВ
 Filmovi|Фильмы
