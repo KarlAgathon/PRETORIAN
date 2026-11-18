@@ -412,7 +412,7 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                                 Key.DirectionLeft -> if (c > 0) { cell = c - 1; true } else false
                                 else -> false
                             }
-                        }, shape = Rnd(12.dp),
+                        }.then(if (active) Modifier.border(1.dp, C.Green.copy(alpha = 0.48f), Rnd(12.dp)) else Modifier), shape = Rnd(12.dp),
                             onClick = {
                                 val sel = nx?.getOrNull(c)
                                 if (wide && c > 0 && sel != null) {
