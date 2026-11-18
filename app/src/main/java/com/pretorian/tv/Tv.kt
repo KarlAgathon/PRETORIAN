@@ -255,7 +255,7 @@ fun GroupColumn(
                                     Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         if (selected) Dot(C.Red, 7.dp)
-                                        if (width > 100.dp) T(g.cat.name, if (classicStyle) 14.sp else Rows.font, if (selected) C.Text else C.Soft, if (selected) FontWeight.Bold else FontWeight.Normal, maxLines = 1, modifier = Modifier.weight(1f)) else Ico(R.drawable.lc_layers, 18.dp, if (selected) C.Text else C.Muted)
+                                        if (width > 100.dp) T(g.cat.name, if (classicStyle) 13.sp else Rows.font, if (selected) C.Text else C.Soft, if (selected) FontWeight.Bold else FontWeight.Normal, maxLines = 1, modifier = Modifier.weight(1f)) else Ico(R.drawable.lc_layers, 18.dp, if (selected) C.Text else C.Muted)
                                         if (locked) Ico(R.drawable.lc_lock, 15.dp, C.Muted)
                                     }
                                 }
@@ -393,6 +393,7 @@ private fun TvList(nav: Nav) {
             ?: return
         st.focusKey = target
         inChannels = false
+        Chrome.rail = 2
         st.refocus++
         // Scroll the target row into view before asking its FocusRequester for focus.
         focusScope.launch {
@@ -420,20 +421,20 @@ private fun TvList(nav: Nav) {
     LaunchedEffect(focusedCh) { val c = focusedCh ?: return@LaunchedEffect; delay(500); Dusk.set(c.logo, c.name) }
     if (Look.layout == 0) {
         // Classic TV: full-screen workspace; the app rail appears only on LEFT/BACK.
-        LaunchedEffect(Unit) { Chrome.driven = true; Chrome.rail = 2 }
+        LaunchedEffect(inChannels) { Chrome.driven = true; Chrome.rail = if (inChannels) 0 else 2 }
         DisposableEffect(Unit) { onDispose { Chrome.driven = false; Chrome.rail = if (Look.layout == 0) 2 else 3 } }
         Row(Modifier.fillMaxSize().padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             // Reference layout: persistent category column on the left; preview and EPG workspace on the right.
-            val groupsWidth = 232.dp
-            Box(Modifier.width(groupsWidth).fillMaxHeight().clip(Rnd(12.dp)).background(C.Rail)
+            val groupsWidth = 206.dp
+            if (!inChannels) Box(Modifier.width(groupsWidth).fillMaxHeight().clip(Rnd(12.dp)).background(C.Rail)
                 .border(1.dp, C.Line, Rnd(12.dp))
                 .onPreviewKeyEvent { e ->
                     if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { revealMainRail(); true } else false
                 }) {
                 GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, groupsWidth, "", null,
                     onFocusGroup = { Chrome.rail = 2 },
-                    onOpen = { focusedCh = null; openGroup(ctx, st, it); enterTick++; inChannels = true },
+                    onOpen = { focusedCh = null; openGroup(ctx, st, it); enterTick++; inChannels = true; Chrome.rail = 0 },
                     onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
                     onHeader = { p ->
                         TvFold.toggle(p.id)
@@ -444,10 +445,10 @@ private fun TvList(nav: Nav) {
                     onFocusRow = { st.focusKey = it; inChannels = false; Chrome.rail = 2 },
                     containVerticalFocus = false, classicStyle = true)
             }
-            Box(Modifier.width(1.dp).fillMaxHeight().background(C.Line))
-            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (!inChannels) Box(Modifier.width(1.dp).fillMaxHeight().background(C.Line))
+            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 val previewCh = focusedCh ?: PreviewSel.ch
-                Row(Modifier.fillMaxWidth().weight(0.34f).clipToBounds(),
+                Row(Modifier.fillMaxWidth().weight(0.32f).clipToBounds(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Box(Modifier.weight(0.43f).fillMaxHeight().clip(Rnd(12.dp)), contentAlignment = Alignment.Center) {
                         if (previewCh != null) PreviewBox(previewCh, Modifier.fillMaxSize())
@@ -475,7 +476,7 @@ private fun TvList(nav: Nav) {
                         }
                     }
                 }
-                Box(Modifier.fillMaxWidth().weight(0.66f).clip(Rnd(12.dp)).background(C.Rail)
+                Box(Modifier.fillMaxWidth().weight(0.68f).clip(Rnd(12.dp)).background(C.Rail)
                     .border(1.dp, C.Line, Rnd(12.dp))
                     .onPreviewKeyEvent { e ->
                         if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { backToGroups(); true } else false
@@ -485,7 +486,7 @@ private fun TvList(nav: Nav) {
                         Message("Izaberi grupu", "Pritisni OK na grupi za prikaz kanala")
                     } else key(g.key, st.rev) {
                         ChannelList(g, nav, st.gate, rows, enterTick,
-                            onFocusCh = { focusedCh = it; inChannels = true; Chrome.rail = 2 },
+                            onFocusCh = { focusedCh = it; inChannels = true; Chrome.rail = 0 },
                             onBackToGroups = { backToGroups() }, onChanged = { st.rev++ },
                             fullWidthClassic = true)
                     }
@@ -760,7 +761,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                 val list = s.value
                 if (fullWidthClassic) {
                     Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 14.dp, top = 7.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        T(g.cat.name.uppercase(), 16.sp, C.Text, FontWeight.Bold, maxLines = 1, modifier = Modifier.weight(1f))
+                        T(g.cat.name.uppercase(), 14.sp, C.Text, FontWeight.Bold, maxLines = 1, modifier = Modifier.weight(1f))
                         T(trf("%s KANALA", list.size), 11.sp, C.Muted, FontWeight.SemiBold)
                     }
                 }
@@ -783,7 +784,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                             val active = PreviewSel.ch?.url == ch.url || TvMemory.preview?.url == ch.url ||
                                 (TvMemory.group?.key == g.key && TvMemory.channel == i)
                             Focusable(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = if (Look.layout == 0) 4.dp else 0.dp).height(if (fullWidthClassic) 54.dp else if (Look.layout == 0) 58.dp else Rows.channel).wrapKeys(i, list.size, cWrap)
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = if (Look.layout == 0) 4.dp else 0.dp).height(if (fullWidthClassic) 46.dp else if (Look.layout == 0) 58.dp else Rows.channel).wrapKeys(i, list.size, cWrap)
                                     .then(if (active) Modifier.border(1.dp, C.Green.copy(alpha = 0.48f), Rnd(12.dp)) else Modifier),
                                 onClick = {
                                     gate.run("c:${ch.url}", locked) {
@@ -810,7 +811,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                         modifier = Modifier.width(if (fullWidthClassic) 34.dp else if (Look.layout == 0) 26.dp else 34.dp))
                                     ChannelLogo(ch.logo, ch.name)
                                     if (fullWidthClassic) {
-                                        T(ch.name, 16.sp, if (f) C.Text else C.Soft, if (f) FontWeight.SemiBold else FontWeight.Medium,
+                                        T(ch.name, 14.sp, if (f) C.Text else C.Soft, if (f) FontWeight.SemiBold else FontWeight.Medium,
                                             maxLines = 1, modifier = Modifier.weight(0.32f))
                                         ChannelEpgCells(ch, Modifier.weight(0.68f))
                                     } else {
