@@ -736,7 +736,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                 if (fullWidthClassic) {
                     Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 14.dp, top = 7.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         T(g.cat.name.uppercase(), 16.sp, C.Text, FontWeight.Bold, maxLines = 1, modifier = Modifier.weight(1f))
-                        T("${list.size} KANALA", 11.sp, C.Muted, FontWeight.SemiBold)
+                        T(trf("%s KANALA", list.size), 11.sp, C.Muted, FontWeight.SemiBold)
                     }
                 }
                 if (list.isEmpty()) {
