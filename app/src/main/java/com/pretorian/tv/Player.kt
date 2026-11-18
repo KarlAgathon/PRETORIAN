@@ -1126,7 +1126,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     LaunchedEffect(item.url) { resize = item.channel?.let { Prefs.long("fmt_" + it.url.hashCode(), 0).toInt().coerceIn(0, FORMATS.lastIndex) } ?: resize }
 }
 
-private val FORMATS = listOf("Automatski", "4:3", "16:9", "Prilagodi", "Rastegni", "Izvorno")
+private val FORMATS = listOf("Zadano / automatski", "4:3", "16:9", "Prilagodi", "Rastegni", "Izvorno")
 
 /** Buttons at the bottom of the player, in one row (no scrolling): Pause · ★ · [CC] · [Audio] · Format · Guide · Group · More.
  *  Subtitles only when the stream has subtitle tracks, Audio only with 2 or more tracks. */
