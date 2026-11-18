@@ -329,7 +329,7 @@ fun SportMixScreen(nav: Nav) {
 
     Row(Modifier.fillMaxSize().padding(start = 24.dp, end = 24.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         // ------------------------------------------------ left: your teams, filters, matches by league
-        Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.weight(1f).fillMaxHeight().glassSide(18.dp).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (mine.isNotEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(mine, key = { it.first }) { (t, e) ->
                     val live = e.state == "in"
@@ -379,7 +379,7 @@ fun SportMixScreen(nav: Nav) {
             }
         }
         // ------------------------------------------------ right: small screen (only after a channel is chosen) and the match
-        Column(Modifier.width(420.dp).fillMaxHeight().onFocusChanged { rightFocus = it.hasFocus }
+        Column(Modifier.width(420.dp).fillMaxHeight().glass(18.dp).padding(12.dp).onFocusChanged { rightFocus = it.hasFocus }
             .onPreviewKeyEvent { k -> if (k.type == KeyEventType.KeyDown && k.key == Key.DirectionLeft) { focusSel(); true } else false },
             verticalArrangement = Arrangement.spacedBy(10.dp)) {
             val pc = playing
