@@ -211,7 +211,7 @@ fun GroupColumn(
     val listForFocus = (rows as? Load.Ok)?.value ?: emptyList()
     Column(Modifier.width(width).fillMaxHeight().padding(start = if (classicStyle) 8.dp else 14.dp, end = if (classicStyle) 6.dp else 10.dp, top = if (title.isEmpty() || classicStyle) 10.dp else 22.dp)) {
         // no title (TV guide): the groups start right under the top bar
-        if (title.isNotEmpty()) T(title, if (classicStyle) 20.sp else 26.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 8.dp, bottom = 2.dp))
+        if (title.isNotEmpty()) T(title, if (classicStyle) 18.sp else 26.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 8.dp, bottom = 2.dp))
         if (sub != null) T(sub, 12.sp, C.Muted, modifier = Modifier.padding(start = 8.dp, bottom = 8.dp))
         extra?.invoke()
         when (rows) {
@@ -224,13 +224,13 @@ fun GroupColumn(
                 LazyColumn(
                     modifier = if (containVerticalFocus) Modifier.focusGroup() else Modifier,
                     state = state,
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                    contentPadding = PaddingValues(bottom = 24.dp, top = 2.dp),
+                    verticalArrangement = Arrangement.spacedBy(if (classicStyle) 3.dp else 4.dp),
+                    contentPadding = PaddingValues(bottom = 16.dp, top = 1.dp),
                 ) {
                     itemsIndexed(list, key = { _, r -> r.id }) { i, r ->
                         // Let Compose move focus naturally inside this focus group. Manual scroll/focus
                         // coroutines here used to race on DPAD key-repeat and made rows jump/flicker.
-                        val m = Modifier.fillMaxWidth().padding(horizontal = if (classicStyle) 3.dp else 0.dp).height(if (classicStyle) 46.dp else Rows.group)
+                        val m = Modifier.fillMaxWidth().padding(horizontal = if (classicStyle) 3.dp else 0.dp).height(if (classicStyle) 42.dp else Rows.group)
                             .then(if (containVerticalFocus) Modifier else Modifier.wrapKeys(i, list.size, wrap))
                         val fr = wrap.requester(i, if (r.id == focusKey) focusFr else null)
                         val rowModifier = if (containVerticalFocus && r.id == focusKey) m.focusRequester(focusFr) else m
@@ -422,13 +422,13 @@ private fun TvList(nav: Nav) {
         LaunchedEffect(Unit) { Chrome.driven = true; Chrome.rail = 0 }
         DisposableEffect(Unit) { onDispose { Chrome.driven = false; Chrome.rail = 3 } }
         Column(Modifier.fillMaxSize()) {
-            Row(Modifier.fillMaxWidth().weight(0.30f).padding(start = 12.dp, end = 14.dp, top = 8.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(Modifier.fillMaxWidth().weight(0.30f).padding(start = 10.dp, end = 12.dp, top = 6.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 val previewCh = PreviewSel.ch
                 Box(Modifier.weight(0.40f).fillMaxHeight(), contentAlignment = Alignment.Center) {
                     if (previewCh != null) PreviewBox(previewCh, Modifier.fillMaxSize())
                     else Box(Modifier.fillMaxSize().clip(Rnd(12.dp)).background(C.Rail), contentAlignment = Alignment.Center) { T(tr("Izaberi kanal za pregled"), 12.sp, C.Muted) }
                 }
-                Column(Modifier.weight(0.60f).fillMaxHeight().clip(Rnd(12.dp)).background(C.Rail).padding(horizontal = 14.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Column(Modifier.weight(0.60f).fillMaxHeight().clip(Rnd(10.dp)).background(C.Rail).padding(horizontal = 10.dp, vertical = 5.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     val selected = focusedCh ?: previewCh
                     if (selected == null) { T(tr("Informacije o programu"), 14.sp, C.Text, FontWeight.Bold); T(tr("Potvrdi kanal tipkom OK da pokreneš mini-player."), 11.sp, C.Muted) }
                     else {
@@ -1255,7 +1255,7 @@ fun EpgList(ch: Channel, limit: Int = 12, modifier: Modifier = Modifier, compact
             }
         } else {
             val nextStart = s.value.firstOrNull { it.start > System.currentTimeMillis() }?.start
-            LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(if (compact) 5.dp else 8.dp)) {
+            LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 8.dp)) {
             itemsIndexed(s.value, key = { _, e -> e.start }) { _, e ->
                 val now = e.start <= System.currentTimeMillis() && e.end > System.currentTimeMillis()
                 val next = e.start == nextStart
@@ -1266,14 +1266,14 @@ fun EpgList(ch: Channel, limit: Int = 12, modifier: Modifier = Modifier, compact
                         Toast.makeText(ctx, tr(if (on) "Podsjetnik postavljen" else "Podsjetnik uklonjen"), Toast.LENGTH_SHORT).show()
                     }
                 }, normal = if (now) EpgLook.cell(C.CardFocus, true) else EpgLook.cell(C.Card), shape = Rnd(12.dp), zoom = 1.01f) { _ ->
-                    Column(Modifier.fillMaxWidth().padding(if (compact) 7.dp else 12.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 2.dp else 4.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(if (compact) 5.dp else 12.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 1.dp else 4.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            T(e.times(), EpgLook.sp(12.sp), if (now) C.RedText else C.Muted, FontWeight.SemiBold)
+                            T(e.times(), EpgLook.sp(if (compact) 11.sp else 12.sp), if (now) C.RedText else C.Muted, FontWeight.SemiBold)
                             if (now) Chip("SADA", C.Red, C.OnRed) else if (next) Chip("SLIJEDI", C.Card, C.Soft)
                             if (rem) { Ico(R.drawable.lc_bell, 14.dp, C.Amber); T("OK = ukloni podsjetnik", 11.sp, C.Amber) }
                             if (!now && !rem && Hints.always) T("OK = podsjeti me", 11.sp, C.Muted)
                         }
-                        T(e.title, EpgLook.sp(if (compact) 15.sp else 18.sp), C.Text, FontWeight.SemiBold, maxLines = if (compact) 1 else 2)
+                        T(e.title, EpgLook.sp(if (compact) 13.sp else 18.sp), C.Text, FontWeight.SemiBold, maxLines = if (compact) 1 else 2)
                         if (now) {
                             Box(Modifier.fillMaxWidth().height(4.dp).clip(Rnd(2.dp)).background(C.CardHi)) {
                                 Box(Modifier.fillMaxWidth(e.progress()).height(4.dp).background(C.Red))
