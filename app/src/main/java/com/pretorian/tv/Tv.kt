@@ -419,50 +419,77 @@ private fun TvList(nav: Nav) {
 
     LaunchedEffect(focusedCh) { val c = focusedCh ?: return@LaunchedEffect; delay(500); Dusk.set(c.logo, c.name) }
     if (Look.layout == 0) {
-        // BETA17 Classic: compact preview area, wide channel list below.
+        // Classic TV: full-screen workspace; the app rail appears only on LEFT/BACK.
         LaunchedEffect(Unit) { Chrome.driven = true; Chrome.rail = 0 }
         DisposableEffect(Unit) { onDispose { Chrome.driven = false; Chrome.rail = 3 } }
         Column(Modifier.fillMaxSize()) {
-            Row(Modifier.fillMaxWidth().weight(0.30f).clipToBounds().padding(start = 10.dp, end = 12.dp, top = 8.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(Modifier.fillMaxWidth().weight(0.30f).clipToBounds()
+                .padding(start = 12.dp, end = 14.dp, top = 8.dp, bottom = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 val previewCh = PreviewSel.ch
                 Box(Modifier.weight(0.30f).fillMaxHeight().clipToBounds(), contentAlignment = Alignment.Center) {
                     if (previewCh != null) PreviewBox(previewCh, Modifier.fillMaxSize())
-                    else Box(Modifier.fillMaxSize().clip(Rnd(12.dp)).background(C.Rail), contentAlignment = Alignment.Center) { T(tr("Izaberi kanal za pregled"), 12.sp, C.Muted) }
+                    else Box(Modifier.fillMaxSize().clip(Rnd(12.dp)).background(C.Rail), contentAlignment = Alignment.Center) {
+                        T(tr("Izaberi kanal za pregled"), 12.sp, C.Muted)
+                    }
                 }
-                Column(Modifier.weight(0.70f).fillMaxHeight().clip(Rnd(12.dp)).background(C.Rail).padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Column(Modifier.weight(0.70f).fillMaxHeight().clip(Rnd(12.dp)).background(C.Rail)
+                    .padding(horizontal = 14.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     val selected = focusedCh ?: previewCh
-                    if (selected == null) { T(tr("Informacije o programu"), 14.sp, C.Text, FontWeight.Bold); T(tr("Potvrdi kanal tipkom OK da pokreneš mini-player."), 11.sp, C.Muted) }
-                    else {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (selected == null) {
+                        T("TV · EPG", 13.sp, C.Muted, FontWeight.SemiBold)
+                        T(tr("Potvrdi kanal tipkom OK da pokreneš mini-player."), 12.sp, C.Soft)
+                    } else {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             ChannelLogo(selected.logo, selected.name)
-                            Column(Modifier.weight(1f)) { T(selected.name, 14.sp, C.Text, FontWeight.Bold, maxLines = 1); T(tr("TV · EPG"), 10.sp, C.Muted) }
+                            Column(Modifier.weight(1f)) {
+                                T(selected.name, 15.sp, C.Text, FontWeight.Bold, maxLines = 1)
+                                T(tr("TV · EPG"), 10.sp, C.Muted, maxLines = 1)
+                            }
                             qualityOf(selected.name)?.let { Chip(it, C.Card, C.Soft) }
                         }
                         EpgList(selected, limit = 3, modifier = Modifier.fillMaxWidth().weight(1f), compact = true)
                     }
                 }
             }
-            Box(Modifier.fillMaxWidth().weight(0.70f).padding(horizontal = 10.dp, vertical = 4.dp)
-                .clip(Rnd(14.dp)).background(C.Rail).border(1.dp, C.Line, Rnd(14.dp))) {
-                if (inChannels && st.group != null) {
-                    key(st.group!!.key, st.rev) {
-                        ChannelList(st.group!!, nav, st.gate, rows, enterTick,
-                            onFocusCh = { focusedCh = it; inChannels = true; Chrome.rail = 0 },
-                            onBackToGroups = { backToGroups() },
-                            onChanged = { st.rev++ }, fullWidthClassic = true)
-                    }
-                } else {
-                    Box(Modifier.fillMaxSize().onPreviewKeyEvent { e ->
-                        if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { revealMainRail(); true } else false
+            Row(Modifier.fillMaxWidth().weight(0.70f).padding(start = 10.dp, end = 10.dp, top = 2.dp, bottom = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                val groupsWidth = if (inChannels) 72.dp else 232.dp
+                Box(Modifier.width(groupsWidth).fillMaxHeight().clip(Rnd(12.dp)).background(C.Rail)
+                    .border(1.dp, C.Line, Rnd(12.dp))
+                    .onPreviewKeyEvent { e ->
+                        if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft && !inChannels) {
+                            revealMainRail(); true
+                        } else false
                     }) {
-                        GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, 1000.dp, "GRUPE", null,
-                            onFocusGroup = { Chrome.rail = 0 },
-                            onOpen = { openGroup(ctx, st, it); enterTick++; inChannels = true },
-                            onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
-                            onHeader = { p -> TvFold.toggle(p.id); if (p.id in TvFold.open) Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
-                            onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it },
-                            onFocusRow = { st.focusKey = it; Chrome.rail = 0 },
-                            containVerticalFocus = false, classicStyle = true, fillWidth = true)
+                    GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, groupsWidth, "", null,
+                        onFocusGroup = { Chrome.rail = 0 },
+                        onOpen = { focusedCh = null; openGroup(ctx, st, it); enterTick++; inChannels = true },
+                        onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
+                        onHeader = { p ->
+                            TvFold.toggle(p.id)
+                            if (p.id in TvFold.open) Store.open(ctx, p.id)
+                            st.focusKey = "h:" + p.id; st.rev++; st.refocus++
+                        },
+                        onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it },
+                        onFocusRow = { st.focusKey = it; inChannels = false; Chrome.rail = 0 },
+                        containVerticalFocus = false, classicStyle = true)
+                }
+                Box(Modifier.width(1.dp).fillMaxHeight().background(C.Line))
+                Box(Modifier.weight(1f).fillMaxHeight().clip(Rnd(12.dp)).background(C.Rail)
+                    .border(1.dp, C.Line, Rnd(12.dp))
+                    .onPreviewKeyEvent { e ->
+                        if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { backToGroups(); true } else false
+                    }) {
+                    val g = st.group
+                    if (g == null) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Message("Izaberi grupu", "Pritisni OK na grupi za prikaz kanala")
+                    } else key(g.key, st.rev) {
+                        ChannelList(g, nav, st.gate, rows, enterTick,
+                            onFocusCh = { focusedCh = it; inChannels = true; Chrome.rail = 0 },
+                            onBackToGroups = { backToGroups() }, onChanged = { st.rev++ },
+                            fullWidthClassic = true)
                     }
                 }
             }
@@ -758,7 +785,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                             val active = PreviewSel.ch?.url == ch.url || TvMemory.preview?.url == ch.url ||
                                 (TvMemory.group?.key == g.key && TvMemory.channel == i)
                             Focusable(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = if (Look.layout == 0) 4.dp else 0.dp).height(if (fullWidthClassic) 62.dp else if (Look.layout == 0) 58.dp else Rows.channel).wrapKeys(i, list.size, cWrap)
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = if (Look.layout == 0) 4.dp else 0.dp).height(if (fullWidthClassic) 54.dp else if (Look.layout == 0) 58.dp else Rows.channel).wrapKeys(i, list.size, cWrap)
                                     .then(if (active) Modifier.border(1.dp, C.Green.copy(alpha = 0.48f), Rnd(12.dp)) else Modifier),
                                 onClick = {
                                     gate.run("c:${ch.url}", locked) {
@@ -786,8 +813,8 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                     ChannelLogo(ch.logo, ch.name)
                                     if (fullWidthClassic) {
                                         T(ch.name, 16.sp, if (f) C.Text else C.Soft, if (f) FontWeight.SemiBold else FontWeight.Medium,
-                                            maxLines = 1, modifier = Modifier.weight(0.36f))
-                                        ChannelEpgCells(ch, Modifier.weight(0.64f))
+                                            maxLines = 1, modifier = Modifier.weight(0.32f))
+                                        ChannelEpgCells(ch, Modifier.weight(0.68f))
                                     } else {
                                         if (Look.layout == 0) {
                                             T(ch.name, Rows.font, if (f) C.Text else C.Soft, if (f) FontWeight.SemiBold else FontWeight.Normal,
@@ -807,16 +834,9 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                         }
                     }
                 }
-                LaunchedEffect(list, fullWidthClassic) {
-                    // Back from the player restores the playing channel. In the full-width Classic
-                    // layout the channel list is composed only after selecting a group, so focus
-                    // its first row explicitly when the panel opens.
-                    if (TvMemory.restore && TvMemory.channel >= 0) {
-                        TvMemory.restore = false
-                        cWrap.target = TvMemory.channel.coerceAtMost(list.lastIndex)
-                    } else if (fullWidthClassic && list.isNotEmpty()) {
-                        cWrap.target = 0
-                    }
+                LaunchedEffect(list) {
+                    // back from the player: focus the channel that was playing (once)
+                    if (TvMemory.restore && TvMemory.channel >= 0) { TvMemory.restore = false; cWrap.target = TvMemory.channel.coerceAtMost(list.lastIndex) }
                 }
                 // OK on a group: the focus goes into its channels
                 val enter0 = remember { enterTick }
