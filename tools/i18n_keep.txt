@@ -1,4 +1,5 @@
 # Texts that stay the same in every language (names, codes, units)
+recent
 PRETORIAN
 TV
 TMDB
