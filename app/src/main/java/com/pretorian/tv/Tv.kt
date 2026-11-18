@@ -494,7 +494,6 @@ private fun TvList(nav: Nav) {
                 }
             }
         }
-    }
     } else {
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.weight(1f).fillMaxWidth()) {
