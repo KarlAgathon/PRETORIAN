@@ -277,13 +277,13 @@ fun HitActions(h: Hit, nav: Nav, onDismiss: () -> Unit) {
         val pid = Store.actives(ctx).firstOrNull()?.id ?: ""
         Popup(tr("Dodaj u listu"), onDismiss = { listPicker = false; onDismiss() }) {
             MyList.names().forEach { list ->
-                OptionRow(if (MyList.has(list, kind, id)) "Ukloni iz $list" else "Dodaj u $list", R.drawable.lc_list) {
+                OptionRow(if (MyList.has(list, kind, id)) trf("Ukloni iz %s", list) else trf("Dodaj u %s", list), R.drawable.lc_list) {
                     MyList.toggle(list, kind, id, name, image, url, pid)
                     Toast.makeText(ctx, tr("Spremljeno"), Toast.LENGTH_SHORT).show()
                     listPicker = false; onDismiss()
                 }
             }
-            Field("Nova lista", newList, { newList = it }, Modifier.fillMaxWidth(), onDone = {
+            Field(tr("Nova lista"), newList, { newList = it }, Modifier.fillMaxWidth(), onDone = {
                 if (MyList.create(newList)) {
                     MyList.toggle(newList.trim().take(32), kind, id, name, image, url, pid)
                     newList = ""; listPicker = false; onDismiss()
@@ -317,7 +317,7 @@ fun HitActions(h: Hit, nav: Nav, onDismiss: () -> Unit) {
         }
         is Hit.Movie -> Popup(h.v.name, onDismiss) {
             OptionRow("Otvori", R.drawable.lc_info) { onDismiss(); nav.push(Screen.MovieDetail(h.v)) }
-            OptionRow("Dodaj u Moje liste", R.drawable.lc_list) { listPicker = true }
+            OptionRow(tr("Dodaj u Moje liste"), R.drawable.lc_list) { listPicker = true }
         }
         is Hit.Show -> Popup(h.s.name, onDismiss) {
             OptionRow("Otvori", R.drawable.lc_info) { onDismiss(); nav.push(Screen.SeriesDetail(h.s)) }
