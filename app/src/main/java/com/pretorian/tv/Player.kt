@@ -682,7 +682,12 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                         val r = if (side == "epg") (v.width * 0.4f).toInt() else 0
                         if (sv.paddingLeft != l || sv.paddingRight != r) sv.setPadding(l, sv.paddingTop, r, sv.paddingBottom)
                     }
-                    v.resizeMode = if (resize == 4) AspectRatioFrameLayout.RESIZE_MODE_FILL else AspectRatioFrameLayout.RESIZE_MODE_FIT },
+                    v.resizeMode = when (resize) {
+                        3 -> AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
+                        4 -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+                        5 -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                        else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    } },
                 modifier = when (resize) {
                     1 -> Modifier.fillMaxSize().wrapContentSize().aspectRatio(4f / 3f)
                     2 -> Modifier.fillMaxSize().wrapContentSize().aspectRatio(16f / 9f)
@@ -1017,7 +1022,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         }
         "recent_clear" -> Popup(tr("Obrisati historiju?"), onDismiss = { dialog = "recent" }) {
             T(tr("Lista posljednjih gledanih kanala bit će obrisana."), 13.sp, C.Muted)
-            OptionRow("Obriši historiju", R.drawable.lc_trash_2, color = C.Danger) { PlayerChannelHistory.clear(); dialog = "recent" }
+            OptionRow(tr("Obriši historiju"), R.drawable.lc_trash_2, color = C.Danger) { PlayerChannelHistory.clear(); dialog = "recent" }
             OptionRow("Odustani", R.drawable.lc_x) { dialog = "recent" }
         }
         "adelay" -> AudioDelayPopup(item.url) { dialog = null }
@@ -1126,7 +1131,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     LaunchedEffect(item.url) { resize = item.channel?.let { Prefs.long("fmt_v2_" + it.url.hashCode(), 0).toInt().coerceIn(0, FORMATS.lastIndex) } ?: resize }
 }
 
-private val FORMATS = listOf("Zadano / automatski", "4:3", "16:9", "Prilagodi", "Rastegni", "Izvorno")
+private val FORMATS = listOf("Zadano / automatski", "4:3", "16:9", "Prilagodi širinu", "Rastegni", "Zoom")
 
 /** Buttons at the bottom of the player, in one row (no scrolling): Pause · ★ · [CC] · [Audio] · Format · Guide · Group · More.
  *  Subtitles only when the stream has subtitle tracks, Audio only with 2 or more tracks. */
