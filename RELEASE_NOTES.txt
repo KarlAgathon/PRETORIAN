@@ -1,3 +1,8 @@
+PRETORIAN 1.0.57 (STABLE)
+Default Home: move active playlist status to the top-right above the welcome content
+Active playlist status: compact single-line display with playlist name and days remaining only
+Expiry status colors: green above 7 days, orange at 3–7 days, red at 2 days or less
+
 PRETORIAN 1.0.56 (STABLE)
 Default Layout Continue Watching: restore visible movie and series poster thumbnails in the actual Onyx Home screen
 Default Layout Continue Watching: run Xtream poster recovery on the correct Home screen and refresh the rows after artwork is restored
