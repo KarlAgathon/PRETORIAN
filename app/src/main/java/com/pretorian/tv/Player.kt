@@ -227,6 +227,32 @@ private fun errorText(e: PlaybackException, live: Boolean): String {
     }
 }
 
+private object PlayerChannelHistory {
+    private const val KEY = "player_channel_recent"
+    var rev by androidx.compose.runtime.mutableIntStateOf(0)
+    fun list(): List<Channel> = try {
+        val a = org.json.JSONArray(Prefs.str(KEY, "[]"))
+        (0 until a.length()).mapNotNull { i ->
+            val o = a.optJSONObject(i) ?: return@mapNotNull null
+            val url = o.optString("url", "")
+            if (url.isBlank()) return@mapNotNull null
+            Channel(o.optString("id", ""), o.optInt("num", i + 1), o.optString("name", url),
+                o.optString("logo", "").takeIf { it.isNotBlank() }, o.optString("group", ""), url,
+                o.optString("epg", "").takeIf { it.isNotBlank() }, o.optString("pid", ""),
+                o.optInt("archive", 0), o.optString("catchup", "").takeIf { it.isNotBlank() })
+        }
+    } catch (_: Exception) { emptyList() }
+    fun add(ch: Channel) {
+        val updated = (list().filterNot { it.url == ch.url }.let { listOf(ch) + it }).take(10)
+        val a = org.json.JSONArray()
+        updated.forEach { c -> a.put(org.json.JSONObject().put("id", c.id).put("num", c.num)
+            .put("name", c.name).put("logo", c.logo ?: "").put("group", c.group).put("url", c.url)
+            .put("epg", c.epg ?: "").put("pid", c.pid).put("archive", c.archive).put("catchup", c.catchup ?: "")) }
+        Prefs.put(KEY, a.toString()); rev++
+    }
+    fun clear() { Prefs.put(KEY, "[]"); rev++ }
+}
+
 @OptIn(UnstableApi::class)
 @Composable
 fun PlayerScreen(s: Screen.Player, nav: Nav) {
@@ -270,7 +296,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     var resume by remember { mutableStateOf<Progress?>(null) }
     var bar by remember { mutableStateOf(false) }   // button bar at the bottom
     var subFile by remember { mutableStateOf(s.items.getOrNull(index)?.subFile) }
-    // picture format: 0 Fit, 1 Zoom, 2 Stretch, 3 16:9, 4 4:3 — remembered per channel
+    // picture format: 0 Auto, 1 4:3, 2 16:9, 3 Fit, 4 Stretch, 5 Original — remembered per channel
     var resize by remember { mutableIntStateOf(0) }
     val player = remember { Preview.stop(); buildPlayer(ctx) }
     val playerScope = rememberCoroutineScope()
@@ -439,6 +465,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         if (s.live) items.getOrNull(index)?.channel?.let { c ->
             val g = TvMemory.group
             try { Recent.add(c, g?.pid, g?.cat?.id ?: c.group, g?.cat?.name ?: c.group) } catch (_: Exception) {}
+            PlayerChannelHistory.add(c)
         }
         error = null; retried = false; showInfo = true; videoH = 0
         val cur = items[index]
@@ -655,8 +682,12 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                         val r = if (side == "epg") (v.width * 0.4f).toInt() else 0
                         if (sv.paddingLeft != l || sv.paddingRight != r) sv.setPadding(l, sv.paddingTop, r, sv.paddingBottom)
                     }
-                    v.resizeMode = when (resize) { 1 -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM; 2, 3, 4 -> AspectRatioFrameLayout.RESIZE_MODE_FILL; else -> AspectRatioFrameLayout.RESIZE_MODE_FIT } },
-                modifier = when (resize) { 3 -> Modifier.fillMaxSize().wrapContentSize().aspectRatio(16f / 9f); 4 -> Modifier.fillMaxSize().wrapContentSize().aspectRatio(4f / 3f); else -> Modifier.fillMaxSize() },
+                    v.resizeMode = if (resize == 4) AspectRatioFrameLayout.RESIZE_MODE_FILL else AspectRatioFrameLayout.RESIZE_MODE_FIT },
+                modifier = when (resize) {
+                    1 -> Modifier.fillMaxSize().wrapContentSize().aspectRatio(4f / 3f)
+                    2 -> Modifier.fillMaxSize().wrapContentSize().aspectRatio(16f / 9f)
+                    else -> Modifier.fillMaxSize()
+                },
             )
         }
 
@@ -862,35 +893,38 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                     val v = player.videoFormat; val a = player.audioFormat
                     if (v != null) T(listOfNotNull("${v.width}×${v.height}", v.sampleMimeType?.substringAfter('/')?.uppercase(), if (v.frameRate > 0) "${v.frameRate.toInt()} fps" else null,
                         a?.let { (it.sampleMimeType?.substringAfter('/')?.uppercase() ?: "") + " " + if (it.channelCount >= 6) "5.1" else "Stereo" }).joinToString(" · "), 12.sp, Color(0xFF9AA4B2))
-                    if (bar) {
+                    if (bar && s.live) {
                         val ch = item.channel
+                        @Suppress("UNUSED_VARIABLE") val favRev = Favs.rev
+                        ChannelOptionsBar(favOn = ch != null && Favs.inAny(ctx, ch), onAction = { action ->
+                            when (action) {
+                                "favorites" -> ch?.let { c ->
+                                    val lists = Favs.lists(ctx)
+                                    val wasFavorite = Favs.inAny(ctx, c)
+                                    if (wasFavorite) lists.forEach { l -> if (Favs.contains(l.id, c)) Favs.toggle(l.id, c) }
+                                    else (lists.firstOrNull() ?: Favs.addList(ctx, tr("Favoriti"))).let { Favs.toggle(it.id, c) }
+                                    Toast.makeText(ctx, tr(if (wasFavorite) "Uklonjeno iz favorita" else "Dodano u favorite"), Toast.LENGTH_SHORT).show()
+                                }
+                                "subs" -> { bar = false; dialog = "subs" }
+                                "zoom" -> { bar = false; dialog = "zoom" }
+                                "audio" -> { bar = false; dialog = "audio" }
+                                "video" -> { bar = false; dialog = "video" }
+                                "epg" -> { bar = false; side = "epg" }
+                                "recent" -> { bar = false; dialog = "recent" }
+                            }
+                        })
+                    } else if (bar) {
                         val subT = tracksOf(player, MC.TRACK_TYPE_TEXT)
                         val subsOn = subFile != null || (!player.trackSelectionParameters.disabledTrackTypes.contains(MC.TRACK_TYPE_TEXT) && subT.any { it.selected })
-                        @Suppress("UNUSED_VARIABLE") val favRev = Favs.rev   // the star follows every add / remove at once
-                        PlayerBar(s.live, playing, ch != null, favOn = ch != null && Favs.inAny(ctx, ch), hasSubs = subT.isNotEmpty(), subsOn = subsOn,
+                        VodPlayerBar(false, playing, false, favOn = false, hasSubs = subT.isNotEmpty(), subsOn = subsOn,
                             audioCount = tracksOf(player, MC.TRACK_TYPE_AUDIO).size, format = FORMATS[resize],
                             onPause = { if (player.isPlaying) player.pause() else player.play() },
-                            onLong = { a2 -> bar = false; dialog = when (a2) { "fav" -> "fav"; "subs" -> "subs"; else -> null } },
-                            rewind = Tech.rewind && ch != null && Catchups.has(p, ch), behind = shiftFrom > 0,
-                            onAction = { a2 -> when (a2) {
-                                "rew" -> liveShift(-1)
-                                "tolive" -> { shiftFrom = 0L; loadMedia(items[index], null, 0L) }
-                                // one OK: on or off at once, no window (the star turns yellow)
-                                "fav" -> ch?.let { c ->
-                                    val lists = Favs.lists(ctx)
-                                    if (Favs.inAny(ctx, c)) lists.forEach { l -> if (Favs.contains(l.id, c)) Favs.toggle(l.id, c) }
-                                    else (lists.firstOrNull() ?: Favs.addList(ctx, tr("Favoriti"))).let { Favs.toggle(it.id, c) }
-                                    android.widget.Toast.makeText(ctx, tr(if (Favs.inAny(ctx, c)) "Dodano u favorite" else "Uklonjeno iz favorita"), android.widget.Toast.LENGTH_SHORT).show()
-                                }
-                                "subs" -> if (subT.isEmpty() && !s.live) { bar = false; dialog = "subs" } else {
-                                    val off = subsOn
-                                    if (off) subFile = null
-                                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, off).build()
-                                }
-                                "format" -> { resize = (resize + 1) % FORMATS.size; ch?.let { Prefs.put("fmt_" + it.url.hashCode(), resize.toLong()) } }
-                                "epg" -> { bar = false; side = "epg" }
-                                "channels" -> { bar = false; side = "channels" }
-                                else -> { bar = false; dialog = a2 }
+                            onLong = { bar = false; dialog = "subs" },
+                            onAction = { action -> when (action) {
+                                "subs" -> { bar = false; dialog = "subs" }
+                                "audio" -> { bar = false; dialog = "audio" }
+                                "format" -> { resize = (resize + 1) % FORMATS.size }
+                                "menu" -> { bar = false; dialog = "menu" }
                             } })
                     }
                     else T(if (s.live) "▲ ▼ kanal · ◀ lista kanala · ▶ TV vodič · OK još jednom = dugmad"
@@ -922,6 +956,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                     ChannelLogo(item.logo, item.title)
                     T(item.title, 17.sp, C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
                 }
+                if (ch != null) OptionRow("Pomak vremena", R.drawable.lc_clock,
+                    value = EpgShift.label(EpgShift.chMin(ch.url))) { dialog = "epgshift" }
                 if (Hints.show()) T("◀ ili Nazad = slika preko cijelog ekrana · OK na emisiji = podsjeti me", 11.sp, C.Muted, maxLines = 2)
                 val fr = remember { FocusRequester() }
                 Box(Modifier.weight(1f).focusRequester(fr).onPreviewKeyEvent { e ->
@@ -955,6 +991,35 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         }
         "fav" -> item.channel?.let { FavPicker(it) { dialog = null } }
         "epgshift" -> item.channel?.let { EpgShiftPopup(it) { dialog = null } }
+        "zoom" -> Popup("Zoom", onDismiss = { dialog = null }) {
+            FORMATS.forEachIndexed { i, label ->
+                OptionRow(tr(label), R.drawable.lc_maximize, selected = resize == i) {
+                    resize = i
+                    item.channel?.let { Prefs.put("fmt_v2_" + it.url.hashCode(), resize.toLong()) }
+                    dialog = null
+                }
+            }
+        }
+        "recent" -> {
+            @Suppress("UNUSED_VARIABLE") val historyRev = PlayerChannelHistory.rev
+            val history = PlayerChannelHistory.list()
+            Popup(trf("Historija · %s/10", history.size), onDismiss = { dialog = null }, width = 700.dp) {
+                if (history.isEmpty()) T(tr("Nema gledanih kanala."), 14.sp, C.Muted)
+                history.forEach { c ->
+                    OptionRow("${c.num}. ${c.name}", R.drawable.lc_history, sub = c.group.takeIf { it.isNotBlank() },
+                        selected = c.url == item.url) {
+                        items = listOf(PlayItem(c.name, c.url, c.logo, c.num.toString(), c)) + items.filterNot { it.url == c.url }
+                        index = 0; dialog = null; side = null; bar = false
+                    }
+                }
+                if (history.isNotEmpty()) OptionRow(tr("Obriši historiju"), R.drawable.lc_trash_2, color = C.Danger) { dialog = "recent_clear" }
+            }
+        }
+        "recent_clear" -> Popup(tr("Obrisati historiju?"), onDismiss = { dialog = "recent" }) {
+            T(tr("Lista posljednjih gledanih kanala bit će obrisana."), 13.sp, C.Muted)
+            OptionRow("Obriši historiju", R.drawable.lc_trash_2, color = C.Danger) { PlayerChannelHistory.clear(); dialog = "recent" }
+            OptionRow("Odustani", R.drawable.lc_x) { dialog = "recent" }
+        }
         "adelay" -> AudioDelayPopup(item.url) { dialog = null }
         "ext" -> ExternalPicker(item.url, item.title, player.currentPosition, onDismiss = { dialog = null })
         "subsync" -> {
@@ -986,26 +1051,50 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             }
         }
         "subs" -> {
-            val tracks = tracksOf(player, MC.TRACK_TYPE_TEXT)
-            SubtitlePicker(item.search ?: item.title, item.season, item.episode, embedded = tracks.map { it.label },
-                onEmbedded = { i ->
-                    val t = tracks[i]
-                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-                        .setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false)
-                        .setOverrideForType(TrackSelectionOverride(t.group.mediaTrackGroup, t.index)).build()
+            if (s.live) {
+                val tracks = tracksOf(player, MC.TRACK_TYPE_TEXT)
+                val selected = tracks.firstOrNull { it.selected }?.label
+                val off = player.trackSelectionParameters.disabledTrackTypes.contains(MC.TRACK_TYPE_TEXT) || tracks.none { it.selected }
+                ProviderSubsPicker(item.url, selected, off,
+                    onDismiss = { dialog = null },
+                    onOff = {
+                        subFile = null
+                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                            .setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, true).build()
+                        dialog = null
+                    },
+                    onPick = { picked ->
+                        val track = tracksOf(player, MC.TRACK_TYPE_TEXT).firstOrNull { it.label == picked.title }
+                        if (track != null) {
+                            subFile = null
+                            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                                .setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false)
+                                .setOverrideForType(TrackSelectionOverride(track.group.mediaTrackGroup, track.index)).build()
+                        }
+                        dialog = null
+                    })
+            } else {
+                val tracks = tracksOf(player, MC.TRACK_TYPE_TEXT)
+                SubtitlePicker(item.search ?: item.title, item.season, item.episode, embedded = tracks.map { it.label },
+                    onEmbedded = { i ->
+                        val t = tracks[i]
+                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                            .setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false)
+                            .setOverrideForType(TrackSelectionOverride(t.group.mediaTrackGroup, t.index)).build()
+                        dialog = null
+                    },
+                    onDismiss = { dialog = null }) { f ->
+                    if (f == null) {
+                        subFile = null
+                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, true).build()
+                    } else {
+                        subFile = f.path
+                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false).build()
+                        loadMedia(item, f.path, player.currentPosition)
+                        Toast.makeText(ctx, tr("Titl učitan"), Toast.LENGTH_SHORT).show()
+                    }
                     dialog = null
-                },
-                onDismiss = { dialog = null }) { f ->
-                if (f == null) {
-                    subFile = null
-                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, true).build()
-                } else {
-                    subFile = f.path
-                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false).build()
-                    loadMedia(item, f.path, player.currentPosition)
-                    Toast.makeText(ctx, tr("Titl učitan"), Toast.LENGTH_SHORT).show()
                 }
-                dialog = null
             }
         }
         "sleep" -> Popup("Tajmer za spavanje", onDismiss = { dialog = null }) {
@@ -1034,15 +1123,50 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     }
 
     LaunchedEffect(dialog, side, resume, bar) { if (dialog == null && side == null && resume == null && !bar) focus.tryFocus() }
-    LaunchedEffect(item.url) { resize = item.channel?.let { Prefs.long("fmt_" + it.url.hashCode(), 0).toInt().coerceIn(0, FORMATS.lastIndex) } ?: resize }
+    LaunchedEffect(item.url) { resize = item.channel?.let { Prefs.long("fmt_v2_" + it.url.hashCode(), 0).toInt().coerceIn(0, FORMATS.lastIndex) } ?: resize }
 }
 
-private val FORMATS = listOf("Fit", "Zoom", "Razvuci", "16:9", "4:3")
+private val FORMATS = listOf("Zadano / automatski", "4:3", "16:9", "Prilagodi", "Rastegni", "Izvorno")
 
 /** Buttons at the bottom of the player, in one row (no scrolling): Pause · ★ · [CC] · [Audio] · Format · Guide · Group · More.
  *  Subtitles only when the stream has subtitle tracks, Audio only with 2 or more tracks. */
 @Composable
-private fun PlayerBar(live: Boolean, playing: Boolean, hasChannel: Boolean, favOn: Boolean, hasSubs: Boolean, subsOn: Boolean, audioCount: Int, format: String,
+private fun ChannelOptionsBar(favOn: Boolean, onAction: (String) -> Unit) {
+    val first = remember { FocusRequester() }
+    data class B(val id: String, val label: String, val icon: Int)
+    val list = listOf(
+        B("favorites", "FAVORITES", R.drawable.lc_star),
+        B("subs", "SUBS", R.drawable.lc_captions),
+        B("zoom", "ZOOM", R.drawable.lc_maximize),
+        B("audio", "AUDIO", R.drawable.lc_volume),
+        B("video", "VIDEO", R.drawable.lc_monitor),
+        B("epg", "EPG", R.drawable.lc_calendar_clock),
+        B("recent", "HISTORY", R.drawable.lc_history),
+    )
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        list.forEachIndexed { i, b ->
+            val favorite = b.id == "favorites"
+            Focusable(modifier = Modifier.weight(1f).height(70.dp), onClick = { onAction(b.id) },
+                focusRequester = if (i == 0) first else null, normal = Color(0xFF202E39),
+                focused = Color(0xFF126FB5), focusBorderColor = Color.White, borderColor = Color(0xFF71818D),
+                shape = Rnd(10.dp), zoom = 1.015f) { focused ->
+                Column(Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 7.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Ico(b.icon, 23.dp, when {
+                        favorite && favOn -> Color(0xFFF4C542)
+                        favorite -> Color(0xFFB8C2CA)
+                        focused -> Color.White
+                        else -> Color(0xFFE2E8ED)
+                    })
+                    T(b.label, 11.sp, Color.White, FontWeight.SemiBold, maxLines = 1)
+                }
+            }
+        }
+    }
+    LaunchedEffect(Unit) { delay(80); first.tryFocus() }
+}
+@Composable
+private fun VodPlayerBar(live: Boolean, playing: Boolean, hasChannel: Boolean, favOn: Boolean, hasSubs: Boolean, subsOn: Boolean, audioCount: Int, format: String,
                       onPause: () -> Unit, onLong: (String) -> Unit, onAction: (String) -> Unit, rewind: Boolean = false, behind: Boolean = false) {
     val first = remember { FocusRequester() }
     data class B(val id: String, val label: String, val icon: Int, val tint: Color? = null)
