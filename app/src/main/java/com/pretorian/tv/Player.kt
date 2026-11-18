@@ -227,6 +227,32 @@ private fun errorText(e: PlaybackException, live: Boolean): String {
     }
 }
 
+private object PlayerChannelHistory {
+    private const val KEY = "player_channel_history"
+    var rev by androidx.compose.runtime.mutableIntStateOf(0)
+    fun list(): List<Channel> = try {
+        val a = org.json.JSONArray(Prefs.str(KEY, "[]"))
+        (0 until a.length()).mapNotNull { i ->
+            val o = a.optJSONObject(i) ?: return@mapNotNull null
+            val url = o.optString("url", "")
+            if (url.isBlank()) return@mapNotNull null
+            Channel(o.optString("id", ""), o.optInt("num", i + 1), o.optString("name", url),
+                o.optString("logo", "").takeIf { it.isNotBlank() }, o.optString("group", ""), url,
+                o.optString("epg", "").takeIf { it.isNotBlank() }, o.optString("pid", ""),
+                o.optInt("archive", 0), o.optString("catchup", "").takeIf { it.isNotBlank() })
+        }
+    } catch (_: Exception) { emptyList() }
+    fun add(ch: Channel) {
+        val updated = (list().filterNot { it.url == ch.url }.let { listOf(ch) + it }).take(10)
+        val a = org.json.JSONArray()
+        updated.forEach { c -> a.put(org.json.JSONObject().put("id", c.id).put("num", c.num)
+            .put("name", c.name).put("logo", c.logo ?: "").put("group", c.group).put("url", c.url)
+            .put("epg", c.epg ?: "").put("pid", c.pid).put("archive", c.archive).put("catchup", c.catchup ?: "")) }
+        Prefs.put(KEY, a.toString()); rev++
+    }
+    fun clear() { Prefs.put(KEY, "[]"); rev++ }
+}
+
 @OptIn(UnstableApi::class)
 @Composable
 fun PlayerScreen(s: Screen.Player, nav: Nav) {
@@ -439,6 +465,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         if (s.live) items.getOrNull(index)?.channel?.let { c ->
             val g = TvMemory.group
             try { Recent.add(c, g?.pid, g?.cat?.id ?: c.group, g?.cat?.name ?: c.group) } catch (_: Exception) {}
+            PlayerChannelHistory.add(c)
         }
         error = null; retried = false; showInfo = true; videoH = 0
         val cur = items[index]
@@ -655,8 +682,12 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                         val r = if (side == "epg") (v.width * 0.4f).toInt() else 0
                         if (sv.paddingLeft != l || sv.paddingRight != r) sv.setPadding(l, sv.paddingTop, r, sv.paddingBottom)
                     }
-                    v.resizeMode = when (resize) { 1 -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM; 2, 3, 4 -> AspectRatioFrameLayout.RESIZE_MODE_FILL; else -> AspectRatioFrameLayout.RESIZE_MODE_FIT } },
-                modifier = when (resize) { 3 -> Modifier.fillMaxSize().wrapContentSize().aspectRatio(16f / 9f); 4 -> Modifier.fillMaxSize().wrapContentSize().aspectRatio(4f / 3f); else -> Modifier.fillMaxSize() },
+                    v.resizeMode = if (resize == 4) AspectRatioFrameLayout.RESIZE_MODE_FILL else AspectRatioFrameLayout.RESIZE_MODE_FIT },
+                modifier = when (resize) {
+                    1 -> Modifier.fillMaxSize().wrapContentSize().aspectRatio(4f / 3f)
+                    2 -> Modifier.fillMaxSize().wrapContentSize().aspectRatio(16f / 9f)
+                    else -> Modifier.fillMaxSize()
+                },
             )
         }
 
@@ -864,148 +895,61 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                         a?.let { (it.sampleMimeType?.substringAfter('/')?.uppercase() ?: "") + " " + if (it.channelCount >= 6) "5.1" else "Stereo" }).joinToString(" · "), 12.sp, Color(0xFF9AA4B2))
                     if (bar) {
                         val ch = item.channel
-                        val subT = tracksOf(player, MC.TRACK_TYPE_TEXT)
-                        val subsOn = subFile != null || (!player.trackSelectionParameters.disabledTrackTypes.contains(MC.TRACK_TYPE_TEXT) && subT.any { it.selected })
-                        @Suppress("UNUSED_VARIABLE") val favRev = Favs.rev   // the star follows every add / remove at once
-                        PlayerBar(s.live, playing, ch != null, favOn = ch != null && Favs.inAny(ctx, ch), hasSubs = subT.isNotEmpty(), subsOn = subsOn,
-                            audioCount = tracksOf(player, MC.TRACK_TYPE_AUDIO).size, format = FORMATS[resize],
-                            onPause = { if (player.isPlaying) player.pause() else player.play() },
-                            onLong = { a2 -> bar = false; dialog = when (a2) { "fav" -> "fav"; "subs" -> "subs"; else -> null } },
-                            rewind = Tech.rewind && ch != null && Catchups.has(p, ch), behind = shiftFrom > 0,
-                            onAction = { a2 -> when (a2) {
-                                "rew" -> liveShift(-1)
-                                "tolive" -> { shiftFrom = 0L; loadMedia(items[index], null, 0L) }
-                                // one OK: on or off at once, no window (the star turns yellow)
-                                "fav" -> ch?.let { c ->
+                        @Suppress("UNUSED_VARIABLE") val favRev = Favs.rev
+                        PlayerBar(favOn = ch != null && Favs.inAny(ctx, ch), onAction = { action ->
+                            when (action) {
+                                "favorites" -> ch?.let { c ->
                                     val lists = Favs.lists(ctx)
-                                    if (Favs.inAny(ctx, c)) lists.forEach { l -> if (Favs.contains(l.id, c)) Favs.toggle(l.id, c) }
+                                    val wasFavorite = Favs.inAny(ctx, c)
+                                    if (wasFavorite) lists.forEach { l -> if (Favs.contains(l.id, c)) Favs.toggle(l.id, c) }
                                     else (lists.firstOrNull() ?: Favs.addList(ctx, tr("Favoriti"))).let { Favs.toggle(it.id, c) }
-                                    android.widget.Toast.makeText(ctx, tr(if (Favs.inAny(ctx, c)) "Dodano u favorite" else "Uklonjeno iz favorita"), android.widget.Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(ctx, tr(if (wasFavorite) "Uklonjeno iz favorite" else "Dodano u favorite"), Toast.LENGTH_SHORT).show()
                                 }
-                                "subs" -> if (subT.isEmpty() && !s.live) { bar = false; dialog = "subs" } else {
-                                    val off = subsOn
-                                    if (off) subFile = null
-                                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, off).build()
-                                }
-                                "format" -> { resize = (resize + 1) % FORMATS.size; ch?.let { Prefs.put("fmt_" + it.url.hashCode(), resize.toLong()) } }
-                                "epg" -> { bar = false; side = "epg" }
-                                "channels" -> { bar = false; side = "channels" }
-                                else -> { bar = false; dialog = a2 }
-                            } })
-                    }
-                    else T(if (s.live) "▲ ▼ kanal · ◀ lista kanala · ▶ TV vodič · OK još jednom = dugmad"
-                      else trf("OK pauza · ◀ ▶ %s s · ▼ = dugmad (audio, titlovi, format slike)", Prefs.seekStep), 13.sp, Color(0xFFB6BCC6))
-                }
-            }
-        }
-        if (!playing && !s.live && error == null && !buffering && resume == null) {
-            Box(Modifier.align(Alignment.Center).size(84.dp).clip(Rnd(42.dp)).background(Color(0x99000000)), contentAlignment = Alignment.Center) {
-                Ico(R.drawable.lc_pause, 36.dp, Color.White)
-            }
-        }
-
-        // ------------------------------------------------------------ live: channel list / groups on the left
-        if (side == "channels" || side == "groups") SideLists(side!!, sideGroup, items, index, p,
-            onGroups = { side = "groups" }, onClose = { side = null; sideGroup = null },
-            onGroup = { g -> sideGroup = g; side = "channels" },
-            onChannel = { list, i ->
-                if (sideGroup != null) { items = list.map { c -> PlayItem(c.name, c.url, c.logo, "${c.num}", c) }; TvMemory.group = sideGroup }
-                index = i; side = null; sideGroup = null
-            },
-            onBackToChannels = { side = null; sideGroup = null; nav.back() })
-        // ------------------------------------------------------------ live: guide on the right, over the picture
-        if (side == "epg") {
-            val ch = item.channel
-            Column(Modifier.align(Alignment.TopEnd).fillMaxWidth(0.4f).fillMaxHeight().background(C.Overlay).padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    ChannelLogo(item.logo, item.title)
-                    T(item.title, 17.sp, C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                }
-                if (Hints.show()) T("◀ ili Nazad = slika preko cijelog ekrana · OK na emisiji = podsjeti me", 11.sp, C.Muted, maxLines = 2)
-                val fr = remember { FocusRequester() }
-                Box(Modifier.weight(1f).focusRequester(fr).onPreviewKeyEvent { e ->
-                    if (e.key == Key.Back || e.key == Key.Escape) { if (e.type == KeyEventType.KeyUp) side = null; true }
-                    else if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { side = null; true } else false
-                }) { if (ch != null) EpgList(ch, 24) else T("Nema EPG podataka za ovaj kanal.", 14.sp, C.Soft) }
-                LaunchedEffect(Unit) { delay(150); fr.tryFocus() }
-            }
-        }
-    }
-
-    // ---------------------------------------------------------------- continue from where you stopped
-    resume?.let { r ->
-        Popup(item.title, onDismiss = { resume = null; player.play() }) {
-            OptionRow(trf("Nastavi od %s", fmt(r.pos)), R.drawable.lc_play, sub = trf("od %s", fmt(r.dur))) { resume = null; player.seekTo(r.pos); player.play() }
-            OptionRow("Od početka", R.drawable.lc_rotate_ccw) { resume = null; player.seekTo(0); player.play() }
-        }
-    }
-
-    when (dialog) {
-        "menu" -> Popup(item.title, onDismiss = { dialog = null }) {
-            // Više: the rarer things, so the bar fits in one row
-            OptionRow(if (Sleep.until > 0) trf("Tajmer: %s min", ((Sleep.until - System.currentTimeMillis()) / 60_000 + 1).coerceAtLeast(1)) else tr("Tajmer za spavanje"), R.drawable.lc_moon) { dialog = "sleep" }
-            OptionRow("Kvalitet i informacije", R.drawable.lc_info, value = if (videoH > 0) qualityLabel(videoH) else null) { dialog = "info" }
-            if (s.live) item.channel?.let { c -> OptionRow("Pomak vremena", R.drawable.lc_clock, value = EpgShift.label(EpgShift.chMin(c.url))) { dialog = "epgshift" } }
-            OptionRow("Vanjski plejer", R.drawable.lc_external_link) { player.pause(); saveProgress(); dialog = "ext" }
-            if (s.live) OptionRow("Arhiva", R.drawable.lc_history, sub = tr("emisije koje su prošle")) { dialog = null; nav.push(Screen.Catchup) }
-            if (!s.live && subFile != null) OptionRow("Podesi vrijeme titla", R.drawable.lc_clock, sub = "ako titl kasni ili žuri · SYNC") { dialog = "subsync" }
-            if (Tech.audioDelay) OptionRow("Pomak zvuka", R.drawable.lc_volume, sub = tr("ako zvuk kasni ili žuri"), value = AudioDelay.label(AudioDelay.of(item.url))) { dialog = "adelay" }
-            if (tracksOf(player, MC.TRACK_TYPE_AUDIO).size > 1) OptionRow("Audio", R.drawable.lc_volume, value = tracksOf(player, MC.TRACK_TYPE_AUDIO).firstOrNull { it.selected }?.label ?: "—") { dialog = "audio" }
-        }
-        "fav" -> item.channel?.let { FavPicker(it) { dialog = null } }
-        "epgshift" -> item.channel?.let { EpgShiftPopup(it) { dialog = null } }
-        "adelay" -> AudioDelayPopup(item.url) { dialog = null }
-        "ext" -> ExternalPicker(item.url, item.title, player.currentPosition, onDismiss = { dialog = null })
-        "subsync" -> {
-            val base = remember { subFile }
-            if (base == null) dialog = null
-            else SubSyncDialog(File(base).nameWithoutExtension.take(30), onDismiss = { dialog = null },
-                onPreview = { off -> if (off != 0L) try { val f = SubSync.shift(base, off); subFile = f.path; loadMedia(item, f.path, player.currentPosition) } catch (_: Exception) {} },
-                onSync = { off ->
-                    try {
-                        val f = SubSync.sync(item.url, base, player.currentPosition, off)
-                        subFile = f.path; loadMedia(item, f.path, player.currentPosition)
-                        Toast.makeText(ctx, tr("Titl usklađen i snimljen za ovaj film"), Toast.LENGTH_SHORT).show()
-                    } catch (e: Exception) { Toast.makeText(ctx, tr("Ovaj titl se ne može uskladiti"), Toast.LENGTH_LONG).show() }
-                    dialog = null
-                },
-                onReset = { subFile = base; loadMedia(item, base, player.currentPosition) })
-        }
-        "audio" -> {
-            val tracks = tracksOf(player, MC.TRACK_TYPE_AUDIO)
-            Popup("Audio", onDismiss = { dialog = null }) {
-                if (tracks.size <= 1) T("Film ima samo jednu audio stazu", 14.sp, C.Muted)
-                tracks.forEach { t ->
-                    OptionRow(t.label, R.drawable.lc_volume, selected = t.selected) {
+                                "subs" -> {
+            if (s.live) {
+                val tracks = tracksOf(player, MC.TRACK_TYPE_TEXT)
+                val selected = tracks.firstOrNull { it.selected }?.label
+                val off = player.trackSelectionParameters.disabledTrackTypes.contains(MC.TRACK_TYPE_TEXT) || tracks.none { it.selected }
+                ProviderSubsPicker(item.url, selected, off,
+                    onDismiss = { dialog = null },
+                    onOff = {
+                        subFile = null
                         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                            .setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, true).build()
+                        dialog = null
+                    },
+                    onPick = { picked ->
+                        val track = tracksOf(player, MC.TRACK_TYPE_TEXT).firstOrNull { it.label == picked.title }
+                        if (track != null) {
+                            subFile = null
+                            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                                .setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false)
+                                .setOverrideForType(TrackSelectionOverride(track.group.mediaTrackGroup, track.index)).build()
+                        }
+                        dialog = null
+                    })
+            } else {
+                val tracks = tracksOf(player, MC.TRACK_TYPE_TEXT)
+                SubtitlePicker(item.search ?: item.title, item.season, item.episode, embedded = tracks.map { it.label },
+                    onEmbedded = { i ->
+                        val t = tracks[i]
+                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                            .setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false)
                             .setOverrideForType(TrackSelectionOverride(t.group.mediaTrackGroup, t.index)).build()
                         dialog = null
+                    },
+                    onDismiss = { dialog = null }) { f ->
+                    if (f == null) {
+                        subFile = null
+                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, true).build()
+                    } else {
+                        subFile = f.path
+                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false).build()
+                        loadMedia(item, f.path, player.currentPosition)
+                        Toast.makeText(ctx, tr("Titl učitan"), Toast.LENGTH_SHORT).show()
                     }
-                }
-            }
-        }
-        "subs" -> {
-            val tracks = tracksOf(player, MC.TRACK_TYPE_TEXT)
-            SubtitlePicker(item.search ?: item.title, item.season, item.episode, embedded = tracks.map { it.label },
-                onEmbedded = { i ->
-                    val t = tracks[i]
-                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-                        .setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false)
-                        .setOverrideForType(TrackSelectionOverride(t.group.mediaTrackGroup, t.index)).build()
                     dialog = null
-                },
-                onDismiss = { dialog = null }) { f ->
-                if (f == null) {
-                    subFile = null
-                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, true).build()
-                } else {
-                    subFile = f.path
-                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false).build()
-                    loadMedia(item, f.path, player.currentPosition)
-                    Toast.makeText(ctx, tr("Titl učitan"), Toast.LENGTH_SHORT).show()
                 }
-                dialog = null
             }
         }
         "sleep" -> Popup("Tajmer za spavanje", onDismiss = { dialog = null }) {
@@ -1023,7 +967,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 }
             }
         }
-        "info" -> Popup("Kvalitet i informacije", onDismiss = { dialog = null }) {
+        "video", "info" -> Popup("Video · kvalitet i informacije", onDismiss = { dialog = null }) {
             val v = player.videoFormat; val a = player.audioFormat
             OptionRow("Slika", R.drawable.lc_monitor, value = if (v != null) "${qualityLabel(v.height)} · ${v.width}×${v.height}" + (if (v.frameRate > 0) " · ${v.frameRate.toInt()} FPS" else "") else "—") {}
             OptionRow("Video kodek", R.drawable.lc_file_video, value = v?.sampleMimeType?.substringAfter('/')?.uppercase() ?: "—") {}
@@ -1037,43 +981,45 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     LaunchedEffect(item.url) { resize = item.channel?.let { Prefs.long("fmt_" + it.url.hashCode(), 0).toInt().coerceIn(0, FORMATS.lastIndex) } ?: resize }
 }
 
-private val FORMATS = listOf("Fit", "Zoom", "Razvuci", "16:9", "4:3")
+private val FORMATS = listOf("Default / Auto", "4:3", "16:9", "Fit", "Stretch", "Original")
 
 /** Buttons at the bottom of the player, in one row (no scrolling): Pause · ★ · [CC] · [Audio] · Format · Guide · Group · More.
  *  Subtitles only when the stream has subtitle tracks, Audio only with 2 or more tracks. */
 @Composable
-private fun PlayerBar(live: Boolean, playing: Boolean, hasChannel: Boolean, favOn: Boolean, hasSubs: Boolean, subsOn: Boolean, audioCount: Int, format: String,
-                      onPause: () -> Unit, onLong: (String) -> Unit, onAction: (String) -> Unit, rewind: Boolean = false, behind: Boolean = false) {
+private fun PlayerBar(favOn: Boolean, onAction: (String) -> Unit) {
     val first = remember { FocusRequester() }
-    data class B(val id: String, val label: String, val icon: Int, val tint: Color? = null)
-    val list = buildList {
-        add(B("pause", if (playing) "Pauza" else "Pusti", if (playing) R.drawable.lc_pause else R.drawable.lc_play))
-        // channels with archive: back in time without ◀◀ keys on the remote, and straight back to live
-        if (live && rewind) add(B("rew", "◀◀ 5 min", R.drawable.lc_rotate_ccw))
-        if (live && rewind && behind) add(B("tolive", "Uživo", R.drawable.lc_radio, Color(0xFFEF4444)))
-        if (live && hasChannel) add(B("fav", "Favorit", R.drawable.lc_star, if (favOn) Color(0xFFFBBF24) else null))
-        if (hasSubs || !live) add(B("subs", "Titlovi", R.drawable.lc_captions, if (subsOn) Color(0xFF22C55E) else null))
-        if (audioCount > 1) add(B("audio", "Audio", R.drawable.lc_volume))
-        add(B("format", format, R.drawable.lc_maximize))
-        if (live) { add(B("epg", "Vodič", R.drawable.lc_calendar_clock)); add(B("channels", "Grupa", R.drawable.lc_list)) }
-        add(B("menu", "Više", R.drawable.lc_layout_grid))
-    }
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    data class B(val id: String, val label: String, val icon: Int)
+    val list = listOf(
+        B("favorites", "FAVORITES", R.drawable.lc_star),
+        B("subs", "SUBS", R.drawable.lc_captions),
+        B("zoom", "ZOOM", R.drawable.lc_maximize),
+        B("audio", "AUDIO", R.drawable.lc_volume),
+        B("video", "VIDEO", R.drawable.lc_monitor),
+        B("epg", "EPG", R.drawable.lc_calendar_clock),
+        B("history", "HISTORY", R.drawable.lc_history),
+    )
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         list.forEachIndexed { i, b ->
-            Focusable(onClick = { if (b.id == "pause") onPause() else onAction(b.id) }, onMenu = if (b.id == "fav" || b.id == "subs") ({ onLong(b.id) }) else null,
-                focusRequester = if (i == 0) first else null,
-                normal = Color(0x33FFFFFF), focused = C.Red, shape = Rnd(12.dp), zoom = 1.05f, modifier = Modifier.height(42.dp)) { f ->
-                Row(Modifier.align(Alignment.Center).padding(horizontal = 11.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    // an "on" button keeps its colour also with focus (dark amber on the yellow focus, so it stays visible)
-                    Ico(b.icon, 17.dp, if (b.tint != null && f) Color(0xFF92400E) else b.tint ?: if (f) C.OnRed else Color.White)
-                    T(b.label, 13.sp, if (f) C.OnRed else Color.White, FontWeight.SemiBold, maxLines = 1)
+            val favorite = b.id == "favorites"
+            Focusable(modifier = Modifier.weight(1f).height(70.dp), onClick = { onAction(b.id) },
+                focusRequester = if (i == 0) first else null, normal = Color(0xFF202E39),
+                focused = Color(0xFF126FB5), focusBorderColor = Color.White, borderColor = Color(0xFF71818D),
+                shape = Rnd(10.dp), zoom = 1.015f) { focused ->
+                Column(Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 7.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Ico(b.icon, 23.dp, when {
+                        favorite && favOn -> Color(0xFFF4C542)
+                        favorite -> Color(0xFFB8C2CA)
+                        focused -> Color.White
+                        else -> Color(0xFFE2E8ED)
+                    })
+                    T(b.label, 11.sp, Color.White, FontWeight.SemiBold, maxLines = 1)
                 }
             }
         }
     }
     LaunchedEffect(Unit) { delay(80); first.tryFocus() }
 }
-
 /** Live: the channels of the group (Left again: the groups) over the picture. */
 @Composable
 private fun SideLists(mode: String, sideGroup: GroupRef?, items: List<PlayItem>, index: Int, p: Playlist?,
