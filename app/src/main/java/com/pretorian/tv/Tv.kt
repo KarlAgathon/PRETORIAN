@@ -495,21 +495,6 @@ private fun TvList(nav: Nav) {
             }
         }
     }
-                    Box(Modifier.fillMaxSize().onPreviewKeyEvent { e ->
-                        if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { revealMainRail(); true } else false
-                    }) {
-                        GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, 1000.dp, "GRUPE", null,
-                            onFocusGroup = { Chrome.rail = 0 },
-                            onOpen = { openGroup(ctx, st, it); enterTick++; inChannels = true },
-                            onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
-                            onHeader = { p -> TvFold.toggle(p.id); if (p.id in TvFold.open) Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
-                            onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it },
-                            onFocusRow = { st.focusKey = it; Chrome.rail = 0 },
-                            containVerticalFocus = false, classicStyle = true, fillWidth = true)
-                    }
-                }
-            }
-        }
     } else {
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.weight(1f).fillMaxWidth()) {
