@@ -351,8 +351,42 @@ fun SportMixScreen(nav: Nav) {
             Chip2(tr("Regije") + " ▾", false) { pick = "region" }
             Chip2(tr("Takmičenja") + if (selectedLeagues.isEmpty()) "" else " · " + selectedLeagues.size, false) { pick = "leagues" }
         }
-        Row(Modifier.weight(1f).fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        // ------------------------------------------------ left: your teams, filters, matches by league
+        Row(Modifier.weight(1f).fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        // ------------------------------------------------ left rail: Sport navigation and competitions
+        Column(Modifier.width(190.dp).fillMaxHeight().glassSide(18.dp).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            T("SPORT", 17.sp, C.Text, FontWeight.ExtraBold)
+            T("MATCH CENTER", 10.sp, C.Muted, FontWeight.Bold)
+            listOf("live" to "Live Matches", "soon" to "Today Matches", "soon" to "Upcoming", "fav" to "Favorites", "mine" to "Following").forEachIndexed { i, item ->
+                val (id, label) = item
+                Focusable(onClick = { tab = id }, shape = Rnd(11.dp),
+                    normal = if (tab == id) C.CardFocus else C.Card, focused = C.Red, zoom = 1.02f,
+                    modifier = Modifier.fillMaxWidth().height(38.dp)) { focused ->
+                    Row(Modifier.fillMaxSize().padding(horizontal = 9.dp), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        T(if (i == 0) "●" else if (i == 3) "★" else "›", 14.sp, if (focused) C.OnRed else if (tab == id) C.Text else C.Soft, FontWeight.Bold)
+                        T(label, 12.sp, if (focused) C.OnRed else C.Text, FontWeight.SemiBold, maxLines = 1)
+                    }
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+            Kicker("COMPETITIONS", C.Soft)
+            val competitions = remember(withCh) { withCh.map { it.league }.filter { it.isNotBlank() }.distinct().sorted() }
+            if (competitions.isEmpty()) T("Takmičenja će se prikazati uz dostupne utakmice", 11.sp, C.Muted, maxLines = 3)
+            else LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                items(competitions.take(16), key = { it }) { league ->
+                    val active = selectedLeagues.size == 1 && league in selectedLeagues
+                    Focusable(onClick = {
+                        val next = if (active) emptySet() else setOf(league)
+                        Prefs.put("sm_leagues", next.joinToString("|")); SportCache.rev++; tab = "live"
+                    }, shape = Rnd(9.dp), normal = if (active) C.CardFocus else Color.Transparent, focused = C.Red, zoom = 1.01f,
+                        modifier = Modifier.fillMaxWidth().height(32.dp)) { focused ->
+                        T("•  " + league, 11.sp, if (focused) C.OnRed else C.Text, FontWeight.Medium,
+                            maxLines = 1, modifier = Modifier.align(Alignment.CenterStart).padding(horizontal = 7.dp))
+                    }
+                }
+            }
+        }
+        // ------------------------------------------------ center: your teams, filters, matches by league
         Column(Modifier.weight(1f).fillMaxHeight().glassSide(18.dp).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (mine.isNotEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(mine, key = { it.first }) { (t, e) ->
