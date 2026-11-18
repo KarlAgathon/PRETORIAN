@@ -722,7 +722,7 @@ private fun LookPage() {
         Segmented(listOf("Isključen", "Na OK", "Automatski"), Look.previewMode) { Look.previewMode = it; Look.preview = it > 0; save() }
         T(when (Look.previewMode) {
             0 -> "Nema male slike. OK na kanalu ga odmah pušta preko cijelog ekrana."
-            1 -> "U TV vodiču: OK na emisiji › Pregled u malom prozoru. Dok listaš, ništa se ne pušta."
+            1 -> "U programu kanala: OK na emisiji › Pregled u malom prozoru. Dok listaš, ništa se ne pušta."
             else -> "Mala slika se pušta sama kad staneš na kanal."
         }, 12.sp, C.Muted, maxLines = 2)
         ToggleRow("Najgledaniji na vrhu grupe", Look.mostWatched, R.drawable.lc_arrow_up, "Kanali koje najčešće gledaš sami idu gore (kad nema ručnog redoslijeda)") {
@@ -892,7 +892,7 @@ fun setAppLang(ctx: android.content.Context, code: String) {
 private fun RemindersPage(nav: Nav) {
     var rev by remember { mutableIntStateOf(0) }
     key(rev, Reminders.rev) {
-        Page("Podsjetnici", "U TV vodiču ili Sports Centeru: OK na emisiji ili utakmici koja još nije počela › Podsjeti me.") {
+        Page("Podsjetnici", "U programu kanala ili Sports Centeru: OK na emisiji ili utakmici koja još nije počela › Podsjeti me.") {
             Label("Podsjeti prije početka (minuta)")
             Segmented(listOf("0", "1", "5", "10", "15"), listOf(0, 1, 5, 10, 15).indexOf(Reminders.before).coerceAtLeast(0)) { Reminders.before = listOf(0, 1, 5, 10, 15)[it]; rev++ }
             Label("Koliko dugo poruka stoji (sekundi)")
@@ -2172,7 +2172,7 @@ private fun SportV2() {
                 SetDrop("Mala slika utakmice", null, listOf("Na OK", "Isključena"), if (Prefs.bool("sport_preview", true)) 0 else 1) { Prefs.put("sport_preview", it == 0); rev++ }
                 SetSection("Ko prenosi")
                 val srcKeys = listOf("sport_src_rights", "sport_src_espn", "sport_src_ai")
-                SetMulti("Izvori", "tvoji kanali (TV vodič) uvijek", listOf("Prava po ligi", "ESPN", "AI"),
+                SetMulti("Izvori", "tvoji TV kanali uvijek", listOf("Prava po ligi", "ESPN", "AI"),
                     srcKeys.indices.filter { Prefs.bool(srcKeys[it], true) }.toSet(), all = false) { s2 -> srcKeys.forEachIndexed { i, k -> Prefs.put(k, i in s2) }; changed() }
                 var afDlg by remember { mutableStateOf(false) }
                 SetRow("API-Football ključ", "brži rezultati uživo · besplatno 100 upita dnevno", if (ApiFootball.on) tr("upisan") else tr("nema"),
@@ -2236,7 +2236,7 @@ private fun RemindersV2(nav: Nav) {
         SetPage("Podsjetnici") {
             val all = Reminders.all().filter { it.start > System.currentTimeMillis() - 3600_000L }.sortedBy { it.start }
             SetSection(trf("Nadolazeći · %s", all.size))
-            if (all.isEmpty()) T("Nema podsjetnika. U TV vodiču ili Sportu: OK na emisiji › Podsjeti me.", 12.sp, C.Muted, maxLines = 2)
+            if (all.isEmpty()) T("Nema podsjetnika. U programu kanala ili Sportu: OK na emisiji › Podsjeti me.", 12.sp, C.Muted, maxLines = 2)
             all.forEach { r ->
                 SetRow(r.title, java.text.SimpleDateFormat("EEE d. M. HH:mm", java.util.Locale(Look.lang)).format(java.util.Date(r.start)) + (r.channelName?.let { " · $it" } ?: ""), arrow = "›",
                     onLong = { menu = r }) { menu = r }
