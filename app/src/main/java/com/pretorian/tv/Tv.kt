@@ -807,9 +807,16 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                         }
                     }
                 }
-                LaunchedEffect(list) {
-                    // back from the player: focus the channel that was playing (once)
-                    if (TvMemory.restore && TvMemory.channel >= 0) { TvMemory.restore = false; cWrap.target = TvMemory.channel.coerceAtMost(list.lastIndex) }
+                LaunchedEffect(list, fullWidthClassic) {
+                    // Back from the player restores the playing channel. In the full-width Classic
+                    // layout the channel list is composed only after selecting a group, so focus
+                    // its first row explicitly when the panel opens.
+                    if (TvMemory.restore && TvMemory.channel >= 0) {
+                        TvMemory.restore = false
+                        cWrap.target = TvMemory.channel.coerceAtMost(list.lastIndex)
+                    } else if (fullWidthClassic && list.isNotEmpty()) {
+                        cWrap.target = 0
+                    }
                 }
                 // OK on a group: the focus goes into its channels
                 val enter0 = remember { enterTick }
