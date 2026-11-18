@@ -674,7 +674,7 @@ fun OnyxSearch(nav: Nav) {
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search, autoCorrectEnabled = false),
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { query = q.trim(); SearchHistory.add(q); keyboard?.hide(); jump++ }),
                 modifier = Modifier.weight(1f).padding(horizontal = 14.dp).focusRequesterSafe(fr),
-                decorationBox = { inner -> Box { if (q.isEmpty()) T("TV channel, movie, series or team", 16.sp, C.Muted); inner() } })
+                decorationBox = { inner -> Box { if (q.isEmpty()) T("TV kanal, film, serija ili tim", 16.sp, C.Muted); inner() } })
             // clear the search
             if (q.isNotEmpty()) Focusable(onClick = { SearchHistory.add(q); q = ""; query = ""; SearchMem.clear(); try { fr.requestFocus() } catch (_: Exception) {} }, shape = Pill, normal = Color.Transparent, focused = C.CardHi,
                 zoom = 1f, modifier = Modifier.height(40.dp)) { _ ->
