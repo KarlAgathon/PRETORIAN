@@ -1,3 +1,10 @@
+PRETORIAN 1.0.45-beta17
+Classic TV layout refinement: smaller top preview/EPG area and more vertical space for groups and channels
+Narrower group column, reduced Classic channel row height and typography for improved TV readability
+Current programme title and time shown inline in each visible channel row when EPG data is available
+Classic browsing keeps the app rail in compact icon-only mode; focusing the rail expands it
+Default layout remains unchanged
+
 PRETORIAN 1.0.44-beta16
 Classic TV layout redesign inspired by the TV Mate reference: mini-player and selected-channel programme information in the upper area; wider groups and channel list in the lower area
 Classic layout uses a wider channel area to reduce truncated channel names; Default layout is unchanged
