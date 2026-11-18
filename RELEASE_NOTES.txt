@@ -1,3 +1,11 @@
+PRETORIAN 1.0.49-beta21
+Classic TV: rebalance the upper mini-player/EPG panel and lower group/channel area to remove cramped overlap
+Classic TV: compact EPG cards and show up to four upcoming programme entries in the upper panel
+Classic TV: separate group and selected-category headings with cleaner spacing
+Classic TV: tighten category and channel card widths, margins and row proportions while preserving readable labels
+Classic TV: retain BETA19 accordion navigation and all BETA20 fixes
+Default layout and Stable main remain unchanged
+
 PRETORIAN 1.0.48-beta20
 Classic TV: prevent the preview video from exceeding its top-left panel and overlapping the groups area
 Classic TV: align group and channel row typography to the same font size and consistent row proportions
