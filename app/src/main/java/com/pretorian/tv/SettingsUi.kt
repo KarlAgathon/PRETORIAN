@@ -115,7 +115,8 @@ fun SettingsScreen(nav: Nav) {
     Row(Modifier.fillMaxSize()) {
         Column(Modifier.width(if (classic) railW else 320.dp).fillMaxHeight()
             .verticalScroll(rememberScrollState())
-            .padding(start = if (classic && inPage) 8.dp else 18.dp, end = 12.dp, top = 20.dp, bottom = 20.dp),
+            .padding(start = if (classic && inPage) 8.dp else 18.dp, end = 12.dp, top = 20.dp, bottom = 20.dp)
+            .onFocusChanged { if (classic && it.hasFocus) Chrome.rail = 2 },
             verticalArrangement = Arrangement.spacedBy(2.dp)) {
             if (!classic || !inPage) T("Postavke", 26.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 10.dp, bottom = 8.dp))
             SECTIONS.forEachIndexed { i, item ->
@@ -1318,7 +1319,8 @@ fun SettingsScreen2(nav: Nav) {
         }
     }
     Row(Modifier.fillMaxSize()) {
-        Column(Modifier.width(railW).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 8.dp, top = 6.dp, bottom = 16.dp),
+        Column(Modifier.width(railW).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 8.dp, top = 6.dp, bottom = 16.dp)
+            .onFocusChanged { if (classic && it.hasFocus) Chrome.rail = 2 },
             verticalArrangement = Arrangement.spacedBy(2.dp)) {
             if (!slim) {
                 Row(Modifier.fillMaxWidth().padding(start = 8.dp, top = 2.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
