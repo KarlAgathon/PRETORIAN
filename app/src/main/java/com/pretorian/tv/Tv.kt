@@ -707,7 +707,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                 onMenu = { menu = ch; menuUrl = ch.url },
                                 onFocus = { onFocusCh(ch) },
                                 focusRequester = cWrap.requester(i, if (ch.url == menuUrl) chFr else null),
-                                normal = C.Card,
+                                normal = if (active) C.Green.copy(alpha = 0.10f) else C.Card,
                                 zoom = 1.01f,
                             ) { f ->
                                 Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
