@@ -2,6 +2,8 @@ package com.pretorian.tv
 
 /** Russian: one line per text, "bosnian|russian" (kept apart so the 10-column table and its tools stay as they are). */
 internal val RU_TABLE = """
+Prilagodi širinu|Подогнать по ширине
+Zoom|Масштаб
 Zadano / automatski|По умолчанию / автоматически
 Nema gledanih kanala.|Нет просмотренных каналов.
 Lista posljednjih gledanih kanala bit će obrisana.|Список недавно просмотренных каналов будет очищен.
