@@ -435,10 +435,10 @@ fun SportMixScreen(nav: Nav) {
             Column(Modifier.heightIn(max = 420.dp).verticalScroll(androidx.compose.foundation.rememberScrollState())) {
                 when (k) {
                     "sport" -> {
-                        ToggleRow(tr("Svi sportovi"), sportsOn.isEmpty()) { Prefs.put("sm_sports", "*"); SportCache.rev++ }
+                        ToggleRow(tr("Svi sportovi"), sportsOn.isEmpty()) { Prefs.put("sm_sports", "*"); SportCache.rev++; pick = null }
                         (Sports.SPORTS + Sports.MORE_SPORTS).forEach { (id, name) ->
                             ToggleRow(sportIcon(id) + "  " + tr(name), id in sportsOn) { v ->
-                                Prefs.put("sm_sports", (if (v) sportsOn + id else sportsOn - id).joinToString(",").ifBlank { "*" }); SportCache.rev++ }
+                                Prefs.put("sm_sports", (if (v) sportsOn + id else sportsOn - id).joinToString(",").ifBlank { "*" }); SportCache.rev++; pick = null }
                         }
                     }
                     "region" -> {
@@ -447,7 +447,7 @@ fun SportMixScreen(nav: Nav) {
                         Sports.CONTINENTS.forEach { (id, name) ->
                             ToggleRow(tr(name), id in on) { v ->
                                 val nw = if (v) on + id else on - id
-                                Prefs.put("sport_cont", nw.ifEmpty { setOf("eu") }.joinToString(",")); SportCache.clear(); Sports.lastCombined.clear()
+                                Prefs.put("sport_cont", nw.ifEmpty { setOf("eu") }.joinToString(",")); SportCache.clear(); Sports.lastCombined.clear(); pick = null
                             }
                         }
                     }
@@ -456,7 +456,7 @@ fun SportMixScreen(nav: Nav) {
                             val name = COUNTRIES.firstOrNull { it.first.equals(code, true) }?.second ?: code.uppercase()
                             ToggleRow(flagEmoji(code) + "  " + tr(name), code in selectedCountries) { v ->
                                 val next = if (v) selectedCountries + code else selectedCountries - code
-                                Prefs.put("sm_countries", next.joinToString(",")); SportCache.rev++
+                                Prefs.put("sm_countries", next.joinToString(",")); SportCache.rev++; pick = null
                             }
                         }
                     }
@@ -464,7 +464,7 @@ fun SportMixScreen(nav: Nav) {
                         withCh.flatMap { listOfNotNull(it.home?.name, it.away?.name) }.distinct().sorted().forEach { team ->
                             ToggleRow(team, team in selectedTeams) { v ->
                                 val next = if (v) selectedTeams + team else selectedTeams - team
-                                Prefs.put("sm_teams", next.joinToString("|")); SportCache.rev++
+                                Prefs.put("sm_teams", next.joinToString("|")); SportCache.rev++; pick = null
                             }
                         }
                     }
@@ -472,7 +472,7 @@ fun SportMixScreen(nav: Nav) {
                         withCh.map { it.league }.filter { it.isNotBlank() }.distinct().sorted().forEach { league ->
                             ToggleRow(league, league in selectedLeagues) { v ->
                                 val next = if (v) selectedLeagues + league else selectedLeagues - league
-                                Prefs.put("sm_leagues", next.joinToString("|")); SportCache.rev++
+                                Prefs.put("sm_leagues", next.joinToString("|")); SportCache.rev++; pick = null
                             }
                         }
                     }
