@@ -537,3 +537,7 @@ sm_leagues
 ${ev.id}|${Sports.countries.joinToString(
 E
 look_layout
+U TV listi: pregled se pokreće potvrdom OK. Dok listaš, ništa se ne pušta.
+veličina redova u TV-u i listi u playeru
+tvoji kanali uvijek
+Nema podsjetnika. U TV programu ili Sportu: OK na emisiji › Podsjeti me.
