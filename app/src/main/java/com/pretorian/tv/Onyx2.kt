@@ -225,8 +225,7 @@ fun OnyxTv(nav: Nav) {
     Column(Modifier.fillMaxSize().padding(horizontal = 24.dp)) {
         Row(Modifier.weight(1f).fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             // ---------------------------------------------------------- groups
-            // Natural DPAD navigation: scroll smoothly through every category; only the real list boundary
-            // may hand focus to the top navigation. Never wrap to the last/first category on a long press.
+            // Explicit circular DPAD navigation: long UP/DOWN holds stay inside the category list.
             Column(Modifier.width(220.dp).fillMaxHeight().glassSide().padding(vertical = 8.dp)) {
                     when (val r = rows) {
                         is Load.Loading -> Loading("")
