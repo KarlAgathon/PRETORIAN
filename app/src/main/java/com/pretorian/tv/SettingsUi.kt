@@ -2682,9 +2682,11 @@ private fun UpdateV2() {
             Updater.status?.let { T(it, 12.sp, C.Amber, maxLines = 2) }
             // ---- channel
             SetSection("Verzija ažuriranja")
+            val betaBuild = BuildConfig.APPLICATION_ID.endsWith(".beta")
             SetDrop("Kanal", if (Updater.beta) "probne verzije odmah, prije svih" else "samo provjerene verzije",
-                listOf("Stable", "Beta"), if (Updater.beta) 1 else 0) {
-                Prefs.put("upd_channel", if (it == 1) "beta" else "stable"); Prefs.put("upd_skip", ""); scope.launch { Updater.check(ctx); rev++ }
+                if (betaBuild) listOf("Beta") else listOf("Stable", "Beta"),
+                if (betaBuild) 0 else if (Updater.beta) 1 else 0) {
+                Prefs.put("upd_channel", if (betaBuild || it == 1) "beta" else "stable"); Prefs.put("upd_skip", ""); scope.launch { Updater.check(ctx); rev++ }
             }
             // ---- how often
             SetSection("Provjera")
