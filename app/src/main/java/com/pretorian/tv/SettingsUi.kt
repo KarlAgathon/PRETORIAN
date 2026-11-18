@@ -633,8 +633,38 @@ private fun LookPage() {
     var rev by remember { mutableIntStateOf(0) }
     Page("Izgled", "Promjene se vide odmah.") {
         Label(tr("TV prikaz"))
-        T(tr("New Era — jedini TV layout za sada. Ostali layouti dolaze kasnije."), 13.sp, C.Text, FontWeight.SemiBold, maxLines = 2)
-        T("TV: kategorije lijevo, kanali u sredini, mali player i EPG desno.", 12.sp, C.Muted, maxLines = 2)
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            listOf(
+                Triple(2, tr("Zadana"), tr("New Age: meni gore, redovi postera po kategorijama, velike kartice epizoda.")),
+                Triple(0, tr("Klasični"), tr("Klasični: meni lijevo, kategorije u koloni."))
+            ).forEach { (layoutId, title, description) ->
+                val active = Look.layout == layoutId
+                Focusable(
+                    modifier = Modifier.weight(1f).height(132.dp)
+                        .border(2.dp, if (active) C.Green else C.Line, Rnd(16.dp)),
+                    onClick = { Look.layout = layoutId; save() },
+                    shape = Rnd(16.dp),
+                    normal = if (active) C.Green.copy(alpha = 0.10f) else C.Card,
+                    focused = C.CardFocus,
+                    zoom = 1.01f
+                ) { focused ->
+                    Column(Modifier.fillMaxSize().padding(14.dp)) {
+                        T(title, 17.sp, if (focused) C.OnRed else C.Text, FontWeight.Bold, maxLines = 1)
+                        T(description, 12.sp, if (focused) C.OnRed.copy(alpha = 0.85f) else C.Muted, maxLines = 3)
+                        Spacer(Modifier.weight(1f))
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                            if (active) {
+                                Ico(R.drawable.lc_circle_check, 18.dp, C.Green)
+                                T(tr("Uključeno"), 12.sp, C.Green, FontWeight.Bold)
+                            } else {
+                                Ico(R.drawable.lc_circle_slash, 18.dp, C.Muted)
+                                T(tr("Izaberi"), 12.sp, C.Muted, FontWeight.SemiBold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
         Label("Oblik ivica")
         Segmented(listOf("Zaobljene", "Blago zaobljene", "Oštre"), Look.corner) { Look.corner = it; save() }
         Label("Set ikona")
