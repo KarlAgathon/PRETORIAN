@@ -632,6 +632,9 @@ private fun LookPage() {
     var dlBusy by remember { mutableStateOf<String?>(null) }
     var rev by remember { mutableIntStateOf(0) }
     Page("Izgled", "Promjene se vide odmah.") {
+        Label(tr("TV prikaz"))
+        Segmented(listOf(tr("New Age"), tr("New Era")), Look.tvDesign) { Look.tvDesign = it; save() }
+        T(if (Look.tvDesign == 1) tr("New Era: tri stalna panela — kategorije providera, kanali i EPG.") else tr("New Age: postojeći TV prikaz."), 12.sp, C.Muted, maxLines = 2)
         Label("Kako se otvara TV")
         var tvView by remember { mutableStateOf(Prefs.str("tv_view", "list")) }
         Segmented(listOf("Lista kanala", "TV vodič (mreža)"), if (tvView == "guide") 1 else 0) {
