@@ -603,39 +603,33 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
     if (!simple) TipOnce("hold_ok", "Savjet", "Drži OK na bilo čemu za opcije: Moja lista, Favoriti, Sakrij.")
 }
 
-/** Subscription on Home: one line per active playlist with a big "days left" number. Red at 5 days or less. */
+/** Compact active-playlist status on Home. Warning colors: green >7 days, orange <=7, red <=2. */
 @Composable
 fun SubscriptionCard() {
     val ctx = LocalContext.current
     val pls = remember { Store.actives(ctx) }
-    if (pls.isEmpty()) return
-    fun daysOf(p: Playlist) = p.exp.toLongOrNull()?.takeIf { it > 0 }?.let { (it * 1000 - System.currentTimeMillis()) / 86_400_000L }
-    val anyWarn = pls.any { (daysOf(it) ?: 99) <= 5 }
-    val accent = if (anyWarn) C.Danger else C.Green
-    Row(Modifier.width(270.dp).height(IntrinsicSize.Min).clip(Rnd(18.dp)).background(Brush.horizontalGradient(listOf(accent.copy(alpha = 0.16f), C.Rail)))
-        .border(1.dp, accent.copy(alpha = 0.45f), Rnd(18.dp))) {
-        Box(Modifier.width(4.dp).fillMaxHeight().background(accent))   // coloured edge: green fine, red soon
-        Column(Modifier.padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Box(Modifier.size(7.dp).clip(CircleShape).background(accent))
-                Kicker(if (pls.size > 1) "Aktivne playliste" else "Aktivna playlista", size = 10.sp)
-            }
-            pls.take(3).forEach { p ->
-                val sec = p.exp.toLongOrNull()?.takeIf { it > 0 }
-                val days = daysOf(p)
-                val warn = days != null && days <= 5
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        T(p.name, 17.sp, C.Text, FontWeight.Bold, maxLines = 1)
-                        T(if (sec != null) tr("Ističe") + " " + SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date(sec * 1000)) else tr("bez datuma isteka"),  // i18n-ignore
-                            11.sp, C.Soft, maxLines = 1)
-                    }
-                    if (days != null) Column(horizontalAlignment = Alignment.End) {
-                        T(if (days < 0) "0" else "$days", 26.sp, if (warn) C.Danger else C.Text, FontWeight.ExtraBold)
-                        T(if (days < 0) tr("Isteklo") else tr("dana"), 10.sp, if (warn) C.Danger else C.Soft, FontWeight.SemiBold)
-                    }
-                }
-            }
+    val p = pls.firstOrNull() ?: return
+    val sec = p.exp.toLongOrNull()?.takeIf { it > 0 }
+    val days = sec?.let { (it * 1000 - System.currentTimeMillis()) / 86_400_000L }
+    val accent = when {
+        days == null -> C.Green
+        days <= 2 -> C.Danger
+        days <= 7 -> Color(0xFFFFA726)
+        else -> C.Green
+    }
+    Row(
+        Modifier.widthIn(min = 170.dp, max = 230.dp).height(42.dp)
+            .clip(Rnd(12.dp))
+            .background(Brush.horizontalGradient(listOf(accent.copy(alpha = 0.15f), C.Rail)))
+            .border(1.dp, accent.copy(alpha = 0.55f), Rnd(12.dp))
+            .padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Box(Modifier.size(7.dp).clip(CircleShape).background(accent))
+        T(p.name, 12.sp, C.Text, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
+        if (days != null) {
+            T(if (days < 0) "0 dana" else "$days dana", 12.sp, accent, FontWeight.Bold, maxLines = 1)
         }
     }
 }
