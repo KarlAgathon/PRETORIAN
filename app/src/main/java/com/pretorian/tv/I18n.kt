@@ -2376,6 +2376,8 @@ Odaberi države za Favoriti|Choose countries for Favourites|Länder für Favorit
 TV kanal, film, serija ili tim|TV channel, movie, series or team|TV-Sender, Film, Serie oder Team|TV kanal, film, serija ili tim|ТВ канал, филм, серија или тим|ТВ канал, филм, сериал или отбор|Canal TV, film, serial sau echipă|TV kanalı, film, dizi veya takım|Canale TV, film, serie o squadra|قناة تلفزيونية أو فيلم أو مسلسل أو فريق
 New Era — jedini TV layout za sada. Ostali layouti dolaze kasnije.|New Era is the only TV layout for now. Other layouts will be added later.|New Era ist vorerst das einzige TV-Layout. Weitere Layouts folgen später.|New Era — jedini TV prikaz za sada. Ostali prikazi dolaze kasnije.|New Era је за сада једини ТВ приказ. Остали прикази стижу касније.|New Era е единственият ТВ изглед засега. Други ще бъдат добавени по-късно.|New Era este singurul aspect TV deocamdată. Alte variante vor fi adăugate ulterior.|Şimdilik tek TV düzeni New Era. Diğer düzenler daha sonra eklenecek.|Per ora New Era è l'unico layout TV. Altri layout arriveranno in seguito.|New Era هو تخطيط التلفزيون الوحيد حاليًا. ستُضاف تخطيطات أخرى لاحقًا.
 Utakmice, timovi i TV prenosi|Matches, teams and TV broadcasts|Spiele, Teams und TV-Übertragungen|Utakmice, timovi i TV prijenosi|Утакмице, тимови и ТВ преноси|Мачове, отбори и ТВ излъчвания|Meciuri, echipe și transmisiuni TV|Maçlar, takımlar ve TV yayınları|Partite, squadre e trasmissioni TV|المباريات والفرق والبث التلفزيوني
+Sportski centar|SPORTS CENTER|Sportzentrum|Sportski centar|Спортски центар|Спортен център|Centru sportiv|Spor Merkezi|Centro sportivo|المركز الرياضي
+Utakmice|Matches|Spiele|Utakmice|Утакмице|Мачове|Meciuri|Maçlar|Partite|المباريات
 """.trimIndent()
 
 private val DICT: Map<String, Map<String, String>> by lazy {
