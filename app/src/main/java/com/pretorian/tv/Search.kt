@@ -265,7 +265,33 @@ fun SearchScreen(nav: Nav) {
 fun HitActions(h: Hit, nav: Nav, onDismiss: () -> Unit) {
     val ctx = LocalContext.current
     var fav by remember { mutableStateOf<Channel?>(null) }
+    var listPicker by remember { mutableStateOf(false) }
+    var newList by remember { mutableStateOf("") }
     if (fav != null) { FavPicker(fav!!) { fav = null; onDismiss() }; return }
+    if (listPicker) {
+        val kind = if (h is Hit.Movie) "vod" else "series"
+        val id = if (h is Hit.Movie) h.v.id else (h as Hit.Show).s.id
+        val name = if (h is Hit.Movie) h.v.name else (h as Hit.Show).s.name
+        val image = if (h is Hit.Movie) h.v.poster else (h as Hit.Show).s.cover
+        val url = if (h is Hit.Movie) h.v.url else null
+        val pid = Store.actives(ctx).firstOrNull()?.id ?: ""
+        Popup(tr("Dodaj u listu"), onDismiss = { listPicker = false; onDismiss() }) {
+            MyList.names().forEach { list ->
+                OptionRow(if (MyList.has(list, kind, id)) "Ukloni iz $list" else "Dodaj u $list", R.drawable.lc_list) {
+                    MyList.toggle(list, kind, id, name, image, url, pid)
+                    Toast.makeText(ctx, tr("Spremljeno"), Toast.LENGTH_SHORT).show()
+                    listPicker = false; onDismiss()
+                }
+            }
+            Field("Nova lista", newList, { newList = it }, Modifier.fillMaxWidth(), onDone = {
+                if (MyList.create(newList)) {
+                    MyList.toggle(newList.trim().take(32), kind, id, name, image, url, pid)
+                    newList = ""; listPicker = false; onDismiss()
+                } else Toast.makeText(ctx, tr("Naziv liste već postoji ili nije ispravan"), Toast.LENGTH_SHORT).show()
+            })
+        }
+        return
+    }
     when (h) {
         is Hit.Ch -> Popup(h.ch.name, onDismiss) {
             OptionRow("Gledaj sada", R.drawable.lc_play, color = C.Green) { onDismiss(); playChannels(nav, listOf(h.ch), 0) }
@@ -289,8 +315,14 @@ fun HitActions(h: Hit, nav: Nav, onDismiss: () -> Unit) {
             }
             OptionRow("Dodaj kanal u favorite", R.drawable.lc_star) { fav = h.ch }
         }
-        is Hit.Movie -> Popup(h.v.name, onDismiss) { OptionRow("Otvori", R.drawable.lc_info) { onDismiss(); nav.push(Screen.MovieDetail(h.v)) } }
-        is Hit.Show -> Popup(h.s.name, onDismiss) { OptionRow("Otvori", R.drawable.lc_info) { onDismiss(); nav.push(Screen.SeriesDetail(h.s)) } }
+        is Hit.Movie -> Popup(h.v.name, onDismiss) {
+            OptionRow("Otvori", R.drawable.lc_info) { onDismiss(); nav.push(Screen.MovieDetail(h.v)) }
+            OptionRow("Dodaj u Moje liste", R.drawable.lc_list) { listPicker = true }
+        }
+        is Hit.Show -> Popup(h.s.name, onDismiss) {
+            OptionRow("Otvori", R.drawable.lc_info) { onDismiss(); nav.push(Screen.SeriesDetail(h.s)) }
+            OptionRow("Dodaj u Moje liste", R.drawable.lc_list) { listPicker = true }
+        }
     }
 }
 
@@ -301,7 +333,7 @@ object SearchHistory {
     fun list() = Prefs.str("search_hist").split('\n').filter { it.isNotBlank() }
     fun add(text: String) {
         val t = text.trim(); if (t.length < 2) return
-        Prefs.put("search_hist", (listOf(t) + list().filter { !it.equals(t, true) }).take(12).joinToString("\n")); rev++
+        Prefs.put("search_hist", (listOf(t) + list().filter { !it.equals(t, true) }).take(10).joinToString("\n")); rev++
     }
     fun remove(text: String) { Prefs.put("search_hist", list().filter { it != text }.joinToString("\n")); rev++ }
     fun clear() { Prefs.put("search_hist", ""); rev++ }
