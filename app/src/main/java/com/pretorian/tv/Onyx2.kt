@@ -679,7 +679,7 @@ fun OnyxSearch(nav: Nav) {
             if (q.isNotEmpty()) Focusable(onClick = { SearchHistory.add(q); q = ""; query = ""; SearchMem.clear(); try { fr.requestFocus() } catch (_: Exception) {} }, shape = Pill, normal = Color.Transparent, focused = C.CardHi,
                 zoom = 1f, modifier = Modifier.height(40.dp)) { _ ->
                 Row(Modifier.align(Alignment.Center).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Ico(R.drawable.lc_x, 16.dp, C.Muted); T("Clear Search", 13.sp, C.Muted)
+                    Ico(R.drawable.lc_x, 16.dp, C.Muted); T("Obriši", 13.sp, C.Muted)
                 }
             }
             Focusable(onClick = {
@@ -689,7 +689,7 @@ fun OnyxSearch(nav: Nav) {
                 catch (e: Exception) { Toast.makeText(ctx, tr("Glasovna pretraga nije dostupna na ovom uređaju"), Toast.LENGTH_LONG).show() }
             }, shape = Pill, normal = Color.Transparent, focused = Color(0x1F000000), zoom = 1f, modifier = Modifier.padding(end = 8.dp).height(40.dp)) { _ ->
                 Row(Modifier.align(Alignment.Center).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Ico(R.drawable.lc_mic, 16.dp, C.Muted); T("Voice", 13.sp, C.Muted)
+                    Ico(R.drawable.lc_mic, 16.dp, C.Muted); T("glasom", 13.sp, C.Muted)
                 }
             }
         }
