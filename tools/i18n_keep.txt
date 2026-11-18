@@ -539,3 +539,7 @@ E
 look_layout
 ▲ ▼ kanal · ◀ lista kanala · ▶ EPG · OK još jednom = dugmad
 TV: kategorije lijevo, kanali u sredini, mali player i EPG desno.
+U programu kanala: OK na emisiji › Pregled u malom prozoru. Dok listaš, ništa se ne pušta.
+U programu kanala ili Sports Centeru: OK na emisiji ili utakmici koja još nije počela › Podsjeti me.
+tvoji TV kanali uvijek
+Nema podsjetnika. U programu kanala ili Sportu: OK na emisiji › Podsjeti me.
