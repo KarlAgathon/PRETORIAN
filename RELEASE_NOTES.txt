@@ -1,3 +1,9 @@
+PRETORIAN 1.0.59 STABLE
+Classic TV: hide the main navigation rail and category column while browsing channels, giving the preview and channel list the full screen workspace
+Classic TV: LEFT from the channel list returns to categories; LEFT from categories reveals the main navigation
+Classic TV: compact category rows, channel rows and typography with more balanced proportions
+Default layout and existing playback behavior remain unchanged
+
 PRETORIAN 1.0.58 (STABLE)
 Classic Layout: persistent left-side section navigation, matching the reference IPTV workspace
 Classic TV: keep the navigation rail visible while browsing categories, channels and EPG
