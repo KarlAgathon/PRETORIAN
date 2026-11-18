@@ -247,7 +247,7 @@ object C {
 /** Settings › Appearance › Focus card: how bright the box you stand on is, 20–100 % in every theme
  *  (100 = the pure theme colour, less = mixed into the background so big boxes don't glare). */
 object FocusCard {
-    private var v by mutableIntStateOf(Prefs.long("focus_pct", if (Prefs.long("look_focus_soft", 0) == 0L) 70 else 100).toInt().coerceIn(20, 100))
+    private var v by mutableIntStateOf(Prefs.long("focus_pct", if (Prefs.long("look_focus_soft", 0) == 0L) 60 else 100).toInt().coerceIn(20, 100))
     val pct get() = v
     fun set(p: Int) { v = p.coerceIn(20, 100); Prefs.put("focus_pct", v.toLong()) }
 }
