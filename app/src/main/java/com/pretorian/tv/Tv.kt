@@ -428,6 +428,17 @@ private fun TvList(nav: Nav) {
             // Reference layout: persistent category column on the left; preview and EPG workspace on the right.
             val groupsWidth = 206.dp
             if (!inChannels) Box(Modifier.width(groupsWidth).fillMaxHeight().clip(Rnd(12.dp)).background(C.Rail)
+                .onPreviewKeyEvent { e ->
+                    if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionRight) {
+                        val focusedGroup = (rows as? Load.Ok)?.value?.filterIsInstance<GRow.Group>()
+                            ?.firstOrNull { "g:" + it.ref.key == st.focusKey }?.ref
+                        if (focusedGroup != null) {
+                            openGroup(ctx, st, focusedGroup); focusedCh = null
+                            enterTick++; inChannels = true; Chrome.rail = 0
+                            true
+                        } else false
+                    } else false
+                }
                 .border(1.dp, C.Line, Rnd(12.dp))
                 .onPreviewKeyEvent { e ->
                     if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { revealMainRail(); true } else false
@@ -447,7 +458,7 @@ private fun TvList(nav: Nav) {
             }
             if (!inChannels) Box(Modifier.width(1.dp).fillMaxHeight().background(C.Line))
             Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                val previewCh = focusedCh ?: PreviewSel.ch
+                val previewCh = PreviewSel.ch
                 Row(Modifier.fillMaxWidth().weight(0.32f).clipToBounds(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Box(Modifier.weight(0.43f).fillMaxHeight().clip(Rnd(12.dp)), contentAlignment = Alignment.Center) {
@@ -470,7 +481,7 @@ private fun TvList(nav: Nav) {
                                     T(previewCh.name, 15.sp, C.Text, FontWeight.Bold, maxLines = 1)
                                     T(tr("TV · EPG"), 10.sp, C.Muted, maxLines = 1)
                                 }
-                                qualityOf(previewCh.name)?.let { Chip(it, C.Card, C.Soft) }
+                                qualityOf(previewCh.name)?.let { label -> Box(Modifier.width(44.dp).height(24.dp).clip(Rnd(8.dp)).background(C.Card), contentAlignment = Alignment.Center) { T(label, 10.sp, C.Soft, FontWeight.SemiBold, maxLines = 1) } }
                             }
                             EpgList(previewCh, limit = 3, modifier = Modifier.fillMaxWidth().weight(1f), compact = true)
                         }
