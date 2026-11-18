@@ -49,21 +49,55 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/** "My list": movies and series you keep to watch later (long press OK on a poster). */
+/** Named watch-later lists. The original single list is migrated without losing saved items. */
 object MyList {
     var rev by mutableIntStateOf(0)
-    private fun all(): JSONArray = try { JSONArray(Prefs.str("mylist", "[]")) } catch (e: Exception) { JSONArray() }
-    fun items(kind: String): List<JSONObject> {
-        val a = all(); return (0 until a.length()).map { a.getJSONObject(it) }.filter { it.optString("k") == kind }.reversed()
+    private const val DEFAULT = "My List"
+    private fun all(): JSONObject {
+        val saved = try { JSONObject(Prefs.str("mylists", "{}")) } catch (_: Exception) { JSONObject() }
+        if (!saved.has(DEFAULT)) {
+            val legacy = try { JSONArray(Prefs.str("mylist", "[]")) } catch (_: Exception) { JSONArray() }
+            saved.put(DEFAULT, legacy)
+            Prefs.put("mylists", saved.toString())
+        }
+        return saved
     }
-    fun has(kind: String, id: String): Boolean = items(kind).any { it.optString("id") == id }
-    fun toggle(kind: String, id: String, name: String, image: String?, url: String?, pid: String): Boolean {
-        val a = all(); val out = JSONArray(); var removed = false
-        for (i in 0 until a.length()) { val o = a.getJSONObject(i); if (o.optString("k") == kind && o.optString("id") == id) removed = true else out.put(o) }
+    private fun save(o: JSONObject) { Prefs.put("mylists", o.toString()); rev++ }
+    fun names(): List<String> = all().keys().asSequence().toList().sortedBy { if (it == DEFAULT) "" else it.lowercase() }
+    fun create(name: String): Boolean {
+        val n = name.trim().take(32)
+        if (n.isBlank() || names().any { it.equals(n, true) }) return false
+        val o = all().put(n, JSONArray()); save(o); return true
+    }
+    fun rename(old: String, name: String): Boolean {
+        val n = name.trim().take(32)
+        if (old == DEFAULT || n.isBlank() || names().any { it != old && it.equals(n, true) }) return false
+        val o = all(); val a = o.optJSONArray(old) ?: return false
+        o.remove(old); o.put(n, a); save(o); return true
+    }
+    fun delete(name: String): Boolean {
+        if (name == DEFAULT || !all().has(name)) return false
+        val o = all(); o.remove(name); save(o); return true
+    }
+    fun items(list: String, kind: String): List<JSONObject> {
+        val a = all().optJSONArray(list) ?: JSONArray()
+        return (0 until a.length()).mapNotNull { a.optJSONObject(it) }.filter { it.optString("k") == kind }.reversed()
+    }
+    fun items(kind: String): List<JSONObject> = items(DEFAULT, kind)
+    fun has(list: String, kind: String, id: String): Boolean = items(list, kind).any { it.optString("id") == id }
+    fun has(kind: String, id: String): Boolean = has(DEFAULT, kind, id)
+    fun toggle(list: String, kind: String, id: String, name: String, image: String?, url: String?, pid: String): Boolean {
+        val o = all(); val a = o.optJSONArray(list) ?: JSONArray().also { o.put(list, it) }
+        val out = JSONArray(); var removed = false
+        for (i in 0 until a.length()) {
+            val item = a.optJSONObject(i) ?: continue
+            if (item.optString("k") == kind && item.optString("id") == id) removed = true else out.put(item)
+        }
         if (!removed) out.put(JSONObject().put("k", kind).put("id", id).put("n", name).put("i", image ?: "").put("u", url ?: "").put("p", pid))
-        Prefs.put("mylist", out.toString()); rev++
-        return !removed
+        o.put(list, out); save(o); return !removed
     }
+    fun toggle(kind: String, id: String, name: String, image: String?, url: String?, pid: String): Boolean =
+        toggle(DEFAULT, kind, id, name, image, url, pid)
 }
 
 /** Program mode: Lite (no big pictures, smaller images, no fades) for weak boxes, Full for strong ones. */
