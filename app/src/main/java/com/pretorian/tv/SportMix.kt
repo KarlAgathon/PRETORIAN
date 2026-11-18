@@ -430,8 +430,7 @@ fun SportMixScreen(nav: Nav) {
         }
     }
     // teams: the list with ✕ and "＋ Add team" (search or any name), several at once
-    if (pick == "teams") FavTeamsDialog { pick = null; SportCache.other.remove("fav"); SportCache.other.remove("mine"); SportCache.rev++ }
-    pick?.takeIf { it != "teams" }?.let { k ->
+    pick?.let { k ->
         Popup(tr(when (k) { "sport" -> "Sportovi"; "region" -> "Regije"; "fav" -> "Favoriti – države"; "countries" -> "Države"; "teams" -> "Timovi"; else -> "Takmičenja" }), { pick = null }, width = 520.dp) {
             Column(Modifier.heightIn(max = 420.dp).verticalScroll(androidx.compose.foundation.rememberScrollState())) {
                 when (k) {
