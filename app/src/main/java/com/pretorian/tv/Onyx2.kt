@@ -399,6 +399,8 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                     itemsIndexed(list, key = { i, ch -> "$i${ch.url}" }) { i, ch ->
                         val ovr = remember(ch.pid, g.pid) { Ovr(ctx, ch.pid.ifBlank { g.pid ?: "" }) }
                         val locked = ovr.isChLocked(ch)
+                        val active = preview?.url == ch.url || TvMemory.preview?.url == ch.url ||
+                            (TvMemory.group?.key == g.key && TvMemory.channel == i)
                         val nx = if (wide) nextOf(ch) else null
                         var rowFocused by remember { mutableStateOf(false) }
                         val c = if (nx.isNullOrEmpty()) 0 else cell.coerceAtMost(nx.lastIndex)
