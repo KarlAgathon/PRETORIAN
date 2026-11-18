@@ -1,3 +1,10 @@
+PRETORIAN 1.0.51
+Classic TV: clip the upper mini-player area so channel/group text cannot spill over the preview
+Classic TV: distribute compact NOW/NEXT EPG cards across the available panel height
+Classic TV: refine channel row proportions and spacing to align number, logo, channel name and EPG columns
+Classic TV: widen the groups column while browsing groups; retain the compact width while browsing channels
+Default layout and playback/navigation behavior remain unchanged
+
 PRETORIAN 1.0.50
 Classic TV: reduce the upper mini-player/EPG section height to remove unused blank space
 Classic TV: expand the Groups column to 220dp while navigating groups so full group names are easier to read
