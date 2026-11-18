@@ -1153,9 +1153,12 @@ fun EpgList(ch: Channel, limit: Int = 12, modifier: Modifier = Modifier) {
                 T("Nema EPG podataka za ovaj kanal.", 14.sp, C.Soft)
                 T(if (EpgSources.noneOn(ctx)) "Nijedan EPG nije uključen" else if (!EpgSources.any) "Dodaj EPG izvor: Postavke › Playliste › EPG izvori" else "Ni tvoji EPG izvori nemaju ovaj kanal.", 12.sp, C.Muted, maxLines = 2)
             }
-        } else LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        } else {
+            val nextStart = s.value.firstOrNull { it.start > System.currentTimeMillis() }?.start
+            LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             itemsIndexed(s.value, key = { _, e -> e.start }) { _, e ->
                 val now = e.start <= System.currentTimeMillis() && e.end > System.currentTimeMillis()
+                val next = e.start == nextStart
                 val rem = remember(remRev) { Reminders.has(e.title, e.start) }
                 Focusable(modifier = Modifier.fillMaxWidth(), onClick = {
                     if (!now) {
@@ -1166,7 +1169,7 @@ fun EpgList(ch: Channel, limit: Int = 12, modifier: Modifier = Modifier) {
                     Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             T(e.times(), EpgLook.sp(12.sp), if (now) C.RedText else C.Muted, FontWeight.SemiBold)
-                            if (now) Chip("SADA", C.Red, C.OnRed)
+                            if (now) Chip("SADA", C.Red, C.OnRed) else if (next) Chip("SLIJEDI", C.Card, C.Soft)
                             if (rem) { Ico(R.drawable.lc_bell, 14.dp, C.Amber); T("OK = ukloni podsjetnik", 11.sp, C.Amber) }
                             if (!now && !rem && Hints.always) T("OK = podsjeti me", 11.sp, C.Muted)
                         }
@@ -1180,6 +1183,7 @@ fun EpgList(ch: Channel, limit: Int = 12, modifier: Modifier = Modifier) {
                     }
                 }
             }
+        }
         }
     }
 }
