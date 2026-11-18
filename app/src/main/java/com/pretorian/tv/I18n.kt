@@ -41,6 +41,15 @@ TV|TV|TV|TV|TV|ТВ|TV|TV|TV|التلفاز
 Filmovi|Movies|Filme|Filmovi|Филмови|Филми|Filme|Filmler|Film|الأفلام
 Serije|Series|Serien|Serije|Серије|Сериали|Seriale|Diziler|Serie|المسلسلات
 Sport|Sports|Sport|Sport|Спорт|Спорт|Sport|Spor|Sport|الرياضة
+SPORT|SPORT|SPORT|SPORT|СПОРТ|СПОРТ|SPORT|SPOR|SPORT|الرياضة
+CENTAR UTAKMICA|MATCH CENTER|SPIELZENTRUM|CENTAR UTAKMICA|ЦЕНТАР УТАКМИЦА|ЦЕНТЪР ЗА МАЧОВЕ|CENTRUL MECIURILOR|MAÇ MERKEZİ|CENTRO PARTITE|مركز المباريات
+TAKMIČENJA|COMPETITIONS|WETTBEWERBE|NATJECANJA|ТАКМИЧЕЊА|СЪСТЕЗАНИЯ|COMPETIȚII|MÜSABAKALAR|COMPETIZIONI|المسابقات
+Utakmice uživo|Live Matches|Live-Spiele|Utakmice uživo|Утакмице уживо|Мачове на живо|Meciuri live|Canlı maçlar|Partite in diretta|المباريات المباشرة
+Današnje utakmice|Today's Matches|Heutige Spiele|Današnje utakmice|Данашње утакмице|Днешни мачове|Meciurile de azi|Bugünün maçları|Partite di oggi|مباريات اليوم
+Predstojeće|Upcoming|Bevorstehend|Predstojeće|Предстојеће|Предстоящи|În curând|Yaklaşan|In programma|القادمة
+Favoriti|Favorites|Favoriten|Favoriti|Омиљени|Любими|Favorite|Favoriler|Preferiti|المفضلة
+Pratim|Following|Ich folge|Pratim|Пратим|Следвам|Urmăresc|Takip ettiklerim|Seguiti|أتابع
+Takmičenja će se prikazati uz dostupne utakmice|Competitions will appear when matches are available|Wettbewerbe erscheinen, sobald Spiele verfügbar sind|Natjecanja će se prikazati uz dostupne utakmice|Такмичења ће се приказати уз доступне утакмице|Състезанията ще се покажат при налични мачове|Competițiile vor apărea când sunt disponibile meciuri|Müsabakalar maçlar mevcut olduğunda görünür|Le competizioni appariranno quando saranno disponibili partite|ستظهر المسابقات عند توفر المباريات
 Postavke|Settings|Einstellungen|Postavke|Подешавања|Настройки|Setări|Ayarlar|Impostazioni|الإعدادات
 Playliste|Playlists|Playlists|Playliste|Плејлисте|Плейлисти|Playlisturi|Oynatma listeleri|Playlist|قوائم التشغيل
 Dodaj, aktiviraj, ažuriraj|Add, activate, update|Hinzufügen, aktivieren, aktualisieren|Dodaj, aktiviraj, ažuriraj|Додај, активирај, ажурирај|Добави, активирай, обнови|Adaugă, activează, actualizează|Ekle, etkinleştir, güncelle|Aggiungi, attiva, aggiorna|إضافة، تفعيل، تحديث
