@@ -91,7 +91,7 @@ fun SettingsScreen(nav: Nav) {
     val scope = rememberCoroutineScope()
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val railW by androidx.compose.animation.core.animateDpAsState(
-        if (classic && inPage) 72.dp else 320.dp, label = "classic-settings-rail"
+        if (classic && inPage) 72.dp else 320.dp, label = "rail"
     )
     LaunchedEffect(classic, inPage) {
         if (classic) {
