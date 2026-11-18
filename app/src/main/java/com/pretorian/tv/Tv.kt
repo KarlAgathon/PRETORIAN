@@ -205,13 +205,13 @@ fun GroupColumn(
     state: androidx.compose.foundation.lazy.LazyListState, width: androidx.compose.ui.unit.Dp,
     title: String, sub: String?, onFocusGroup: (GroupRef) -> Unit, onOpen: (GroupRef) -> Unit, onMenu: (GroupRef) -> Unit,
     onHeader: (Playlist) -> Unit, onNewFav: () -> Unit, onNewGroup: (String) -> Unit, onFocusRow: (String) -> Unit,
-    extra: (@Composable () -> Unit)? = null, containVerticalFocus: Boolean = false,
+    extra: (@Composable () -> Unit)? = null, containVerticalFocus: Boolean = false, classicStyle: Boolean = false,
 ) {
     val ctx = LocalContext.current
     val listForFocus = (rows as? Load.Ok)?.value ?: emptyList()
-    Column(Modifier.width(width).fillMaxHeight().padding(start = 14.dp, end = 10.dp, top = if (title.isEmpty()) 8.dp else 22.dp)) {
+    Column(Modifier.width(width).fillMaxHeight().padding(start = 14.dp, end = 10.dp, top = if (title.isEmpty() || classicStyle) 8.dp else 22.dp)) {
         // no title (TV guide): the groups start right under the top bar
-        if (title.isNotEmpty()) T(title, 26.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 8.dp, bottom = 2.dp))
+        if (title.isNotEmpty()) T(title, if (classicStyle) 20.sp else 26.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 8.dp, bottom = 2.dp))
         if (sub != null) T(sub, 12.sp, C.Muted, modifier = Modifier.padding(start = 8.dp, bottom = 8.dp))
         extra?.invoke()
         when (rows) {
@@ -230,7 +230,7 @@ fun GroupColumn(
                     itemsIndexed(list, key = { _, r -> r.id }) { i, r ->
                         // Let Compose move focus naturally inside this focus group. Manual scroll/focus
                         // coroutines here used to race on DPAD key-repeat and made rows jump/flicker.
-                        val m = Modifier.fillMaxWidth().height(Rows.group)
+                        val m = Modifier.fillMaxWidth().height(if (classicStyle) 48.dp else Rows.group)
                             .then(if (containVerticalFocus) Modifier else Modifier.wrapKeys(i, list.size, wrap))
                         val fr = wrap.requester(i, if (r.id == focusKey) focusFr else null)
                         val rowModifier = if (containVerticalFocus && r.id == focusKey) m.focusRequester(focusFr) else m
@@ -254,12 +254,12 @@ fun GroupColumn(
                                     Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         if (selected) Dot(C.Red, 7.dp)
-                                        if (width > 100.dp) T(g.cat.name, Rows.font, if (selected) C.Text else C.Soft, if (selected) FontWeight.Bold else FontWeight.Normal, maxLines = 1, modifier = Modifier.weight(1f)) else Ico(R.drawable.lc_layers, 18.dp, if (selected) C.Text else C.Muted)
+                                        if (width > 100.dp) T(g.cat.name, if (classicStyle) 14.sp else Rows.font, if (selected) C.Text else C.Soft, if (selected) FontWeight.Bold else FontWeight.Normal, maxLines = 1, modifier = Modifier.weight(1f)) else Ico(R.drawable.lc_layers, 18.dp, if (selected) C.Text else C.Muted)
                                         if (locked) Ico(R.drawable.lc_lock, 15.dp, C.Muted)
                                     }
                                 }
                             }
-                            is GRow.Header -> Focusable(modifier = rowModifier.height(Rows.group + 6.dp), onClick = { onHeader(r.p) },
+                            is GRow.Header -> Focusable(modifier = rowModifier.height(if (classicStyle) 52.dp else Rows.group + 6.dp), onClick = { onHeader(r.p) },
                                 onFocus = { onFocusRow(r.id) }, focusRequester = if (containVerticalFocus) null else fr, normal = C.Card, zoom = 1f) { _ ->
                                 Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -422,10 +422,10 @@ private fun TvList(nav: Nav) {
         LaunchedEffect(Unit) { Chrome.driven = true; Chrome.rail = 0 }
         DisposableEffect(Unit) { onDispose { Chrome.driven = false; Chrome.rail = 3 } }
         Column(Modifier.fillMaxSize()) {
-            Row(Modifier.fillMaxWidth().weight(0.32f).padding(start = 10.dp, end = 12.dp, top = 8.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(Modifier.fillMaxWidth().weight(0.34f).padding(start = 10.dp, end = 12.dp, top = 8.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 val previewCh = PreviewSel.ch
                 Box(Modifier.weight(0.40f).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                    if (previewCh != null) PreviewBox(previewCh, Modifier.fillMaxWidth())
+                    if (previewCh != null) PreviewBox(previewCh, Modifier.fillMaxSize())
                     else Box(Modifier.fillMaxSize().clip(Rnd(12.dp)).background(C.Rail), contentAlignment = Alignment.Center) { T(tr("Izaberi kanal za pregled"), 12.sp, C.Muted) }
                 }
                 Column(Modifier.weight(0.60f).fillMaxHeight().background(C.Rail, Rnd(12.dp)).padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -441,7 +441,7 @@ private fun TvList(nav: Nav) {
                     }
                 }
             }
-            Row(Modifier.fillMaxWidth().weight(0.68f)) {
+            Row(Modifier.fillMaxWidth().weight(0.66f)) {
                 Box(Modifier.onPreviewKeyEvent { e ->
                     if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft && !inChannels) { revealMainRail(); true } else false
                 }) {
@@ -449,7 +449,7 @@ private fun TvList(nav: Nav) {
                     onFocusGroup = { Chrome.rail = 0 }, onOpen = { openGroup(ctx, st, it); enterTick++; inChannels = true },
                     onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
                     onHeader = { p -> TvFold.toggle(p.id); if (p.id in TvFold.open) Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
-                    onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it }, onFocusRow = { st.focusKey = it; inChannels = false; Chrome.rail = 0 }, containVerticalFocus = false)
+                    onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it }, onFocusRow = { st.focusKey = it; inChannels = false; Chrome.rail = 0 }, containVerticalFocus = false, classicStyle = true)
                 }
                 Box(Modifier.width(1.dp).fillMaxHeight().background(C.Line))
                 Box(Modifier.weight(1f).fillMaxHeight().onPreviewKeyEvent { e -> if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { backToGroups(); true } else false }) {
@@ -716,7 +716,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
     WrapEffect(cWrap, cState)
 
     Column(Modifier.fillMaxSize().padding(start = if (Look.layout == 0) 10.dp else 20.dp, end = if (Look.layout == 0) 10.dp else 20.dp, top = if (Look.layout == 0) 8.dp else 22.dp)) {
-        T(g.cat.name, if (Look.layout == 0) 16.sp else 20.sp, C.Text, FontWeight.SemiBold, modifier = Modifier.fillMaxWidth())
+        T(g.cat.name, if (Look.layout == 0) Rows.font else 20.sp, C.Text, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.fillMaxWidth())
         T("OK gledaj · drži OK = opcije · ◀ grupe",
             12.sp, C.Muted, maxLines = 1, modifier = Modifier.padding(bottom = 10.dp))
         when (val s = state) {
@@ -769,7 +769,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                     T("${ch.num}", if (Look.layout == 0) 11.sp else 13.sp, C.Muted, modifier = Modifier.width(if (Look.layout == 0) 26.dp else 34.dp))
                                     ChannelLogo(ch.logo, ch.name)
                                     if (Look.layout == 0) {
-                                        T(ch.name, 12.sp, if (f) C.Text else C.Soft, if (f) FontWeight.SemiBold else FontWeight.Normal,
+                                        T(ch.name, Rows.font, if (f) C.Text else C.Soft, if (f) FontWeight.SemiBold else FontWeight.Normal,
                                             maxLines = 1, modifier = Modifier.weight(0.30f))
                                         ChannelEpgLine(ch, Modifier.weight(0.70f))
                                     } else {
@@ -1231,8 +1231,8 @@ private fun ChannelEpgLine(ch: Channel, modifier: Modifier = Modifier) {
     val current = (state as? Load.Ok)?.value?.firstOrNull { it.start <= now && it.end > now }
     if (current != null) {
         Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            T(current.times(), 11.sp, C.Muted, maxLines = 1)
-            T(current.title, 12.sp, C.Soft, maxLines = 1, modifier = Modifier.weight(1f))
+            T(current.times(), 12.sp, C.Muted, maxLines = 1)
+            T(current.title, 13.sp, C.Soft, maxLines = 1, modifier = Modifier.weight(1f))
         }
     } else if (state is Load.Loading) {
         T("EPG …", 9.sp, C.Muted, maxLines = 1, modifier = modifier)
