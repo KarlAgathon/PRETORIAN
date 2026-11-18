@@ -2400,6 +2400,7 @@ GRUPE|GROUPS|GRUPPEN|GRUPE|ГРУПЕ|ГРУПИ|GRUPURI|GRUPLAR|GRUPPI|المج
 Učitavam EPG…|Loading EPG…|EPG wird geladen…|Učitavam EPG…|Учитавање EPG-а…|Зареждане на EPG…|Se încarcă EPG…|EPG yükleniyor…|Caricamento EPG…|جارٍ تحميل دليل البرامج…
 EPG nije dostupan|EPG unavailable|EPG nicht verfügbar|EPG nije dostupan|EPG није доступан|EPG не е наличен|EPG indisponibil|EPG mevcut değil|EPG non disponibile|دليل البرامج غير متاح
 Nema EPG vodiča|No EPG guide|Kein EPG-Programm|Nema EPG vodiča|Нема EPG водича|Няма EPG справочник|Nu există ghid EPG|EPG rehberi yok|Nessuna guida EPG|لا يوجد دليل برامج
+Pritisni OK na grupi za prikaz kanala|Press OK on a group to show channels|Drücke OK auf einer Gruppe, um Sender anzuzeigen|Pritisnite OK na grupi za prikaz kanala|Притисни OK на групи за приказ канала|Натиснете OK върху група, за да видите каналите|Apasă OK pe un grup pentru a afișa canalele|Kanalları görüntülemek için bir grupta OK tuşuna basın|Premi OK su un gruppo per visualizzare i canali|اضغط على OK على المجموعة لعرض القنوات
 """.trimIndent()
 
 private val DICT: Map<String, Map<String, String>> by lazy {
