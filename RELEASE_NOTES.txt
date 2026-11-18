@@ -1,3 +1,13 @@
+PRETORIAN 1.0.41-beta11
+Full-screen player: isti meni opcija za kanale u svim layoutima — FAVORITES, SUBS, ZOOM, AUDIO, VIDEO, EPG i HISTORY
+Favorites: jedan OK dodaje ili uklanja kanal; žuta zvijezda označava aktivan favorit
+Subs: za TV kanale prikazuje ugrađene titlove koje stream nudi
+Zoom: Default / Auto, 4:3, 16:9, Fit, Stretch i Original
+EPG: vodič i pomak vremena (+/-) dostupni iz playera
+History: posljednjih 10 gledanih kanala, najnoviji prvi, uz Clear History i potvrdu
+Player kontrole koriste zajednički plavo-sivi izgled, plavu selekciju i tanki bijeli okvir
+DEFAULT glavni izgled ostaje nepromijenjen; Stable main nije mijenjan
+
 PRETORIAN 1.0.39-beta5
 TV kanali: mali pregled se pokreće tek nakon prvog OK; drugi OK na istom kanalu otvara cijeli ekran
 TV kategorije: UP na prvom redu i DOWN na posljednjem redu ostaju unutar liste, uključujući brzo ponavljanje tipke
