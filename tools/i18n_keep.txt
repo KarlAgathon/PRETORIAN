@@ -533,3 +533,4 @@ sm_teams
 sm_countries
 sm_sports
 sm_leagues
+${ev.id}|${Sports.countries.joinToString(
