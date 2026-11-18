@@ -995,7 +995,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             FORMATS.forEachIndexed { i, label ->
                 OptionRow(tr(label), R.drawable.lc_maximize, selected = resize == i) {
                     resize = i
-                    item.channel?.let { Prefs.put("fmt_" + it.url.hashCode(), resize.toLong()) }
+                    item.channel?.let { Prefs.put("fmt_v2_" + it.url.hashCode(), resize.toLong()) }
                     dialog = null
                 }
             }
@@ -1123,7 +1123,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     }
 
     LaunchedEffect(dialog, side, resume, bar) { if (dialog == null && side == null && resume == null && !bar) focus.tryFocus() }
-    LaunchedEffect(item.url) { resize = item.channel?.let { Prefs.long("fmt_" + it.url.hashCode(), 0).toInt().coerceIn(0, FORMATS.lastIndex) } ?: resize }
+    LaunchedEffect(item.url) { resize = item.channel?.let { Prefs.long("fmt_v2_" + it.url.hashCode(), 0).toInt().coerceIn(0, FORMATS.lastIndex) } ?: resize }
 }
 
 private val FORMATS = listOf("Zadano / automatski", "4:3", "16:9", "Prilagodi", "Rastegni", "Izvorno")
