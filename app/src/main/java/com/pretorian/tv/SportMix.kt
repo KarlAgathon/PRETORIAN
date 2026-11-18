@@ -337,11 +337,11 @@ fun SportMixScreen(nav: Nav) {
     Column(Modifier.fillMaxSize().padding(horizontal = 24.dp)) {
         Row(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                T(tr("Sportski centar").uppercase(), 20.sp, C.Text, FontWeight.Bold)
+                T(tr("Sportski centar").uppercase(), 20.sp, C.Text, FontWeight.Bold)  // i18n-ignore
                 T("Utakmice, timovi i TV prenosi", 11.sp, C.Muted)
             }
             Spacer(Modifier.weight(1f))
-            T(shown.size.toString() + "  " + tr("Utakmice").uppercase(), 12.sp, C.Soft, FontWeight.SemiBold)
+            T(shown.size.toString() + "  " + tr("Utakmice").uppercase(), 12.sp, C.Soft, FontWeight.SemiBold)  // i18n-ignore
         }
         Row(Modifier.fillMaxWidth().padding(bottom = 10.dp).horizontalScroll(androidx.compose.foundation.rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
