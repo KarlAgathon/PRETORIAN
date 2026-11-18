@@ -113,10 +113,10 @@ fun Focusable(
     focused: Color? = null,
     zoom: Float = 1.03f,
     focusRequester: FocusRequester? = null,
-    focusBorderColor: Color? = null,
-    borderColor: Color? = null,
     onFocus: (() -> Unit)? = null,
     onMenu: (() -> Unit)? = null,
+    focusBorderColor: Color? = null,
+    borderColor: Color? = null,
     content: @Composable BoxScope.(Boolean) -> Unit,
 ) {
     val src = remember { MutableInteractionSource() }
