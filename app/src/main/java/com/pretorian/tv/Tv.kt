@@ -243,20 +243,25 @@ fun GroupColumn(
                                 val locked = g.pid?.let { Ovr(ctx, it).isLocked("live", g.cat.id) } ?: false
                                 val shape = Rnd(12.dp)
                                 Focusable(
-                                    modifier = rowModifier.then(if (Look.groupFrame) Modifier.border(if (selected) 1.5.dp else 1.dp,
+                                    modifier = (if (Look.dawn) rowModifier.height(48.dp) else rowModifier).then(if (Look.groupFrame && !Look.dawn) Modifier.border(if (selected) 1.5.dp else 1.dp,
                                         C.Red.copy(alpha = if (selected) 0.9f else 0.28f), shape) else Modifier),
                                     shape = shape,
                                     onClick = { onOpen(g) },
                                     onFocus = { onFocusRow(r.id); onFocusGroup(g) },
                                     onMenu = if (Lock.simple || g.cat.id == ALL_GROUP || g.cat.id == RECENT_GROUP) null else ({ onMenu(g) }),
                                     focusRequester = if (containVerticalFocus) null else fr,
-                                    normal = if (selected) C.Red.copy(alpha = 0.28f) else Color.Transparent,
+                                    normal = if (Look.dawn) Color.Transparent else if (selected) C.Red.copy(alpha = 0.28f) else Color.Transparent,
+                                    focused = if (Look.dawn) Dawn.pill else null,
+                                    focusBorderColor = if (Look.dawn) Color.Transparent else null,
                                     zoom = 1.0f,
-                                ) { _ ->
-                                    Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
+                                ) { gf ->
+                                    Row(Modifier.fillMaxSize().padding(horizontal = if (Look.dawn) 20.dp else 12.dp), verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        if (Look.dawn) T(g.cat.name, 18.sp, if (gf) Dawn.onPill else Color(0xFFEFF2F6), if (gf) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, modifier = Modifier.weight(1f))
+                                        else {
                                         if (selected) Dot(C.Red, 7.dp)
                                         if (width > 100.dp) T(g.cat.name, if (classicStyle) 13.sp else Rows.font, if (selected) C.Text else C.Soft, if (selected) FontWeight.Bold else FontWeight.Normal, maxLines = 1, modifier = Modifier.weight(1f)) else Ico(R.drawable.lc_layers, 18.dp, if (selected) C.Text else C.Muted)
+                                        }
                                         if (locked) Ico(R.drawable.lc_lock, 15.dp, C.Muted)
                                     }
                                 }
@@ -422,17 +427,21 @@ private fun TvList(nav: Nav) {
 
     LaunchedEffect(focusedCh) { val c = focusedCh ?: return@LaunchedEffect; delay(500); Dusk.set(c.logo, c.name) }
     if (Look.dawn) {
-        // New Dawn: groups alone › channels alone with a big preview, EPG and options › full screen.
+        // New Dawn: groups alone › channels alone with preview, now/next and options › full screen.
         // Back and ◀ go exactly one level out; at the groups they return to the menu (on TV).
         BackHandler(enabled = st.groupMenu == null && inChannels) { PreviewSel.ch = null; Preview.stop(); backToGroups() }
-        LaunchedEffect(inChannels, st.group?.key) { Dawn.crumb = if (inChannels) st.group?.cat?.name ?: "" else "" }
-        DisposableEffect(Unit) { onDispose { Dawn.crumb = "" } }
-        var hover by remember { mutableStateOf<GroupRef?>(null) }
+        LaunchedEffect(inChannels, st.group?.key) {
+            Dawn.crumb = if (inChannels) st.group?.cat?.name ?: "" else ""
+            if (!inChannels) Dawn.pos = ""
+            Dawn.hints = if (inChannels) listOf("▲▼" to "Izaberi kanal", "OK" to "Pregled", "OK" to "Cijeli ekran", "Back" to "Grupe")
+                else listOf("▲▼" to "Izaberi grupu", "OK" to "Otvori grupu", "Back" to "Meni")
+        }
+        DisposableEffect(Unit) { onDispose { Dawn.crumb = ""; Dawn.pos = ""; Dawn.hints = emptyList() } }
         // first time on the groups: the focus goes to the last opened group (or the first one)
         var placed by remember { mutableStateOf(false) }
         LaunchedEffect(rows is Load.Ok, inChannels) { if (!inChannels && rows is Load.Ok && !placed) { placed = true; backToGroups() } }
-        if (!inChannels) Row(Modifier.fillMaxSize().padding(start = 28.dp, end = 34.dp, top = 4.dp, bottom = 24.dp)) {
-            Box(Modifier.width(400.dp).fillMaxHeight().dawnGlass().padding(vertical = 8.dp)
+        if (!inChannels) Box(Modifier.fillMaxSize().padding(start = 34.dp, top = 6.dp, bottom = 8.dp)) {
+            Box(Modifier.width(360.dp).fillMaxHeight().dawnGlass().padding(vertical = 8.dp)
                 .onPreviewKeyEvent { e ->
                     if (e.type != KeyEventType.KeyDown) false
                     else if (e.key == Key.DirectionLeft) { nav.back(); true }
@@ -441,39 +450,44 @@ private fun TvList(nav: Nav) {
                         if (g != null) { focusedCh = null; openGroup(ctx, st, g); enterTick++; inChannels = true; true } else false
                     } else false
                 }) {
-                GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, 400.dp, "", null,
-                    onFocusGroup = { hover = it },
+                GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, 360.dp, "", null,
+                    onFocusGroup = { },
                     onOpen = { focusedCh = null; openGroup(ctx, st, it); enterTick++; inChannels = true },
                     onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
                     onHeader = { p -> TvFold.toggle(p.id); if (p.id in TvFold.open) Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
                     onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it },
                     onFocusRow = { st.focusKey = it })
             }
-            Spacer(Modifier.weight(1f))
-            hover?.let { DawnHero(it.cat.name, tr("OK ili ▶ otvara grupu · ◀ meni"), Modifier.align(Alignment.Bottom)) }
         } else {
             val g = st.group
             val chs by load(g?.key, Favs.rev, keep = true) { g?.let { channelsOf(ctx, it) } ?: emptyList() }
-            fun full() {
-                val list = (chs as? Load.Ok)?.value ?: return
-                val c = focusedCh ?: PreviewSel.ch ?: return
-                val i = list.indexOfFirst { it.url == c.url }.coerceAtLeast(0)
-                TvMemory.group = g; TvMemory.channel = i; TvMemory.restore = true
-                playChannels(nav, list, i)
+            var opts by remember { mutableStateOf<Channel?>(null) }
+            LaunchedEffect(focusedCh, chs) {
+                val list = (chs as? Load.Ok)?.value ?: return@LaunchedEffect
+                val i = focusedCh?.let { c -> list.indexOfFirst { it.url == c.url } } ?: -1
+                Dawn.pos = if (i >= 0) "${i + 1} / ${list.size}" else ""
             }
-            Row(Modifier.fillMaxSize().padding(start = 28.dp, end = 34.dp, top = 4.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                Box(Modifier.weight(0.40f).fillMaxHeight().dawnGlass().padding(vertical = 4.dp)) {
+            Row(Modifier.fillMaxSize().padding(start = 34.dp, end = 38.dp, top = 6.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Box(Modifier.weight(0.42f).fillMaxHeight().dawnGlass().padding(vertical = 4.dp)) {
                     if (g != null) key(g.key, st.rev) {
                         ChannelList(g, nav, st.gate, rows, enterTick, onFocusCh = { focusedCh = it },
                             onBackToGroups = { PreviewSel.ch = null; Preview.stop(); backToGroups() }, onChanged = { st.rev++ }, focusOnStart = true)
                     }
                 }
-                Column(Modifier.weight(0.60f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    DawnPreview(focusedCh, Modifier.fillMaxWidth().weight(1f))
-                    DawnNowNext(focusedCh ?: PreviewSel.ch, Modifier.fillMaxWidth().height(84.dp))
-                    (focusedCh ?: PreviewSel.ch)?.let { ChannelEpgCells(it, Modifier.fillMaxWidth().height(60.dp)) }
-                    DawnOptions(focusedCh ?: PreviewSel.ch, onFull = { full() }, onGroups = { PreviewSel.ch = null; Preview.stop(); backToGroups() },
-                        modifier = Modifier.fillMaxWidth().height(76.dp))
+                Column(Modifier.weight(0.58f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    DawnPreview(Modifier.fillMaxWidth().weight(1f, fill = false))
+                    DawnNowNext(focusedCh ?: PreviewSel.ch, Modifier.fillMaxWidth())
+                    Spacer(Modifier.weight(0.001f))
+                    DawnOptions(focusedCh ?: PreviewSel.ch, onOptions = { opts = focusedCh ?: PreviewSel.ch }, modifier = Modifier.fillMaxWidth().height(68.dp))
+                }
+            }
+            opts?.let { ch ->
+                val list = (chs as? Load.Ok)?.value.orEmpty()
+                val groups = (rows as? Load.Ok)?.value?.mapNotNull { (it as? GRow.Group)?.ref }
+                    ?.filter { it.pid != null && it.pid == ch.pid.ifBlank { g?.pid } && it.cat.id != ALL_GROUP }?.map { it.cat } ?: emptyList()
+                if (g != null) ChannelOptions(g, ch, list, groups, onDismiss = { opts = null }) { reload, close ->
+                    if (close) opts = null
+                    if (reload) st.rev++
                 }
             }
         }
@@ -818,8 +832,8 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
     val chFr = remember { FocusRequester() }
     WrapEffect(cWrap, cState)
 
-    Column(Modifier.fillMaxSize().padding(start = if (Look.layout == 0) 6.dp else 20.dp, end = if (Look.layout == 0) 6.dp else 20.dp, top = if (fullWidthClassic) 4.dp else if (Look.layout == 0) 12.dp else 22.dp)) {
-        if (!fullWidthClassic) {
+    Column(Modifier.fillMaxSize().padding(start = if (Look.layout == 0 || Look.dawn) 6.dp else 20.dp, end = if (Look.layout == 0 || Look.dawn) 6.dp else 20.dp, top = if (fullWidthClassic) 4.dp else if (Look.layout == 0) 12.dp else if (Look.dawn) 6.dp else 22.dp)) {
+        if (!fullWidthClassic && !Look.dawn) {
             T(g.cat.name, if (Look.layout == 0) Rows.font else 20.sp, C.Text, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.fillMaxWidth())
             T("OK gledaj · drži OK = opcije · ◀ grupe", 12.sp, C.Muted, maxLines = 1, modifier = Modifier.padding(bottom = 10.dp))
         }
@@ -853,7 +867,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                             val active = PreviewSel.ch?.url == ch.url || TvMemory.preview?.url == ch.url ||
                                 (TvMemory.group?.key == g.key && TvMemory.channel == i)
                             Focusable(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = if (Look.layout == 0) 4.dp else 0.dp).height(if (fullWidthClassic) 46.dp else if (Look.layout == 0) 58.dp else Rows.channel).wrapKeys(i, list.size, cWrap)
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = if (Look.layout == 0 || Look.dawn) 4.dp else 0.dp).height(if (fullWidthClassic) 46.dp else if (Look.dawn) 50.dp else if (Look.layout == 0) 58.dp else Rows.channel).wrapKeys(i, list.size, cWrap)
                                     .then(if (active) Modifier.border(1.dp, C.Green.copy(alpha = 0.48f), Rnd(12.dp)) else Modifier),
                                 onClick = {
                                     gate.run("c:${ch.url}", locked) {
@@ -871,12 +885,14 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                 onMenu = { menu = ch; menuUrl = ch.url },
                                 onFocus = { onFocusCh(ch) },
                                 focusRequester = cWrap.requester(i, if (ch.url == menuUrl) chFr else null),
-                                normal = if (active) C.Green.copy(alpha = 0.10f) else C.Card,
-                                zoom = 1.01f,
+                                normal = if (Look.dawn) Color.Transparent else if (active) C.Green.copy(alpha = 0.10f) else C.Card,
+                                focused = if (Look.dawn) Dawn.pill else null,
+                                focusBorderColor = if (Look.dawn) Color.Transparent else null,
+                                zoom = if (Look.dawn) 1.0f else 1.01f,
                             ) { f ->
                                 Row(Modifier.fillMaxSize().clipToBounds().padding(horizontal = if (fullWidthClassic) 14.dp else 10.dp), verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(if (fullWidthClassic) 12.dp else 10.dp)) {
-                                    T("${ch.num}", if (fullWidthClassic) 13.sp else if (Look.layout == 0) 11.sp else 13.sp, C.Muted,
+                                    T(if (Look.dawn) "%03d".format(ch.num) else "${ch.num}", if (fullWidthClassic) 13.sp else if (Look.layout == 0) 11.sp else if (Look.dawn) 15.sp else 13.sp, if (Look.dawn) (if (f) Dawn.onPill else Color(0xFFD5DBE3)) else C.Muted,
                                         modifier = Modifier.width(if (fullWidthClassic) 34.dp else if (Look.layout == 0) 26.dp else 34.dp))
                                     ChannelLogo(ch.logo, ch.name)
                                     if (fullWidthClassic) {
@@ -888,12 +904,15 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                             T(ch.name, Rows.font, if (f) C.Text else C.Soft, if (f) FontWeight.SemiBold else FontWeight.Normal,
                                                 maxLines = 1, modifier = Modifier.weight(0.34f))
                                             ChannelEpgLine(ch, Modifier.weight(0.66f))
+                                        } else if (Look.dawn) {
+                                            T(ch.name, 16.sp, if (f) Dawn.onPill else Color(0xFFEFF2F6), if (f) FontWeight.SemiBold else FontWeight.Normal,
+                                                maxLines = 1, modifier = Modifier.weight(1f))
                                         } else {
                                             T(ch.name, Rows.font, if (f) C.Text else C.Soft, if (f) FontWeight.SemiBold else FontWeight.Normal,
                                                 maxLines = 1, modifier = Modifier.weight(1f))
                                         }
                                     }
-                                    qualityOf(ch.name)?.let { Chip(it, C.Card, C.Soft) }
+                                    if (!Look.dawn) qualityOf(ch.name)?.let { Chip(it, C.Card, C.Soft) }
                                     if (locked) Ico(R.drawable.lc_lock, 16.dp, C.Muted)
                                     if (!isFav && Favs.inAny(ctx, ch)) T("★", 17.sp, C.Amber)
                                     if (active) Dot(C.Green, 8.dp)

@@ -2407,6 +2407,14 @@ New Dawn: jedan nivo na ekranu, prethodni nestaje. Tamno plava.|New Dawn: one le
 Ponoćno plava|Midnight blue|Mitternachtsblau|Ponoćno plava|Поноћно плава|Среднощно синьо|Albastru de miezul nopții|Gece mavisi|Blu notte|أزرق منتصف الليل
 OK ili ▶ otvara grupu · ◀ meni|OK or ▶ opens the group · ◀ menu|OK oder ▶ öffnet die Gruppe · ◀ Menü|OK ili ▶ otvara grupu · ◀ izbornik|OK или ▶ отвара групу · ◀ мени|OK или ▶ отваря групата · ◀ меню|OK sau ▶ deschide grupul · ◀ meniu|OK veya ▶ grubu açar · ◀ menü|OK o ▶ apre il gruppo · ◀ menu|OK أو ▶ يفتح المجموعة · ◀ القائمة
 Cijeli ekran|Full screen|Vollbild|Cijeli zaslon|Цео екран|Цял екран|Ecran complet|Tam ekran|Schermo intero|ملء الشاشة
+Slijedi:|Next:|Danach:|Slijedi:|Следи:|Следва:|Urmează:|Sıradaki:|A seguire:|التالي:
+Prvo pritisni OK na kanalu za pregled.|First press OK on a channel to start the preview.|Zuerst OK auf einem Sender drücken, um die Vorschau zu starten.|Prvo pritisni OK na kanalu za pregled.|Прво притисни OK на каналу за преглед.|Първо натисни OK на канал за преглед.|Apasă mai întâi OK pe un canal pentru previzualizare.|Önizleme için önce bir kanalda OK'a bas.|Prima premi OK su un canale per l'anteprima.|اضغط أولاً OK على قناة للمعاينة.
+Ovaj kanal nema titlova.|This channel has no subtitles.|Dieser Sender hat keine Untertitel.|Ovaj kanal nema titlova.|Овај канал нема титлова.|Този канал няма субтитри.|Acest canal nu are subtitrări.|Bu kanalda altyazı yok.|Questo canale non ha sottotitoli.|هذه القناة بلا ترجمة.
+Ovaj kanal ima samo jedan zvuk.|This channel has only one audio track.|Dieser Sender hat nur eine Tonspur.|Ovaj kanal ima samo jedan zvuk.|Овај канал има само један звук.|Този канал има само един звук.|Acest canal are o singură pistă audio.|Bu kanalda yalnızca bir ses var.|Questo canale ha una sola traccia audio.|هذه القناة لها صوت واحد فقط.
+Navigacija|Navigate|Navigieren|Navigacija|Навигација|Навигация|Navigare|Gezin|Naviga|تنقل
+Odaberi|Select|Auswählen|Odaberi|Одабери|Избери|Selectează|Seç|Seleziona|اختر
+Otvori grupu|Open group|Gruppe öffnen|Otvori grupu|Отвори групу|Отвори групата|Deschide grupul|Grubu aç|Apri gruppo|افتح المجموعة
+Meni|Menu|Menü|Izbornik|Мени|Меню|Meniu|Menü|Menu|القائمة
 """.trimIndent()
 
 private val DICT: Map<String, Map<String, String>> by lazy {

@@ -1,5 +1,6 @@
 package com.pretorian.tv
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -30,10 +31,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -45,61 +46,97 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * New Dawn layout (Settings › Appearance › TV layout): one level on the screen at a time.
- * Menu › groups › channels with a big preview, EPG and options › full screen. OK goes one level in and the
- * previous level disappears; Back (and ◀ in TV) goes exactly one level out, with the focus on where you came from.
+ * New Dawn layout (Settings › Appearance › TV layout): one level on the screen at a time, over a misty night
+ * background with a street lamp. Menu › groups › channels (preview, now/next, options) › full screen.
+ * OK goes one level in and the previous level disappears; Back (and ◀ in TV) goes exactly one level out.
  */
 object Dawn {
     /** the section last opened from the menu: Back to the menu lands on it */
     var last: Screen? = null
+    /** Home opened from the menu (its rows full screen); Back closes it and shows the menu again */
+    var homeOpen by mutableStateOf(false)
     /** extra part of the path in the top bar (the TV group) */
     var crumb by mutableStateOf("")
-    /** New Dawn starts in midnight blue; black and white and OLED stay if you already use them */
+    /** "3 / 124" in the top bar while channels are shown */
+    var pos by mutableStateOf("")
+    /** remote hints at the bottom, set by the TV screen; empty = the shell's own */
+    var hints by mutableStateOf<List<Pair<String, String>>>(emptyList())
+    /** the focus pill: light grey with dark text, the same in every New Dawn list */
+    val pill = Color(0xFFD5DBE3)
+    val onPill = Color(0xFF111A26)
+    /** New Dawn starts in its misty night colours; black and white and OLED stay if you already use them */
     fun pickTheme() { if (Look.theme != "ponoc" && Look.theme != "bw" && Look.theme != "oled") Look.theme = "ponoc" }
 }
 
-/** Frosted panel used everywhere in New Dawn. */
-fun Modifier.dawnGlass(r: Dp = 22.dp): Modifier = this.clip(Rnd(r)).background(C.Rail).border(1.dp, C.Line, Rnd(r))
+/** Frosted grey-blue panel used everywhere in New Dawn. */
+fun Modifier.dawnGlass(r: Dp = 18.dp): Modifier = this.clip(Rnd(r)).background(Color(0x8C0E1724)).border(1.dp, Color(0x1FFFFFFF), Rnd(r))
 
-/** Calm background: theme colour, a soft glow and two misty mountain lines. Lite: only the colour. */
+/** Misty night: blue-grey fog, a house corner on the right and a glowing street lamp. Drawn, not a picture: sharp on every screen. */
 @Composable
 fun DawnBackground() {
-    if (Perf.lite) return
-    val glow = lerp(C.Bg, C.Red, 0.22f)
-    val far = lerp(C.Bg, C.Text, 0.10f)
-    val near = lerp(C.Bg, C.Text, 0.05f)
     Canvas(Modifier.fillMaxSize()) {
         val w = size.width; val h = size.height
-        drawRect(Brush.radialGradient(listOf(glow.copy(alpha = 0.55f), Color.Transparent), center = Offset(w * 0.72f, h * 0.26f), radius = w * 0.55f))
-        fun ridge(points: List<Pair<Float, Float>>, color: Color) {
-            val p = Path()
-            p.moveTo(0f, h * points.first().second)
-            for (i in 1 until points.size) {
-                val (x0, y0) = points[i - 1]; val (x1, y1) = points[i]
-                p.quadraticBezierTo(w * x0 + (w * (x1 - x0)) / 2f, h * minOf(y0, y1) - h * 0.04f, w * x1, h * y1)
-            }
-            p.lineTo(w, h); p.lineTo(0f, h); p.close()
-            drawPath(p, Brush.verticalGradient(listOf(color, C.Bg), startY = h * 0.45f, endY = h))
-        }
-        ridge(listOf(0f to 0.72f, 0.18f to 0.55f, 0.37f to 0.62f, 0.55f to 0.48f, 0.74f to 0.6f, 0.88f to 0.5f, 1f to 0.6f), far)
-        ridge(listOf(0f to 0.84f, 0.22f to 0.72f, 0.45f to 0.8f, 0.66f to 0.7f, 0.86f to 0.8f, 1f to 0.74f), near)
-        drawRect(Brush.verticalGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.035f), Color.Transparent), startY = h * 0.55f, endY = h * 0.75f))
+        drawRect(Brush.verticalGradient(listOf(Color(0xFF16243A), Color(0xFF24364C), Color(0xFF0D1622)), startY = 0f, endY = h))
+        val lx = w * 0.64f; val ly = h * 0.36f
+        drawRect(Brush.radialGradient(listOf(Color(0x38A5B9D0), Color(0x00A5B9D0)), center = Offset(lx, ly), radius = w * 0.42f))
+        // house: roof slab and wall in the fog
+        drawPath(Path().apply { moveTo(w * 0.78f, h * 0.38f); lineTo(w, h * 0.02f); lineTo(w, h * 0.10f); lineTo(w * 0.83f, h * 0.40f); close() }, Color(0x8C0C1420))
+        drawPath(Path().apply { moveTo(w * 0.83f, h * 0.40f); lineTo(w, h * 0.10f); lineTo(w, h * 0.86f); lineTo(w * 0.83f, h * 0.86f); close() },
+            Brush.verticalGradient(listOf(Color(0x8C141E2C), Color(0x40141E2C)), startY = h * 0.1f, endY = h * 0.86f))
+        // lamp post
+        val u = h / 720f
+        drawRect(Brush.verticalGradient(listOf(Color(0xF2121820), Color(0x26121820)), startY = ly, endY = h * 0.95f),
+            topLeft = Offset(lx - 3 * u, ly + 28 * u), size = Size(6 * u, h * 0.6f))
+        drawRect(Color(0x99121820), topLeft = Offset(lx - 7 * u, h * 0.70f), size = Size(14 * u, 4 * u))
+        // warm halo
+        drawRect(Brush.radialGradient(0f to Color(0x8CFFD696), 0.35f to Color(0x2EFFC882), 1f to Color(0x00FFC882), center = Offset(lx, ly), radius = w * 0.10f))
+        // lantern: glass, roof, base
+        drawPath(Path().apply { moveTo(lx - 14 * u, ly - 16 * u); lineTo(lx + 14 * u, ly - 16 * u); lineTo(lx + 10 * u, ly + 22 * u); lineTo(lx - 10 * u, ly + 22 * u); close() }, Color(0xFFFFE2B0))
+        drawPath(Path().apply { moveTo(lx - 20 * u, ly - 16 * u); lineTo(lx, ly - 30 * u); lineTo(lx + 20 * u, ly - 16 * u); close() }, Color(0xFF1A222D))
+        drawRect(Color(0xFF1A222D), topLeft = Offset(lx - 12 * u, ly + 22 * u), size = Size(24 * u, 6 * u))
+        drawRect(Color(0xFF1A222D), topLeft = Offset(lx - 1.5f * u, ly - 16 * u), size = Size(3 * u, 38 * u))
+        drawCircle(Brush.radialGradient(listOf(Color(0xE6FFF0D2), Color(0x00FFF0D2)), center = Offset(lx, ly + 4 * u), radius = 22 * u), radius = 22 * u, center = Offset(lx, ly + 4 * u))
+        // ground fog
+        drawRect(Brush.verticalGradient(0f to Color(0x00788799), 0.5f to Color(0x1A788799), 1f to Color(0x80080C14), startY = h * 0.6f, endY = h),
+            topLeft = Offset(0f, h * 0.6f), size = Size(w, h * 0.4f))
     }
 }
 
 private data class DawnItem(val screen: Screen, val icon: Int, val label: String, val badge: Int = 0)
 
-/** The whole app in New Dawn: the menu only on Home; every other screen fills the screen under a slim top bar. */
+/** The whole app in New Dawn: the menu alone on the start screen; every section fills the screen under the top bar. */
 @Composable
 fun DawnShell(top: Screen, nav: Nav, content: @Composable () -> Unit) {
-    Box(Modifier.fillMaxSize().background(C.BgBrush)) {
+    val menu = top == Screen.Home && !Dawn.homeOpen
+    BackHandler(enabled = top == Screen.Home && Dawn.homeOpen) { Dawn.homeOpen = false }
+    Box(Modifier.fillMaxSize().background(Color(0xFF16243A))) {
         DawnBackground()
-        if (top == Screen.Home) Row(Modifier.fillMaxSize()) {
-            DawnMenu(nav)
-            Box(Modifier.weight(1f).fillMaxHeight()) { content() }
-        } else Column(Modifier.fillMaxSize()) {
-            DawnTopBar(top)
-            Box(Modifier.weight(1f).fillMaxWidth()) { content() }
+        Column(Modifier.fillMaxSize()) {
+            DawnTopBar(top, menu)
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                if (menu) DawnMenu(nav) else content()
+            }
+            val hints = when {
+                top == Screen.Tv && Dawn.hints.isNotEmpty() -> Dawn.hints
+                menu -> listOf("▲▼" to "Navigacija", "OK" to "Odaberi")
+                else -> listOf("▲▼" to "Navigacija", "OK" to "Odaberi", "Back" to "Nazad")
+            }
+            DawnHintBar(hints)
+        }
+    }
+}
+
+@Composable
+fun DawnHintBar(hints: List<Pair<String, String>>) {
+    Row(Modifier.fillMaxWidth().height(46.dp).padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(30.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically) {
+        hints.forEach { (key, label) ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                Box(Modifier.clip(Rnd(6.dp)).border(1.dp, Color(0x99FFFFFF), Rnd(6.dp)).padding(horizontal = 7.dp, vertical = 1.dp)) {
+                    T(key, 13.sp, Color.White, FontWeight.SemiBold)
+                }
+                T(label, 15.sp, Color(0xFFD5DBE3))
+            }
         }
     }
 }
@@ -110,166 +147,178 @@ private fun DawnMenu(nav: Nav) {
         DawnItem(Screen.Home, R.drawable.lc_house, "Početna"),
         DawnItem(Screen.Tv, R.drawable.lc_tv, "TV", Notes.unread("reminder")),
         DawnItem(Screen.Movies, R.drawable.lc_film, "Filmovi", NewContent.count("vod")),
-        DawnItem(Screen.Series, R.drawable.lc_monitor, "Serije", NewContent.count("series")),
-        DawnItem(Screen.Catchup, R.drawable.lc_history, "Catch-up"),
+        DawnItem(Screen.Series, R.drawable.lc_layers, "Serije", NewContent.count("series")),
         DawnItem(Screen.Sports, R.drawable.lc_trophy, "Sport"),
+        DawnItem(Screen.Catchup, R.drawable.lc_history, "Catch-up"),
         DawnItem(Screen.Search, R.drawable.lc_search, "Pretraga"),
         DawnItem(Screen.Settings, R.drawable.lc_settings, "Postavke", if (Updater.available != null) 1 else 0),
     )
     val frs = remember { items.map { FocusRequester() } }
-    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     DisposableEffect(Unit) { onDispose { Chrome.inRail = false } }
-    // back from a section: the focus waits on that section's item
+    // back from a section: the focus waits on that section's item (first start: TV)
     LaunchedEffect(Unit) {
-        val i = items.indexOfFirst { it.screen == Dawn.last }.coerceAtLeast(0)
+        val i = items.indexOfFirst { it.screen == (Dawn.last ?: Screen.Tv) }.coerceAtLeast(0)
         delay(120); frs[i].tryFocus()
     }
-    Column(Modifier.width(320.dp).fillMaxHeight().padding(start = 28.dp, top = 24.dp, bottom = 24.dp)
-        .dawnGlass(26.dp).onFocusChanged { Chrome.inRail = it.hasFocus }.padding(horizontal = 14.dp, vertical = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(Modifier.fillMaxWidth().padding(start = 8.dp, bottom = 14.dp), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            LogoTile(34.dp)
-            T("PRETORIAN", 18.sp, C.Text, FontWeight.Bold, modifier = Modifier.weight(1f))
-            ProfileButton(34.dp)
-        }
+    Column(Modifier.padding(start = 34.dp, top = 6.dp).width(330.dp)
+        .dawnGlass().onFocusChanged { Chrome.inRail = it.hasFocus }.padding(horizontal = 10.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)) {
         items.forEachIndexed { i, it ->
-            if (it.screen == Screen.Settings) Spacer(Modifier.weight(1f))
             Box {
                 Focusable(
-                    modifier = Modifier.fillMaxWidth().height(58.dp),
+                    modifier = Modifier.fillMaxWidth().height(54.dp),
                     onClick = {
                         Chrome.inRail = false
                         Dawn.last = it.screen
-                        if (it.screen == Screen.Home) focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Right) else nav.root(it.screen)
+                        if (it.screen == Screen.Home) Dawn.homeOpen = true else nav.root(it.screen)
                     },
                     focusRequester = frs[i],
-                    shape = Rnd(16.dp),
+                    shape = Rnd(12.dp),
                     normal = Color.Transparent,
-                    focused = C.Red,
-                    zoom = 1.02f,
+                    focused = Dawn.pill,
+                    focusBorderColor = Color.Transparent,
+                    zoom = 1.0f,
                 ) { f ->
-                    val c = if (f) C.OnRed else C.Soft
+                    val c = if (f) Dawn.onPill else Color(0xFFEFF2F6)
                     Row(Modifier.fillMaxSize().padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                        Ico(it.icon, 28.dp, c)
-                        T(it.label, 20.sp, c, if (f) FontWeight.SemiBold else FontWeight.Medium, modifier = Modifier.weight(1f))
+                        horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                        Ico(it.icon, 27.dp, c)
+                        T(it.label, 19.sp, c, if (f) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
                     }
                 }
-                if (it.badge > 0) Box(Modifier.align(Alignment.TopEnd).offset(x = (-8).dp, y = 6.dp)) { Bell(it.badge) }
+                if (it.badge > 0) Box(Modifier.align(Alignment.TopEnd).offset(x = (-10).dp, y = 8.dp)) { Bell(it.badge) }
             }
         }
     }
 }
 
 @Composable
-private fun DawnTopBar(top: Screen) {
-    val section = when (top) {
-        Screen.Tv -> "TV"; Screen.Movies, is Screen.MovieDetail -> "Filmovi"; Screen.Series, is Screen.SeriesDetail -> "Serije"
+private fun DawnTopBar(top: Screen, menu: Boolean) {
+    val section = if (menu) "" else when (top) {
+        Screen.Home -> "Početna"; Screen.Tv -> "TV"; Screen.Movies, is Screen.MovieDetail -> "Filmovi"; Screen.Series, is Screen.SeriesDetail -> "Serije"
         Screen.Catchup -> "Catch-up"; Screen.Sports -> "Sport"; Screen.Search -> "Pretraga"
         Screen.Settings, Screen.AddPlaylist -> "Postavke"; else -> ""
     }
     var now by remember { mutableStateOf(Date()) }
     LaunchedEffect(Unit) { while (true) { now = Date(); delay(15_000) } }
-    Row(Modifier.fillMaxWidth().height(62.dp).padding(horizontal = 34.dp), verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        LogoTile(28.dp)
-        T("PRETORIAN", 16.sp, C.Text, FontWeight.Bold)
+    val sep: @Composable () -> Unit = { Box(Modifier.width(1.dp).height(20.dp).background(Color(0x4DFFFFFF))) }
+    Row(Modifier.fillMaxWidth().height(72.dp).padding(horizontal = 38.dp), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Ico(R.drawable.lc_play, 30.dp, Color.White)
+        T("PRETORIAN TV", 21.sp, Color.White, FontWeight.Bold)
         if (section.isNotEmpty()) {
-            Box(Modifier.width(1.dp).height(22.dp).background(C.Line))
-            T(section, 16.sp, if (Dawn.crumb.isEmpty()) C.Text else C.Muted, FontWeight.SemiBold)
-            if (Dawn.crumb.isNotEmpty()) {
-                Ico(R.drawable.lc_chevron_right, 16.dp, C.Muted)
-                T(Dawn.crumb, 16.sp, C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f, fill = false))
+            sep()
+            if (Dawn.crumb.isEmpty()) T(section, 18.sp, Color.White, FontWeight.SemiBold)
+            else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                T(section, 17.sp, Color(0xFFD5DBE3))
+                T("›", 17.sp, Color(0xFFD5DBE3))
+                T(Dawn.crumb, 17.sp, Color.White, FontWeight.SemiBold)
             }
         }
         Spacer(Modifier.weight(1f))
-        T(SimpleDateFormat("EEE, d. MMM", Locale(Look.lang)).format(now), 15.sp, C.Muted)
-        T(SimpleDateFormat("HH:mm", Locale.getDefault()).format(now), 18.sp, C.Text, FontWeight.SemiBold)
+        if (top == Screen.Tv && Dawn.pos.isNotEmpty()) { T(Dawn.pos, 15.sp, Color(0xFFD5DBE3)); sep() }
+        T(SimpleDateFormat("EEE, d MMM", Locale(Look.lang)).format(now), 15.sp, Color(0xFFD5DBE3))
+        sep()
+        T(SimpleDateFormat("HH:mm", Locale.getDefault()).format(now), 17.sp, Color.White, FontWeight.Bold)
     }
 }
 
-/** Big text at the bottom right of the groups level: which group you stand on. */
+/** Preview area: the picture after the first OK, before that a calm box with a play mark. */
 @Composable
-fun DawnHero(title: String, sub: String?, modifier: Modifier = Modifier) {
-    Column(modifier, horizontalAlignment = Alignment.End) {
-        T(title, 46.sp, C.Text, FontWeight.Light)
-        if (sub != null) T(sub, 16.sp, C.Muted)
-    }
-}
-
-/** Preview area: the picture after the first OK, before that the channel's logo and "OK to watch". */
-@Composable
-fun DawnPreview(focused: Channel?, modifier: Modifier) {
+fun DawnPreview(modifier: Modifier) {
     val playing = PreviewSel.ch
-    Box(modifier, contentAlignment = Alignment.Center) {
-        if (playing != null) PreviewBox(playing, Modifier.fillMaxHeight())
-        else Box(Modifier.fillMaxHeight().aspectRatio(16f / 9f).dawnGlass(18.dp), contentAlignment = Alignment.Center) {
-            if (focused != null) Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Box(Modifier.size(64.dp), contentAlignment = Alignment.Center) { ChannelLogo(focused.logo, focused.name) }
-                T(focused.name, 20.sp, C.Text, FontWeight.SemiBold)
-                Row(Modifier.clip(Rnd(12.dp)).background(Color.Black.copy(alpha = 0.35f)).padding(horizontal = 14.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Ico(R.drawable.lc_play, 18.dp, C.Text)
-                    T("OK = pregled · OK još jednom = cijeli ekran", 14.sp, C.Text)
-                }
-            } else T("Izaberi kanal", 15.sp, C.Muted)
-        }
+    Box(modifier.aspectRatio(16f / 9f).dawnGlass(14.dp), contentAlignment = Alignment.Center) {
+        if (playing != null) PreviewBox(playing, Modifier.fillMaxSize())
+        else Ico(R.drawable.lc_play, 54.dp, Color(0x99D5DBE3))
     }
 }
 
-/** Now and next of a channel, with a progress line. */
+/** Now and next of a channel, with a progress line, under the preview. */
 @Composable
 fun DawnNowNext(ch: Channel?, modifier: Modifier) {
     val ctx = LocalContext.current
-    Row(modifier.dawnGlass(18.dp).padding(horizontal = 22.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-        if (ch == null) { T("Stani na kanal da vidiš program", 14.sp, C.Muted); return@Row }
+    Column(modifier.dawnGlass(14.dp)) {
+        if (ch == null) { Box(Modifier.fillMaxWidth().padding(16.dp)) { T("Stani na kanal da vidiš program", 14.sp, C.Muted) }; return@Column }
         val st by load(ch.url, EpgShift.rev) { Store.byId(ctx, ch.pid)?.let { Repo.epg(it, ch, 3) } ?: emptyList() }
         val list = (st as? Load.Ok)?.value.orEmpty()
         val t = System.currentTimeMillis()
         val cur = list.firstOrNull { it.start <= t && it.end > t }
         val next = list.firstOrNull { it.start > t }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            T(cur?.title ?: ch.name, 19.sp, C.Text, FontWeight.SemiBold)
-            T(if (cur != null) ch.name + " · " + cur.times() else if (st is Load.Loading) tr("Učitavam program…") else tr("Nema EPG vodiča"), 13.sp, C.Muted)
-            if (cur != null) Box(Modifier.width(260.dp).height(4.dp).clip(Rnd(2.dp)).background(C.CardHi)) {
-                Box(Modifier.fillMaxWidth(cur.progress()).height(4.dp).background(C.Red))
+        Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            T(ch.name, 18.sp, Color.White, FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                T(cur?.title ?: if (st is Load.Loading) tr("Učitavam program…") else tr("Nema EPG vodiča"), 14.sp, Color(0xFFC3CCD8), modifier = Modifier.weight(1f))
+                if (cur != null) T(cur.times(), 14.sp, Color(0xFFC3CCD8))
+            }
+            if (cur != null) Box(Modifier.padding(top = 6.dp).fillMaxWidth().height(4.dp).clip(Rnd(2.dp)).background(Color(0x33FFFFFF))) {
+                Box(Modifier.fillMaxWidth(cur.progress()).height(4.dp).background(Color(0xFFB9D0F0)))
             }
         }
         if (next != null) {
-            Box(Modifier.width(1.dp).height(40.dp).background(C.Line))
-            Column(horizontalAlignment = Alignment.End) {
-                T("Slijedi", 12.sp, C.Muted)
-                T(next.title, 15.sp, C.Text, FontWeight.Medium)
-                T(next.times(), 12.sp, C.Muted)
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0x1FFFFFFF)))
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                T("Slijedi:", 14.sp, Color(0xFFC3CCD8))
+                T(next.title, 14.sp, Color.White, FontWeight.Medium, modifier = Modifier.weight(1f))
+                T(next.times(), 14.sp, Color(0xFFC3CCD8))
             }
         }
-        qualityOf(ch.name)?.let { Chip(it, C.Card, C.Soft) }
     }
 }
 
-/** Bottom options of the channels level: big, clear icons. */
+/** Bottom options of the channels level: Favourite, EPG, Audio, Subtitles, Options. */
 @Composable
-fun DawnOptions(ch: Channel?, onFull: () -> Unit, onGroups: () -> Unit, modifier: Modifier) {
+fun DawnOptions(ch: Channel?, onOptions: () -> Unit, modifier: Modifier) {
     var fav by remember { mutableStateOf<Channel?>(null) }
     var epg by remember { mutableStateOf<Channel?>(null) }
-    Row(modifier.dawnGlass(18.dp).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    var tracks by remember { mutableStateOf(0) }
+    Row(modifier.dawnGlass(14.dp).padding(5.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         @Composable fun Opt(icon: Int, label: String, onClick: () -> Unit) {
-            Focusable(modifier = Modifier.weight(1f).fillMaxHeight(), onClick = onClick, shape = Rnd(14.dp), normal = Color.Transparent,
-                focused = C.Red, zoom = 1.03f) { f ->
+            Focusable(modifier = Modifier.weight(1f).fillMaxHeight(), onClick = onClick, shape = Rnd(10.dp), normal = Color.Transparent,
+                focused = Dawn.pill, focusBorderColor = Color.Transparent, zoom = 1.0f) { f ->
                 Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterVertically)) {
-                    Ico(icon, 26.dp, if (f) C.OnRed else C.Soft)
-                    T(label, 13.sp, if (f) C.OnRed else C.Soft, FontWeight.Medium)
+                    Ico(icon, 24.dp, if (f) Dawn.onPill else Color(0xFFEFF2F6))
+                    T(label, 12.sp, if (f) Dawn.onPill else Color(0xFFD5DBE3), FontWeight.Medium)
                 }
             }
         }
-        Opt(R.drawable.lc_star, "Favoriti") { ch?.let { fav = it } }
+        Opt(R.drawable.lc_star, "Favorit") { ch?.let { fav = it } }
         Opt(R.drawable.lc_calendar, "EPG") { ch?.let { epg = it } }
-        Opt(R.drawable.lc_maximize, "Cijeli ekran") { onFull() }
-        Opt(R.drawable.lc_folder, "Grupe") { onGroups() }
+        Opt(R.drawable.lc_volume, "Audio") { tracks = androidx.media3.common.C.TRACK_TYPE_AUDIO }
+        Opt(R.drawable.lc_captions, "Titlovi") { tracks = androidx.media3.common.C.TRACK_TYPE_TEXT }
+        Opt(R.drawable.lc_settings, "Opcije") { onOptions() }
     }
     fav?.let { c -> FavPicker(c) { fav = null } }
     epg?.let { c -> Popup(c.name, { epg = null }, width = 720.dp) { EpgList(c, 16, Modifier.fillMaxWidth().height(440.dp)) } }
+    if (tracks != 0) DawnTracks(tracks) { tracks = 0 }
+}
+
+/** Audio or subtitle tracks of the channel in the preview. */
+@Composable
+private fun DawnTracks(type: Int, onDismiss: () -> Unit) {
+    val p = Preview.player
+    val text = type == androidx.media3.common.C.TRACK_TYPE_TEXT
+    val groups = remember(p) { p?.currentTracks?.groups?.filter { it.type == type }.orEmpty() }
+    Popup(if (text) "Titlovi" else "Audio", onDismiss) {
+        if (p == null || PreviewSel.ch == null) T("Prvo pritisni OK na kanalu za pregled.", 14.sp, C.Soft, maxLines = 2)
+        else if (groups.isEmpty()) T(if (text) "Ovaj kanal nema titlova." else "Ovaj kanal ima samo jedan zvuk.", 14.sp, C.Soft, maxLines = 2)
+        else {
+            if (text) OptionRow("Isključeno", R.drawable.lc_x) {
+                p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setTrackTypeDisabled(type, true).build(); onDismiss()
+            }
+            groups.forEach { g ->
+                for (i in 0 until g.length) {
+                    val f = g.getTrackFormat(i)
+                    val name = listOfNotNull(f.label, f.language?.uppercase()).distinct().joinToString(" · ").ifBlank { "#${i + 1}" }
+                    OptionRow(name, if (g.isTrackSelected(i)) R.drawable.lc_check else if (text) R.drawable.lc_captions else R.drawable.lc_volume,
+                        color = if (g.isTrackSelected(i)) C.Green else null) {
+                        p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setTrackTypeDisabled(type, false)
+                            .setOverrideForType(androidx.media3.common.TrackSelectionOverride(g.mediaTrackGroup, i)).build()
+                        onDismiss()
+                    }
+                }
+            }
+        }
+    }
 }
