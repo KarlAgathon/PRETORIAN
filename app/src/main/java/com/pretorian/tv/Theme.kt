@@ -33,7 +33,7 @@ object Look {
     var resBadge by mutableIntStateOf(1)       // resolution in the player corner: 0 off, 1 on start, 2 always
     var bigText by mutableStateOf(false)      // larger text everywhere (for parents, far sofas)
     var layout by mutableIntStateOf(2)         // 0 classic, 1 New Wave, 2 New Age
-    var tvDesign by mutableIntStateOf(0)       // 0 New Age, 1 New Era (three-panel TV browser)
+    var tvDesign by mutableIntStateOf(1)       // 0 New Age, 1 New Era (three-panel TV browser)
     val wave get() = layout >= 1
     val age get() = layout == 2
 
@@ -79,7 +79,7 @@ object Look {
         groupFrame = p.getBoolean("look_groupframe", true)
         resBadge = p.getInt("look_resbadge", 1)
         layout = p.getInt("look_layout", 2).coerceIn(0, 2)
-        tvDesign = p.getInt("look_tvdesign", 0).coerceIn(0, 1)
+        tvDesign = p.getInt("look_tvdesign", 1).coerceIn(0, 1)
         bigText = false   // replaced by the size slider, which grows everything together
         // 0.3: the new modern home tiles become the default once
         if (p.getInt("look_v", 0) < 3) { tileStyle = 3; p.edit().putInt("look_v", 3).putInt("look_tilestyle", 3).apply() }
