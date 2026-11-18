@@ -36,6 +36,7 @@ private const val COLS = "bs|en|de|hr|sr|bg|ro|tr|it|ar"
 
 /* One line per text: bs | en | de | hr | sr | bg | ro | tr | it | ar.  "=" means the same as Bosnian. */
 private val TABLE = """
+Zadano / automatski|Default / Auto|Standard / Automatisch|Zadano / automatski|Подразумевано / аутоматски|По подразбиране / автоматично|Implicit / automat|Varsayılan / otomatik|Predefinito / automatico|افتراضي / تلقائي
 Nema gledanih kanala.|No watched channels.|Keine angesehenen Sender.|Nema gledanih kanala.|Нема гледаних канала.|Няма гледани канали.|Nu există canale vizionate.|İzlenen kanal yok.|Nessun canale guardato.|لا توجد قنوات تمت مشاهدتها.
 Lista posljednjih gledanih kanala bit će obrisana.|The list of recently watched channels will be cleared.|Die Liste der zuletzt angesehenen Sender wird gelöscht.|Popis nedavno gledanih kanala bit će izbrisan.|Листа недавно гледаних канала биће обрисана.|Списъкът с последно гледани канали ще бъде изчистен.|Lista canalelor vizionate recent va fi ștearsă.|Son izlenen kanallar listesi temizlenecek.|L'elenco degli ultimi canali guardati verrà cancellato.|سيتم مسح قائمة القنوات التي شاهدتها مؤخرًا.
 Historija · %s/10|History · %s/10|Verlauf · %s/10|Povijest · %s/10|Историја · %s/10|История · %s/10|Istoric · %s/10|Geçmiş · %s/10|Cronologia · %s/10|السجل · %s/10
