@@ -334,7 +334,24 @@ fun SportMixScreen(nav: Nav) {
     val mine = remember(mineRev, withCh) { MyTeams.list().mapNotNull { t -> withCh.filter { e -> e.home?.name.equals(t, true) || e.away?.name.equals(t, true) }
         .sortedWith(compareBy({ it.state != "in" }, { it.state == "post" }, { it.start })).firstOrNull()?.let { t to it } } }
 
-    Row(Modifier.fillMaxSize().padding(start = 24.dp, end = 24.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(Modifier.fillMaxSize().padding(horizontal = 24.dp)) {
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                T("SPORTS CENTER", 20.sp, C.Text, FontWeight.Bold)
+                T("Utakmice, timovi i TV prenosi", 11.sp, C.Muted)
+            }
+            Spacer(Modifier.weight(1f))
+            T(shown.size.toString() + "  MATCHES", 12.sp, C.Soft, FontWeight.SemiBold)
+        }
+        Row(Modifier.fillMaxWidth().padding(bottom = 10.dp).horizontalScroll(androidx.compose.foundation.rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Chip2(tr("Sportovi") + if (sportsOn.isEmpty()) "" else " · " + sportsOn.size, false) { pick = "sport" }
+            Chip2(tr("Timovi") + if (selectedTeams.isEmpty()) "" else " · " + selectedTeams.size, false) { pick = "teams" }
+            Chip2(tr("Države") + if (selectedCountries.isEmpty()) "" else " · " + selectedCountries.size, false) { pick = "countries" }
+            Chip2(tr("Regije") + " ▾", false) { pick = "region" }
+            Chip2(tr("Takmičenja") + if (selectedLeagues.isEmpty()) "" else " · " + selectedLeagues.size, false) { pick = "leagues" }
+        }
+        Row(Modifier.weight(1f).fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         // ------------------------------------------------ left: your teams, filters, matches by league
         Column(Modifier.weight(1f).fillMaxHeight().glassSide(18.dp).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (mine.isNotEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -357,13 +374,6 @@ fun SportMixScreen(nav: Nav) {
                     val n = withCh.count { e -> inSport(e) && inUserFilters(e) && (if (id == "live") e.live else inTab(e, id)) }
                     Chip2((if (id == "live") "● " else "") + tr(l) + (if (id == "done" || (id == "soon" && other == null && tab != "soon")) "" else " · $n"), tab == id, if (tab == id) tabFr else null) { tab = id }
                 }
-            }
-            Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
-                Chip2(tr("Sportovi") + if (sportsOn.isEmpty()) "" else " · " + sportsOn.size, false) { pick = "sport" }
-                Chip2(tr("Timovi") + if (selectedTeams.isEmpty()) "" else " · " + selectedTeams.size, false) { pick = "teams" }
-                Chip2(tr("Države") + if (selectedCountries.isEmpty()) "" else " · " + selectedCountries.size, false) { pick = "countries" }
-                Chip2(tr("Regije") + " ▾", false) { pick = "region" }
-                Chip2(tr("Takmičenja") + if (selectedLeagues.isEmpty()) "" else " · " + selectedLeagues.size, false) { pick = "leagues" }
             }
             if (loading && shown.isEmpty()) Loading("Učitavam utakmice…")
             else if (shown.isEmpty()) Message(when (tab) { "live" -> "Trenutno nema utakmica uživo"; "soon" -> "Nema utakmica uskoro"; "mine" -> "Ne pratiš nijednu utakmicu · dugi OK na utakmicu › Prati"; "fav" -> "Nema utakmica tvojih favorita u idućih 10 dana · ＋ Države ili ＋ Timovi"; else -> "Nema završenih utakmica" })
@@ -400,6 +410,7 @@ fun SportMixScreen(nav: Nav) {
             }
             if (ev != null) MatchCard(ev, playing, chipFr, firstChipFr, onPlay = { ch -> if (playing?.url == ch.url) { SportUi.back = "chip"; playChannels(nav, listOf(ch), 0) } else playing = ch }, onMenu = { menu = ev })
         }
+    }
     }
     // long OK on a match: reminder, your team, watch now
     menu?.let { e ->
