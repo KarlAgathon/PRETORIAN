@@ -905,7 +905,139 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                                     else (lists.firstOrNull() ?: Favs.addList(ctx, tr("Favoriti"))).let { Favs.toggle(it.id, c) }
                                     Toast.makeText(ctx, tr(if (wasFavorite) "Uklonjeno iz favorite" else "Dodano u favorite"), Toast.LENGTH_SHORT).show()
                                 }
-                                "subs" -> {
+                                "subs" -> { bar = false; dialog = "subs" }
+                                "zoom" -> { bar = false; dialog = "zoom" }
+                                "audio" -> { bar = false; dialog = "audio" }
+                                "video" -> { bar = false; dialog = "video" }
+                                "epg" -> { bar = false; side = "epg" }
+                                "history" -> { bar = false; dialog = "history" }
+                            }
+                        })
+                    }
+                    else T(if (s.live) "▲ ▼ kanal · ◀ lista kanala · ▶ TV vodič · OK još jednom = dugmad"
+                      else trf("OK pauza · ◀ ▶ %s s · ▼ = dugmad (audio, titlovi, format slike)", Prefs.seekStep), 13.sp, Color(0xFFB6BCC6))
+                }
+            }
+        }
+        if (!playing && !s.live && error == null && !buffering && resume == null) {
+            Box(Modifier.align(Alignment.Center).size(84.dp).clip(Rnd(42.dp)).background(Color(0x99000000)), contentAlignment = Alignment.Center) {
+                Ico(R.drawable.lc_pause, 36.dp, Color.White)
+            }
+        }
+
+        // ------------------------------------------------------------ live: channel list / groups on the left
+        if (side == "channels" || side == "groups") SideLists(side!!, sideGroup, items, index, p,
+            onGroups = { side = "groups" }, onClose = { side = null; sideGroup = null },
+            onGroup = { g -> sideGroup = g; side = "channels" },
+            onChannel = { list, i ->
+                if (sideGroup != null) { items = list.map { c -> PlayItem(c.name, c.url, c.logo, "${c.num}", c) }; TvMemory.group = sideGroup }
+                index = i; side = null; sideGroup = null
+            },
+            onBackToChannels = { side = null; sideGroup = null; nav.back() })
+        // ------------------------------------------------------------ live: guide on the right, over the picture
+        if (side == "epg") {
+            val ch = item.channel
+            Column(Modifier.align(Alignment.TopEnd).fillMaxWidth(0.4f).fillMaxHeight().background(C.Overlay).padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    ChannelLogo(item.logo, item.title)
+                    T(item.title, 17.sp, C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                }
+                if (ch != null) OptionRow("Pomak vremena", R.drawable.lc_clock,
+                    value = EpgShift.label(EpgShift.chMin(ch.url))) { dialog = "epgshift" }
+                if (Hints.show()) T("◀ ili Nazad = slika preko cijelog ekrana · OK na emisiji = podsjeti me", 11.sp, C.Muted, maxLines = 2)
+                val fr = remember { FocusRequester() }
+                Box(Modifier.weight(1f).focusRequester(fr).onPreviewKeyEvent { e ->
+                    if (e.key == Key.Back || e.key == Key.Escape) { if (e.type == KeyEventType.KeyUp) side = null; true }
+                    else if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { side = null; true } else false
+                }) { if (ch != null) EpgList(ch, 24) else T("Nema EPG podataka za ovaj kanal.", 14.sp, C.Soft) }
+                LaunchedEffect(Unit) { delay(150); fr.tryFocus() }
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- continue from where you stopped
+    resume?.let { r ->
+        Popup(item.title, onDismiss = { resume = null; player.play() }) {
+            OptionRow(trf("Nastavi od %s", fmt(r.pos)), R.drawable.lc_play, sub = trf("od %s", fmt(r.dur))) { resume = null; player.seekTo(r.pos); player.play() }
+            OptionRow("Od početka", R.drawable.lc_rotate_ccw) { resume = null; player.seekTo(0); player.play() }
+        }
+    }
+
+    when (dialog) {
+        "menu" -> Popup(item.title, onDismiss = { dialog = null }) {
+            // Više: the rarer things, so the bar fits in one row
+            OptionRow(if (Sleep.until > 0) trf("Tajmer: %s min", ((Sleep.until - System.currentTimeMillis()) / 60_000 + 1).coerceAtLeast(1)) else tr("Tajmer za spavanje"), R.drawable.lc_moon) { dialog = "sleep" }
+            OptionRow("Kvalitet i informacije", R.drawable.lc_info, value = if (videoH > 0) qualityLabel(videoH) else null) { dialog = "info" }
+            if (s.live) item.channel?.let { c -> OptionRow("Pomak vremena", R.drawable.lc_clock, value = EpgShift.label(EpgShift.chMin(c.url))) { dialog = "epgshift" } }
+            OptionRow("Vanjski plejer", R.drawable.lc_external_link) { player.pause(); saveProgress(); dialog = "ext" }
+            if (s.live) OptionRow("Arhiva", R.drawable.lc_history, sub = tr("emisije koje su prošle")) { dialog = null; nav.push(Screen.Catchup) }
+            if (!s.live && subFile != null) OptionRow("Podesi vrijeme titla", R.drawable.lc_clock, sub = "ako titl kasni ili žuri · SYNC") { dialog = "subsync" }
+            if (Tech.audioDelay) OptionRow("Pomak zvuka", R.drawable.lc_volume, sub = tr("ako zvuk kasni ili žuri"), value = AudioDelay.label(AudioDelay.of(item.url))) { dialog = "adelay" }
+            if (tracksOf(player, MC.TRACK_TYPE_AUDIO).size > 1) OptionRow("Audio", R.drawable.lc_volume, value = tracksOf(player, MC.TRACK_TYPE_AUDIO).firstOrNull { it.selected }?.label ?: "—") { dialog = "audio" }
+        }
+        "fav" -> item.channel?.let { FavPicker(it) { dialog = null } }
+        "epgshift" -> item.channel?.let { EpgShiftPopup(it) { dialog = null } }
+        "zoom" -> Popup("Zoom", onDismiss = { dialog = null }) {
+            FORMATS.forEachIndexed { i, label ->
+                OptionRow(label, R.drawable.lc_maximize, selected = resize == i) {
+                    resize = i
+                    item.channel?.let { Prefs.put("fmt_" + it.url.hashCode(), resize.toLong()) }
+                    dialog = null
+                }
+            }
+        }
+        "history" -> {
+            @Suppress("UNUSED_VARIABLE") val historyRev = PlayerChannelHistory.rev
+            val history = PlayerChannelHistory.list()
+            Popup("History · ${history.size}/10", onDismiss = { dialog = null }, width = 700.dp) {
+                if (history.isEmpty()) T("Nema gledanih kanala.", 14.sp, C.Muted)
+                history.forEach { c ->
+                    OptionRow("${c.num}. ${c.name}", R.drawable.lc_history, sub = c.group.takeIf { it.isNotBlank() },
+                        selected = c.url == item.url) {
+                        items = listOf(PlayItem(c.name, c.url, c.logo, c.num.toString(), c)) + items.filterNot { it.url == c.url }
+                        index = 0; dialog = null; side = null; bar = false
+                    }
+                }
+                if (history.isNotEmpty()) OptionRow("Clear History", R.drawable.lc_trash_2, color = C.Danger) { dialog = "history_clear" }
+            }
+        }
+        "history_clear" -> Popup("Obrisati History?", onDismiss = { dialog = "history" }) {
+            T("Lista posljednjih gledanih kanala bit će obrisana.", 13.sp, C.Muted)
+            OptionRow("Obriši historiju", R.drawable.lc_trash_2, color = C.Danger) { PlayerChannelHistory.clear(); dialog = "history" }
+            OptionRow("Odustani", R.drawable.lc_x) { dialog = "history" }
+        }
+        "adelay" -> AudioDelayPopup(item.url) { dialog = null }
+        "ext" -> ExternalPicker(item.url, item.title, player.currentPosition, onDismiss = { dialog = null })
+        "subsync" -> {
+            val base = remember { subFile }
+            if (base == null) dialog = null
+            else SubSyncDialog(File(base).nameWithoutExtension.take(30), onDismiss = { dialog = null },
+                onPreview = { off -> if (off != 0L) try { val f = SubSync.shift(base, off); subFile = f.path; loadMedia(item, f.path, player.currentPosition) } catch (_: Exception) {} },
+                onSync = { off ->
+                    try {
+                        val f = SubSync.sync(item.url, base, player.currentPosition, off)
+                        subFile = f.path; loadMedia(item, f.path, player.currentPosition)
+                        Toast.makeText(ctx, tr("Titl usklađen i snimljen za ovaj film"), Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) { Toast.makeText(ctx, tr("Ovaj titl se ne može uskladiti"), Toast.LENGTH_LONG).show() }
+                    dialog = null
+                },
+                onReset = { subFile = base; loadMedia(item, base, player.currentPosition) })
+        }
+        "audio" -> {
+            val tracks = tracksOf(player, MC.TRACK_TYPE_AUDIO)
+            Popup("Audio", onDismiss = { dialog = null }) {
+                if (tracks.size <= 1) T("Film ima samo jednu audio stazu", 14.sp, C.Muted)
+                tracks.forEach { t ->
+                    OptionRow(t.label, R.drawable.lc_volume, selected = t.selected) {
+                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                            .setOverrideForType(TrackSelectionOverride(t.group.mediaTrackGroup, t.index)).build()
+                        dialog = null
+                    }
+                }
+            }
+        }
+        "subs" -> {
             if (s.live) {
                 val tracks = tracksOf(player, MC.TRACK_TYPE_TEXT)
                 val selected = tracks.firstOrNull { it.selected }?.label
@@ -967,7 +1099,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 }
             }
         }
-        "video", "info" -> Popup("Video · kvalitet i informacije", onDismiss = { dialog = null }) {
+        "info" -> Popup("Kvalitet i informacije", onDismiss = { dialog = null }) {
             val v = player.videoFormat; val a = player.audioFormat
             OptionRow("Slika", R.drawable.lc_monitor, value = if (v != null) "${qualityLabel(v.height)} · ${v.width}×${v.height}" + (if (v.frameRate > 0) " · ${v.frameRate.toInt()} FPS" else "") else "—") {}
             OptionRow("Video kodek", R.drawable.lc_file_video, value = v?.sampleMimeType?.substringAfter('/')?.uppercase() ?: "—") {}
