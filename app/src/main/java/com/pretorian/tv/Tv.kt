@@ -169,7 +169,7 @@ sealed class GRow {
 
 suspend fun groupRows(ctx: android.content.Context): List<GRow> {
     val out = ArrayList<GRow>()
-    if (Look.age && Recent.list().isNotEmpty()) out.add(GRow.Group(GroupRef(null, Category(RECENT_GROUP, tr("Zadnje gledano")))))
+    if (Look.age && !Look.dawn && Recent.list().isNotEmpty()) out.add(GRow.Group(GroupRef(null, Category(RECENT_GROUP, tr("Zadnje gledano")))))
     Favs.lists(ctx).forEach { out.add(GRow.Group(GroupRef(null, Category(FAV_PREFIX + it.id, "★ " + it.name)))) }
     if (!Lock.simple) out.add(GRow.NewFav())
     val pls = Store.actives(ctx)

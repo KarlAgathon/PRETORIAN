@@ -256,6 +256,8 @@ private object PlayerChannelHistory {
 @OptIn(UnstableApi::class)
 @Composable
 fun PlayerScreen(s: Screen.Player, nav: Nav) {
+    // a match from Sport keeps its other channels only while this player is open
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { MatchWatch.clear() } }
     val ctx = LocalContext.current
     var items by remember { mutableStateOf(s.items) }
     val n = items.size
@@ -398,10 +400,11 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     fun giveUp(e: PlaybackException?) {
         val cur = items.getOrNull(index)
         fun fail() { if (e != null) error = errorText(e, s.live) else frozenMsg = true }
-        if (s.live && Tech.backup && cur?.channel != null && shiftFrom == 0L) {
+        if (s.live && (Tech.backup || MatchWatch.on(cur?.url)) && cur?.channel != null && shiftFrom == 0L) {
             backupTried += cur.url
             playerScope.launch {
-                val alt = try { StreamBackup.find(ctx, cur.channel, backupTried) } catch (_: Exception) { null }
+                // a match: first another of your channels that shows the same match, then the same channel from elsewhere
+                val alt = (if (MatchWatch.on(cur.url)) MatchWatch.next(backupTried) else null) ?: if (!Tech.backup) null else try { StreamBackup.find(ctx, cur.channel, backupTried) } catch (_: Exception) { null }
                 if (alt != null) {
                     backupTried += alt.url
                     Toast.makeText(ctx, trf("Kanal ne radi · prebacujem na rezervni: %s", alt.name), Toast.LENGTH_LONG).show()
@@ -529,12 +532,16 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 if ((gaveUp || frozenMsg) && pos != last && last >= 0) { gaveUp = false; frozenMsg = false; reconnect = 0 }
             }
             last = pos; lastFrames = frames; lastBuf = buf
-            if (stuck >= Recover.waitMs && reconnect < 4) {
+            // a match from Sport: stuck 2 s → reconnect up to 2 times → another channel with the same match
+            val match = MatchWatch.on(items.getOrNull(index)?.url)
+            val waitMs = if (match) 2000L else Recover.waitMs
+            val tries = if (match) 2 else 4
+            if (stuck >= waitMs && reconnect < tries) {
                 stuck = 0; reconnect++; Stats.recovery()
                 (items.getOrNull(index)?.title ?: "").let { t -> if (reconnect == 1) StreamLog.event("freeze", t); StreamLog.event("try", t) }
                 StreamLog.add(listOf(items.getOrNull(index)?.title ?: "", " · ", tr(why), " · ", trf("spajam ponovo (%s/4)", reconnect)).joinToString(""))  // i18n-ignore
                 retryToken++
-            } else if (stuck >= Recover.waitMs && reconnect >= 4) {
+            } else if (stuck >= waitMs && reconnect >= tries) {
                 // 4 tries did not help: backup stream once, then a new try every 20 s with a message on screen
                 if (!gaveUp) { gaveUp = true; stuck = 0; giveUp(null) }
                 else if (stuck >= 20_000L) {

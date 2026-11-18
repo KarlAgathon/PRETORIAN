@@ -2415,6 +2415,25 @@ Navigacija|Navigate|Navigieren|Navigacija|Навигација|Навигаци�
 Odaberi|Select|Auswählen|Odaberi|Одабери|Избери|Selectează|Seç|Seleziona|اختر
 Otvori grupu|Open group|Gruppe öffnen|Otvori grupu|Отвори групу|Отвори групата|Deschide grupul|Grubu aç|Apri gruppo|افتح المجموعة
 Meni|Menu|Menü|Izbornik|Мени|Меню|Meniu|Menü|Menu|القائمة
+Istekla|Expired|Abgelaufen|Istekla|Истекла|Изтекла|Expirată|Süresi doldu|Scaduta|منتهية
+još %s dana|%s days left|noch %s Tage|još %s dana|још %s дана|остават %s дни|încă %s zile|%s gün kaldı|ancora %s giorni|متبقي %s يوم
+Catch-up / Vraćanje programa|Catch-up / Rewind TV|Catch-up / Zeitversetzt|Catch-up / Vraćanje programa|Catch-up / Враћање програма|Catch-up / Връщане назад|Catch-up / TV în reluare|Catch-up / Geri sar|Catch-up / Rivedi TV|المشاهدة اللاحقة / إرجاع التلفاز
+Gledaj od početka|Watch from start|Von Anfang an|Gledaj od početka|Гледај од почетка|Гледай от началото|Vezi de la început|Baştan izle|Guarda dall'inizio|شاهد من البداية
+Ispočetka|Restart|Neu starten|Ispočetka|Испочетка|Отначало|Repornește|Yeniden başlat|Ricomincia|إعادة التشغيل
+Program koji sada ide nije poznat|The show on now is not known|Die laufende Sendung ist nicht bekannt|Program koji se sada emitira nije poznat|Програм који сада иде није познат|Текущото предаване не е известно|Emisiunea curentă nu este cunoscută|Şu anki program bilinmiyor|Il programma in onda non è noto|البرنامج الحالي غير معروف
+Rezultati za: „%s“|Results for: “%s”|Ergebnisse für: „%s“|Rezultati za: „%s“|Резултати за: „%s“|Резултати за: „%s“|Rezultate pentru: „%s”|Sonuçlar: “%s”|Risultati per: “%s”|نتائج: «%s»
+Traži seriju ili kategoriju|Search series or category|Serie oder Kategorie suchen|Traži seriju ili kategoriju|Тражи серију или категорију|Търси сериал или категория|Caută serial sau categorie|Dizi veya kategori ara|Cerca serie o categoria|ابحث عن مسلسل أو فئة
+Traži film ili kategoriju|Search movie or category|Film oder Kategorie suchen|Traži film ili kategoriju|Тражи филм или категорију|Търси филм или категория|Caută film sau categorie|Film veya kategori ara|Cerca film o categoria|ابحث عن فيلم أو فئة
+Nema rezultata|No results|Keine Ergebnisse|Nema rezultata|Нема резултата|Няма резултати|Niciun rezultat|Sonuç yok|Nessun risultato|لا نتائج
+Ništa za „%s“ u ovoj kategoriji|Nothing for “%s” in this category|Nichts für „%s“ in dieser Kategorie|Ništa za „%s“ u ovoj kategoriji|Ништа за „%s“ у овој категорији|Нищо за „%s“ в тази категория|Nimic pentru „%s” în această categorie|Bu kategoride “%s” için bir şey yok|Niente per “%s” in questa categoria|لا شيء لـ «%s» في هذه الفئة
+Svi rezultati|All results|Alle Ergebnisse|Svi rezultati|Сви резултати|Всички резултати|Toate rezultatele|Tüm sonuçlar|Tutti i risultati|كل النتائج
+Prati ovu utakmicu|Follow this match|Dieses Spiel verfolgen|Prati ovu utakmicu|Прати ову утакмицу|Следи този мач|Urmărește acest meci|Bu maçı takip et|Segui questa partita|تابع هذه المباراة
+Obavijesti uživo na Početnoj|Live notices on Home|Live-Hinweise auf der Startseite|Obavijesti uživo na Početnoj|Обавештења уживо на Почетној|Известия на живо на Начало|Notificări live pe Acasă|Ana sayfada canlı bildirimler|Avvisi live nella Home|إشعارات مباشرة في الرئيسية
+Golovi|Goals|Tore|Golovi|Голови|Голове|Goluri|Goller|Gol|الأهداف
+Crveni kartoni|Red cards|Rote Karten|Crveni kartoni|Црвени картони|Червени картони|Cartonașe roșii|Kırmızı kartlar|Cartellini rossi|البطاقات الحمراء
+sada|now|jetzt|sada|сада|сега|acum|şimdi|ora|الآن
+prije %s min|%s min ago|vor %s Min.|prije %s min|пре %s мин|преди %s мин|acum %s min|%s dk önce|%s min fa|قبل %s د
+prije %s h|%s h ago|vor %s Std.|prije %s h|пре %s ч|преди %s ч|acum %s h|%s sa önce|%s h fa|قبل %s س
 """.trimIndent()
 
 private val DICT: Map<String, Map<String, String>> by lazy {

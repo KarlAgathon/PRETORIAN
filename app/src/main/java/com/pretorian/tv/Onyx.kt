@@ -710,10 +710,16 @@ fun onyxMigrate(c: Context) {
         // 1.0.38: a new box starts with the hardware decoder and with adult, XXX, LGBT and trans categories hidden (PIN opens them)
         .putLong("tech_decoder", 1L).putBoolean("par_adult", true).putBoolean("par_lgbt", true).putBoolean("par_trans", true).apply()
     if (p.getInt("look_v", 0) < 7) {   // 0.6.4: "Predvečerje" becomes the look for everyone once
-        Look.theme = "vece"; Look.layout = 2
-        p.edit().putInt("look_v", 7).putString("look_theme", "vece").putInt("look_layout", 2).apply()
+        Look.theme = "ponoc"; Look.layout = 3
+        p.edit().putInt("look_v", 7).putString("look_theme", "ponoc").putInt("look_layout", 3).apply()
     }
-    if (p.getInt("look_v", 0) < 8) { Look.theme = "vece"; p.edit().putInt("look_v", 8).putString("tv_view", "list").putString("look_theme", "vece").apply() }   // 0.8.0: TV opens as the new channel list once
+    if (p.getInt("look_v", 0) < 8) { Look.theme = "ponoc"; p.edit().putInt("look_v", 8).putString("tv_view", "list").putString("look_theme", "ponoc").apply() }   // 0.8.0: TV opens as the new channel list once
+    // 1.0.63: New Dawn is the only layout; every box gets midnight blue once (black and white stays)
+    if (p.getInt("look_v", 0) < 9) {
+        val t = if (p.getString("look_theme", "") == "bw") "bw" else "ponoc"
+        Look.theme = t; Look.layout = 3
+        p.edit().putInt("look_v", 9).putString("look_theme", t).putInt("look_layout", 3).apply()
+    }
 }
 
 /** The last 10 TV channels you watched, newest first, with the group they were played from. */

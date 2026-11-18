@@ -71,33 +71,40 @@ object Dawn {
 /** Frosted grey-blue panel used everywhere in New Dawn. */
 fun Modifier.dawnGlass(r: Dp = 18.dp): Modifier = this.clip(Rnd(r)).background(Color(0x8C0E1724)).border(1.dp, Color(0x1FFFFFFF), Rnd(r))
 
+/** Black and white theme: the same misty night without colour. */
+private fun dc(c: Color): Color {
+    if (Look.theme != "bw") return c
+    val l = c.red * 0.3f + c.green * 0.59f + c.blue * 0.11f
+    return Color(l, l, l, c.alpha)
+}
+
 /** Misty night: blue-grey fog, a house corner on the right and a glowing street lamp. Drawn, not a picture: sharp on every screen. */
 @Composable
 fun DawnBackground() {
     Canvas(Modifier.fillMaxSize()) {
         val w = size.width; val h = size.height
-        drawRect(Brush.verticalGradient(listOf(Color(0xFF16243A), Color(0xFF24364C), Color(0xFF0D1622)), startY = 0f, endY = h))
+        drawRect(Brush.verticalGradient(listOf(dc(Color(0xFF16243A)), dc(Color(0xFF24364C)), dc(Color(0xFF0D1622))), startY = 0f, endY = h))
         val lx = w * 0.64f; val ly = h * 0.36f
-        drawRect(Brush.radialGradient(listOf(Color(0x38A5B9D0), Color(0x00A5B9D0)), center = Offset(lx, ly), radius = w * 0.42f))
+        drawRect(Brush.radialGradient(listOf(dc(Color(0x38A5B9D0)), dc(Color(0x00A5B9D0))), center = Offset(lx, ly), radius = w * 0.42f))
         // house: roof slab and wall in the fog
-        drawPath(Path().apply { moveTo(w * 0.78f, h * 0.38f); lineTo(w, h * 0.02f); lineTo(w, h * 0.10f); lineTo(w * 0.83f, h * 0.40f); close() }, Color(0x8C0C1420))
+        drawPath(Path().apply { moveTo(w * 0.78f, h * 0.38f); lineTo(w, h * 0.02f); lineTo(w, h * 0.10f); lineTo(w * 0.83f, h * 0.40f); close() }, dc(Color(0x8C0C1420)))
         drawPath(Path().apply { moveTo(w * 0.83f, h * 0.40f); lineTo(w, h * 0.10f); lineTo(w, h * 0.86f); lineTo(w * 0.83f, h * 0.86f); close() },
-            Brush.verticalGradient(listOf(Color(0x8C141E2C), Color(0x40141E2C)), startY = h * 0.1f, endY = h * 0.86f))
+            Brush.verticalGradient(listOf(dc(Color(0x8C141E2C)), dc(Color(0x40141E2C))), startY = h * 0.1f, endY = h * 0.86f))
         // lamp post
         val u = h / 720f
-        drawRect(Brush.verticalGradient(listOf(Color(0xF2121820), Color(0x26121820)), startY = ly, endY = h * 0.95f),
+        drawRect(Brush.verticalGradient(listOf(dc(Color(0xF2121820)), dc(Color(0x26121820))), startY = ly, endY = h * 0.95f),
             topLeft = Offset(lx - 3 * u, ly + 28 * u), size = Size(6 * u, h * 0.6f))
-        drawRect(Color(0x99121820), topLeft = Offset(lx - 7 * u, h * 0.70f), size = Size(14 * u, 4 * u))
+        drawRect(dc(Color(0x99121820)), topLeft = Offset(lx - 7 * u, h * 0.70f), size = Size(14 * u, 4 * u))
         // warm halo
-        drawRect(Brush.radialGradient(0f to Color(0x8CFFD696), 0.35f to Color(0x2EFFC882), 1f to Color(0x00FFC882), center = Offset(lx, ly), radius = w * 0.10f))
+        drawRect(Brush.radialGradient(0f to dc(Color(0x8CFFD696)), 0.35f to dc(Color(0x2EFFC882)), 1f to dc(Color(0x00FFC882)), center = Offset(lx, ly), radius = w * 0.10f))
         // lantern: glass, roof, base
-        drawPath(Path().apply { moveTo(lx - 14 * u, ly - 16 * u); lineTo(lx + 14 * u, ly - 16 * u); lineTo(lx + 10 * u, ly + 22 * u); lineTo(lx - 10 * u, ly + 22 * u); close() }, Color(0xFFFFE2B0))
-        drawPath(Path().apply { moveTo(lx - 20 * u, ly - 16 * u); lineTo(lx, ly - 30 * u); lineTo(lx + 20 * u, ly - 16 * u); close() }, Color(0xFF1A222D))
-        drawRect(Color(0xFF1A222D), topLeft = Offset(lx - 12 * u, ly + 22 * u), size = Size(24 * u, 6 * u))
-        drawRect(Color(0xFF1A222D), topLeft = Offset(lx - 1.5f * u, ly - 16 * u), size = Size(3 * u, 38 * u))
-        drawCircle(Brush.radialGradient(listOf(Color(0xE6FFF0D2), Color(0x00FFF0D2)), center = Offset(lx, ly + 4 * u), radius = 22 * u), radius = 22 * u, center = Offset(lx, ly + 4 * u))
+        drawPath(Path().apply { moveTo(lx - 14 * u, ly - 16 * u); lineTo(lx + 14 * u, ly - 16 * u); lineTo(lx + 10 * u, ly + 22 * u); lineTo(lx - 10 * u, ly + 22 * u); close() }, dc(Color(0xFFFFE2B0)))
+        drawPath(Path().apply { moveTo(lx - 20 * u, ly - 16 * u); lineTo(lx, ly - 30 * u); lineTo(lx + 20 * u, ly - 16 * u); close() }, dc(Color(0xFF1A222D)))
+        drawRect(dc(Color(0xFF1A222D)), topLeft = Offset(lx - 12 * u, ly + 22 * u), size = Size(24 * u, 6 * u))
+        drawRect(dc(Color(0xFF1A222D)), topLeft = Offset(lx - 1.5f * u, ly - 16 * u), size = Size(3 * u, 38 * u))
+        drawCircle(Brush.radialGradient(listOf(dc(Color(0xE6FFF0D2)), dc(Color(0x00FFF0D2))), center = Offset(lx, ly + 4 * u), radius = 22 * u), radius = 22 * u, center = Offset(lx, ly + 4 * u))
         // ground fog
-        drawRect(Brush.verticalGradient(0f to Color(0x00788799), 0.5f to Color(0x1A788799), 1f to Color(0x80080C14), startY = h * 0.6f, endY = h),
+        drawRect(Brush.verticalGradient(0f to dc(Color(0x00788799)), 0.5f to dc(Color(0x1A788799)), 1f to dc(Color(0x80080C14)), startY = h * 0.6f, endY = h),
             topLeft = Offset(0f, h * 0.6f), size = Size(w, h * 0.4f))
     }
 }
@@ -160,17 +167,21 @@ private fun DawnMenu(nav: Nav) {
         val i = items.indexOfFirst { it.screen == (Dawn.last ?: Screen.Tv) }.coerceAtLeast(0)
         delay(120); frs[i].tryFocus()
     }
-    Column(Modifier.padding(start = 34.dp, top = 6.dp).width(330.dp)
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+    // every item always fits on the screen, Settings included: rows get smaller on small screens or big text
+    val rowH = ((maxHeight - 6.dp - 8.dp - 24.dp) / items.size - 4.dp).coerceIn(36.dp, 54.dp)
+    val big = rowH >= 48.dp
+    Column(Modifier.padding(start = 34.dp, top = 6.dp, bottom = 8.dp).width(330.dp)
         .dawnGlass().onFocusChanged { Chrome.inRail = it.hasFocus }.padding(horizontal = 10.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)) {
         items.forEachIndexed { i, it ->
             Box {
                 Focusable(
-                    modifier = Modifier.fillMaxWidth().height(54.dp),
+                    modifier = Modifier.fillMaxWidth().height(rowH),
                     onClick = {
                         Chrome.inRail = false
                         Dawn.last = it.screen
-                        if (it.screen == Screen.Home) Dawn.homeOpen = true else nav.root(it.screen)
+                        if (it.screen != Screen.Home) nav.root(it.screen)   // Home is this screen
                     },
                     focusRequester = frs[i],
                     shape = Rnd(12.dp),
@@ -182,14 +193,79 @@ private fun DawnMenu(nav: Nav) {
                     val c = if (f) Dawn.onPill else Color(0xFFEFF2F6)
                     Row(Modifier.fillMaxSize().padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                        Ico(it.icon, 27.dp, c)
-                        T(it.label, 19.sp, c, if (f) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
+                        Ico(it.icon, if (big) 27.dp else 23.dp, c)
+                        T(it.label, if (big) 19.sp else 17.sp, c, if (f) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
                     }
                 }
                 if (it.badge > 0) Box(Modifier.align(Alignment.TopEnd).offset(x = (-10).dp, y = 8.dp)) { Bell(it.badge) }
             }
         }
     }
+    DawnNotes(nav, Modifier.align(Alignment.TopEnd).padding(end = 38.dp, top = 6.dp).width(520.dp))
+    DawnPlaylists(Modifier.align(Alignment.BottomEnd).padding(end = 38.dp, bottom = 10.dp))
+    }
+}
+
+/** Home notices (goals, cards, match end, reminders, new version): the newest few, OK opens them. Nothing when there are none. */
+@Composable
+private fun DawnNotes(nav: Nav, modifier: Modifier) {
+    val notes = Notes.list.filter { System.currentTimeMillis() - it.time < 6 * 3600_000L }.take(4)
+    if (notes.isEmpty()) return
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        notes.forEach { n ->
+            val tone = when {
+                n.text.startsWith("⚽") -> Color(0xFF22C55E)
+                n.text.startsWith("🟥") -> Color(0xFFEF4444)
+                n.text.startsWith("🟨") -> Color(0xFFFBBF24)
+                n.kind == "update" -> Color(0xFF60A5FA)
+                else -> Color(0xFFD5DBE3)
+            }
+            Focusable(onClick = { openNote(nav, n) }, shape = Rnd(12.dp), normal = Color(0x8C0E1724), focused = Dawn.pill, focusBorderColor = Color.Transparent,
+                zoom = 1f, modifier = Modifier.fillMaxWidth().height(46.dp).border(1.dp, tone.copy(alpha = 0.55f), Rnd(12.dp))) { f ->
+                Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Box(Modifier.width(4.dp).height(22.dp).clip(Rnd(2.dp)).background(tone))
+                    T(n.text, 14.sp, if (f) Dawn.onPill else Color.White, FontWeight.Medium, modifier = Modifier.weight(1f))
+                    T(whenAgo(n.time), 12.sp, if (f) Dawn.onPill else Color(0xFF9AA6B5))
+                }
+            }
+        }
+    }
+}
+
+/** "sada", "2 min", "1 h" */
+private fun whenAgo(t: Long): String {
+    val m = ((System.currentTimeMillis() - t) / 60_000L).toInt()
+    return when { m < 1 -> tr("sada"); m < 60 -> trf("prije %s min", m); else -> trf("prije %s h", m / 60) }
+}
+
+/** Active playlists and how many days they still have, small and calm (amber under 7 days, red when expired). */
+@Composable
+private fun DawnPlaylists(modifier: Modifier) {
+    val ctx = LocalContext.current
+    val pls = remember { Store.actives(ctx) }
+    if (pls.isEmpty()) return
+    Column(modifier, horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        pls.take(4).forEach { p ->
+            val ex = expiryText(p.exp)
+            val left = dawnDaysLeft(p.exp)
+            val col = when { ex?.second == 2 -> Color(0xFFF87171); ex?.second == 1 -> Color(0xFFFBBF24); else -> Color(0xFFD5DBE3) }
+            Row(Modifier.dawnGlass(12.dp).padding(horizontal = 14.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(Modifier.size(8.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Color(0xFF4ADE80)))
+                T(p.name, 14.sp, Color.White, FontWeight.SemiBold)
+                if (left != null) { T("·", 14.sp, Color(0xFF9AA6B5)); T(left, 14.sp, col) }
+            }
+        }
+    }
+}
+
+/** "23 dana", "Bez isteka" or "Istekla" for a playlist's expiry (unix seconds or "0"). */
+private fun dawnDaysLeft(exp: String): String? {
+    if (exp.isBlank()) return null
+    if (exp == "0") return tr("Bez isteka")
+    val sec = exp.toLongOrNull() ?: return null
+    val days = ((sec * 1000 - System.currentTimeMillis()) / 86_400_000L).toInt()
+    return if (days < 0) tr("Istekla") else trf("još %s dana", days)
 }
 
 @Composable
@@ -316,6 +392,81 @@ private fun DawnTracks(type: Int, onDismiss: () -> Unit) {
                         p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setTrackTypeDisabled(type, false)
                             .setOverrideForType(androidx.media3.common.TrackSelectionOverride(g.mediaTrackGroup, i)).build()
                         onDismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** New Dawn search results: filters with counts on the left (All, TV channels, Movies, Series, Sport), one clear list on the right. */
+@Composable
+fun DawnSearchResults(
+    query: String, tv: List<Hit>, movies: List<Hit>, shows: List<Hit>, sport: List<SportEvent>, first: FocusRequester,
+    onHit: (Hit) -> Unit, onMenu: (Hit) -> Unit, onSport: (SportEvent) -> Unit, modifier: Modifier,
+) {
+    var filt by remember { mutableStateOf(SearchMem.open ?: "all") }
+    LaunchedEffect(filt) { SearchMem.open = filt }
+    val filters = listOf(
+        Triple("all", "Svi rezultati", tv.size + movies.size + shows.size + sport.size),
+        Triple("tv", "TV kanali", tv.size), Triple("vod", "Filmovi", movies.size),
+        Triple("series", "Serije", shows.size), Triple("sport", "Sport", sport.size),
+    )
+    val icons = mapOf("all" to R.drawable.lc_search, "tv" to R.drawable.lc_tv, "vod" to R.drawable.lc_film, "series" to R.drawable.lc_layers, "sport" to R.drawable.lc_trophy)
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(Modifier.width(270.dp).fillMaxHeight().dawnGlass().padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            filters.forEach { (id, label, n) ->
+                Focusable(onClick = { filt = id }, onFocus = { filt = id }, shape = Rnd(12.dp), normal = if (filt == id) Color(0x26FFFFFF) else Color.Transparent,
+                    focused = Dawn.pill, focusBorderColor = Color.Transparent, zoom = 1f, modifier = Modifier.fillMaxWidth().height(50.dp)) { f ->
+                    Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Ico(icons[id] ?: R.drawable.lc_search, 22.dp, if (f) Dawn.onPill else Color(0xFFEFF2F6))
+                        T(label, 16.sp, if (f) Dawn.onPill else Color(0xFFEFF2F6), if (f || filt == id) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
+                        T("($n)", 14.sp, if (f) Dawn.onPill else Color(0xFF9AA6B5))
+                    }
+                }
+            }
+        }
+        Column(Modifier.weight(1f).fillMaxHeight()) {
+            T(trf("Rezultati za: „%s“", query), 16.sp, Color(0xFFD5DBE3), FontWeight.SemiBold, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
+            val rows: List<Any> = when (filt) {
+                "tv" -> tv; "vod" -> movies; "series" -> shows; "sport" -> sport
+                else -> buildList { addAll(shows.take(20)); addAll(movies.take(20)); addAll(tv.take(20)); addAll(sport.take(10)) }
+            }
+            if (rows.isEmpty()) { T("Ništa nije pronađeno", 15.sp, C.Soft); return@Column }
+            androidx.compose.foundation.lazy.LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(rows.size) { i ->
+                    val r = rows[i]
+                    Focusable(onClick = { if (r is Hit) onHit(r) else if (r is SportEvent) onSport(r) }, onMenu = { if (r is Hit) onMenu(r) },
+                        focusRequester = if (i == 0) first else null, shape = Rnd(12.dp), normal = Color(0x590E1724), focused = Dawn.pill,
+                        focusBorderColor = Color.Transparent, zoom = 1f, modifier = Modifier.fillMaxWidth().height(76.dp)) { f ->
+                        val main = if (f) Dawn.onPill else Color.White
+                        val sub = if (f) Dawn.onPill.copy(alpha = 0.7f) else Color(0xFFC3CCD8)
+                        Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            val (title, line, type) = when (r) {
+                                is Hit.Show -> Triple(cleanTitle(r.s.name).first, tr("Serija"), "Serija")
+                                is Hit.Movie -> Triple(cleanTitle(r.v.name).first, tr("Film"), "Film")
+                                is Hit.Ch -> Triple(r.ch.name, nowOf(r.ch, 600)?.title ?: (tr("Kanal") + " ${r.ch.num}"), "TV")
+                                is Hit.Prog -> Triple(r.e.title, r.ch.name + " · " + r.e.times(), "TV")
+                                is SportEvent -> Triple(if (r.home != null && r.away != null) r.home.name + " – " + r.away.name else r.title, r.league, "Sport")
+                                else -> Triple("", "", "")
+                            }
+                            val img = when (r) { is Hit.Show -> r.s.cover; is Hit.Movie -> r.v.poster; else -> null }
+                            Box(Modifier.width(104.dp).height(60.dp).clip(Rnd(8.dp)).background(Color(0x33000000)), contentAlignment = Alignment.Center) {
+                                when {
+                                    img != null -> OnyxImage(img, title, Modifier.fillMaxSize(), maxW = 220)
+                                    r is Hit.Ch -> ChannelLogo(r.ch, 40.dp)
+                                    r is Hit.Prog -> ChannelLogo(r.ch, 40.dp)
+                                    else -> Ico(R.drawable.lc_trophy, 26.dp, main)
+                                }
+                            }
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                T(title, 16.sp, main, FontWeight.SemiBold)
+                                T(line, 13.sp, sub)
+                            }
+                            Box(Modifier.clip(Rnd(10.dp)).border(1.dp, if (f) Dawn.onPill.copy(alpha = 0.5f) else Color(0x4DFFFFFF), Rnd(10.dp)).padding(horizontal = 12.dp, vertical = 5.dp)) {
+                                T(type, 12.sp, main, FontWeight.Medium)
+                            }
+                        }
                     }
                 }
             }

@@ -193,7 +193,7 @@ object GoalNote {
         val parts = noteId.split(':'); val id = parts.getOrNull(1) ?: return
         val ev = Sports.lastCombined.values.flatten().firstOrNull { it.id == id }
         val ch = ev?.let { (it.channels + it.ai + it.maybe).firstOrNull() }
-        if (ch != null && ev.state == "in") { playChannels(nav, listOf(ch), 0); return }
+        if (ch != null && ev.state == "in") { playMatch(nav, ev, ch); return }
         SportsMemory.evId = id
         SportsMemory.view = when (parts.getOrNull(2)) { "today" -> "soon"; "end" -> "done"; else -> "live" }
         nav.root(Screen.Sports)
@@ -335,7 +335,8 @@ fun SportMixScreen(nav: Nav) {
         .sortedWith(compareBy({ it.state != "in" }, { it.state == "post" }, { it.start })).firstOrNull()?.let { t to it } } }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 24.dp)) {
-        Row(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        // New Dawn: the top bar already says Sport, the screen starts with the filters
+        if (!Look.dawn) Row(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 T(tr("Sportski centar").uppercase(), 20.sp, C.Text, FontWeight.Bold)  // i18n-ignore
                 T("Utakmice, timovi i TV prenosi", 11.sp, C.Muted)
@@ -350,10 +351,12 @@ fun SportMixScreen(nav: Nav) {
             Chip2(tr("Države") + if (selectedCountries.isEmpty()) "" else " · " + selectedCountries.size, false) { pick = "countries" }
             Chip2(tr("Regije") + " ▾", false) { pick = "region" }
             Chip2(tr("Takmičenja") + if (selectedLeagues.isEmpty()) "" else " · " + selectedLeagues.size, false) { pick = "leagues" }
+            // followed matches and teams in one press
+            if (Look.dawn) Chip2("🔔 " + tr("Pratim") + " · " + withCh.count { followedEv(it) }, tab == "mine") { tab = "mine" }  // i18n-ignore
         }
         Row(Modifier.weight(1f).fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        // ------------------------------------------------ left rail: Sport navigation and competitions
-        Column(Modifier.width(190.dp).fillMaxHeight().glassSide(18.dp).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // ------------------------------------------------ left rail: Sport navigation and competitions (New Dawn: the tabs above do this)
+        if (!Look.dawn) Column(Modifier.width(190.dp).fillMaxHeight().glassSide(18.dp).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             T("SPORT", 17.sp, C.Text, FontWeight.ExtraBold)  // i18n-ignore
             T("CENTAR UTAKMICA", 10.sp, C.Muted, FontWeight.Bold)  // i18n-ignore
             val sportNavItems = listOf("live" to "Utakmice uživo", "soon" to "Današnje utakmice", "soon" to "Predstojeće", "fav" to "Favoriti", "mine" to "Pratim")  // i18n-ignore
@@ -431,7 +434,7 @@ fun SportMixScreen(nav: Nav) {
             .onPreviewKeyEvent { k -> if (k.type == KeyEventType.KeyDown && k.key == Key.DirectionLeft) { focusSel(); true } else false },
             verticalArrangement = Arrangement.spacedBy(10.dp)) {
             val pc = playing
-            if (pc != null) Focusable(onClick = { SportUi.back = "preview"; playChannels(nav, listOf(pc), 0) }, onLongClick = null, focusRequester = previewFr, shape = Rnd(14.dp),
+            if (pc != null) Focusable(onClick = { SportUi.back = "preview"; ev?.let { playMatch(nav, it, pc) } ?: playChannels(nav, listOf(pc), 0) }, onLongClick = null, focusRequester = previewFr, shape = Rnd(14.dp),
                 normal = Color.Transparent, focused = C.CardHi, zoom = 1f, modifier = Modifier.fillMaxWidth()) { f ->
                 PreviewBox(pc, Modifier.fillMaxWidth())
                 if (f) Box(Modifier.matchParentSize().border(3.dp, C.Red, Rnd(14.dp)))
@@ -443,7 +446,7 @@ fun SportMixScreen(nav: Nav) {
                     T("slika krene tek na OK · OK OK = cijeli ekran", 11.sp, C.Muted)
                 }
             }
-            if (ev != null) MatchCard(ev, playing, chipFr, firstChipFr, onPlay = { ch -> if (playing?.url == ch.url) { SportUi.back = "chip"; playChannels(nav, listOf(ch), 0) } else playing = ch }, onMenu = { menu = ev })
+            if (ev != null) MatchCard(ev, playing, chipFr, firstChipFr, onPlay = { ch -> if (playing?.url == ch.url) { SportUi.back = "chip"; playMatch(nav, ev, ch) } else playing = ch }, onMenu = { menu = ev })
         }
     }
     }
@@ -460,7 +463,7 @@ fun SportMixScreen(nav: Nav) {
                     Toast.makeText(ctx, tr(if (on) "Podsjetnik postavljen" else "Podsjetnik uklonjen"), Toast.LENGTH_SHORT).show(); menu = null
                 }
             }
-            if (ch != null) OptionRow("Gledaj kanal sada", R.drawable.lc_play, color = C.Green) { menu = null; playChannels(nav, listOf(ch), 0) }
+            if (ch != null) OptionRow("Gledaj kanal sada", R.drawable.lc_play, color = C.Green) { menu = null; playMatch(nav, e, ch) }
             if (e.state != "post") {
                 val fm = MatchFollow.has(e.id)
                 OptionRow(if (fm) "Ne prati utakmicu" else "Prati utakmicu", R.drawable.lc_bell, sub = if (fm) null else tr("gol, crveni karton, produžeci, penali, kraj → obavijest na Početnoj")) {
@@ -551,9 +554,12 @@ fun SportMixScreen(nav: Nav) {
 
 @Composable
 private fun Chip2(label: String, on: Boolean, fr: FocusRequester? = null, onClick: () -> Unit) {
-    Focusable(onClick = onClick, focusRequester = fr, shape = Pill, normal = if (on) Color.White else C.Card, focused = C.Red, zoom = 1.04f, modifier = Modifier.height(34.dp)) { f ->
-        T(label, 13.sp, if (f) C.OnRed else if (on) Color(0xFF0B0F1A) else C.Text, FontWeight.SemiBold, maxLines = 1,
-            modifier = Modifier.align(Alignment.Center).padding(horizontal = 14.dp))
+    val dawn = Look.dawn
+    Focusable(onClick = onClick, focusRequester = fr, shape = Pill, normal = if (on) (if (dawn) Color(0xD9D5DBE3) else Color.White) else if (dawn) Color.Transparent else C.Card,
+        focused = if (dawn) Dawn.pill else C.Red, focusBorderColor = if (dawn) Color.Transparent else null, zoom = if (dawn) 1f else 1.04f,
+        modifier = Modifier.height(if (dawn) 40.dp else 34.dp).then(if (dawn) Modifier.border(1.dp, Color(0x4DFFFFFF), Pill) else Modifier)) { f ->
+        T(label, if (dawn) 14.sp else 13.sp, if (dawn && (f || on)) Dawn.onPill else if (f) C.OnRed else if (on) Color(0xFF0B0F1A) else C.Text, FontWeight.SemiBold, maxLines = 1,
+            modifier = Modifier.align(Alignment.Center).padding(horizontal = if (dawn) 18.dp else 14.dp))
     }
 }
 
@@ -615,6 +621,7 @@ private fun MatchCard(e: SportEvent, playing: Channel?, playingFr: FocusRequeste
             }
         }
         val chs = (e.channels + e.ai + e.maybe).distinctBy { it.url }.take(6)
+        if (Look.dawn && e.state != "post") DawnFollow(e)
         Kicker(tr("Prenose") + " · " + tr("OK gledaj · drži OK 🔔"), C.Muted)
         if (chs.isEmpty()) T("Nijedan tvoj kanal ne prenosi ovu utakmicu", 12.sp, C.Muted)
         // who broadcasts it anywhere (TV houses), also when it is not in your list
@@ -645,6 +652,50 @@ private fun MatchCard(e: SportEvent, playing: Channel?, playingFr: FocusRequeste
             }
         }
     }
+}
+
+/** New Dawn: follow this match (switch) and which events come as a notice on Home (goals, red cards, extra time, penalties, end). */
+@Composable
+private fun DawnFollow(e: SportEvent) {
+    var rev by remember { mutableIntStateOf(0) }
+    key(rev, MatchFollow.rev) {
+        val on = MatchFollow.has(e.id)
+        Column(Modifier.fillMaxWidth().clip(Rnd(12.dp)).background(Color(0x26000000)).padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Focusable(onClick = { MatchFollow.toggle(e.id); GoalNote.check(listOf(e)); rev++ }, shape = Rnd(10.dp), normal = Color.Transparent, focused = Dawn.pill,
+                focusBorderColor = Color.Transparent, zoom = 1f, modifier = Modifier.fillMaxWidth().height(44.dp)) { f ->
+                Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Ico(R.drawable.lc_bell, 20.dp, if (f) Dawn.onPill else Color.White)
+                    Column(Modifier.weight(1f)) {
+                        T("Prati ovu utakmicu", 14.sp, if (f) Dawn.onPill else Color.White, FontWeight.SemiBold)
+                        T("Obavijesti uživo na Početnoj", 11.sp, if (f) Dawn.onPill.copy(alpha = 0.7f) else Color(0xFFC3CCD8))
+                    }
+                    Box(Modifier.width(44.dp).height(24.dp).clip(Pill).background(if (on) Color(0xFF22C55E) else Color(0x4DFFFFFF)), contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart) {
+                        Box(Modifier.padding(3.dp).size(18.dp).clip(CircleShape).background(Color.White))
+                    }
+                }
+            }
+            if (on) Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("goal" to "Golovi", "red" to "Crveni kartoni", "pen" to "Penali", "et" to "Produžeci", "end" to "Kraj utakmice").forEach { (k, label) ->
+                    val c = GoalNote.on(k)
+                    Focusable(onClick = { Prefs.put("sa_$k", !c); rev++ }, shape = Rnd(8.dp), normal = Color.Transparent, focused = Dawn.pill,
+                        focusBorderColor = Color.Transparent, zoom = 1f, modifier = Modifier.height(34.dp)) { f ->
+                        Row(Modifier.align(Alignment.Center).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Box(Modifier.size(16.dp).clip(Rnd(4.dp)).background(if (c) Color(0xFF3B82F6) else Color.Transparent).border(1.dp, if (c) Color(0xFF3B82F6) else Color(0x99FFFFFF), Rnd(4.dp)),
+                                contentAlignment = Alignment.Center) { if (c) Ico(R.drawable.lc_check, 12.dp, Color.White) }
+                            T(label, 12.sp, if (f) Dawn.onPill else Color.White)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** A match full screen: the other channels of yours that show it are kept, so a stuck picture switches to one of them. */
+fun playMatch(nav: Nav, e: SportEvent, ch: Channel) {
+    val all = (e.channels + e.ai + e.maybe).distinctBy { it.url }
+    MatchWatch.set(e.title, listOf(ch) + all.filter { it.url != ch.url })
+    playChannels(nav, listOf(ch), 0)
 }
 
 private fun sportIcon(s: String) = when (s) { "football" -> "⚽"; "basketball" -> "🏀"; "f1" -> "🏎"; "tennis" -> "🎾"; "volleyball" -> "🏐"; "handball" -> "🤾"; "" -> "🏟"; else -> "🏅" }  // i18n-ignore

@@ -2356,4 +2356,45 @@ Navigacija|Навигация
 Odaberi|Выбрать
 Otvori grupu|Открыть группу
 Meni|Меню
+Istekla|Истекла
+još %s dana|осталось %s дн.
+Catch-up / Vraćanje programa|Catch-up / Перемотка ТВ
+Gledaj od početka|Смотреть с начала
+Ispočetka|Заново
+Program koji sada ide nije poznat|Текущая передача неизвестна
+Rezultati za: „%s“|Результаты для: «%s»
+Traži seriju ili kategoriju|Искать сериал или категорию
+Traži film ili kategoriju|Искать фильм или категорию
+Nema rezultata|Нет результатов
+Ništa za „%s“ u ovoj kategoriji|Ничего по «%s» в этой категории
+Svi rezultati|Все результаты
+Prati ovu utakmicu|Следить за матчем
+Obavijesti uživo na Početnoj|Уведомления на Главной
+Golovi|Голы
+Crveni kartoni|Красные карточки
+sada|сейчас
+prije %s min|%s мин назад
+prije %s h|%s ч назад
+SPORT|СПОРТ
+CENTAR UTAKMICA|ЦЕНТР МАТЧЕЙ
+TAKMIČENJA|СОРЕВНОВАНИЯ
+Utakmice uživo|Матчи в прямом эфире
+Današnje utakmice|Матчи сегодня
+Predstojeće|Предстоящие
+Takmičenja će se prikazati uz dostupne utakmice|Соревнования появятся вместе с доступными матчами
+Regije|Регионы
+Favoriti – države|Избранное – страны
+countries|страны
+teams|команды
+Odaberi države za Favoriti|Выбери страны для Избранного
+TV kanal, film, serija ili tim|ТВ-канал, фильм, сериал или команда
+New Era — jedini TV layout za sada. Ostali layouti dolaze kasnije.|New Era — пока единственный вид ТВ. Другие появятся позже.
+Utakmice, timovi i TV prenosi|Матчи, команды и трансляции
+Sportski centar|Спортивный центр
+Utakmice|Матчи
+GRUPE|ГРУППЫ
+Učitavam EPG…|Загружаю EPG…
+EPG nije dostupan|EPG недоступен
+Nema EPG vodiča|Нет телегида
+Pritisni OK na grupi za prikaz kanala|Нажми OK на группе, чтобы увидеть каналы
 """.trimIndent()
