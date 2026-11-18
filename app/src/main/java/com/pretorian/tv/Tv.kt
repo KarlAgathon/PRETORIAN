@@ -359,26 +359,19 @@ private fun TvList(nav: Nav, onGuide: () -> Unit) {
     val coming = remember { TvMemory.restore && TvMemory.group != null && TvMemory.channel >= 0 }
     var inChannels by remember { mutableStateOf(coming) }
     var focusedCh by remember { mutableStateOf<Channel?>(null) }
-    var focusedGroup by remember { mutableStateOf<GroupRef?>(null) }
     LaunchedEffect(Unit) { if (!coming) { TvMemory.restore = false; st.refocus++ } }
 
     fun backToGroups() { st.focusKey = "g:" + (st.group?.key ?: ""); inChannels = false; st.refocus++ }
     BackHandler(enabled = inChannels && st.groupMenu == null) { backToGroups() }
 
-    // browsing the groups shows that group's channels on the right at once; focus stays on the groups, OK or Right goes in
+    // Group focus only moves the highlight. The channel list changes only after OK (onOpen).
     var enterTick by remember { mutableIntStateOf(0) }
-    LaunchedEffect(focusedGroup) {
-        val f = focusedGroup ?: return@LaunchedEffect
-        delay(200)
-        val locked = f.pid?.let { Ovr(ctx, it).isLocked("live", f.cat.id) } ?: false
-        if (!locked && st.group?.key != f.key && !inChannels) { TvMemory.channel = -1; st.group = f; TvMemory.group = f }
-    }
 
     LaunchedEffect(focusedCh) { val c = focusedCh ?: return@LaunchedEffect; delay(500); Dusk.set(c.logo, c.name) }
     Column(Modifier.fillMaxSize()) {
     Row(Modifier.weight(1f).fillMaxWidth()) {
         GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, 260.dp, "Kategorije", null,
-            onFocusGroup = { focusedGroup = it },
+            onFocusGroup = { /* focus never changes the selected group */ },
             onOpen = { openGroup(ctx, st, it); enterTick++ },
             onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
             onHeader = { p -> TvFold.toggle(p.id); if (p.id in TvFold.open) Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
