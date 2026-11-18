@@ -1,3 +1,9 @@
+PRETORIAN 1.0.43-beta15
+Fix: add the Default / Classic TV layout selector to the modern Appearance (LookV2) screen actually used by Settings
+The selector is shown under Appearance → TV Layout, separately from visual Theme cards; selecting a layout saves the choice immediately
+Default remains the default layout; Classic selects the existing left-navigation/category-column layout
+BETA12 functionality and fullscreen player options/history are retained; Stable main is unchanged
+
 PRETORIAN 1.0.42-beta14
 Appearance: add a live Default / Classic layout selector; Default remains selected for new installations and Classic is available as an alternative
 Default uses the modern top navigation and poster-row layout; Classic uses the left navigation and category-column layout
