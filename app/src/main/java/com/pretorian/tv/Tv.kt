@@ -222,18 +222,12 @@ fun GroupColumn(
                 ) {
                     itemsIndexed(list, key = { _, r -> r.id }) { i, r ->
                         val m = Modifier.fillMaxWidth().height(Rows.group)
+                            // Let Compose handle normal row-to-row focus movement, exactly like ChannelList.
+                            // Intercept only DOWN at the final row; scheduling scrollToItem/requestFocus
+                            // for every key repeat caused category focus to jump and flicker while held.
                             .then(if (containVerticalFocus) Modifier.onPreviewKeyEvent { e ->
-                                if (e.type != KeyEventType.KeyDown) false
-                                else when {
-                                    // Move explicitly between category rows so rapid/held UP cannot escape early.
-                                    e.key == Key.DirectionUp && i > 0 -> { wrap.target = i - 1; true }
-                                    // At the first category, allow normal focus search to move to the top bar.
-                                    e.key == Key.DirectionUp && i == 0 -> false
-                                    e.key == Key.DirectionDown && i < list.lastIndex -> { wrap.target = i + 1; true }
-                                    // DOWN at the final row stays inside the category list.
-                                    e.key == Key.DirectionDown && i == list.lastIndex -> true
-                                    else -> false
-                                }
+                                e.type == KeyEventType.KeyDown &&
+                                    e.key == Key.DirectionDown && i == list.lastIndex
                             } else Modifier.wrapKeys(i, list.size, wrap))
                         val fr = wrap.requester(i, if (r.id == focusKey) focusFr else null)
                         when (r) {
