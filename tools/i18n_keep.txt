@@ -543,3 +543,7 @@ U programu kanala: OK na emisiji › Pregled u malom prozoru. Dok listaš, ništ
 U programu kanala ili Sports Centeru: OK na emisiji ili utakmici koja još nije počela › Podsjeti me.
 tvoji TV kanali uvijek
 Nema podsjetnika. U programu kanala ili Sportu: OK na emisiji › Podsjeti me.
+Izaberi kanal za pregled
+Informacije o programu
+Potvrdi kanal tipkom OK da pokreneš mini-player.
+TV · EPG
