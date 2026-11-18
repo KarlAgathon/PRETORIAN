@@ -609,6 +609,7 @@ fun HomeScreen(nav: Nav) {
             UpdateBanner(nav)
             if (pls.isEmpty()) { Message("Nema playliste", "Dodaj playlistu u Postavkama"); return@Column }
             val cont = remember(Watch.rev) { Watch.continueList(ctx) }
+            LaunchedEffect(Unit) { try { Watch.enrichMissingPosters(ctx) } catch (_: Exception) {} }
             NeonRow(homeTiles(nav, push = false), first, Modifier.weight(1f))
             if (cont.isNotEmpty()) ContinueRow(cont, nav, Modifier.padding(start = 36.dp, bottom = 12.dp))
             HomeStatusBar(Modifier.padding(horizontal = 36.dp))
