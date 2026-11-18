@@ -1,3 +1,8 @@
+PRETORIAN 1.0.56 (STABLE)
+Default Layout Continue Watching: restore visible movie and series poster thumbnails in the actual Onyx Home screen
+Default Layout Continue Watching: run Xtream poster recovery on the correct Home screen and refresh the rows after artwork is restored
+Xtream poster recovery: match movie entries by exact stream URL first, then normalized title; match series by normalized series title
+
 PRETORIAN 1.0.55 (STABLE)
 Home Continue Watching: recover missing movie and series posters from active Xtream catalogs for older playback-history entries
 Home Continue Watching: preserve existing progress, playback position and history while restoring poster artwork
