@@ -86,23 +86,52 @@ fun SettingsScreen(nav: Nav) {
     var section by remember { mutableStateOf(SettingsNav.section?.also { SettingsNav.section = null } ?: SettingsNav.last ?: if (Updater.available != null) "update" else "playlists") }
     LaunchedEffect(section) { SettingsNav.last = section }
     val first = remember { FocusRequester() }
+    val classic = Look.layout == 0
+    var inPage by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    val railW by androidx.compose.animation.core.animateDpAsState(
+        if (classic && inPage) 72.dp else 320.dp, label = "classic-settings-rail"
+    )
+    LaunchedEffect(classic, inPage) {
+        if (classic) {
+            Chrome.driven = true
+            Chrome.rail = if (inPage) 0 else 2
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            if (classic) {
+                Chrome.driven = false
+                Chrome.rail = 2
+            }
+        }
+    }
+    BackHandler(enabled = classic && inPage) {
+        inPage = false
+        Chrome.rail = 2
+        scope.launch { first.tryFocus() }
+    }
     Row(Modifier.fillMaxSize()) {
-        Column(Modifier.width(320.dp).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 12.dp, top = 20.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            T("Postavke", 26.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 10.dp, bottom = 8.dp))
-            SECTIONS.forEachIndexed { i, s ->
-                val sel = s.id == section
-                // a section opens on OK, not by just moving over it
-                Focusable(modifier = Modifier.fillMaxWidth().height(50.dp), onClick = { section = s.id },
-                    focusRequester = if (s.id == section) first else null, normal = if (sel) C.CardFocus else Color.Transparent, zoom = 1f) { _ ->
-                    Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.width(if (classic) railW else 320.dp).fillMaxHeight()
+            .verticalScroll(rememberScrollState())
+            .padding(start = if (classic && inPage) 8.dp else 18.dp, end = 12.dp, top = 20.dp, bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            if (!classic || !inPage) T("Postavke", 26.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 10.dp, bottom = 8.dp))
+            SECTIONS.forEachIndexed { i, item ->
+                val sel = item.id == section
+                Focusable(modifier = Modifier.fillMaxWidth().height(50.dp), onClick = { section = item.id; inPage = false; if (classic) Chrome.rail = 2 },
+                    focusRequester = if (item.id == section) first else null, normal = if (sel) C.CardFocus else Color.Transparent, zoom = 1f) { _ ->
+                    Row(Modifier.fillMaxSize().padding(horizontal = if (classic && inPage) 8.dp else 12.dp), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Box(Modifier.size(30.dp).clip(Rnd(9.dp)).background(if (sel) C.Red else C.Card), contentAlignment = Alignment.Center) {
-                            Ico(s.icon, 16.dp, if (sel) C.OnRed else C.Text)
+                            Ico(item.icon, 16.dp, if (sel) C.OnRed else C.Text)
                         }
-                        Column(Modifier.weight(1f)) {
-                            T(s.title, 14.sp, C.Text, FontWeight.Medium, maxLines = 1)
-                            T(s.sub, 11.sp, C.Muted, maxLines = 1)
+                        if (!classic || !inPage) Column(Modifier.weight(1f)) {
+                            T(item.title, 14.sp, C.Text, FontWeight.Medium, maxLines = 1)
+                            T(item.sub, 11.sp, C.Muted, maxLines = 1)
                         }
-                        if (s.id == "update" && Updater.available != null) Box(Modifier.size(18.dp).clip(CircleShape).background(C.Danger), contentAlignment = Alignment.Center) {
+                        if ((!classic || !inPage) && item.id == "update" && Updater.available != null) Box(Modifier.size(18.dp).clip(CircleShape).background(C.Danger), contentAlignment = Alignment.Center) {
                             T("1", 10.sp, Color.White, FontWeight.Bold)
                         }
                     }
@@ -110,11 +139,18 @@ fun SettingsScreen(nav: Nav) {
             }
         }
         Box(Modifier.width(1.dp).fillMaxHeight().background(C.Line))
-        // Back inside a page goes one step back: to this section in the list on the left, not out of Settings
-        var inPage by remember { mutableStateOf(false) }
-        val scope = rememberCoroutineScope()
-        BackHandler(enabled = inPage) { inPage = false; scope.launch { first.tryFocus() } }
-        Box(Modifier.weight(1f).fillMaxHeight().onFocusChanged { inPage = it.hasFocus }.padding(horizontal = 30.dp, vertical = 24.dp)) {
+        Box(Modifier.weight(1f).fillMaxHeight()
+            .onFocusChanged { if (classic) inPage = it.hasFocus }
+            .onPreviewKeyEvent { ev ->
+                if (classic && ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
+                    if (!focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Left)) {
+                        inPage = false
+                        scope.launch { first.tryFocus() }
+                    }
+                    true
+                } else false
+            }
+            .padding(horizontal = 30.dp, vertical = 24.dp)) {
             key(section) {
                 when (section) {
                     "playlists" -> PlaylistsPage(nav)
@@ -1266,6 +1302,21 @@ fun SettingsScreen2(nav: Nav) {
     // like Search: inside a section the list shrinks to a narrow rail of icons and the page gets the room
     val railW by androidx.compose.animation.core.animateDpAsState(if (inPage) 74.dp else 270.dp, label = "rail")
     val slim = inPage
+    val classic = Look.layout == 0
+    LaunchedEffect(classic, inPage) {
+        if (classic) {
+            Chrome.driven = true
+            Chrome.rail = if (inPage) 0 else 2
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            if (classic) {
+                Chrome.driven = false
+                Chrome.rail = 2
+            }
+        }
+    }
     Row(Modifier.fillMaxSize()) {
         Column(Modifier.width(railW).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 8.dp, top = 6.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp)) {
