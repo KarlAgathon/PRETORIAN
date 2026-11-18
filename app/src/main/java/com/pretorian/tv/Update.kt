@@ -32,7 +32,10 @@ object Updater {
     /** Beta: test versions, published as the release "beta" (only for whoever chose the Beta channel) */
     private const val BETA_URL = "https://github.com/KarlAgathon/PRETORIAN/releases/download/beta/update.json"
     /** "stable" or "beta" */
-    val beta get() = Prefs.str("upd_channel", if (BuildConfig.APPLICATION_ID.endsWith(".beta")) "beta" else "stable") == "beta"  // i18n-ignore
+    private val betaBuild get() = BuildConfig.APPLICATION_ID.endsWith(".beta")
+    // A beta APK must never switch to the Stable feed: Android treats Stable and Beta as
+    // different packages, so offering the Stable APK here produces a failed install.
+    val beta get() = betaBuild || Prefs.str("upd_channel", "stable") == "beta"  // i18n-ignore
     /** the APK's signature against the installed PRETORIAN: true ok, false foreign or broken, null not checked yet */
     var signature by mutableStateOf<Boolean?>(null)
     /** download paused by the user: the part already loaded stays and goes on from there */
@@ -149,8 +152,9 @@ object Updater {
             fun read(u: String) = JSONObject(String(Http.bytes(u, 100_000))).let { o -> UpdateInfo(o.optLong("versionCode"), o.str("versionName"), o.str("apk"), o.str("notes")) }
             val stable = read(JSON_URL)
             stableName = stable.name; Prefs.put("upd_stable_name", stable.name)
-            // Beta gets the test version when it is newer than the stable one
-            val info = if (beta) (try { read(BETA_URL) } catch (e: Exception) { null })?.takeIf { it.code > stable.code } ?: stable else stable
+            // Keep package feeds separate. Beta APKs have applicationId .beta and must
+            // only ever receive another .beta APK; never silently fall back to Stable.
+            val info = if (beta) read(BETA_URL) else stable
             Prefs.put("upd_last", System.currentTimeMillis())
             val newer = if (info.code > installedCode(ctx) && info.apk.startsWith(APK_PREFIX) && Prefs.str("upd_skip") != info.name) info else null
             available = newer
