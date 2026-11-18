@@ -541,3 +541,4 @@ U TV listi: pregled se pokreće potvrdom OK. Dok listaš, ništa se ne pušta.
 veličina redova u TV-u i listi u playeru
 tvoji kanali uvijek
 Nema podsjetnika. U TV programu ili Sportu: OK na emisiji › Podsjeti me.
+Mini-player se pokreće samo nakon prvog OK. Drugi OK na istom kanalu otvara cijeli ekran. Pregled kategorija i kanala nikada ne pokreće reprodukciju.
