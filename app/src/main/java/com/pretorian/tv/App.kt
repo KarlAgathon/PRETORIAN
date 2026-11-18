@@ -451,6 +451,7 @@ fun Rail(current: Screen, nav: Nav) {
         RailItem(Screen.Tv, R.drawable.lc_tv, "TV", Notes.unread("reminder")),
         RailItem(Screen.Movies, R.drawable.lc_film, "Filmovi", NewContent.count("vod")),
         RailItem(Screen.Series, R.drawable.lc_monitor, "Serije", NewContent.count("series")),
+        RailItem(Screen.Catchup, R.drawable.lc_history, "Catch-up"),
         RailItem(Screen.Sports, R.drawable.lc_trophy, "Sport"),
         RailItem(Screen.Search, R.drawable.lc_search, "Pretraga"),
     )
