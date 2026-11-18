@@ -668,11 +668,16 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                             Focusable(
                                 modifier = Modifier.fillMaxWidth().height(Rows.channel).wrapKeys(i, list.size, cWrap),
                                 onClick = {
-                                    // preview on OK: the first OK shows the small picture, the second one plays full screen
                                     gate.run("c:${ch.url}", locked) {
                                         ovr.countWatch(ch)
                                         TvMemory.channel = i; TvMemory.group = g; TvMemory.restore = true
-                                        playChannels(nav, list, i)
+                                        // First OK selects and starts the small preview. A second OK on the same channel opens fullscreen.
+                                        if (Look.previewMode == 1 && PreviewSel.ch?.url != ch.url) {
+                                            PreviewSel.ch = ch
+                                        } else {
+                                            PreviewSel.ch = ch
+                                            playChannels(nav, list, i)
+                                        }
                                     }
                                 },
                                 onMenu = { menu = ch; menuUrl = ch.url },
