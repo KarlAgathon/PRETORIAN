@@ -19,3 +19,9 @@ PRETORIAN 1.0.39-beta8
 TV grupe: zadržana ispravka prirodnog kretanja fokusa red po red, bez treperenja i skakanja pri držanju daljinskog
 TV kanali: aktivni kanal je jasno označen diskretnim zelenim indikatorom i blagim zelenim okvirom/pozadinom, uključujući povratak iz fullscreen playera
 Mini pregled i potvrda tipkom OK ostaju nepromijenjeni
+
+PRETORIAN 1.0.39-beta9
+TV kategorije: UP prolazi red po red i pri držanju ne napušta listu prije prve kategorije; tek novi UP na vrhu predaje fokus gornjoj TV navigaciji
+TV kategorije: DOWN prolazi red po red, a DOWN na posljednjoj kategoriji vraća fokus na prvu
+Onyx TV i standardni TV prikaz koriste isto predvidljivo kretanje fokusa
+Mini pregled, potvrda tipkom OK i aktivni kanal iz beta8 ostaju nepromijenjeni
