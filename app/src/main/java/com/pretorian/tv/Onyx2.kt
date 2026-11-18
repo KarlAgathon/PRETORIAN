@@ -221,29 +221,9 @@ fun OnyxTv(nav: Nav, onGuide: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(horizontal = 24.dp)) {
         Row(Modifier.weight(1f).fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             // ---------------------------------------------------------- groups
-            // the group list goes round: ▲ on the first jumps to the last, ▼ on the last to the first; ▲▲ quickly on the first = top bar
-            val focusables = (rows as? Load.Ok)?.value?.filter { it !is TRow.Title } ?: emptyList()
-            var upJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
-            val wrapScope = rememberCoroutineScope()
-            // The category column stays visible while browsing channels.
-            Column(Modifier.width(220.dp).fillMaxHeight().glassSide().padding(vertical = 8.dp).onPreviewKeyEvent { e ->
-                    if (e.type != KeyEventType.KeyDown || focusables.size < 2) return@onPreviewKeyEvent false
-                    val all = (rows as? Load.Ok)?.value ?: return@onPreviewKeyEvent false
-                    val first = focusables.first().id; val last = focusables.last().id
-                    when {
-                        e.key == Key.DirectionUp && st.focusKey == first -> {
-                            val waiting = upJob
-                            if (waiting != null && waiting.isActive) { waiting.cancel(); upJob = null; false }   // second quick ▲: on to the top bar
-                            else {
-                                // one ▲: after a short moment (no second ▲) the last group takes the focus
-                                upJob = wrapScope.launch { delay(450); st.focusKey = last; gState.scrollToItem(all.lastIndex); st.refocus++; upJob = null }
-                                true
-                            }
-                        }
-                        e.key == Key.DirectionDown && st.focusKey == last -> { st.focusKey = first; wrapScope.launch { gState.scrollToItem(0) }; st.refocus++; true }
-                        else -> false
-                    }
-                }) {
+            // Natural DPAD navigation: scroll smoothly through every category; only the real list boundary
+            // may hand focus to the top navigation. Never wrap to the last/first category on a long press.
+            Column(Modifier.width(220.dp).fillMaxHeight().glassSide().padding(vertical = 8.dp)) {
                     when (val r = rows) {
                         is Load.Loading -> Loading("")
                         is Load.Err -> Message("Greška", r.message)
