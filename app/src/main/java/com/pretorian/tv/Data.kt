@@ -710,13 +710,18 @@ object Repo {
 fun m3uText(url: String): String = if (url.startsWith("file://")) java.io.File(url.removePrefix("file://")).readText() else Net.get(url)
 
 /** Quality written in a title ("4K", "FHD", "UHD", "HD", "SD"), or null. */
+private val QUALITY_4K = Regex("\\b(4K|UHD|2160P?)\\b")
+private val QUALITY_FHD = Regex("\\b(FHD|1080P?)\\b")
+private val QUALITY_HD = Regex("\\b(HD|720P?|HEVC)\\b")
+private val QUALITY_SD = Regex("\\bSD\\b")
+
 fun qualityOf(name: String): String? {
     val n = name.uppercase()
     return when {
-        Regex("\\b(4K|UHD|2160P?)\\b").containsMatchIn(n) -> "4K"
-        Regex("\\b(FHD|1080P?)\\b").containsMatchIn(n) -> "FHD"
-        Regex("\\b(HD|720P?|HEVC)\\b").containsMatchIn(n) -> "HD"
-        Regex("\\bSD\\b").containsMatchIn(n) -> "SD"
+        QUALITY_4K.containsMatchIn(n) -> "4K"
+        QUALITY_FHD.containsMatchIn(n) -> "FHD"
+        QUALITY_HD.containsMatchIn(n) -> "HD"
+        QUALITY_SD.containsMatchIn(n) -> "SD"
         else -> null
     }
 }
