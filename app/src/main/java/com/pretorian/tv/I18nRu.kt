@@ -2328,4 +2328,5 @@ Sačuvaj ili vrati postavke|Сохранить или восстановить �
 Nova verzija i kanal ažuriranja|Новая версия и канал обновлений
 Uređaj, kontakt i licence|Устройство, контакты и лицензии
 Kategorije|Категории
+SLIJEDI|СЛЕДУЮЩЕЕ
 """.trimIndent()
