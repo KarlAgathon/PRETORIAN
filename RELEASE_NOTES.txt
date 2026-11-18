@@ -1,3 +1,7 @@
+PRETORIAN 1.0.50 (STABLE)
+- Reduced unused vertical space in the Classic TV layout by reallocating height from the top preview/EPG panel to the channel list.
+- Expanded the groups column to 210dp while browsing groups; it collapses to 54dp when focus moves to channels, restoring full channel width.
+
 PRETORIAN 1.0.49
 Classic TV: compact the top NOW/NEXT programme cards with smaller text, padding and vertical gaps
 Classic TV: reduce the Groups heading size, group row height and spacing for a tighter left column
