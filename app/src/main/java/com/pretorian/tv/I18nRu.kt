@@ -2368,4 +2368,8 @@ Traži film ili kategoriju|Искать фильм или категорию
 Nema rezultata|Нет результатов
 Ništa za „%s“ u ovoj kategoriji|Ничего по «%s» в этой категории
 Svi rezultati|Все результаты
+Prati ovu utakmicu|Следить за матчем
+Obavijesti uživo na Početnoj|Уведомления на Главной
+Golovi|Голы
+Crveni kartoni|Красные карточки
 """.trimIndent()

@@ -2427,6 +2427,10 @@ Traži film ili kategoriju|Search movie or category|Film oder Kategorie suchen|T
 Nema rezultata|No results|Keine Ergebnisse|Nema rezultata|Нема резултата|Няма резултати|Niciun rezultat|Sonuç yok|Nessun risultato|لا نتائج
 Ništa za „%s“ u ovoj kategoriji|Nothing for “%s” in this category|Nichts für „%s“ in dieser Kategorie|Ništa za „%s“ u ovoj kategoriji|Ништа за „%s“ у овој категорији|Нищо за „%s“ в тази категория|Nimic pentru „%s” în această categorie|Bu kategoride “%s” için bir şey yok|Niente per “%s” in questa categoria|لا شيء لـ «%s» في هذه الفئة
 Svi rezultati|All results|Alle Ergebnisse|Svi rezultati|Сви резултати|Всички резултати|Toate rezultatele|Tüm sonuçlar|Tutti i risultati|كل النتائج
+Prati ovu utakmicu|Follow this match|Dieses Spiel verfolgen|Prati ovu utakmicu|Прати ову утакмицу|Следи този мач|Urmărește acest meci|Bu maçı takip et|Segui questa partita|تابع هذه المباراة
+Obavijesti uživo na Početnoj|Live notices on Home|Live-Hinweise auf der Startseite|Obavijesti uživo na Početnoj|Обавештења уживо на Почетној|Известия на живо на Начало|Notificări live pe Acasă|Ana sayfada canlı bildirimler|Avvisi live nella Home|إشعارات مباشرة في الرئيسية
+Golovi|Goals|Tore|Golovi|Голови|Голове|Goluri|Goller|Gol|الأهداف
+Crveni kartoni|Red cards|Rote Karten|Crveni kartoni|Црвени картони|Червени картони|Cartonașe roșii|Kırmızı kartlar|Cartellini rossi|البطاقات الحمراء
 """.trimIndent()
 
 private val DICT: Map<String, Map<String, String>> by lazy {
