@@ -410,14 +410,14 @@ private fun TvList(nav: Nav) {
                 ) {
                     val selected = focusedCh ?: previewCh
                     if (selected == null) {
-                        T(tr("Informacije o programu"), 17.sp, C.Text, FontWeight.Bold)
-                        T(tr("Potvrdi kanal tipkom OK da pokreneš mini-player."), 13.sp, C.Muted)
+                        T(tr("Informacije o programu"), 17.sp, C.Text, FontWeight.Bold) // i18n-ignore
+                        T(tr("Potvrdi kanal tipkom OK da pokreneš mini-player."), 13.sp, C.Muted) // i18n-ignore
                     } else {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             ChannelLogo(selected.logo, selected.name)
                             Column(Modifier.weight(1f)) {
                                 T(selected.name, 17.sp, C.Text, FontWeight.Bold, maxLines = 1)
-                                T(tr("TV · EPG"), 11.sp, C.Muted)
+                                T(tr("TV · EPG"), 11.sp, C.Muted) // i18n-ignore
                             }
                             qualityOf(selected.name)?.let { Chip(it, C.Card, C.Soft) }
                         }
