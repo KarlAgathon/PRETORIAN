@@ -684,8 +684,12 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                         itemsIndexed(list, key = { _, ch -> "${ch.pid}|${ch.id}|${ch.url}" }) { i, ch ->
                             val ovr = remember(ch.pid, g.pid) { Ovr(ctx, ch.pid.ifBlank { g.pid ?: "" }) }
                             val locked = ovr.isChLocked(ch)
+                            // Mark the channel actually playing (or in the confirmed mini-preview), not merely the focused row.
+                            val active = PreviewSel.ch?.url == ch.url || TvMemory.preview?.url == ch.url ||
+                                (TvMemory.group?.key == g.key && TvMemory.channel == i)
                             Focusable(
-                                modifier = Modifier.fillMaxWidth().height(Rows.channel).wrapKeys(i, list.size, cWrap),
+                                modifier = Modifier.fillMaxWidth().height(Rows.channel).wrapKeys(i, list.size, cWrap)
+                                    .then(if (active) Modifier.border(1.dp, C.Green.copy(alpha = 0.48f), Rnd(12.dp)) else Modifier),
                                 onClick = {
                                     gate.run("c:${ch.url}", locked) {
                                         ovr.countWatch(ch)
