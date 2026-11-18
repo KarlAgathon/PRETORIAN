@@ -222,7 +222,8 @@ fun SearchScreen(nav: Nav) {
         }
         val busy = loadingOf.values.any { it }
         if (busy && nq.length >= 2) T(loadingOf.filter { it.value }.keys.joinToString(" · ") { tr(mapOf("ch" to "Kanali", "vod" to "Filmovi", "series" to "Serije", "prog" to "Emisije")[it]!!) } + " · " + tr("učitavam…"), 12.sp, C.Muted)
-        if (nq.length < 2) { SearchRecent { h -> q = h; query = h; jump++ }; Message("Upiši bar 2 slova", "Tastatura daljinskog ili Google TV aplikacija na telefonu") }
+        SearchRecent { h -> q = h; query = h; jump++ }
+        if (nq.length < 2) { Message("Upiši bar 2 slova", "Tastatura daljinskog ili Google TV aplikacija na telefonu") }
         else if (shown.isEmpty() && !busy) Message("Ništa nije pronađeno")
         else if (shown.isEmpty()) Loading("Tražim…")
         else LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(bottom = 30.dp)) {
