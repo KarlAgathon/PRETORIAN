@@ -1186,6 +1186,22 @@ fun PreviewBox(ch: Channel?, modifier: Modifier) {
 
 /** EPG list of one channel (programme guide); OK on a coming show sets a reminder. */
 @Composable
+@Composable
+private fun ChannelEpgLine(ch: Channel) {
+    val ctx = LocalContext.current
+    val state by load(ch.url, EpgShift.rev) { Store.byId(ctx, ch.pid)?.let { Repo.epg(it, ch, 2) } ?: emptyList() }
+    val now = System.currentTimeMillis()
+    val current = (state as? Load.Ok)?.value?.firstOrNull { it.start <= now && it.end > now }
+    if (current != null) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            T(current.times(), 9.sp, C.Muted, maxLines = 1)
+            T(current.title, 10.sp, C.Soft, maxLines = 1, modifier = Modifier.weight(1f))
+        }
+    } else if (state is Load.Loading) {
+        T("EPG …", 9.sp, C.Muted, maxLines = 1)
+    }
+}
+
 fun EpgList(ch: Channel, limit: Int = 12, modifier: Modifier = Modifier) {
     val ctx = LocalContext.current
     // the list is not loaded again when a reminder changes: the focus stays on the show
