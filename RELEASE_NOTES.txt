@@ -1,3 +1,11 @@
+PRETORIAN 1.0.47-beta19
+Classic TV: accordion navigation — channel browsing collapses the group column; LEFT/BACK expands one level at a time
+Classic TV: LEFT/BACK from the expanded groups reveals the main app navigation
+Classic TV: wider, more readable inline EPG area beside channel names
+Classic TV: top programme panel shows current and next programme with larger titles and descriptions; future programme cards support Remind Me
+Classic TV: narrower group column to give channel and EPG information more room
+Default layout and Stable main remain unchanged
+
 PRETORIAN 1.0.46-beta18
 Fix Classic and Default TV navigation: LEFT from channels returns focus to the selected group
 Fix BACK handling from the channel list and restore focus only after the group row is visible

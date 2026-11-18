@@ -218,7 +218,9 @@ fun GroupColumn(
             is Load.Loading -> Loading("Učitavam grupe…")
             is Load.Err -> Message("Greška", rows.message)
             is Load.Ok -> {
-                val list = rows.value
+                val list = if (width <= 100.dp) {
+                    rows.value.filterIsInstance<GRow.Group>().filter { it.ref.key == current?.key }.take(1)
+                } else rows.value
                 LazyColumn(
                     modifier = if (containVerticalFocus) Modifier.focusGroup() else Modifier,
                     state = state,
@@ -252,8 +254,7 @@ fun GroupColumn(
                                     Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         if (selected) Dot(C.Red, 7.dp)
-                                        T(g.cat.name, Rows.font, if (selected) C.Text else C.Soft, if (selected) FontWeight.Bold else FontWeight.Normal,
-                                            modifier = Modifier.weight(1f))
+                                        if (width > 100.dp) T(g.cat.name, Rows.font, if (selected) C.Text else C.Soft, if (selected) FontWeight.Bold else FontWeight.Normal, maxLines = 1, modifier = Modifier.weight(1f)) else Ico(R.drawable.lc_layers, 18.dp, if (selected) C.Text else C.Muted)
                                         if (locked) Ico(R.drawable.lc_lock, 15.dp, C.Muted)
                                     }
                                 }
@@ -400,7 +401,17 @@ private fun TvList(nav: Nav) {
             runCatching { st.focusFr.requestFocus() }
         }
     }
-    BackHandler(enabled = st.groupMenu == null && inChannels) { backToGroups() }
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    fun revealMainRail() {
+        Chrome.rail = 1
+        focusScope.launch {
+            delay(80)
+            runCatching { focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Left) }
+        }
+    }
+    BackHandler(enabled = st.groupMenu == null && Look.layout == 0) {
+        if (inChannels) backToGroups() else revealMainRail()
+    }
 
     // Group focus only moves the highlight. The channel list changes only after OK (onOpen).
     var enterTick by remember { mutableIntStateOf(0) }
@@ -411,7 +422,7 @@ private fun TvList(nav: Nav) {
         LaunchedEffect(Unit) { Chrome.driven = true; Chrome.rail = 0 }
         DisposableEffect(Unit) { onDispose { Chrome.driven = false; Chrome.rail = 3 } }
         Column(Modifier.fillMaxSize()) {
-            Row(Modifier.fillMaxWidth().weight(0.27f).padding(start = 10.dp, end = 12.dp, top = 8.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(Modifier.fillMaxWidth().weight(0.32f).padding(start = 10.dp, end = 12.dp, top = 8.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 val previewCh = PreviewSel.ch
                 Box(Modifier.weight(0.40f).fillMaxHeight(), contentAlignment = Alignment.Center) {
                     if (previewCh != null) PreviewBox(previewCh, Modifier.fillMaxWidth())
@@ -426,16 +437,20 @@ private fun TvList(nav: Nav) {
                             Column(Modifier.weight(1f)) { T(selected.name, 14.sp, C.Text, FontWeight.Bold, maxLines = 1); T(tr("TV · EPG"), 10.sp, C.Muted) }
                             qualityOf(selected.name)?.let { Chip(it, C.Card, C.Soft) }
                         }
-                        EpgList(selected, limit = 1, modifier = Modifier.fillMaxWidth())
+                        EpgList(selected, limit = 2, modifier = Modifier.fillMaxWidth())
                     }
                 }
             }
-            Row(Modifier.fillMaxWidth().weight(0.73f)) {
-                GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, 205.dp, "Grupe", null,
+            Row(Modifier.fillMaxWidth().weight(0.68f)) {
+                Box(Modifier.onPreviewKeyEvent { e ->
+                    if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft && !inChannels) { revealMainRail(); true } else false
+                }) {
+                GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, if (inChannels) 58.dp else 168.dp, if (inChannels) "" else "Grupe", null,
                     onFocusGroup = { Chrome.rail = 0 }, onOpen = { openGroup(ctx, st, it); enterTick++; inChannels = true },
                     onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
                     onHeader = { p -> TvFold.toggle(p.id); if (p.id in TvFold.open) Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
                     onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it }, onFocusRow = { st.focusKey = it; inChannels = false; Chrome.rail = 0 }, containVerticalFocus = false)
+                }
                 Box(Modifier.width(1.dp).fillMaxHeight().background(C.Line))
                 Box(Modifier.weight(1f).fillMaxHeight().onPreviewKeyEvent { e -> if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { backToGroups(); true } else false }) {
                     val g = st.group
@@ -728,7 +743,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                             val active = PreviewSel.ch?.url == ch.url || TvMemory.preview?.url == ch.url ||
                                 (TvMemory.group?.key == g.key && TvMemory.channel == i)
                             Focusable(
-                                modifier = Modifier.fillMaxWidth().height(if (Look.layout == 0) 56.dp else Rows.channel).wrapKeys(i, list.size, cWrap)
+                                modifier = Modifier.fillMaxWidth().height(if (Look.layout == 0) 60.dp else Rows.channel).wrapKeys(i, list.size, cWrap)
                                     .then(if (active) Modifier.border(1.dp, C.Green.copy(alpha = 0.48f), Rnd(12.dp)) else Modifier),
                                 onClick = {
                                     gate.run("c:${ch.url}", locked) {
@@ -755,8 +770,8 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                     ChannelLogo(ch.logo, ch.name)
                                     if (Look.layout == 0) {
                                         T(ch.name, 12.sp, if (f) C.Text else C.Soft, if (f) FontWeight.SemiBold else FontWeight.Normal,
-                                            maxLines = 1, modifier = Modifier.weight(0.42f))
-                                        ChannelEpgLine(ch, Modifier.weight(0.58f))
+                                            maxLines = 1, modifier = Modifier.weight(0.30f))
+                                        ChannelEpgLine(ch, Modifier.weight(0.70f))
                                     } else {
                                         T(ch.name, Rows.font, if (f) C.Text else C.Soft, if (f) FontWeight.SemiBold else FontWeight.Normal,
                                             maxLines = 1, modifier = Modifier.weight(1f))
@@ -1216,8 +1231,8 @@ private fun ChannelEpgLine(ch: Channel, modifier: Modifier = Modifier) {
     val current = (state as? Load.Ok)?.value?.firstOrNull { it.start <= now && it.end > now }
     if (current != null) {
         Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            T(current.times(), 9.sp, C.Muted, maxLines = 1)
-            T(current.title, 10.sp, C.Soft, maxLines = 1, modifier = Modifier.weight(1f))
+            T(current.times(), 11.sp, C.Muted, maxLines = 1)
+            T(current.title, 12.sp, C.Soft, maxLines = 1, modifier = Modifier.weight(1f))
         }
     } else if (state is Load.Loading) {
         T("EPG …", 9.sp, C.Muted, maxLines = 1, modifier = modifier)
@@ -1258,13 +1273,13 @@ fun EpgList(ch: Channel, limit: Int = 12, modifier: Modifier = Modifier) {
                             if (rem) { Ico(R.drawable.lc_bell, 14.dp, C.Amber); T("OK = ukloni podsjetnik", 11.sp, C.Amber) }
                             if (!now && !rem && Hints.always) T("OK = podsjeti me", 11.sp, C.Muted)
                         }
-                        T(e.title, EpgLook.sp(15.sp), C.Text, FontWeight.Medium, maxLines = 2)
+                        T(e.title, EpgLook.sp(18.sp), C.Text, FontWeight.SemiBold, maxLines = 2)
                         if (now) {
                             Box(Modifier.fillMaxWidth().height(4.dp).clip(Rnd(2.dp)).background(C.CardHi)) {
                                 Box(Modifier.fillMaxWidth(e.progress()).height(4.dp).background(C.Red))
                             }
-                            cleanDesc(e.desc)?.let { T(it, 12.sp, C.Soft, maxLines = 4) }
-                        } else cleanDesc(e.desc)?.let { T(it, 12.sp, C.Muted, maxLines = 2) }
+                            cleanDesc(e.desc)?.let { T(it, 14.sp, C.Soft, maxLines = 5) }
+                        } else cleanDesc(e.desc)?.let { T(it, 13.sp, C.Muted, maxLines = 4) }
                     }
                 }
             }
