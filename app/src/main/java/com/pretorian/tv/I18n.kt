@@ -2415,6 +2415,8 @@ Navigacija|Navigate|Navigieren|Navigacija|Навигација|Навигаци�
 Odaberi|Select|Auswählen|Odaberi|Одабери|Избери|Selectează|Seç|Seleziona|اختر
 Otvori grupu|Open group|Gruppe öffnen|Otvori grupu|Отвори групу|Отвори групата|Deschide grupul|Grubu aç|Apri gruppo|افتح المجموعة
 Meni|Menu|Menü|Izbornik|Мени|Меню|Meniu|Menü|Menu|القائمة
+Istekla|Expired|Abgelaufen|Istekla|Истекла|Изтекла|Expirată|Süresi doldu|Scaduta|منتهية
+još %s dana|%s days left|noch %s Tage|još %s dana|још %s дана|остават %s дни|încă %s zile|%s gün kaldı|ancora %s giorni|متبقي %s يوم
 """.trimIndent()
 
 private val DICT: Map<String, Map<String, String>> by lazy {

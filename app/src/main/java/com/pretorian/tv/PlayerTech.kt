@@ -145,6 +145,19 @@ object Catchups {
 }
 
 /** A channel that does not play: the same channel elsewhere (same guide id, or the same name without "HD", "VIP", country prefix…). */
+/** A match started from Sport: the other channels in your lists that show it. The player switches to one of them when the
+ *  picture is stuck (2 s, then 2 reconnects). Cleared when the player closes. */
+object MatchWatch {
+    @Volatile var alts: List<Channel> = emptyList()
+    @Volatile var title: String = ""
+    val active get() = alts.size > 1
+    /** only while one of the match channels is on screen (zapping to another channel ends the match rule) */
+    fun on(url: String?) = active && url != null && alts.any { it.url == url }
+    fun set(title: String, channels: List<Channel>) { this.title = title; alts = channels.distinctBy { it.url } }
+    fun clear() { alts = emptyList(); title = "" }
+    fun next(tried: Set<String>): Channel? = alts.firstOrNull { it.url !in tried }
+}
+
 object StreamBackup {
     private val prefix = Regex("^[\\p{L}]{2,4}\\s*[|:]\\s*")
     private val noise = Regex("\\b(fhd|uhd|hd|sd|4k|hevc|h265|h\\.265|vip|raw|backup|bkp|alt|50fps|60fps|hq|lq)\\b")

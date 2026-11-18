@@ -2356,4 +2356,6 @@ Navigacija|Навигация
 Odaberi|Выбрать
 Otvori grupu|Открыть группу
 Meni|Меню
+Istekla|Истекла
+još %s dana|осталось %s дн.
 """.trimIndent()

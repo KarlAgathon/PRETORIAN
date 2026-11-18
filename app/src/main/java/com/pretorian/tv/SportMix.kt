@@ -193,7 +193,7 @@ object GoalNote {
         val parts = noteId.split(':'); val id = parts.getOrNull(1) ?: return
         val ev = Sports.lastCombined.values.flatten().firstOrNull { it.id == id }
         val ch = ev?.let { (it.channels + it.ai + it.maybe).firstOrNull() }
-        if (ch != null && ev.state == "in") { playChannels(nav, listOf(ch), 0); return }
+        if (ch != null && ev.state == "in") { playMatch(nav, ev, ch); return }
         SportsMemory.evId = id
         SportsMemory.view = when (parts.getOrNull(2)) { "today" -> "soon"; "end" -> "done"; else -> "live" }
         nav.root(Screen.Sports)
@@ -431,7 +431,7 @@ fun SportMixScreen(nav: Nav) {
             .onPreviewKeyEvent { k -> if (k.type == KeyEventType.KeyDown && k.key == Key.DirectionLeft) { focusSel(); true } else false },
             verticalArrangement = Arrangement.spacedBy(10.dp)) {
             val pc = playing
-            if (pc != null) Focusable(onClick = { SportUi.back = "preview"; playChannels(nav, listOf(pc), 0) }, onLongClick = null, focusRequester = previewFr, shape = Rnd(14.dp),
+            if (pc != null) Focusable(onClick = { SportUi.back = "preview"; ev?.let { playMatch(nav, it, pc) } ?: playChannels(nav, listOf(pc), 0) }, onLongClick = null, focusRequester = previewFr, shape = Rnd(14.dp),
                 normal = Color.Transparent, focused = C.CardHi, zoom = 1f, modifier = Modifier.fillMaxWidth()) { f ->
                 PreviewBox(pc, Modifier.fillMaxWidth())
                 if (f) Box(Modifier.matchParentSize().border(3.dp, C.Red, Rnd(14.dp)))
@@ -443,7 +443,7 @@ fun SportMixScreen(nav: Nav) {
                     T("slika krene tek na OK · OK OK = cijeli ekran", 11.sp, C.Muted)
                 }
             }
-            if (ev != null) MatchCard(ev, playing, chipFr, firstChipFr, onPlay = { ch -> if (playing?.url == ch.url) { SportUi.back = "chip"; playChannels(nav, listOf(ch), 0) } else playing = ch }, onMenu = { menu = ev })
+            if (ev != null) MatchCard(ev, playing, chipFr, firstChipFr, onPlay = { ch -> if (playing?.url == ch.url) { SportUi.back = "chip"; playMatch(nav, ev, ch) } else playing = ch }, onMenu = { menu = ev })
         }
     }
     }
@@ -460,7 +460,7 @@ fun SportMixScreen(nav: Nav) {
                     Toast.makeText(ctx, tr(if (on) "Podsjetnik postavljen" else "Podsjetnik uklonjen"), Toast.LENGTH_SHORT).show(); menu = null
                 }
             }
-            if (ch != null) OptionRow("Gledaj kanal sada", R.drawable.lc_play, color = C.Green) { menu = null; playChannels(nav, listOf(ch), 0) }
+            if (ch != null) OptionRow("Gledaj kanal sada", R.drawable.lc_play, color = C.Green) { menu = null; playMatch(nav, e, ch) }
             if (e.state != "post") {
                 val fm = MatchFollow.has(e.id)
                 OptionRow(if (fm) "Ne prati utakmicu" else "Prati utakmicu", R.drawable.lc_bell, sub = if (fm) null else tr("gol, crveni karton, produžeci, penali, kraj → obavijest na Početnoj")) {
@@ -645,6 +645,13 @@ private fun MatchCard(e: SportEvent, playing: Channel?, playingFr: FocusRequeste
             }
         }
     }
+}
+
+/** A match full screen: the other channels of yours that show it are kept, so a stuck picture switches to one of them. */
+fun playMatch(nav: Nav, e: SportEvent, ch: Channel) {
+    val all = (e.channels + e.ai + e.maybe).distinctBy { it.url }
+    MatchWatch.set(e.title, listOf(ch) + all.filter { it.url != ch.url })
+    playChannels(nav, listOf(ch), 0)
 }
 
 private fun sportIcon(s: String) = when (s) { "football" -> "⚽"; "basketball" -> "🏀"; "f1" -> "🏎"; "tennis" -> "🎾"; "volleyball" -> "🏐"; "handball" -> "🤾"; "" -> "🏟"; else -> "🏅" }  // i18n-ignore

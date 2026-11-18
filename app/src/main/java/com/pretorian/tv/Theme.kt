@@ -35,7 +35,8 @@ object Look {
     var layout by mutableIntStateOf(2)         // 0 classic, 1 New Wave, 2 New Age, 3 New Dawn
     var tvDesign by mutableIntStateOf(1)       // New Era is the only available TV layout
     val wave get() = layout == 1 || layout == 2
-    val age get() = layout == 2
+    /** the modern screens (posters, detail pages, search, settings) are used inside New Dawn */
+    val age get() = layout == 2 || layout == 3
     /** New Dawn: one level at a time (menu › groups › channels › full screen), the previous level disappears */
     val dawn get() = layout == 3
 
@@ -44,8 +45,8 @@ object Look {
         "Narandžasta" to Color(0xFFEA580C), "Ljubičasta" to Color(0xFF9333EA), "Tirkizna" to Color(0xFF0891B2),
         "Roza" to Color(0xFFDB2777), "Zlatna" to Color(0xFFCA8A04),
     )
-    val THEMES = listOf("vece" to "Zadana", "bw" to "Crno-bijela", "pijesak" to "Pijesak",
-        "liquid" to "Liquid", "classic" to "Classic", "oled" to "OLED crna", "kino" to "Kino", "reddawn" to "Red Dawn", "papir" to "Papir", "ponoc" to "Ponoćno plava")
+    /** New Dawn has two looks: misty midnight blue (default) and black and white */
+    val THEMES = listOf("ponoc" to "Ponoćno plava", "bw" to "Crno-bijela")
     /** themes with their own focus colour: accent and the text on it */
     val FIXED = mapOf(
         "liquid" to (Color(0xFF22D3EE) to Color(0xFF02141A)), "classic" to (Color(0xFFF1F5F9) to Color(0xFF1E293B)),
@@ -61,7 +62,7 @@ object Look {
 
     fun load(c: Context) {
         val p = sp(c)
-        theme = (p.getString("look_theme", "vece") ?: "vece").let { t -> if (THEMES.any { it.first == t }) t else "vece" }
+        theme = (p.getString("look_theme", "ponoc") ?: "ponoc").let { t -> if (THEMES.any { it.first == t }) t else "ponoc" }
         uiScale = p.getInt("look_scale", 0).coerceIn(0, 100)
         accent = p.getInt("look_accent", 0).coerceIn(0, ACCENTS.lastIndex)
         shade = p.getInt("look_shade", 0)
@@ -81,7 +82,7 @@ object Look {
         corner = p.getInt("look_corner", 0)
         groupFrame = p.getBoolean("look_groupframe", true)
         resBadge = p.getInt("look_resbadge", 1)
-        layout = p.getInt("look_layout", 2).coerceIn(0, 3)
+        layout = 3   // New Dawn is the only layout (1.0.63)
         tvDesign = 1 // New Era is the only supported TV layout; migrate older selections
         p.edit().putInt("look_tvdesign", 1).apply()
         bigText = false   // replaced by the size slider, which grows everything together
@@ -218,7 +219,7 @@ object C {
             listOf(Color(0xFF18181B), Color(0xFF1F1F23), Color(0xFF2A0D0F)),
             start = androidx.compose.ui.geometry.Offset(0f, 0f), end = androidx.compose.ui.geometry.Offset(2400f, 1400f))
         // New Dawn draws its misty lamp background behind every screen: screens stay see-through over it
-        else if (Look.theme == "ponoc" && Look.dawn) androidx.compose.ui.graphics.SolidColor(Color.Transparent)
+        else if (Look.dawn) androidx.compose.ui.graphics.SolidColor(Color.Transparent)
         else if (Look.theme == "ponoc") androidx.compose.ui.graphics.Brush.linearGradient(
             listOf(Color(0xFF16243A), Color(0xFF24364C), Color(0xFF0D1622)),
             start = androidx.compose.ui.geometry.Offset(0f, 0f), end = androidx.compose.ui.geometry.Offset(1400f, 2400f))

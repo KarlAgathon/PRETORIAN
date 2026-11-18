@@ -71,33 +71,40 @@ object Dawn {
 /** Frosted grey-blue panel used everywhere in New Dawn. */
 fun Modifier.dawnGlass(r: Dp = 18.dp): Modifier = this.clip(Rnd(r)).background(Color(0x8C0E1724)).border(1.dp, Color(0x1FFFFFFF), Rnd(r))
 
+/** Black and white theme: the same misty night without colour. */
+private fun dc(c: Color): Color {
+    if (Look.theme != "bw") return c
+    val l = c.red * 0.3f + c.green * 0.59f + c.blue * 0.11f
+    return Color(l, l, l, c.alpha)
+}
+
 /** Misty night: blue-grey fog, a house corner on the right and a glowing street lamp. Drawn, not a picture: sharp on every screen. */
 @Composable
 fun DawnBackground() {
     Canvas(Modifier.fillMaxSize()) {
         val w = size.width; val h = size.height
-        drawRect(Brush.verticalGradient(listOf(Color(0xFF16243A), Color(0xFF24364C), Color(0xFF0D1622)), startY = 0f, endY = h))
+        drawRect(Brush.verticalGradient(listOf(dc(Color(0xFF16243A)), dc(Color(0xFF24364C)), dc(Color(0xFF0D1622))), startY = 0f, endY = h))
         val lx = w * 0.64f; val ly = h * 0.36f
-        drawRect(Brush.radialGradient(listOf(Color(0x38A5B9D0), Color(0x00A5B9D0)), center = Offset(lx, ly), radius = w * 0.42f))
+        drawRect(Brush.radialGradient(listOf(dc(Color(0x38A5B9D0)), dc(Color(0x00A5B9D0))), center = Offset(lx, ly), radius = w * 0.42f))
         // house: roof slab and wall in the fog
-        drawPath(Path().apply { moveTo(w * 0.78f, h * 0.38f); lineTo(w, h * 0.02f); lineTo(w, h * 0.10f); lineTo(w * 0.83f, h * 0.40f); close() }, Color(0x8C0C1420))
+        drawPath(Path().apply { moveTo(w * 0.78f, h * 0.38f); lineTo(w, h * 0.02f); lineTo(w, h * 0.10f); lineTo(w * 0.83f, h * 0.40f); close() }, dc(Color(0x8C0C1420)))
         drawPath(Path().apply { moveTo(w * 0.83f, h * 0.40f); lineTo(w, h * 0.10f); lineTo(w, h * 0.86f); lineTo(w * 0.83f, h * 0.86f); close() },
-            Brush.verticalGradient(listOf(Color(0x8C141E2C), Color(0x40141E2C)), startY = h * 0.1f, endY = h * 0.86f))
+            Brush.verticalGradient(listOf(dc(Color(0x8C141E2C)), dc(Color(0x40141E2C))), startY = h * 0.1f, endY = h * 0.86f))
         // lamp post
         val u = h / 720f
-        drawRect(Brush.verticalGradient(listOf(Color(0xF2121820), Color(0x26121820)), startY = ly, endY = h * 0.95f),
+        drawRect(Brush.verticalGradient(listOf(dc(Color(0xF2121820)), dc(Color(0x26121820))), startY = ly, endY = h * 0.95f),
             topLeft = Offset(lx - 3 * u, ly + 28 * u), size = Size(6 * u, h * 0.6f))
-        drawRect(Color(0x99121820), topLeft = Offset(lx - 7 * u, h * 0.70f), size = Size(14 * u, 4 * u))
+        drawRect(dc(Color(0x99121820)), topLeft = Offset(lx - 7 * u, h * 0.70f), size = Size(14 * u, 4 * u))
         // warm halo
-        drawRect(Brush.radialGradient(0f to Color(0x8CFFD696), 0.35f to Color(0x2EFFC882), 1f to Color(0x00FFC882), center = Offset(lx, ly), radius = w * 0.10f))
+        drawRect(Brush.radialGradient(0f to dc(Color(0x8CFFD696)), 0.35f to dc(Color(0x2EFFC882)), 1f to dc(Color(0x00FFC882)), center = Offset(lx, ly), radius = w * 0.10f))
         // lantern: glass, roof, base
-        drawPath(Path().apply { moveTo(lx - 14 * u, ly - 16 * u); lineTo(lx + 14 * u, ly - 16 * u); lineTo(lx + 10 * u, ly + 22 * u); lineTo(lx - 10 * u, ly + 22 * u); close() }, Color(0xFFFFE2B0))
-        drawPath(Path().apply { moveTo(lx - 20 * u, ly - 16 * u); lineTo(lx, ly - 30 * u); lineTo(lx + 20 * u, ly - 16 * u); close() }, Color(0xFF1A222D))
-        drawRect(Color(0xFF1A222D), topLeft = Offset(lx - 12 * u, ly + 22 * u), size = Size(24 * u, 6 * u))
-        drawRect(Color(0xFF1A222D), topLeft = Offset(lx - 1.5f * u, ly - 16 * u), size = Size(3 * u, 38 * u))
-        drawCircle(Brush.radialGradient(listOf(Color(0xE6FFF0D2), Color(0x00FFF0D2)), center = Offset(lx, ly + 4 * u), radius = 22 * u), radius = 22 * u, center = Offset(lx, ly + 4 * u))
+        drawPath(Path().apply { moveTo(lx - 14 * u, ly - 16 * u); lineTo(lx + 14 * u, ly - 16 * u); lineTo(lx + 10 * u, ly + 22 * u); lineTo(lx - 10 * u, ly + 22 * u); close() }, dc(Color(0xFFFFE2B0)))
+        drawPath(Path().apply { moveTo(lx - 20 * u, ly - 16 * u); lineTo(lx, ly - 30 * u); lineTo(lx + 20 * u, ly - 16 * u); close() }, dc(Color(0xFF1A222D)))
+        drawRect(dc(Color(0xFF1A222D)), topLeft = Offset(lx - 12 * u, ly + 22 * u), size = Size(24 * u, 6 * u))
+        drawRect(dc(Color(0xFF1A222D)), topLeft = Offset(lx - 1.5f * u, ly - 16 * u), size = Size(3 * u, 38 * u))
+        drawCircle(Brush.radialGradient(listOf(dc(Color(0xE6FFF0D2)), dc(Color(0x00FFF0D2))), center = Offset(lx, ly + 4 * u), radius = 22 * u), radius = 22 * u, center = Offset(lx, ly + 4 * u))
         // ground fog
-        drawRect(Brush.verticalGradient(0f to Color(0x00788799), 0.5f to Color(0x1A788799), 1f to Color(0x80080C14), startY = h * 0.6f, endY = h),
+        drawRect(Brush.verticalGradient(0f to dc(Color(0x00788799)), 0.5f to dc(Color(0x1A788799)), 1f to dc(Color(0x80080C14)), startY = h * 0.6f, endY = h),
             topLeft = Offset(0f, h * 0.6f), size = Size(w, h * 0.4f))
     }
 }
@@ -160,13 +167,17 @@ private fun DawnMenu(nav: Nav) {
         val i = items.indexOfFirst { it.screen == (Dawn.last ?: Screen.Tv) }.coerceAtLeast(0)
         delay(120); frs[i].tryFocus()
     }
-    Column(Modifier.padding(start = 34.dp, top = 6.dp).width(330.dp)
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+    // every item always fits on the screen, Settings included: rows get smaller on small screens or big text
+    val rowH = ((maxHeight - 6.dp - 8.dp - 24.dp) / items.size - 4.dp).coerceIn(36.dp, 54.dp)
+    val big = rowH >= 48.dp
+    Column(Modifier.padding(start = 34.dp, top = 6.dp, bottom = 8.dp).width(330.dp)
         .dawnGlass().onFocusChanged { Chrome.inRail = it.hasFocus }.padding(horizontal = 10.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)) {
         items.forEachIndexed { i, it ->
             Box {
                 Focusable(
-                    modifier = Modifier.fillMaxWidth().height(54.dp),
+                    modifier = Modifier.fillMaxWidth().height(rowH),
                     onClick = {
                         Chrome.inRail = false
                         Dawn.last = it.screen
@@ -182,14 +193,46 @@ private fun DawnMenu(nav: Nav) {
                     val c = if (f) Dawn.onPill else Color(0xFFEFF2F6)
                     Row(Modifier.fillMaxSize().padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                        Ico(it.icon, 27.dp, c)
-                        T(it.label, 19.sp, c, if (f) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
+                        Ico(it.icon, if (big) 27.dp else 23.dp, c)
+                        T(it.label, if (big) 19.sp else 17.sp, c, if (f) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
                     }
                 }
                 if (it.badge > 0) Box(Modifier.align(Alignment.TopEnd).offset(x = (-10).dp, y = 8.dp)) { Bell(it.badge) }
             }
         }
     }
+    DawnPlaylists(Modifier.align(Alignment.BottomEnd).padding(end = 38.dp, bottom = 10.dp))
+    }
+}
+
+/** Active playlists and how many days they still have, small and calm (amber under 7 days, red when expired). */
+@Composable
+private fun DawnPlaylists(modifier: Modifier) {
+    val ctx = LocalContext.current
+    val pls = remember { Store.actives(ctx) }
+    if (pls.isEmpty()) return
+    Column(modifier, horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        pls.take(4).forEach { p ->
+            val ex = expiryText(p.exp)
+            val left = dawnDaysLeft(p.exp)
+            val col = when { ex?.second == 2 -> Color(0xFFF87171); ex?.second == 1 -> Color(0xFFFBBF24); else -> Color(0xFFD5DBE3) }
+            Row(Modifier.dawnGlass(12.dp).padding(horizontal = 14.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(Modifier.size(8.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Color(0xFF4ADE80)))
+                T(p.name, 14.sp, Color.White, FontWeight.SemiBold)
+                if (left != null) { T("·", 14.sp, Color(0xFF9AA6B5)); T(left, 14.sp, col) }
+            }
+        }
+    }
+}
+
+/** "23 dana", "Bez isteka" or "Istekla" for a playlist's expiry (unix seconds or "0"). */
+private fun dawnDaysLeft(exp: String): String? {
+    if (exp.isBlank()) return null
+    if (exp == "0") return tr("Bez isteka")
+    val sec = exp.toLongOrNull() ?: return null
+    val days = ((sec * 1000 - System.currentTimeMillis()) / 86_400_000L).toInt()
+    return if (days < 0) tr("Istekla") else trf("još %s dana", days)
 }
 
 @Composable
