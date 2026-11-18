@@ -133,15 +133,15 @@ fun fallbackFor(key: String): Int = FALLBACKS[(key.hashCode() and 0x7fffffff) % 
 
 /** Picture that falls back to a landscape when there is no image or it fails to load. */
 @Composable
-fun OnyxImage(url: String?, key: String, modifier: Modifier = Modifier, maxW: Int = 360, scale: ContentScale = ContentScale.Crop) {
+fun OnyxImage(url: String?, key: String, modifier: Modifier = Modifier, maxW: Int = 360, scale: ContentScale = ContentScale.Crop, highQuality: Boolean = false) {
     val ctx = LocalContext.current
     val fb = painterResource(fallbackFor(key))
     if (url.isNullOrBlank()) Image(fb, null, modifier, contentScale = ContentScale.Crop)
     else {
         // never decode more pixels than the screen shows; Lite also uses half the memory per pixel
-        val w = if (Perf.lite || Lean.posters) maxW * 2 / 3 else maxW
+        val w = if (highQuality) maxW else if (Perf.lite || Lean.posters) maxW * 2 / 3 else maxW
         val req = remember(url, w) {
-            coil.request.ImageRequest.Builder(ctx).data(url).size(w, w * 3 / 2).allowRgb565(Perf.lite || Lean.posters).crossfade(!Perf.lite).build()
+            coil.request.ImageRequest.Builder(ctx).data(url).size(w, w * 3 / 2).allowRgb565(!highQuality && (Perf.lite || Lean.posters)).crossfade(!Perf.lite && !highQuality).build()
         }
         AsyncImage(model = req, contentDescription = null, contentScale = scale, modifier = modifier, error = fb, placeholder = fb)
     }
@@ -296,7 +296,6 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
     val ctx = LocalContext.current
     val first = remember { FocusRequester() }
     val cont = remember(Watch.rev) { Watch.continueList(ctx) }
-    LaunchedEffect(Unit) { try { Watch.findAlternatives(ctx) } catch (_: Exception) {} }
     var contMenu by remember { mutableStateOf<Progress?>(null) }
     val p = remember { Store.active(ctx) }
     val homeScope = rememberCoroutineScope()
@@ -326,20 +325,9 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
         if (kind == "series") nav.push(Screen.SeriesDetail(SeriesItem(o.optString("id"), o.optString("n"), o.optString("i").ifBlank { null }, null, o.optString("r").ifBlank { null })))
         else nav.push(Screen.MovieDetail(Vod(o.optString("id"), o.optString("n"), o.optString("i").ifBlank { null }, o.optString("r").ifBlank { null }, o.optString("u"))))
     }
-    val hero: Hero? = cont.firstOrNull()?.let { pr ->
-        val left = ((pr.dur - pr.pos) / 60_000L).coerceAtLeast(1)
-        Hero(pr.url, tr(if (pr.series != null) "NASTAVI GLEDANJE · SERIJA" else "NASTAVI GLEDANJE · FILM"), cleanTitle(pr.series ?: pr.title).first,
-            if (pr.next) trf("Sljedeća: S%sE%s", pr.season ?: 1, pr.episode ?: 1)
-            else (if (pr.season != null) "S${pr.season} E${pr.episode} · " else "") + trf("ostalo %s min", left),
-            pr.poster, tr("Nastavi"), if (pr.next) null else pr.fraction, playOf(pr))
-    } ?: newest.firstOrNull()?.let { (kind, o) ->
-        Hero(o.optString("id"), tr(if (kind == "series") "NOVO KOD PROVIDERA · SERIJA" else "NOVO KOD PROVIDERA · FILM"),
-            cleanTitle(o.optString("n")).first, cleanTitle(o.optString("n")).second ?: "", o.optString("i").ifBlank { null }, tr("Gledaj"), null) { openNew(kind, o) }
-    }
+    val hero: Hero? = null // Informational Home: no poster hero or recommendations.
     Box(Modifier.fillMaxSize()) {
-        OnyxBackdrop(hero?.image, hero?.key ?: "home")
-        // one calm picture behind Home (no film posters): fades into the theme's own background, so the text stays easy to read
-        HomeScenery()
+        Box(Modifier.fillMaxSize().background(C.BgBrush))
         Column(Modifier.fillMaxSize()) {
             OnyxTopBar(Screen.Home, nav, simple)
             // everything sits higher and bigger: no empty half screen, nothing cut at the bottom of the TV
@@ -380,15 +368,35 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                     Text(tr("DOBRO DOŠAO"), style = TextStyle(fontFamily = Inter, fontSize = 12.sp, color = C.Soft, fontWeight = FontWeight.SemiBold, letterSpacing = 3.sp))
                     Text(tr("Šta gledamo danas?"), style = TextStyle(fontFamily = Inter, fontSize = 34.sp, color = C.Text, fontWeight = FontWeight.ExtraBold),
                         modifier = Modifier.padding(top = 2.dp))
-                    Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        listOf(Triple(Screen.Tv, R.drawable.lc_tv, "TV uživo"), Triple(Screen.Movies, R.drawable.lc_film, "Filmovi"),
-                            Triple(Screen.Series, R.drawable.lc_monitor, "Serije"), Triple(Screen.Sports, R.drawable.lc_ball, "Sport")).forEachIndexed { i, (scr, ic, lb) ->
-                            if (simple && scr == Screen.Sports) return@forEachIndexed
-                            Focusable(onClick = { nav.root(scr) }, focusRequester = if (i == 0) first else null, shape = Pill, normal = if (i == 0) C.Text else C.CardHi,
-                                focused = C.Red, zoom = 1.06f, modifier = Modifier.height(42.dp)) { f ->
-                                Row(Modifier.align(Alignment.Center).padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    val col = if (f) C.OnRed else if (i == 0) C.Bg else C.Text
-                                    Ico(ic, 15.dp, col); T(lb, 14.sp, col, FontWeight.Bold)
+                    val nCh = NewContent.count("tv")
+                    val nVod = NewContent.count("vod")
+                    val nSer = NewContent.count("series")
+                    val liveFollowed = GoalNote.followed.count { it.live }
+                    Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        val tiles = listOf(
+                            Triple(Screen.Tv, R.drawable.lc_tv, "LIVE TV") to (if (nCh > 0) "NEW CHANNELS: " + nCh else "TV kanali"),
+                            Triple(Screen.Movies, R.drawable.lc_film, "MOVIES") to (if (nVod > 0) "NEW MOVIES: " + nVod else "Filmovi"),
+                            Triple(Screen.Series, R.drawable.lc_monitor, "SERIES") to (if (nSer > 0) "NEW SERIES: " + nSer else "Serije"),
+                            Triple(Screen.Sports, R.drawable.lc_ball, "SPORTS") to (if (liveFollowed > 0) "LIVE: " + liveFollowed else "")
+                        )
+                        tiles.forEachIndexed { i, pair ->
+                            val item = pair.first
+                            val sub = pair.second
+                            if (simple && item.first == Screen.Sports) return@forEachIndexed
+                            Focusable(onClick = { nav.root(item.first) }, focusRequester = if (i == 0) first else null,
+                                shape = Rnd(15.dp), normal = C.Rail, focused = C.CardHi, zoom = 1.025f,
+                                modifier = Modifier.weight(1f).height(84.dp).border(1.dp, C.Line, Rnd(15.dp))) { f ->
+                                Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Ico(item.second, 25.dp, if (f) C.RedText else C.Soft)
+                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        T(item.third, 14.sp, C.Text, FontWeight.Bold, maxLines = 1)
+                                        if (sub.isNotBlank()) T(sub, 10.sp, C.Muted, FontWeight.Medium, maxLines = 1)
+                                    }
+                                    val badge = when (i) { 0 -> nCh; 1 -> nVod; 2 -> nSer; else -> 0 }
+                                    if (badge > 0) Box(Modifier.clip(CircleShape).background(C.CardHi).padding(horizontal = 7.dp, vertical = 3.dp)) {
+                                        T(badge.toString(), 10.sp, C.Text, FontWeight.Bold)
+                                    }
                                 }
                             }
                         }
@@ -422,26 +430,33 @@ fun OnyxHome(nav: Nav, simple: Boolean = false) {
                 }
                         }
                         "cont" -> {
-                if (cont.isNotEmpty()) {
-                    RowTitle("NASTAVI GLEDANJE")
-                    // round trip: ▶ on the last card goes to the first, ◀ on the first goes to the last
-                    val cState = androidx.compose.foundation.lazy.rememberLazyListState()
-                    val cScope = rememberCoroutineScope()
-                    val cFirst = remember { FocusRequester() }; val cLast = remember { FocusRequester() }
-                    LazyRow(state = cState, horizontalArrangement = Arrangement.spacedBy(18.dp), contentPadding = PaddingValues(end = 40.dp, top = 6.dp, bottom = 6.dp)) {
-                        itemsIndexed(cont, key = { _, it -> it.url }) { i, pr ->
-                            WideCard(pr.series ?: pr.title, if (pr.season != null) "S${pr.season} E${pr.episode}" else fmtTime(pr.dur), pr.poster, pr.url,
-                                if (pr.next) null else pr.fraction, onMenu = { contMenu = pr }, height = cardH,
-                                fr = if (i == 0) cFirst else if (i == cont.lastIndex) cLast else null,
-                                keys = Modifier.onPreviewKeyEvent { e ->
-                                    if (e.type != KeyEventType.KeyDown || cont.size < 2) false
-                                    else if (i == cont.lastIndex && e.key == Key.DirectionRight) { cScope.launch { cState.scrollToItem(0); delay(30); cFirst.tryFocus() }; true }
-                                    else if (i == 0 && e.key == Key.DirectionLeft) { cScope.launch { cState.scrollToItem(cont.lastIndex); delay(30); cLast.tryFocus() }; true }
-                                    else false
-                                }, onClick = playOf(pr))
+                val movieProgress = cont.filter { it.series == null }
+                val showProgress = cont.filter { it.series != null }
+                @Composable fun progressRow(title: String, entries: List<Progress>) {
+                    if (entries.isEmpty()) return
+                    RowTitle(title)
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(end = 40.dp, top = 6.dp, bottom = 8.dp)) {
+                        items(entries, key = { it.url }) { pr ->
+                            Focusable(onClick = playOf(pr), onMenu = { contMenu = pr }, shape = Rnd(14.dp),
+                                normal = C.Rail, focused = C.CardHi, zoom = 1.02f,
+                                modifier = Modifier.width(300.dp).height(66.dp).border(1.dp, C.Line, Rnd(14.dp))) { f ->
+                                Column(Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 8.dp), verticalArrangement = Arrangement.Center) {
+                                    T(pr.series ?: pr.title, 14.sp, C.Text, FontWeight.SemiBold, maxLines = 1)
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        T(if (pr.season != null) "S" + pr.season + " E" + pr.episode else fmtTime(pr.dur), 11.sp, C.Muted, maxLines = 1)
+                                        Spacer(Modifier.weight(1f))
+                                        if (!pr.next) T((pr.fraction * 100).toInt().toString() + "%", 11.sp, C.Soft)
+                                    }
+                                    if (!pr.next) Box(Modifier.fillMaxWidth().padding(top = 4.dp).height(3.dp).clip(Pill).background(C.Line)) {
+                                        Box(Modifier.fillMaxWidth(pr.fraction).fillMaxHeight().background(C.Red.copy(alpha = 0.75f)))
+                                    }
+                                }
+                            }
                         }
                     }
                 }
+                progressRow("CONTINUE WATCHING · MOVIES", movieProgress)
+                progressRow("CONTINUE WATCHING · TV SHOWS", showProgress)
                         }
                         "mylist" -> {
                 // films and series you saved with "+ My list"
@@ -855,13 +870,12 @@ fun AdvancedGate(nav: Nav) {
 /** Settings › Home: which rows the home screen shows and in which order. */
 object HomeRows {
     // "Newly added": on in Full (can be switched off here), never in Lite
-    val ALL = listOf("fresh" to "Nove epizode", "cont" to "Nastavi gledati", "mylist" to "Moja lista", "new" to "Novo dodano",
-        "today" to "Utakmice danas", "follow" to "Pratiš · uživo", "recent" to "Nedavno gledani kanali")
+    val ALL = listOf("cont" to "Nastavi gledati", "recent" to "Nedavno gledani kanali", "follow" to "Pratiš · uživo")
     var rev by mutableIntStateOf(0)
     /** "Matches today" starts off (it loads live scores) */
     /** weak box (score under 50): "Recently added" posters also start off; the user can turn them on in Settings › Home */
     // first start on every box: "Newly added" (new films, series, channels) and "Matches today" are off until switched on
-    private fun offStr() = Prefs.str("home_off", "today,new,follow")
+    private fun offStr() = Prefs.str("home_off", "fresh,mylist,new,today")
     private fun savedOrder(): List<String> {
         val saved = Prefs.str("home_rows", "fresh,cont,new,recent").split(',').filter { s -> ALL.any { it.first == s } }.toMutableList()
         if ("follow" !in saved) { val i = saved.indexOf("today"); if (i >= 0) saved.add(i + 1, "follow") else saved.add("follow") }

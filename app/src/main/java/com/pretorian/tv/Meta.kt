@@ -203,7 +203,7 @@ object Tmdb {
             studio = studio, tmdbId = id, runtimeMin = rtMin,
             title = d.str(if (tv) "name" else "title").ifBlank { title },
             overview = overview, overviewLang = overviewLang,
-            poster = d.str("poster_path").orNullIfBlank()?.let { IMG + "w500" + it },
+            poster = d.str("poster_path").orNullIfBlank()?.let { IMG + "w780" + it },
             backdrop = d.str("backdrop_path").orNullIfBlank()?.let { IMG + "w1280" + it },
             year = d.str(if (tv) "first_air_date" else "release_date").take(4).orNullIfBlank(),
             runtime = runtime, genres = genres,

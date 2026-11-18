@@ -2,6 +2,14 @@ package com.pretorian.tv
 
 /** Russian: one line per text, "bosnian|russian" (kept apart so the 10-column table and its tools stay as they are). */
 internal val RU_TABLE = """
+ZOOM|ЗУМ
+Prilagodi širinu|Подогнать по ширине
+Zoom|Масштаб
+Zadano / automatski|По умолчанию / автоматически
+Nema gledanih kanala.|Нет просмотренных каналов.
+Lista posljednjih gledanih kanala bit će obrisana.|Список недавно просмотренных каналов будет очищен.
+Historija · %s/10|История · %s/10
+Izvorno|Оригинал
 Početna|Главная
 TV|ТВ
 Filmovi|Фильмы
@@ -2277,4 +2285,61 @@ Prozirnost EPG-a|Прозрачность EPG
 0 = kao tema · 80 = skoro providno|0 = как в теме · 80 = почти прозрачно
 Svjetlina EPG-a|Яркость EPG
 Vrati izgled EPG-a|Сбросить вид EPG
+people|люди
+Profili i roditeljska kontrola|Профили и родительский контроль
+Profili, PIN i sigurnost|Профили, PIN-код и безопасность
+sources|источники
+Izvori i sadržaj|Источники и содержимое
+Playliste, EPG, grupe i kanali|Плейлисты, EPG, группы и каналы
+Početna i navigacija|Главная и навигация
+Početni ekran i raspored|Главный экран и расположение
+playback|воспроизведение
+Reprodukcija|Воспроизведение
+Plejer, zvuk, titlovi i stream|Плеер, звук, субтитры и поток
+appearance|оформление
+Izgled i jezik|Оформление и язык
+Tema, boje, veličine i jezik|Тема, цвета, размеры и язык
+Sportovi, timovi i takmičenja|Виды спорта, команды и соревнования
+notifications|уведомления
+Obavještenja i podsjetnici|Уведомления и напоминания
+Podsjetnici i čuvar ekrana|Напоминания и заставка
+system|система
+Sistem i održavanje|Система и обслуживание
+Dijagnostika, backup i ažuriranje|Диагностика, резервное копирование и обновления
+POSTAVKE|НАСТРОЙКИ
+Profil, ko gleda, profili, dječiji profil, PIN, roditeljska kontrola, sakrij kategorije, vrijeme gledanja, jednostavni mod|Профиль, кто смотрит, профили, детский профиль, PIN-код, родительский контроль, скрытие категорий, время просмотра, простой режим
+Playliste, dodaj playlistu, Xtream, M3U, Stalker, EPG izvori, grupe i kanali, osvježi playlistu, redoslijed, sakrij kanale|Плейлисты, добавить плейлист, Xtream, M3U, Stalker, источники EPG, группы и каналы, обновить плейлист, порядок, скрыть каналы
+Početna, redovi, nove epizode, nastavi gledati, novo dodano, nedavni kanali, početni ekran, start s boxom, zadnji kanal, potvrdi izlaz, rad u pozadini, User-Agent, UDP proxy|Главная, ряды, новые серии, продолжить просмотр, недавно добавленное, недавние каналы, главный экран, запуск вместе с устройством, последний канал, подтверждение выхода, работа в фоне, User-Agent, UDP-прокси
+Plejer, titl, titlovi, veličina titla, kašnjenje titla, sync, zvuk, jezik zvuka, Dolby, passthrough, oporavak, prekid streama, bafer, rezolucija, preskok, nastavi gdje si stao, sljedeća epizoda, trailer, eksterni plejer, file manager|Плеер, субтитры, размер субтитров, задержка субтитров, синхронизация, звук, язык звука, Dolby, passthrough, восстановление, прерывание потока, буфер, разрешение, пропуск, продолжить с места остановки, следующая серия, трейлер, внешний плеер, файловый менеджер
+Izgled, tema, boja, veličina, ikone, mod programa, Lite, Full, oblik ivica, jezik, meniji, opisi filmova, prevod|Оформление, тема, цвет, размер, значки, режим программы, Lite, Full, форма углов, язык, меню, описания фильмов, перевод
+Podsjetnici, obavijest, utakmica, emisija, zvuk obavijesti, čuvar ekrana, sat, datum, pauzirano|Напоминания, уведомление, матч, передача, звук уведомления, заставка, часы, дата, пауза
+Dijagnostika, brzina interneta, VPN, protok, gledano, uptime, keš, zapis ažuriranja, zapis streama, backup, vraćanje, USB, fajl, Download, automatski backup, vrati na početak, ažuriranje, nova verzija, beta, stable, kanal, potpis, vrati prethodnu verziju, o aplikaciji, uređaj, kontakt, licence, privatnost, pomoć|Диагностика, скорость интернета, VPN, трафик, просмотр, время работы, кэш, журнал обновлений, журнал потока, резервное копирование, восстановление, USB, файл, загрузки, автоматическое резервное копирование, сброс, обновление, новая версия, бета, стабильная, канал, подпись, возврат к предыдущей версии, о приложении, устройство, контакты, лицензии, конфиденциальность, помощь
+Korisnički profili i ko gleda|Пользовательские профили и кто смотрит
+Osnovni prikaz i zaštita postavki|Основной вид и защита настроек
+Ograničenja kategorija i sadržaja|Ограничения категорий и содержимого
+Dodavanje, aktivacija i ažuriranje|Добавление, активация и обновление
+Programski vodič i izvori|Телепрограмма и источники
+Redoslijed, nazivi, skrivanje i PIN|Порядок, названия, скрытие и PIN
+Početni ekran|Главный экран
+Redovi, sadržaj i redoslijed|Ряды, содержимое и порядок
+Opće postavke|Общие настройки
+Pokretanje, pozadina i napredne opcije|Запуск, фоновые процессы и дополнительные параметры
+Postavke plejera|Настройки плеера
+Titlovi, zvuk, stream i kontrole|Субтитры, звук, поток и управление
+Tema, boje, veličina i ikone|Тема, цвета, размер и значки
+Jezik menija i opisa sadržaja|Язык меню и описаний содержимого
+Sportovi, države, timovi i prenosi|Виды спорта, страны, команды и трансляции
+Emisije, utakmice i obavještenja|Передачи, матчи и уведомления
+Sat, datum i prikaz pauze|Часы, дата и отображение паузы
+Protok, brzina, stabilnost i zapisi|Трафик, скорость, стабильность и журналы
+Sačuvaj ili vrati postavke|Сохранить или восстановить настройки
+Nova verzija i kanal ažuriranja|Новая версия и канал обновлений
+Uređaj, kontakt i licence|Устройство, контакты и лицензии
+Kategorije|Категории
+SLIJEDI|СЛЕДУЮЩЕЕ
+TV prikaz|Представление ТВ
+New Age|New Age
+New Era|New Era
+New Era: tri stalna panela — kategorije providera, kanali i EPG.|New Era: три постоянные панели — категории провайдера, каналы и EPG.
+New Age: postojeći TV prikaz.|New Age: существующий вид ТВ.
 """.trimIndent()

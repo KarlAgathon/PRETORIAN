@@ -182,7 +182,11 @@ private fun GuideGrid(g: GroupRef, nav: Nav, gate: PinGate, fr: FocusRequester, 
     val wantPast = focusTime < now
     // guide of the rows around the focused one (more of it when a later day is picked; the archive when going back)
     LaunchedEffect(row, list, limit, wantPast) {
-        for (i in (row - 2).coerceAtLeast(0)..(row + 12).coerceAtMost(list.lastIndex)) {
+        // Load the focused row first, then nearby rows in alternating order.
+        // This avoids a long sequential queue when focus moves quickly.
+        val nearby = listOf(row, row - 1, row + 1, row - 2, row + 2, row - 3, row + 3)
+            .filter { it in list.indices }
+        for (i in nearby) {
             val ch = list[i]
             val p = Store.byId(ctx, ch.pid) ?: continue
             if ((epgLim[ch.url] ?: 0) < limit) {

@@ -1,6 +1,103 @@
-PRETORIAN 1.0.38
-Kanal koji zamrzne više ne ostaje tiho stajati: poslije 4 pokušaja uzima rezervni stream, a ako ga nema, javlja poruku i pokušava ponovo svakih 20 s
-Kanali s arhivom: u traci playera dugmad "◀◀ 5 min" i "Uživo", a u uglu piše koliko si iza uživo
-Izgled › EPG: boja, veličina slova, prozirnost i svjetlina programa (EPG mreža, vodič u playeru, lista kanala)
-Nova instalacija: hardverski dekoder i skrivene kategorije za odrasle, XXX, LGBT i trans (otvara ih PIN)
-Zapis streamova: "Nikad" je preveden
+PRETORIAN 1.0.49
+Classic TV: compact the top NOW/NEXT programme cards with smaller text, padding and vertical gaps
+Classic TV: reduce the Groups heading size, group row height and spacing for a tighter left column
+Classic TV: preserve the existing preview/channel proportions and all navigation behavior
+
+Classic TV: rebalance the upper mini-player/EPG panel and lower group/channel area to remove cramped overlap
+Classic TV: compact EPG cards and show up to four upcoming programme entries in the upper panel
+Classic TV: separate group and selected-category headings with cleaner spacing
+Classic TV: tighten category and channel card widths, margins and row proportions while preserving readable labels
+Classic TV: retain BETA19 accordion navigation and all BETA20 fixes
+Default layout and Stable main remain unchanged
+
+PRETORIAN 1.0.48-beta20
+Classic TV: prevent the preview video from exceeding its top-left panel and overlapping the groups area
+Classic TV: align group and channel row typography to the same font size and consistent row proportions
+Classic TV: reserve separate bounded areas for preview, Groups heading, selected group title, channel names and inline EPG
+Classic TV: improve EPG readability while keeping all text clipped to its own row/column
+Default layout and Stable main remain unchanged
+
+PRETORIAN 1.0.47-beta19
+Classic TV: accordion navigation — channel browsing collapses the group column; LEFT/BACK expands one level at a time
+Classic TV: LEFT/BACK from the expanded groups reveals the main app navigation
+Classic TV: wider, more readable inline EPG area beside channel names
+Classic TV: top programme panel shows current and next programme with larger titles and descriptions; future programme cards support Remind Me
+Classic TV: narrower group column to give channel and EPG information more room
+Default layout and Stable main remain unchanged
+
+PRETORIAN 1.0.46-beta18
+Fix Classic and Default TV navigation: LEFT from channels returns focus to the selected group
+Fix BACK handling from the channel list and restore focus only after the group row is visible
+Classic layout hides the main rail while browsing groups/channels to give the TV list more usable space
+Classic channel name, current EPG time and programme title are displayed on one horizontal line
+Default layout styling and Stable main remain unchanged
+
+PRETORIAN 1.0.45-beta17
+Classic TV layout refinement: smaller top preview/EPG area and more vertical space for groups and channels
+Narrower group column, reduced Classic channel row height and typography for improved TV readability
+Current programme title and time shown inline in each visible channel row when EPG data is available
+Classic browsing keeps the app rail in compact icon-only mode; focusing the rail expands it
+Default layout remains unchanged
+
+PRETORIAN 1.0.44-beta16
+Classic TV layout redesign inspired by the TV Mate reference: mini-player and selected-channel programme information in the upper area; wider groups and channel list in the lower area
+Classic layout uses a wider channel area to reduce truncated channel names; Default layout is unchanged
+TV Mate-inspired arrangement uses PRETORIAN styling and existing channel confirmation/playback behavior
+
+PRETORIAN 1.0.43-beta15
+Fix: add the Default / Classic TV layout selector to the modern Appearance (LookV2) screen actually used by Settings
+The selector is shown under Appearance → TV Layout, separately from visual Theme cards; selecting a layout saves the choice immediately
+Default remains the default layout; Classic selects the existing left-navigation/category-column layout
+BETA12 functionality and fullscreen player options/history are retained; Stable main is unchanged
+
+PRETORIAN 1.0.42-beta14
+Appearance: add a live Default / Classic layout selector; Default remains selected for new installations and Classic is available as an alternative
+Default uses the modern top navigation and poster-row layout; Classic uses the left navigation and category-column layout
+Only one layout can be active at a time; selection is saved immediately
+Fullscreen live-channel options remain identical in both layouts: FAVORITES, SUBS, ZOOM, AUDIO, VIDEO, EPG and HISTORY
+Channel history retains the latest 10 channels and includes Clear History with confirmation
+All existing BETA12 functionality is retained; Stable main is unchanged
+
+PRETORIAN 1.0.42-beta12
+TV Guide preko cijelog ekrana je uklonjen iz TV navigacije, pretrage i postavki; ostaje stari prikaz kategorije · kanali · mali player · EPG
+DPAD navigacija u kategorijama i kanalima je kružna: UP na prvoj stavci vodi na posljednju, DOWN na posljednjoj vodi na prvu
+Samo pomjeranje fokusa ne mijenja odabranu kategoriju i ne pokreće kanal; prvi OK potvrđuje mini-player, drugi OK na istom kanalu otvara fullscreen
+Zadržan je postojeći plavo-ljubičasti PRETORIAN izgled i Stable aplikacija nije mijenjana
+
+PRETORIAN 1.0.41-beta11
+Full-screen player: isti meni opcija za kanale u svim layoutima — FAVORITES, SUBS, ZOOM, AUDIO, VIDEO, EPG i HISTORY
+Favorites: jedan OK dodaje ili uklanja kanal; žuta zvijezda označava aktivan favorit
+Subs: za TV kanale prikazuje ugrađene titlove koje stream nudi
+Zoom: Default / Auto, 4:3, 16:9, Fit, Stretch i Original
+EPG: vodič i pomak vremena (+/-) dostupni iz playera
+History: posljednjih 10 gledanih kanala, najnoviji prvi, uz Clear History i potvrdu
+Player kontrole koriste zajednički plavo-sivi izgled, plavu selekciju i tanki bijeli okvir
+DEFAULT glavni izgled ostaje nepromijenjen; Stable main nije mijenjan
+
+PRETORIAN 1.0.39-beta5
+TV kanali: mali pregled se pokreće tek nakon prvog OK; drugi OK na istom kanalu otvara cijeli ekran
+TV kategorije: UP na prvom redu i DOWN na posljednjem redu ostaju unutar liste, uključujući brzo ponavljanje tipke
+Home, Sport i Stable nisu mijenjani
+
+PRETORIAN 1.0.39-beta6
+TV kategorije: držanje UP pomjera fokus red po red i ne dozvoljava prerani izlazak na gornju traku; izlazak je moguć tek iz prve kategorije
+TV kategorije: DOWN ostaje unutar liste i na posljednjoj kategoriji
+Mini pregled: postojeća potvrda tipkom OK ostaje nepromijenjena
+
+
+PRETORIAN 1.0.39-beta7
+TV kategorije: prirodno pomjeranje fokusa red po red, kao na kanalima; držanje UP/DOWN prati ponavljanje daljinskog bez skakanja i treperenja
+TV kategorije: DOWN na posljednjoj kategoriji ostaje unutar liste
+Mini pregled i beta6 zaštita granica ostaju nepromijenjeni
+
+
+PRETORIAN 1.0.39-beta8
+TV grupe: zadržana ispravka prirodnog kretanja fokusa red po red, bez treperenja i skakanja pri držanju daljinskog
+TV kanali: aktivni kanal je jasno označen diskretnim zelenim indikatorom i blagim zelenim okvirom/pozadinom, uključujući povratak iz fullscreen playera
+Mini pregled i potvrda tipkom OK ostaju nepromijenjeni
+
+PRETORIAN 1.0.39-beta9
+TV kategorije: UP prolazi red po red i pri držanju ne napušta listu prije prve kategorije; tek novi UP na vrhu predaje fokus gornjoj TV navigaciji
+TV kategorije: DOWN prolazi red po red, a DOWN na posljednjoj kategoriji vraća fokus na prvu
+Onyx TV i standardni TV prikaz koriste isto predvidljivo kretanje fokusa
+Mini pregled, potvrda tipkom OK i aktivni kanal iz beta8 ostaju nepromijenjeni

@@ -105,7 +105,7 @@ private fun DBadge(t: String, bg: Color = Color(0xB3000000), fg: Color = Color.W
 @Composable
 private fun BigPoster(url: String?, key: String, rating: String?, marks: List<String>, w: Dp) {
     Box(Modifier.width(w).aspectRatio(2f / 3f).clip(Rnd(16.dp)).border(1.dp, C.Line, Rnd(16.dp))) {
-        OnyxImage(url, key, Modifier.fillMaxSize(), maxW = 420)
+        OnyxImage(url, key, Modifier.fillMaxSize(), maxW = 900, scale = androidx.compose.ui.layout.ContentScale.Fit, highQuality = true)
         if (marks.isNotEmpty()) Row(Modifier.align(Alignment.TopStart).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) { marks.forEach { DBadge(it) } }
         rating?.let { Box(Modifier.align(Alignment.TopEnd).padding(8.dp)) { DBadge("★ $it", fg = Color(0xFFFFC941)) } }
     }

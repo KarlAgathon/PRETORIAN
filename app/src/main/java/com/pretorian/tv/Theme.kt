@@ -32,7 +32,8 @@ object Look {
     var groupFrame by mutableStateOf(true)     // thin accent frame around TV groups
     var resBadge by mutableIntStateOf(1)       // resolution in the player corner: 0 off, 1 on start, 2 always
     var bigText by mutableStateOf(false)      // larger text everywhere (for parents, far sofas)
-    var layout by mutableIntStateOf(1)         // 0 classic, 1 New Wave (full-width grids, chips, hint bar), 2 New Age (top menu, poster rows)
+    var layout by mutableIntStateOf(2)         // 0 classic, 1 New Wave, 2 New Age
+    var tvDesign by mutableIntStateOf(1)       // New Era is the only available TV layout
     val wave get() = layout >= 1
     val age get() = layout == 2
 
@@ -68,7 +69,7 @@ object Look {
         mostWatched = p.getBoolean("look_mostwatched", true)
         overlay = p.getInt("look_overlay", 0)
         preview = p.getBoolean("look_preview", true)
-        previewMode = p.getInt("look_previewmode", 2)
+        previewMode = p.getInt("look_previewmode", 1)
         menuOpacity = p.getInt("look_menuopacity", 94)
         rowSize = p.getInt("look_rowsize", 1)
         lang = p.getString("app_lang", null) ?: "en"   // a new install starts in English
@@ -77,13 +78,19 @@ object Look {
         corner = p.getInt("look_corner", 0)
         groupFrame = p.getBoolean("look_groupframe", true)
         resBadge = p.getInt("look_resbadge", 1)
-        layout = 2   // the new look is the only one now (old layouts could be switched on by accident)
+        layout = p.getInt("look_layout", 2).coerceIn(0, 2)
+        tvDesign = 1 // New Era is the only supported TV layout; migrate older selections
+        p.edit().putInt("look_tvdesign", 1).apply()
         bigText = false   // replaced by the size slider, which grows everything together
         // 0.3: the new modern home tiles become the default once
         if (p.getInt("look_v", 0) < 3) { tileStyle = 3; p.edit().putInt("look_v", 3).putInt("look_tilestyle", 3).apply() }
         // 0.4.2: inside a group the small picture starts by itself (you asked for it)
         if (p.getInt("look_v", 0) < 4) { previewMode = 2; p.edit().putInt("look_v", 4).putInt("look_previewmode", 2).apply() }
         if (p.getInt("look_v", 0) < 5) { tileStyle = 4; p.edit().putInt("look_v", 5).putInt("look_tilestyle", 4).apply() }
+        // 0.4.3: mini-player changes only after the user confirms a channel with OK.
+        if (p.getInt("look_v", 0) < 6) { previewMode = 1; p.edit().putInt("look_v", 6).putInt("look_previewmode", 1).apply() }
+        // 0.4.4: the agreed TV mini-player is confirmed with OK; focus alone never starts playback.
+        if (p.getInt("look_v", 0) < 7) { previewMode = 1; p.edit().putInt("look_v", 7).putInt("look_previewmode", 1).apply() }
     }
 
     fun save(c: Context) {
@@ -93,7 +100,7 @@ object Look {
             .putInt("look_overlay", overlay).putBoolean("look_preview", preview).putInt("look_previewmode", previewMode)
             .putInt("look_menuopacity", menuOpacity).putInt("look_rowsize", rowSize).putString("app_lang", lang)
             .putString("look_iconset", iconSet).putInt("look_iconstyle", iconStyle).putInt("look_corner", corner)
-            .putBoolean("look_groupframe", groupFrame).putInt("look_resbadge", resBadge).putInt("look_layout", layout).putBoolean("look_bigtext", bigText).putInt("look_scale", uiScale).apply()
+            .putBoolean("look_groupframe", groupFrame).putInt("look_resbadge", resBadge).putInt("look_layout", layout).putInt("look_tvdesign", tvDesign).putBoolean("look_bigtext", bigText).putInt("look_scale", uiScale).apply()
     }
 }
 
@@ -247,7 +254,7 @@ object C {
 /** Settings › Appearance › Focus card: how bright the box you stand on is, 20–100 % in every theme
  *  (100 = the pure theme colour, less = mixed into the background so big boxes don't glare). */
 object FocusCard {
-    private var v by mutableIntStateOf(Prefs.long("focus_pct", if (Prefs.long("look_focus_soft", 0) == 0L) 70 else 100).toInt().coerceIn(20, 100))
+    private var v by mutableIntStateOf(Prefs.long("focus_pct", if (Prefs.long("look_focus_soft", 0) == 0L) 60 else 100).toInt().coerceIn(20, 100))
     val pct get() = v
     fun set(p: Int) { v = p.coerceIn(20, 100); Prefs.put("focus_pct", v.toLong()) }
 }

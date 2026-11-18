@@ -1,4 +1,8 @@
 name: Build APK
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
 on:
   push:
     branches: ["**"]
@@ -82,7 +86,7 @@ jobs:
             Pretorian.apk
             update.json
 
-      # Beta channel: every push to the "beta" branch replaces the pre-release "beta" (only Beta users get it)
+      # Beta channel: serialize pushes and update the existing prerelease instead of deleting its tag
       - name: Publish beta
         if: github.ref == 'refs/heads/beta'
         env:
@@ -90,6 +94,10 @@ jobs:
         run: |
           NOTES=$(jq -Rs . < RELEASE_NOTES.txt 2>/dev/null || echo '""')
           echo "{\"versionCode\": ${{ steps.v.outputs.code }}, \"versionName\": \"${{ steps.v.outputs.name }}\", \"apk\": \"https://github.com/${{ github.repository }}/releases/download/beta/Pretorian.apk\", \"notes\": $NOTES}" > update.json
-          gh release delete beta --repo "${{ github.repository }}" --yes --cleanup-tag || true
-          gh release create beta Pretorian.apk update.json --repo "${{ github.repository }}" --prerelease --latest=false \
-            --target "${{ github.sha }}" --title "PRETORIAN ${{ steps.v.outputs.name }} (beta)" --notes-file RELEASE_NOTES.txt
+          if gh release view beta --repo "${{ github.repository }}" > /dev/null 2>&1; then
+            gh release upload beta Pretorian.apk update.json --repo "${{ github.repository }}" --clobber
+            gh release edit beta --repo "${{ github.repository }}" --title "PRETORIAN ${{ steps.v.outputs.name }} (beta)" --notes-file RELEASE_NOTES.txt --prerelease
+          else
+            gh release create beta Pretorian.apk update.json --repo "${{ github.repository }}" --prerelease --latest=false \
+              --target "${{ github.sha }}" --title "PRETORIAN ${{ steps.v.outputs.name }} (beta)" --notes-file RELEASE_NOTES.txt
+          fi

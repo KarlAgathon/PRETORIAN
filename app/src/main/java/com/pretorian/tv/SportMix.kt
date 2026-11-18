@@ -280,12 +280,19 @@ fun SportMixScreen(nav: Nav) {
     fun fav(e: SportEvent) = e.country in favC || MyTeams.has(e.home?.name ?: "-") || MyTeams.has(e.away?.name ?: "-") || MatchFollow.has(e.id) ||
         favNations.any { it.equals(e.home?.name, true) || it.equals(e.away?.name, true) }
     val sportsOn = remember(SportCache.rev) { Prefs.str("sm_sports", Prefs.str("sport_enabled", "football")).split(',').filter { it.isNotBlank() && it != "*" }.toSet() }
-    // the chosen sports count everywhere: Live, Coming up, Favourites and Following
+    val selectedTeams = remember(SportCache.rev) { Prefs.str("sm_teams").split('|').filter { it.isNotBlank() }.toSet() }
+    val selectedCountries = remember(SportCache.rev) { Prefs.str("sm_countries").split(',').filter { it.isNotBlank() }.toSet() }
+    val selectedLeagues = remember(SportCache.rev) { Prefs.str("sm_leagues").split('|').filter { it.isNotBlank() }.toSet() }
+    // Independent multi-select filters apply to all Sport tabs.
     fun inSport(e: SportEvent) = sportsOn.isEmpty() || e.sport in sportsOn
+    fun inUserFilters(e: SportEvent) =
+        (selectedTeams.isEmpty() || e.home?.name in selectedTeams || e.away?.name in selectedTeams) &&
+        (selectedCountries.isEmpty() || e.country.lowercase() in selectedCountries) &&
+        (selectedLeagues.isEmpty() || e.league in selectedLeagues)
     fun followedEv(e: SportEvent) = MatchFollow.has(e.id) || MyTeams.list().any { t -> t.equals(e.home?.name, true) || t.equals(e.away?.name, true) }
     fun inTab(e: SportEvent, t: String) = when (t) { "live" -> e.live; "soon" -> e.state == "pre"; "mine" -> followedEv(e); "fav" -> fav(e) && !e.over; else -> e.over }
     val shown = remember(withCh, tab, SportCache.rev, MyTeams.rev, MatchFollow.rev) {
-        withCh.filter { e -> inSport(e) && inTab(e, tab) }
+        withCh.filter { e -> inSport(e) && inUserFilters(e) && inTab(e, tab) }
             .sortedWith(if (tab == "mine" || tab == "fav") compareBy({ it.state != "in" }, { it.state == "post" }, { it.start }) else compareBy({ it.fromGuide }, { it.replay }, { !fav(it) }, { it.league }, { it.start }))
     }
     val ev = shown.firstOrNull { it.id == sel } ?: shown.firstOrNull()
@@ -327,9 +334,61 @@ fun SportMixScreen(nav: Nav) {
     val mine = remember(mineRev, withCh) { MyTeams.list().mapNotNull { t -> withCh.filter { e -> e.home?.name.equals(t, true) || e.away?.name.equals(t, true) }
         .sortedWith(compareBy({ it.state != "in" }, { it.state == "post" }, { it.start })).firstOrNull()?.let { t to it } } }
 
-    Row(Modifier.fillMaxSize().padding(start = 24.dp, end = 24.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        // ------------------------------------------------ left: your teams, filters, matches by league
-        Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.fillMaxSize().padding(horizontal = 24.dp)) {
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                T(tr("Sportski centar").uppercase(), 20.sp, C.Text, FontWeight.Bold)  // i18n-ignore
+                T("Utakmice, timovi i TV prenosi", 11.sp, C.Muted)
+            }
+            Spacer(Modifier.weight(1f))
+            T(shown.size.toString() + "  " + tr("Utakmice").uppercase(), 12.sp, C.Soft, FontWeight.SemiBold)  // i18n-ignore
+        }
+        Row(Modifier.fillMaxWidth().padding(bottom = 10.dp).horizontalScroll(androidx.compose.foundation.rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Chip2(tr("Sportovi") + if (sportsOn.isEmpty()) "" else " · " + sportsOn.size, false) { pick = "sport" }
+            Chip2(tr("Timovi") + if (selectedTeams.isEmpty()) "" else " · " + selectedTeams.size, false) { pick = "teams" }
+            Chip2(tr("Države") + if (selectedCountries.isEmpty()) "" else " · " + selectedCountries.size, false) { pick = "countries" }
+            Chip2(tr("Regije") + " ▾", false) { pick = "region" }
+            Chip2(tr("Takmičenja") + if (selectedLeagues.isEmpty()) "" else " · " + selectedLeagues.size, false) { pick = "leagues" }
+        }
+        Row(Modifier.weight(1f).fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        // ------------------------------------------------ left rail: Sport navigation and competitions
+        Column(Modifier.width(190.dp).fillMaxHeight().glassSide(18.dp).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            T("SPORT", 17.sp, C.Text, FontWeight.ExtraBold)  // i18n-ignore
+            T("CENTAR UTAKMICA", 10.sp, C.Muted, FontWeight.Bold)  // i18n-ignore
+            val sportNavItems = listOf("live" to "Utakmice uživo", "soon" to "Današnje utakmice", "soon" to "Predstojeće", "fav" to "Favoriti", "mine" to "Pratim")  // i18n-ignore
+            sportNavItems.forEachIndexed { i, item ->
+                val (id, label) = item
+                Focusable(onClick = { tab = id }, shape = Rnd(11.dp),
+                    normal = if (tab == id) C.CardFocus else C.Card, focused = C.Red, zoom = 1.02f,
+                    modifier = Modifier.fillMaxWidth().height(38.dp)) { focused ->
+                    Row(Modifier.fillMaxSize().padding(horizontal = 9.dp), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        T(if (i == 0) "●" else if (i == 3) "★" else "›", 14.sp, if (focused) C.OnRed else if (tab == id) C.Text else C.Soft, FontWeight.Bold)
+                        T(label, 12.sp, if (focused) C.OnRed else C.Text, FontWeight.SemiBold, maxLines = 1)
+                    }
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+            Kicker("TAKMIČENJA", C.Soft)  // i18n-ignore
+            val competitions = remember(withCh) { withCh.map { it.league }.filter { it.isNotBlank() }.distinct().sorted() }
+            if (competitions.isEmpty()) T("Takmičenja će se prikazati uz dostupne utakmice", 11.sp, C.Muted, maxLines = 3)  // i18n-ignore
+            else LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                items(competitions.take(16), key = { it }) { league ->
+                    val active = selectedLeagues.size == 1 && league in selectedLeagues
+                    Focusable(onClick = {
+                        val next = if (active) emptySet() else setOf(league)
+                        Prefs.put("sm_leagues", next.joinToString("|")); SportCache.rev++; tab = "live"
+                    }, shape = Rnd(9.dp), normal = if (active) C.CardFocus else Color.Transparent, focused = C.Red, zoom = 1.01f,
+                        modifier = Modifier.fillMaxWidth().height(32.dp)) { focused ->
+                        T("•  " + league, 11.sp, if (focused) C.OnRed else C.Text, FontWeight.Medium,
+                            maxLines = 1, modifier = Modifier.align(Alignment.CenterStart).padding(horizontal = 7.dp))
+                    }
+                }
+            }
+        }
+        // ------------------------------------------------ center: your teams, filters, matches by league
+        Column(Modifier.weight(1f).fillMaxHeight().glassSide(18.dp).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (mine.isNotEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(mine, key = { it.first }) { (t, e) ->
                     val live = e.state == "in"
@@ -347,20 +406,9 @@ fun SportMixScreen(nav: Nav) {
             }
             Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 listOf("live" to "Uživo", "soon" to "Uskoro", "done" to "Završeno", "fav" to "★ Favoriti", "mine" to "Pratim").forEach { (id, l) ->
-                    // the number counts exactly what the list below shows (same filters)
-                    val n = withCh.count { e -> inSport(e) && (if (id == "live") e.live else inTab(e, id)) }
-                    Chip2((if (id == "live") "● " else "") + tr(l) + (if (id == "done" || (id == "soon" && other == null && tab != "soon")) "" else " · $n"), tab == id, if (tab == id) tabFr else null) { tab = id }  // i18n-ignore
+                    val n = withCh.count { e -> inSport(e) && inUserFilters(e) && (if (id == "live") e.live else inTab(e, id)) }
+                    Chip2((if (id == "live") "● " else "") + tr(l) + (if (id == "done" || (id == "soon" && other == null && tab != "soon")) "" else " · $n"), tab == id, if (tab == id) tabFr else null) { tab = id }
                 }
-                Chip2(tr("Sportovi") + (if (sportsOn.isEmpty()) "" else " · " + sportsOn.size) + " ▾", false) { pick = "sport" }  // i18n-ignore
-                Chip2(tr("Regija") + " ▾", false) { pick = "region" }  // i18n-ignore
-            }
-            // Favourites and Following: add as many countries and teams as you like
-            if (tab == "fav" || tab == "mine") Row(Modifier.onFocusChanged { favRowFocus = it.hasFocus }.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically) {
-                Chip2("＋ " + tr("Države"), false) { pick = "fav" }  // i18n-ignore
-                Chip2("＋ " + tr("Timovi"), false) { pick = "teams" }  // i18n-ignore
-                favC.forEach { c -> Chip2(flagEmoji(c) + " " + tr(COUNTRIES.firstOrNull { it.first.equals(c, true) }?.second ?: c.uppercase()), false) { pick = "fav" } }  // i18n-ignore
-                MyTeams.list().forEach { t -> Chip2("★ " + t, false) { pick = "teams" } }  // i18n-ignore
             }
             if (loading && shown.isEmpty()) Loading("Učitavam utakmice…")
             else if (shown.isEmpty()) Message(when (tab) { "live" -> "Trenutno nema utakmica uživo"; "soon" -> "Nema utakmica uskoro"; "mine" -> "Ne pratiš nijednu utakmicu · dugi OK na utakmicu › Prati"; "fav" -> "Nema utakmica tvojih favorita u idućih 10 dana · ＋ Države ili ＋ Timovi"; else -> "Nema završenih utakmica" })
@@ -379,7 +427,7 @@ fun SportMixScreen(nav: Nav) {
             }
         }
         // ------------------------------------------------ right: small screen (only after a channel is chosen) and the match
-        Column(Modifier.width(420.dp).fillMaxHeight().onFocusChanged { rightFocus = it.hasFocus }
+        Column(Modifier.width(420.dp).fillMaxHeight().glass(18.dp).padding(12.dp).onFocusChanged { rightFocus = it.hasFocus }
             .onPreviewKeyEvent { k -> if (k.type == KeyEventType.KeyDown && k.key == Key.DirectionLeft) { focusSel(); true } else false },
             verticalArrangement = Arrangement.spacedBy(10.dp)) {
             val pc = playing
@@ -397,6 +445,7 @@ fun SportMixScreen(nav: Nav) {
             }
             if (ev != null) MatchCard(ev, playing, chipFr, firstChipFr, onPlay = { ch -> if (playing?.url == ch.url) { SportUi.back = "chip"; playChannels(nav, listOf(ch), 0) } else playing = ch }, onMenu = { menu = ev })
         }
+    }
     }
     // long OK on a match: reminder, your team, watch now
     menu?.let { e ->
@@ -427,16 +476,15 @@ fun SportMixScreen(nav: Nav) {
         }
     }
     // teams: the list with ✕ and "＋ Add team" (search or any name), several at once
-    if (pick == "teams") FavTeamsDialog { pick = null; SportCache.other.remove("fav"); SportCache.other.remove("mine"); SportCache.rev++ }
-    pick?.takeIf { it != "teams" }?.let { k ->
-        Popup(tr(when (k) { "sport" -> "Sportovi"; "region" -> "Regija"; "fav" -> "Države"; else -> "Timovi" }), { pick = null }, width = 520.dp) {
+    pick?.let { k ->
+        Popup(tr(when (k) { "sport" -> "Sportovi"; "region" -> "Regije"; "fav" -> "Favoriti – države"; "countries" -> "Države"; "teams" -> "Timovi"; else -> "Takmičenja" }), { pick = null }, width = 520.dp) {
             Column(Modifier.heightIn(max = 420.dp).verticalScroll(androidx.compose.foundation.rememberScrollState())) {
                 when (k) {
                     "sport" -> {
-                        ToggleRow(tr("Svi sportovi"), sportsOn.isEmpty()) { Prefs.put("sm_sports", "*"); SportCache.rev++ }
+                        ToggleRow(tr("Svi sportovi"), sportsOn.isEmpty()) { Prefs.put("sm_sports", "*"); SportCache.rev++; pick = null }
                         (Sports.SPORTS + Sports.MORE_SPORTS).forEach { (id, name) ->
                             ToggleRow(sportIcon(id) + "  " + tr(name), id in sportsOn) { v ->
-                                Prefs.put("sm_sports", (if (v) sportsOn + id else sportsOn - id).joinToString(",").ifBlank { "*" }); SportCache.rev++ }
+                                Prefs.put("sm_sports", (if (v) sportsOn + id else sportsOn - id).joinToString(",").ifBlank { "*" }); SportCache.rev++; pick = null }
                         }
                     }
                     "region" -> {
@@ -445,12 +493,37 @@ fun SportMixScreen(nav: Nav) {
                         Sports.CONTINENTS.forEach { (id, name) ->
                             ToggleRow(tr(name), id in on) { v ->
                                 val nw = if (v) on + id else on - id
-                                Prefs.put("sport_cont", nw.ifEmpty { setOf("eu") }.joinToString(",")); SportCache.clear(); Sports.lastCombined.clear()
+                                Prefs.put("sport_cont", nw.ifEmpty { setOf("eu") }.joinToString(",")); SportCache.clear(); Sports.lastCombined.clear(); pick = null
+                            }
+                        }
+                    }
+                    "countries" -> {
+                        withCh.map { it.country.lowercase() }.filter { it.isNotBlank() }.distinct().sorted().forEach { code ->
+                            val name = COUNTRIES.firstOrNull { it.first.equals(code, true) }?.second ?: code.uppercase()
+                            ToggleRow(flagEmoji(code) + "  " + tr(name), code in selectedCountries) { v ->
+                                val next = if (v) selectedCountries + code else selectedCountries - code
+                                Prefs.put("sm_countries", next.joinToString(",")); SportCache.rev++; pick = null
+                            }
+                        }
+                    }
+                    "teams" -> {
+                        withCh.flatMap { listOfNotNull(it.home?.name, it.away?.name) }.distinct().sorted().forEach { team ->
+                            ToggleRow(team, team in selectedTeams) { v ->
+                                val next = if (v) selectedTeams + team else selectedTeams - team
+                                Prefs.put("sm_teams", next.joinToString("|")); SportCache.rev++; pick = null
+                            }
+                        }
+                    }
+                    "leagues" -> {
+                        withCh.map { it.league }.filter { it.isNotBlank() }.distinct().sorted().forEach { league ->
+                            ToggleRow(league, league in selectedLeagues) { v ->
+                                val next = if (v) selectedLeagues + league else selectedLeagues - league
+                                Prefs.put("sm_leagues", next.joinToString("|")); SportCache.rev++; pick = null
                             }
                         }
                     }
                     "fav" -> {
-                        T("Utakmice ovih država uvijek prve, u Sportu i na Početnoj", 12.sp, C.Muted, maxLines = 2)
+                        T("Odaberi države za Favoriti", 12.sp, C.Muted, maxLines = 2)
                         COUNTRIES.drop(1).forEach { (code, name) ->
                             ToggleRow(flagEmoji(code.lowercase()) + "  " + tr(name), code.lowercase() in favC) { v ->
                                 val cur = Prefs.str("sport_country").split(',').filter { it.isNotBlank() }.toSet()
@@ -496,7 +569,7 @@ private fun MatchRow(e: SportEvent, selected: Boolean, fr: FocusRequester?, onFo
     val title = if (e.home != null && e.away != null) e.home.name + " – " + e.away.name else e.title
     val reminded = e.state == "pre" && Reminders.has(title, e.start)
     Focusable(onClick = onClick, onMenu = onMenu, onFocus = onFocus, focusRequester = fr, shape = Rnd(12.dp),
-        normal = if (selected) C.Red.copy(alpha = 0.16f) else C.Card, focused = C.Red, zoom = 1.01f,
+        normal = if (selected) C.CardFocus else C.Card, focused = C.Red, zoom = 1.01f,
         modifier = Modifier.fillMaxWidth().height(46.dp).then(if (reminded) Modifier.border(1.5.dp, C.Amber, Rnd(12.dp)) else Modifier)) { f ->
         Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             T(when { e.onAir -> tr(if (e.replay) "SNIMAK" else "NA TV"); e.state == "in" -> e.clock ?: tr("UŽIVO"); e.state == "post" -> "FT"; else -> whenShort(e.start) },  // i18n-ignore
