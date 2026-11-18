@@ -430,7 +430,8 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                             },
                             onMenu = { val sel = nx?.getOrNull(c); if (wide && c > 0 && sel != null) showMenu = ch to sel else menu = ch },
                             onFocus = { rowFocused = true; focusedIdx = i; onFocusCh(ch) }, focusRequester = cWrap.requester(i),
-                            normal = Color.Transparent, focused = if (solid) C.Red.copy(alpha = ListStyle.strength) else C.Red.copy(alpha = ListStyle.strength * 0.22f), zoom = 1.01f) { f ->
+                            normal = if (active) C.Green.copy(alpha = 0.10f) else Color.Transparent,
+                            focused = if (solid) C.Red.copy(alpha = ListStyle.strength) else C.Red.copy(alpha = ListStyle.strength * 0.22f), zoom = 1.01f) { f ->
                             // "frame" look (default): a calm, lightly tinted row with a thin theme-colour frame; "full colour" fills the row.
                             // How strong the colour is: Settings › Appearance (every theme, 10–100 %)
                             val hl = f && solid && ListStyle.strength >= 0.65f
