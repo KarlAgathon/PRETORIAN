@@ -356,7 +356,8 @@ fun SportMixScreen(nav: Nav) {
         Column(Modifier.width(190.dp).fillMaxHeight().glassSide(18.dp).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             T("SPORT", 17.sp, C.Text, FontWeight.ExtraBold)  // i18n-ignore
             T("CENTAR UTAKMICA", 10.sp, C.Muted, FontWeight.Bold)  // i18n-ignore
-            listOf("live" to "Utakmice uživo", "soon" to "Današnje utakmice", "soon" to "Predstojeće", "fav" to "Favoriti", "mine" to "Pratim")  // i18n-ignore.forEachIndexed { i, item ->
+            val sportNavItems = listOf("live" to "Utakmice uživo", "soon" to "Današnje utakmice", "soon" to "Predstojeće", "fav" to "Favoriti", "mine" to "Pratim")  // i18n-ignore
+            sportNavItems.forEachIndexed { i, item ->
                 val (id, label) = item
                 Focusable(onClick = { tab = id }, shape = Rnd(11.dp),
                     normal = if (tab == id) C.CardFocus else C.Card, focused = C.Red, zoom = 1.02f,
