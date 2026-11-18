@@ -2327,4 +2327,5 @@ Protok, brzina, stabilnost i zapisi|Трафик, скорость, стабил
 Sačuvaj ili vrati postavke|Сохранить или восстановить настройки
 Nova verzija i kanal ažuriranja|Новая версия и канал обновлений
 Uređaj, kontakt i licence|Устройство, контакты и лицензии
+Kategorije|Категории
 """.trimIndent()
