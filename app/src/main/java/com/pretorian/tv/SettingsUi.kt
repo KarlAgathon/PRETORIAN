@@ -1159,25 +1159,54 @@ object SetMode {
 }
 
 private val SECTIONS2 = listOf(
-    Section("profile", R.drawable.lc_users, "Profil", "Ko gleda, dječiji profil"),
-    Section("playlists", R.drawable.lc_list, "Playliste", "Dodaj, aktivne, EPG izvori"),
-    Section("general", R.drawable.lc_settings, "Opće", "Napredne opcije, start, pozadina"),
-    Section("home", R.drawable.lc_house, "Početna", "Redovi i redoslijed"),
-    Section("look", R.drawable.lc_palette, "Izgled", "Tema, boja, veličina"),
-    Section("language", R.drawable.lc_languages, "Jezik", "Meniji, opisi filmova"),
-    Section("parental", R.drawable.lc_shield_check, "Modovi", "Jednostavni mod, PIN"),
-    Section("kids", R.drawable.lc_lock, "Roditeljska kontrola", "Kategorije, vrijeme gledanja"),
-    Section("media", R.drawable.lc_play, "Plejer", "Titlovi, zvuk, stream, kontrole"),
-    Section("sport", R.drawable.lc_trophy, "Sports Center", "Sportovi, timovi, ko prenosi"),
-    Section("saver", R.drawable.lc_moon, "Čuvar ekrana", "Sat, datum, pauzirano"),
-    Section("diag", R.drawable.lc_gauge2, "Dijagnostika", "Gledano, protok, brzina, stabilnost"),
-    Section("reminders", R.drawable.lc_bell, "Podsjetnici", "Emisije i utakmice"),
-    Section("backup", R.drawable.lc_archive, "Backup", "Fajl, USB"),
-    // always: Update second to last, About last
-    Section("update", R.drawable.lc_download, "Ažuriranje", "Nova verzija"),
-    Section("about", R.drawable.lc_info, "O aplikaciji", "Uređaj, kontakt, licence"),
+    Section("people", R.drawable.lc_users, "Profili i roditeljska kontrola", "Profili, PIN i sigurnost"),
+    Section("sources", R.drawable.lc_list, "Izvori i sadržaj", "Playliste, EPG, grupe i kanali"),
+    Section("home", R.drawable.lc_house, "Početna i navigacija", "Početni ekran i raspored"),
+    Section("playback", R.drawable.lc_play, "Reprodukcija", "Plejer, zvuk, titlovi i stream"),
+    Section("appearance", R.drawable.lc_palette, "Izgled i jezik", "Tema, boje, veličine i jezik"),
+    Section("sport", R.drawable.lc_trophy, "Sports Center", "Sportovi, timovi i takmičenja"),
+    Section("notifications", R.drawable.lc_bell, "Obavještenja i podsjetnici", "Podsjetnici i čuvar ekrana"),
+    Section("system", R.drawable.lc_settings, "Sistem i održavanje", "Dijagnostika, backup i ažuriranje"),
 )
-private val BASIC = setOf("profile", "playlists", "general", "home", "look", "language", "parental", "kids", "update", "about")
+private val BASIC = SECTIONS2.map { it.id }.toSet()
+
+private data class SettingsLink(val id: String, val title: String, val sub: String, val icon: Int)
+private val SETTINGS_LINKS = mapOf(
+    "people" to listOf(
+        SettingsLink("profiles", "Profili", "Korisnički profili i ko gleda", R.drawable.lc_users),
+        SettingsLink("simple", "Jednostavni mod i PIN", "Osnovni prikaz i zaštita postavki", R.drawable.lc_shield_check),
+        SettingsLink("parental", "Roditeljska kontrola", "Ograničenja kategorija i sadržaja", R.drawable.lc_lock),
+    ),
+    "sources" to listOf(
+        SettingsLink("playlists", "Playliste", "Dodavanje, aktivacija i ažuriranje", R.drawable.lc_list),
+        SettingsLink("epg", "EPG izvori", "Programski vodič i izvori", R.drawable.lc_calendar),
+        SettingsLink("groups", "Grupe i kanali", "Redoslijed, nazivi, skrivanje i PIN", R.drawable.lc_layers),
+    ),
+    "home" to listOf(
+        SettingsLink("homepage", "Početni ekran", "Redovi, sadržaj i redoslijed", R.drawable.lc_house),
+        SettingsLink("general", "Opće postavke", "Pokretanje, pozadina i napredne opcije", R.drawable.lc_settings),
+    ),
+    "playback" to listOf(
+        SettingsLink("player", "Postavke plejera", "Titlovi, zvuk, stream i kontrole", R.drawable.lc_play),
+    ),
+    "appearance" to listOf(
+        SettingsLink("look", "Izgled", "Tema, boje, veličina i ikone", R.drawable.lc_palette),
+        SettingsLink("language", "Jezik", "Jezik menija i opisa sadržaja", R.drawable.lc_languages),
+    ),
+    "sport" to listOf(
+        SettingsLink("sports", "Sports Center", "Sportovi, države, timovi i prenosi", R.drawable.lc_trophy),
+    ),
+    "notifications" to listOf(
+        SettingsLink("reminders", "Podsjetnici", "Emisije, utakmice i obavještenja", R.drawable.lc_bell),
+        SettingsLink("saver", "Čuvar ekrana", "Sat, datum i prikaz pauze", R.drawable.lc_moon),
+    ),
+    "system" to listOf(
+        SettingsLink("diagnostics", "Dijagnostika", "Protok, brzina, stabilnost i zapisi", R.drawable.lc_gauge2),
+        SettingsLink("backup", "Backup i vraćanje", "Sačuvaj ili vrati postavke", R.drawable.lc_archive),
+        SettingsLink("update", "Ažuriranje", "Nova verzija i kanal ažuriranja", R.drawable.lc_download),
+        SettingsLink("about", "O aplikaciji", "Uređaj, kontakt i licence", R.drawable.lc_info),
+    ),
+)
 
 /** Settings screen of the new look: sections on the left, the page on the right, sub-pages open inside. */
 @Composable
@@ -1208,6 +1237,15 @@ fun SettingsScreen2(nav: Nav) {
     Row(Modifier.fillMaxSize()) {
         Column(Modifier.width(railW).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 8.dp, top = 6.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            if (!slim) {
+                Row(Modifier.fillMaxWidth().padding(start = 8.dp, top = 2.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Ico(R.drawable.lc_shield, 25.dp, Color(0xFF19AFFF))
+                    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                        T("PRETORIAN", 16.sp, C.Text, FontWeight.ExtraBold, maxLines = 1)
+                        T("POSTAVKE", 9.sp, Color(0xFF19AFFF), FontWeight.Bold, maxLines = 1)
+                    }
+                }
+            }
             // search in all settings
             Focusable(modifier = Modifier.fillMaxWidth().height(40.dp).padding(bottom = 4.dp), onClick = { search = true }, shape = Pill,
                 normal = Color.White.copy(alpha = 0.06f), focused = C.Red, zoom = 1f) { f ->
@@ -1267,24 +1305,22 @@ fun SettingsScreen2(nav: Nav) {
                     "lookmore" -> LookPage()
                     "player" -> MediaPage()
                     "device" -> DeviceV2()
-                    else -> when (section) {
-                        "playlists" -> PlaylistsV2(nav) { sub = it }
-                        "profile" -> ProfilesV2()
-                        "sport" -> SportV2()
-                        "look" -> LookV2 { sub = it }
-                        "language" -> LanguageV2()
-                        "media" -> PlayerV2 { sub = it }
-                        "parental" -> SimpleV2(nav)
-                        "kids" -> ParentalV2()
-                        "reminders" -> RemindersV2(nav)
-                        "backup" -> BackupV2(nav)
-                        "home" -> HomeV2()
-                        "general" -> GeneralV2()
-                        "update" -> UpdateV2()
-                        "diag" -> DiagnosticsV2()
-                        "saver" -> SaverV2()
-                        else -> AboutV2(onSub = { sub = it }, onSection = { section = it })
-                    }
+                    "profiles" -> ProfilesV2()
+                    "simple" -> SimpleV2(nav)
+                    "parental" -> ParentalV2()
+                    "homepage" -> HomeV2()
+                    "general" -> GeneralV2()
+                    "player" -> PlayerV2 { sub = it }
+                    "look" -> LookV2 { sub = it }
+                    "language" -> LanguageV2()
+                    "sports" -> SportV2()
+                    "reminders" -> RemindersV2(nav)
+                    "saver" -> SaverV2()
+                    "diagnostics" -> DiagnosticsV2()
+                    "backup" -> BackupV2(nav)
+                    "update" -> UpdateV2()
+                    "about" -> AboutV2(onSub = { sub = it }, onSection = { section = it })
+                    else -> SettingsHubPage(section, onOpen = { sub = it })
                 }
             }
         }
@@ -1295,23 +1331,26 @@ fun SettingsScreen2(nav: Nav) {
 
 /** Every option by name, with the section it lives in. */
 private val SEARCH_INDEX = listOf(
-    "playlists" to "Playliste, dodaj playlistu, Xtream, M3U, Stalker, EPG izvori, grupe i kanali, osvježi playlistu",
-    "profile" to "Profil, ko gleda, profil za djecu",
-    "home" to "Početna, redovi, nove epizode, nastavi gledati, novo dodano, nedavni kanali",
-    "general" to "Opće, napredne opcije, početni ekran, start s boxom, zadnji kanal, potvrdi izlaz, rad u pozadini, User-Agent, UDP proxy",
-    "kids" to "Roditeljska kontrola, sakrij kategorije, odrasli, XXX, LGBT, trans, zaključaj, vrijeme gledanja",
-    "look" to "Izgled, tema, boja, veličina, ikone, mod programa, Lite, Full, oblik ivica",
-    "language" to "Jezik, meniji, opisi filmova, prevod",
-    "media" to "Plejer, titl, titlovi, veličina titla, kašnjenje titla, sync, zvuk, jezik zvuka, Dolby, passthrough, oporavak, prekid streama, bafer, rezolucija, preskok, nastavi gdje si stao, sljedeća epizoda, zamuti, trailer, eksterni plejer, file manager",
+    "people" to "Profil, ko gleda, profili, dječiji profil, PIN, roditeljska kontrola, sakrij kategorije, vrijeme gledanja, jednostavni mod",
+    "sources" to "Playliste, dodaj playlistu, Xtream, M3U, Stalker, EPG izvori, grupe i kanali, osvježi playlistu, redoslijed, sakrij kanale",
+    "home" to "Početna, redovi, nove epizode, nastavi gledati, novo dodano, nedavni kanali, početni ekran, start s boxom, zadnji kanal, potvrdi izlaz, rad u pozadini, User-Agent, UDP proxy",
+    "playback" to "Plejer, titl, titlovi, veličina titla, kašnjenje titla, sync, zvuk, jezik zvuka, Dolby, passthrough, oporavak, prekid streama, bafer, rezolucija, preskok, nastavi gdje si stao, sljedeća epizoda, trailer, eksterni plejer, file manager",
+    "appearance" to "Izgled, tema, boja, veličina, ikone, mod programa, Lite, Full, oblik ivica, jezik, meniji, opisi filmova, prevod",
     "sport" to "Sports Center, sport, sportovi, takmičenja, država, reprezentacije, timovi, ko prenosi, AI pretraga, rezultati",
-    "reminders" to "Podsjetnici, obavijest, utakmica, emisija, zvuk obavijesti",
-    "parental" to "Modovi, jednostavni mod, PIN, promijeni PIN",
-    "backup" to "Backup, vraćanje, USB, fajl, Download, automatski backup, vrati na početak",
-    "saver" to "Čuvar ekrana, sat, datum, pauzirano, screensaver",
-    "diag" to "Dijagnostika, brzina interneta, VPN, protok, gledano, uptime, keš, zapis ažuriranja, zapis streama",
-    "update" to "Ažuriranje, nova verzija, beta, stable, kanal, pauza, potpis, vrati prethodnu verziju, USB",
-    "about" to "O aplikaciji, o uređaju, ocjena boxa, kontakt, licence, privatnost, pomoć",
+    "notifications" to "Podsjetnici, obavijest, utakmica, emisija, zvuk obavijesti, čuvar ekrana, sat, datum, pauzirano",
+    "system" to "Dijagnostika, brzina interneta, VPN, protok, gledano, uptime, keš, zapis ažuriranja, zapis streama, backup, vraćanje, USB, fajl, Download, automatski backup, vrati na početak, ažuriranje, nova verzija, beta, stable, kanal, potpis, vrati prethodnu verziju, o aplikaciji, uređaj, kontakt, licence, privatnost, pomoć",
 )
+
+@Composable
+private fun SettingsHubPage(section: String, onOpen: (String) -> Unit) {
+    val title = SECTIONS2.firstOrNull { it.id == section }?.title ?: "Postavke"
+    val subtitle = SECTIONS2.firstOrNull { it.id == section }?.sub
+    SetPage(title, subtitle) {
+        SETTINGS_LINKS[section].orEmpty().forEach { item ->
+            OptionRow(item.title, item.icon, sub = item.sub) { onOpen(item.id) }
+        }
+    }
+}
 
 @Composable
 private fun SettingsSearch(allowed: List<String>, onDismiss: () -> Unit, onOpen: (String) -> Unit) {
