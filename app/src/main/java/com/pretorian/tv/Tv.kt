@@ -382,8 +382,21 @@ private fun TvList(nav: Nav) {
         }
     }
 
-    fun backToGroups() { st.focusKey = "g:" + (st.group?.key ?: ""); inChannels = false; st.refocus++ }
-    BackHandler(enabled = inChannels && st.groupMenu == null) { backToGroups() }
+    val focusScope = rememberCoroutineScope()
+    fun backToGroups() {
+        val target = (st.group?.let { "g:" + it.key })
+            ?: ((rows as? Load.Ok)?.value?.filterIsInstance<GRow.Group>()?.firstOrNull()?.let { "g:" + it.ref.key })
+            ?: ""
+        st.focusKey = target
+        inChannels = false
+        st.refocus++
+        // Wait for GroupColumn to attach the matching FocusRequester before requesting focus.
+        focusScope.launch {
+            delay(80)
+            runCatching { st.focusFr.requestFocus() }
+        }
+    }
+    BackHandler(enabled = st.groupMenu == null && (inChannels || Look.layout == 0)) { backToGroups() }
 
     // Group focus only moves the highlight. The channel list changes only after OK (onOpen).
     var enterTick by remember { mutableIntStateOf(0) }
@@ -415,7 +428,7 @@ private fun TvList(nav: Nav) {
             }
             Row(Modifier.fillMaxWidth().weight(0.73f)) {
                 GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, 205.dp, "Grupe", null,
-                    onFocusGroup = { Chrome.rail = 1 }, onOpen = { openGroup(ctx, st, it); enterTick++ },
+                    onFocusGroup = { Chrome.rail = 1 }, onOpen = { openGroup(ctx, st, it); enterTick++; inChannels = true },
                     onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
                     onHeader = { p -> TvFold.toggle(p.id); if (p.id in TvFold.open) Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
                     onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it }, onFocusRow = { st.focusKey = it; Chrome.rail = 1 }, containVerticalFocus = false)
