@@ -441,7 +441,7 @@ private fun TvList(nav: Nav) {
                     }
                 }
             }
-            Row(Modifier.fillMaxWidth().weight(0.70f).padding(horizontal = 4.dp)) {
+            Row(Modifier.fillMaxWidth().weight(0.76f).padding(horizontal = 4.dp)) {
                 Box(Modifier.onPreviewKeyEvent { e ->
                     if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft && !inChannels) { revealMainRail(); true } else false
                 }) {
