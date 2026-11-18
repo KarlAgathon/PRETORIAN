@@ -86,6 +86,8 @@ object Look {
         // 0.4.2: inside a group the small picture starts by itself (you asked for it)
         if (p.getInt("look_v", 0) < 4) { previewMode = 2; p.edit().putInt("look_v", 4).putInt("look_previewmode", 2).apply() }
         if (p.getInt("look_v", 0) < 5) { tileStyle = 4; p.edit().putInt("look_v", 5).putInt("look_tilestyle", 4).apply() }
+        // 0.4.3: mini-player changes only after the user confirms a channel with OK.
+        if (p.getInt("look_v", 0) < 6) { previewMode = 1; p.edit().putInt("look_v", 6).putInt("look_previewmode", 1).apply() }
     }
 
     fun save(c: Context) {
