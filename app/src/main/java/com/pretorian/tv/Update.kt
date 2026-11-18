@@ -32,7 +32,7 @@ object Updater {
     /** Beta: test versions, published as the release "beta" (only for whoever chose the Beta channel) */
     private const val BETA_URL = "https://github.com/KarlAgathon/PRETORIAN/releases/download/beta/update.json"
     /** "stable" or "beta" */
-    val beta get() = Prefs.str("upd_channel", "stable") == "beta"
+    val beta get() = Prefs.str("upd_channel", if (BuildConfig.APPLICATION_ID.endsWith(".beta")) "beta" else "stable") == "beta"
     /** the APK's signature against the installed PRETORIAN: true ok, false foreign or broken, null not checked yet */
     var signature by mutableStateOf<Boolean?>(null)
     /** download paused by the user: the part already loaded stays and goes on from there */
