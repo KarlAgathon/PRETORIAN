@@ -36,6 +36,7 @@ private const val COLS = "bs|en|de|hr|sr|bg|ro|tr|it|ar"
 
 /* One line per text: bs | en | de | hr | sr | bg | ro | tr | it | ar.  "=" means the same as Bosnian. */
 private val TABLE = """
+ZOOM|ZOOM|ZOOM|ZOOM|ЗУМ|МАЩАБИРАНЕ|ZOOM|YAKINLAŞTIR|ZOOM|تكبير
 Prilagodi širinu|Fit Width|Breite anpassen|Prilagodi širinu|Прилагоди ширину|Напасни ширината|Potrivește lățimea|Genişliğe sığdır|Adatta larghezza|ملاءمة العرض
 Zoom|Zoom|Zoom|Zoom|Зум|Мащабиране|Zoom|Yakınlaştır|Zoom|تكبير
 Zadano / automatski|Default / Auto|Standard / Automatisch|Zadano / automatski|Подразумевано / аутоматски|По подразбиране / автоматично|Implicit / automat|Varsayılan / otomatik|Predefinito / automatico|افتراضي / تلقائي
