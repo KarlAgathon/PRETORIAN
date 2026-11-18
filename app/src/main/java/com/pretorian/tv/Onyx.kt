@@ -631,7 +631,7 @@ fun SubscriptionCard() {
         Box(Modifier.size(7.dp).clip(CircleShape).background(accent))
         T(p.name, 12.sp, C.Text, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
         if (days != null) {
-            T(if (days < 0) "0 dana" else "$days dana", 12.sp, accent, FontWeight.Bold, maxLines = 1)
+            T(if (days < 0) "0" else trf("%s dana", days.toString()), 12.sp, accent, FontWeight.Bold, maxLines = 1)
         }
     }
 }
