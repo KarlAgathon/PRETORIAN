@@ -405,7 +405,7 @@ private fun TvList(nav: Nav, onGuide: () -> Unit) {
         }
         Box(Modifier.weight(1f).fillMaxHeight()) {
             val g = st.group
-            if (g == null) Message("Izaberi kategoriju", "Odaberi kategoriju od svog providera")
+            if (g == null) Message("Izaberi grupu", "Drži OK na grupi za opcije")
             else Row(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f).fillMaxHeight().onPreviewKeyEvent { e ->
                     if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { backToGroups(); true } else false
