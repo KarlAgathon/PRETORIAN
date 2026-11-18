@@ -225,7 +225,7 @@ fun GroupColumn(
                         // Let Compose move focus naturally inside this focus group. Manual scroll/focus
                         // coroutines here used to race on DPAD key-repeat and made rows jump/flicker.
                         val m = Modifier.fillMaxWidth().height(Rows.group)
-                            .then(if (containVerticalFocus) Modifier else Modifier.wrapKeys(i, list.size, wrap))
+                            .wrapKeys(i, list.size, wrap)
                         val fr = wrap.requester(i, if (r.id == focusKey) focusFr else null)
                         val rowModifier = m
                         when (r) {
