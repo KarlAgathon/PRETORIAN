@@ -480,7 +480,7 @@ private fun TvList(nav: Nav) {
                     if (g == null) Message("Izaberi grupu", "Drži OK na grupi za opcije")
                     else Row(Modifier.fillMaxSize()) {
                         Box(Modifier.weight(1f).fillMaxHeight().onPreviewKeyEvent { e -> if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { backToGroups(); true } else false }) {
-                            key(g.key, st.rev) { ChannelList(g, nav, st.gate, rows, enterTick, onFocusCh = { focusedCh = it; inChannels = true }, onBackToGroups = { backToGroups() }) { st.rev++ } }
+                            key(g.key, st.rev) { ChannelList(g, nav, st.gate, rows, enterTick, onFocusCh = { focusedCh = it; inChannels = true }, onBackToGroups = { backToGroups() }, onChanged = { st.rev++ }) }
                         }
                         EpgPanel(focusedCh, Modifier.width(330.dp))
                     }
