@@ -2342,4 +2342,10 @@ New Age|New Age
 New Era|New Era
 New Era: tri stalna panela — kategorije providera, kanali i EPG.|New Era: три постоянные панели — категории провайдера, каналы и EPG.
 New Age: postojeći TV prikaz.|New Age: существующий вид ТВ.
+OK = pregled · OK još jednom = cijeli ekran|OK = предпросмотр · ещё раз OK = весь экран
+Slijedi|Далее
+New Dawn: jedan nivo na ekranu, prethodni nestaje. Tamno plava.|New Dawn: один уровень на экране, предыдущий исчезает. Тёмно-синий.
+Ponoćno plava|Полночный синий
+OK ili ▶ otvara grupu · ◀ meni|OK или ▶ открывает группу · ◀ меню
+Cijeli ekran|Весь экран
 """.trimIndent()

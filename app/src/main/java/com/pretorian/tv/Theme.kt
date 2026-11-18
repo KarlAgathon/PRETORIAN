@@ -32,10 +32,12 @@ object Look {
     var groupFrame by mutableStateOf(true)     // thin accent frame around TV groups
     var resBadge by mutableIntStateOf(1)       // resolution in the player corner: 0 off, 1 on start, 2 always
     var bigText by mutableStateOf(false)      // larger text everywhere (for parents, far sofas)
-    var layout by mutableIntStateOf(2)         // 0 classic, 1 New Wave, 2 New Age
+    var layout by mutableIntStateOf(2)         // 0 classic, 1 New Wave, 2 New Age, 3 New Dawn
     var tvDesign by mutableIntStateOf(1)       // New Era is the only available TV layout
-    val wave get() = layout >= 1
+    val wave get() = layout == 1 || layout == 2
     val age get() = layout == 2
+    /** New Dawn: one level at a time (menu › groups › channels › full screen), the previous level disappears */
+    val dawn get() = layout == 3
 
     val ACCENTS = listOf(
         "Pretorian crvena" to Color(0xFFE5141B), "Plava" to Color(0xFF2563EB), "Zelena" to Color(0xFF16A34A),
@@ -43,13 +45,14 @@ object Look {
         "Roza" to Color(0xFFDB2777), "Zlatna" to Color(0xFFCA8A04),
     )
     val THEMES = listOf("vece" to "Zadana", "bw" to "Crno-bijela", "pijesak" to "Pijesak",
-        "liquid" to "Liquid", "classic" to "Classic", "oled" to "OLED crna", "kino" to "Kino", "reddawn" to "Red Dawn", "papir" to "Papir")
+        "liquid" to "Liquid", "classic" to "Classic", "oled" to "OLED crna", "kino" to "Kino", "reddawn" to "Red Dawn", "papir" to "Papir", "ponoc" to "Ponoćno plava")
     /** themes with their own focus colour: accent and the text on it */
     val FIXED = mapOf(
         "liquid" to (Color(0xFF22D3EE) to Color(0xFF02141A)), "classic" to (Color(0xFFF1F5F9) to Color(0xFF1E293B)),
         "oled" to (Color(0xFFD4A537) to Color(0xFF120D00)),
         "kino" to (Color(0xFFE11D2A) to Color.White),
         "papir" to (Color(0xFF111827) to Color.White), "reddawn" to (Color(0xFFDC2626) to Color.White),
+        "ponoc" to (Color(0xFFE8EFFF) to Color(0xFF0B1730)),
     )
     /** size of everything together, 0–100 (Settings › Look › Size): 100 is about 35 % bigger */
     var uiScale by mutableIntStateOf(0)
@@ -78,7 +81,7 @@ object Look {
         corner = p.getInt("look_corner", 0)
         groupFrame = p.getBoolean("look_groupframe", true)
         resBadge = p.getInt("look_resbadge", 1)
-        layout = p.getInt("look_layout", 2).coerceIn(0, 2)
+        layout = p.getInt("look_layout", 2).coerceIn(0, 3)
         tvDesign = 1 // New Era is the only supported TV layout; migrate older selections
         p.edit().putInt("look_tvdesign", 1).apply()
         bigText = false   // replaced by the size slider, which grows everything together
@@ -180,6 +183,9 @@ private fun basePalette(): Palette {
         // Red Dawn: soft black, grey, white and red
         "reddawn" -> Palette(Color(0xFF18181B), Color(0xFF111113), Color(0xFF2F2F33), Color(0xFF3A3A40),
             Color(0xFFF4F4F5), Color(0xFFA1A1AA), Color(0xFFD4D4D8), Color(0xFF27272A), false)
+        // Midnight blue (New Dawn): deep navy, frosted blue glass, white focus with a soft blue glow
+        "ponoc" -> Palette(Color(0xFF070D1C), alpha(Color(0xFF0F1D3A), (o * 0.75f).toInt().coerceIn(40, 92)), Color(0x1A9CBCFF), Color(0x2694B4FF),
+            Color(0xFFF2F6FF), Color(0xFF8A9BBD), Color(0xFFC3CEE6), Color(0xFF13203D), false)
         "dew" -> Palette(Color(0xFF221B36), alpha(Color(0xFF2A2340), (o * 0.55f).toInt().coerceAtLeast(25)), Color(0x1CFFFFFF), Color(0x2EFFFFFF),
             Color(0xFFF7F4FA), Color(0xFFB9B0C8), Color(0xFFE2DCEA), Color(0x26FFFFFF), false)
         else -> Palette(Color(0xFF0B0D12), alpha(Color(0xFF0E1117), o.coerceAtLeast(60)), Color(0x0FFFFFFF), Color(0x14FFFFFF),
@@ -211,6 +217,9 @@ object C {
         else if (Look.theme == "reddawn") androidx.compose.ui.graphics.Brush.linearGradient(
             listOf(Color(0xFF18181B), Color(0xFF1F1F23), Color(0xFF2A0D0F)),
             start = androidx.compose.ui.geometry.Offset(0f, 0f), end = androidx.compose.ui.geometry.Offset(2400f, 1400f))
+        else if (Look.theme == "ponoc") androidx.compose.ui.graphics.Brush.linearGradient(
+            listOf(Color(0xFF0C1630), Color(0xFF081022), Color(0xFF050912)),
+            start = androidx.compose.ui.geometry.Offset(0f, 0f), end = androidx.compose.ui.geometry.Offset(1400f, 2400f))
         else if (Look.theme == "dew") androidx.compose.ui.graphics.Brush.linearGradient(
             listOf(Color(0xFF1C2140), Color(0xFF2E2347), Color(0xFF4A2A48), Color(0xFF5C3045)),
             start = androidx.compose.ui.geometry.Offset(0f, 0f), end = androidx.compose.ui.geometry.Offset(2400f, 1400f))

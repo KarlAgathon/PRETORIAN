@@ -8,3 +8,5 @@ Dew
 passthrough
 Dolby
 NextDNS
+New
+Dawn

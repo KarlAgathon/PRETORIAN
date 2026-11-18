@@ -1,3 +1,11 @@
+PRETORIAN 1.0.61 STABLE
+New layout: New Dawn (Settings › Appearance › TV layout) — one level on screen at a time: menu › groups › channels › full screen
+New Dawn: the previous level disappears completely; Back and LEFT go exactly one level back, with focus on where you came from
+New Dawn TV: channel list with logos, big preview (first OK), now/next with progress, EPG strip and big option buttons (Favourites, EPG, Full screen, Groups); second OK = full screen
+New Dawn: larger, clearer menu icons and a slim top bar with the path (TV › group) and clock
+New theme: Midnight blue (default for New Dawn); Black and white and OLED also work with New Dawn
+Default and Classic layouts remain unchanged
+
 PRETORIAN 1.0.60 STABLE
 Classic TV: keep preview stopped while moving focus; only OK confirms the channel and starts preview/playback
 Classic TV: RIGHT from the focused group opens its channel list; LEFT returns to groups and LEFT again reveals main navigation
