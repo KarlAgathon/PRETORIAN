@@ -373,8 +373,14 @@ fun PretorianApp() {
                             }
                         }
                 }
+                // New Dawn: one level at a time, the menu only on Home
+                if (Look.dawn) DawnShell(top, nav) {
+                    val noActive = remember(version, top) { Store.playlists(ctx).isNotEmpty() && Store.actives(ctx).isEmpty() } &&
+                        (top == Screen.Home || top == Screen.Tv || top == Screen.Movies || top == Screen.Series)
+                    if (noActive) NoPlaylist(nav) else content()
+                }
                 // holding ▲ anywhere (outside the player) goes straight to the top bar, on the screen you are on
-                if (Look.age) Box(Modifier.fillMaxSize().background(C.BgBrush).onPreviewKeyEvent { ev ->
+                else if (Look.age) Box(Modifier.fillMaxSize().background(C.BgBrush).onPreviewKeyEvent { ev ->
                     if (ev.key == androidx.compose.ui.input.key.Key.DirectionUp && ev.type == androidx.compose.ui.input.key.KeyEventType.KeyDown &&
                         ev.nativeKeyEvent.repeatCount >= 6) { try { TopNav.fr.requestFocus() } catch (_: Exception) {}; true } else false
                 }) {

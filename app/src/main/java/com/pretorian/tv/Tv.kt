@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -373,7 +374,8 @@ private fun TvList(nav: Nav) {
     val gState = rememberLazyListState()
     WrapEffect(st.wrap, gState)
     val coming = remember { TvMemory.restore && TvMemory.group != null && TvMemory.channel >= 0 }
-    var inChannels by remember { mutableStateOf(coming || st.group != null) }
+    // New Dawn opens TV on the groups (one level at a time); only the way back from the player lands in the channels
+    var inChannels by remember { mutableStateOf(coming || (st.group != null && !Look.dawn)) }
     var focusedCh by remember { mutableStateOf<Channel?>(null) }
     LaunchedEffect(Unit) {
         if (!coming) {
@@ -419,7 +421,63 @@ private fun TvList(nav: Nav) {
     var enterTick by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(focusedCh) { val c = focusedCh ?: return@LaunchedEffect; delay(500); Dusk.set(c.logo, c.name) }
-    if (Look.layout == 0) {
+    if (Look.dawn) {
+        // New Dawn: groups alone › channels alone with a big preview, EPG and options › full screen.
+        // Back and ◀ go exactly one level out; at the groups they return to the menu (on TV).
+        BackHandler(enabled = st.groupMenu == null && inChannels) { PreviewSel.ch = null; Preview.stop(); backToGroups() }
+        LaunchedEffect(inChannels, st.group?.key) { Dawn.crumb = if (inChannels) st.group?.cat?.name ?: "" else "" }
+        DisposableEffect(Unit) { onDispose { Dawn.crumb = "" } }
+        var hover by remember { mutableStateOf<GroupRef?>(null) }
+        // first time on the groups: the focus goes to the last opened group (or the first one)
+        var placed by remember { mutableStateOf(false) }
+        LaunchedEffect(rows is Load.Ok, inChannels) { if (!inChannels && rows is Load.Ok && !placed) { placed = true; backToGroups() } }
+        if (!inChannels) Row(Modifier.fillMaxSize().padding(start = 28.dp, end = 34.dp, top = 4.dp, bottom = 24.dp)) {
+            Box(Modifier.width(400.dp).fillMaxHeight().dawnGlass().padding(vertical = 8.dp)
+                .onPreviewKeyEvent { e ->
+                    if (e.type != KeyEventType.KeyDown) false
+                    else if (e.key == Key.DirectionLeft) { nav.back(); true }
+                    else if (e.key == Key.DirectionRight) {
+                        val g = (rows as? Load.Ok)?.value?.filterIsInstance<GRow.Group>()?.firstOrNull { "g:" + it.ref.key == st.focusKey }?.ref
+                        if (g != null) { focusedCh = null; openGroup(ctx, st, g); enterTick++; inChannels = true; true } else false
+                    } else false
+                }) {
+                GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, 400.dp, "", null,
+                    onFocusGroup = { hover = it },
+                    onOpen = { focusedCh = null; openGroup(ctx, st, it); enterTick++; inChannels = true },
+                    onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
+                    onHeader = { p -> TvFold.toggle(p.id); if (p.id in TvFold.open) Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
+                    onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it },
+                    onFocusRow = { st.focusKey = it })
+            }
+            Spacer(Modifier.weight(1f))
+            hover?.let { DawnHero(it.cat.name, tr("OK ili ▶ otvara grupu · ◀ meni"), Modifier.align(Alignment.Bottom)) }
+        } else {
+            val g = st.group
+            val chs by load(g?.key, Favs.rev, keep = true) { g?.let { channelsOf(ctx, it) } ?: emptyList() }
+            fun full() {
+                val list = (chs as? Load.Ok)?.value ?: return
+                val c = focusedCh ?: PreviewSel.ch ?: return
+                val i = list.indexOfFirst { it.url == c.url }.coerceAtLeast(0)
+                TvMemory.group = g; TvMemory.channel = i; TvMemory.restore = true
+                playChannels(nav, list, i)
+            }
+            Row(Modifier.fillMaxSize().padding(start = 28.dp, end = 34.dp, top = 4.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                Box(Modifier.weight(0.40f).fillMaxHeight().dawnGlass().padding(vertical = 4.dp)) {
+                    if (g != null) key(g.key, st.rev) {
+                        ChannelList(g, nav, st.gate, rows, enterTick, onFocusCh = { focusedCh = it },
+                            onBackToGroups = { PreviewSel.ch = null; Preview.stop(); backToGroups() }, onChanged = { st.rev++ }, focusOnStart = true)
+                    }
+                }
+                Column(Modifier.weight(0.60f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    DawnPreview(focusedCh, Modifier.fillMaxWidth().weight(1f))
+                    DawnNowNext(focusedCh ?: PreviewSel.ch, Modifier.fillMaxWidth().height(84.dp))
+                    (focusedCh ?: PreviewSel.ch)?.let { ChannelEpgCells(it, Modifier.fillMaxWidth().height(60.dp)) }
+                    DawnOptions(focusedCh ?: PreviewSel.ch, onFull = { full() }, onGroups = { PreviewSel.ch = null; Preview.stop(); backToGroups() },
+                        modifier = Modifier.fillMaxWidth().height(76.dp))
+                }
+            }
+        }
+    } else if (Look.layout == 0) {
         // Classic TV: full-screen workspace; the app rail appears only on LEFT/BACK.
         LaunchedEffect(inChannels) { Chrome.driven = true; Chrome.rail = if (inChannels) 0 else 2 }
         DisposableEffect(Unit) { onDispose { Chrome.driven = false; Chrome.rail = if (Look.layout == 0) 2 else 3 } }
@@ -748,7 +806,7 @@ fun playChannels(nav: Nav, list: List<Channel>, index: Int) {
 }
 
 @Composable
-private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GRow>>, enterTick: Int = 0, onFocusCh: (Channel) -> Unit = {}, onBackToGroups: () -> Unit, onChanged: () -> Unit, fullWidthClassic: Boolean = false) {
+private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GRow>>, enterTick: Int = 0, onFocusCh: (Channel) -> Unit = {}, onBackToGroups: () -> Unit, onChanged: () -> Unit, fullWidthClassic: Boolean = false, focusOnStart: Boolean = false) {
     val ctx = LocalContext.current
     var listRev by remember { mutableIntStateOf(0) }
     val isFav = g.pid == null
@@ -848,6 +906,8 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                     // back from the player: focus the channel that was playing (once)
                     if (TvMemory.restore && TvMemory.channel >= 0) { TvMemory.restore = false; cWrap.target = TvMemory.channel.coerceAtMost(list.lastIndex) }
                 }
+                // New Dawn: the list appears only after OK on a group, so it takes the focus as soon as it is there
+                LaunchedEffect(list.isNotEmpty()) { if (focusOnStart && list.isNotEmpty()) cWrap.target = TvMemory.channel.coerceIn(0, list.lastIndex) }
                 // OK on a group: the focus goes into its channels
                 val enter0 = remember { enterTick }
                 // the channels take focus only after OK on a group, never while the groups are being browsed

@@ -86,7 +86,7 @@ fun SettingsScreen(nav: Nav) {
     var section by remember { mutableStateOf(SettingsNav.section?.also { SettingsNav.section = null } ?: SettingsNav.last ?: if (Updater.available != null) "update" else "playlists") }
     LaunchedEffect(section) { SettingsNav.last = section }
     val first = remember { FocusRequester() }
-    val classic = Look.layout == 0
+    val classic = Look.layout == 0 || Look.dawn
     var inPage by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
@@ -673,13 +673,14 @@ private fun LookPage() {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             listOf(
                 Triple(2, tr("Zadana"), tr("New Age: meni gore, redovi postera po kategorijama, velike kartice epizoda.")),
-                Triple(0, tr("Klasični"), tr("Klasični: meni lijevo, kategorije u koloni."))
+                Triple(0, tr("Klasični"), tr("Klasični: meni lijevo, kategorije u koloni.")),
+                Triple(3, "New Dawn", tr("New Dawn: jedan nivo na ekranu, prethodni nestaje. Tamno plava."))
             ).forEach { (layoutId, title, description) ->
                 val active = Look.layout == layoutId
                 Focusable(
                     modifier = Modifier.weight(1f).height(132.dp)
                         .border(2.dp, if (active) C.Green else C.Line, Rnd(16.dp)),
-                    onClick = { Look.layout = layoutId; save() },
+                    onClick = { Look.layout = layoutId; if (layoutId == 3) Dawn.pickTheme(); save() },
                     shape = Rnd(16.dp),
                     normal = if (active) C.Green.copy(alpha = 0.10f) else C.Card,
                     focused = C.CardFocus,
@@ -1303,7 +1304,7 @@ fun SettingsScreen2(nav: Nav) {
     // like Search: inside a section the list shrinks to a narrow rail of icons and the page gets the room
     val railW by androidx.compose.animation.core.animateDpAsState(if (inPage) 74.dp else 270.dp, label = "rail")
     val slim = inPage
-    val classic = Look.layout == 0
+    val classic = Look.layout == 0 || Look.dawn
     LaunchedEffect(classic, inPage) {
         if (classic) {
             Chrome.driven = true
@@ -1691,7 +1692,7 @@ private val THEME_SWATCH = mapOf("vece" to (Color(0xFF0C1428) to Color(0xFF1C2A4
     "staklo" to (Color(0xFFF7F7F8) to Color.White), "pijesak" to (Color(0xFF1E140A) to Color(0xFF8A6A3A)), "dark" to (Color(0xFF0B0D12) to Color(0xFF1A1F2A)),
     "light" to (Color(0xFFF2F3F6) to Color.White), "glass" to (Color(0xFF1B3346) to Color(0x66FFFFFF)), "dew" to (Color(0xFF221B36) to Color(0xFF3A2F55)),
     "liquid" to (Color(0xFF243B52) to Color(0x66FFFFFF)), "classic" to (Color(0xFF1C2735) to Color(0xFF3B4E66)),
-    "oled" to (Color(0xFF000000) to Color(0xFFD4A537)), "kino" to (Color(0xFF111214) to Color(0xFFE11D2A)), "papir" to (Color(0xFFEEF0F3) to Color.White), "reddawn" to (Color(0xFF18181B) to Color(0xFFDC2626)))
+    "oled" to (Color(0xFF000000) to Color(0xFFD4A537)), "kino" to (Color(0xFF111214) to Color(0xFFE11D2A)), "papir" to (Color(0xFFEEF0F3) to Color.White), "reddawn" to (Color(0xFF18181B) to Color(0xFFDC2626)), "ponoc" to (Color(0xFF0C1630) to Color(0xFF6FA3FF)))
 
 /** Themes as small pictures. */
 @Composable
@@ -1972,13 +1973,14 @@ private fun LookV2(openSub: (String) -> Unit) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(
                     Triple(2, tr("Zadana"), tr("New Age: meni gore, redovi postera po kategorijama, velike kartice epizoda.")),
-                    Triple(0, tr("Klasični"), tr("Klasični: meni lijevo, kategorije u koloni."))
+                    Triple(0, tr("Klasični"), tr("Klasični: meni lijevo, kategorije u koloni.")),
+                    Triple(3, "New Dawn", tr("New Dawn: jedan nivo na ekranu, prethodni nestaje. Tamno plava."))
                 ).forEach { (layoutId, title, description) ->
                     val active = Look.layout == layoutId
                     Focusable(
                         modifier = Modifier.weight(1f).height(132.dp)
                             .border(2.dp, if (active) C.Green else C.Line, Rnd(16.dp)),
-                        onClick = { Look.layout = layoutId; save(); rev++ },
+                        onClick = { Look.layout = layoutId; if (layoutId == 3) Dawn.pickTheme(); save(); rev++ },
                         shape = Rnd(16.dp),
                         normal = if (active) C.Green.copy(alpha = 0.10f) else C.Card,
                         focused = C.CardFocus,
