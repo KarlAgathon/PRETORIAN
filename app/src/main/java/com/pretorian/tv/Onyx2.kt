@@ -481,7 +481,7 @@ private fun OnyxChannels(g: GroupRef, nav: Nav, st: TvState, rows: Load<List<TRo
                                     T(now?.title ?: " ", 11.sp, if (hl) C.OnRed.copy(alpha = 0.65f) else C.Muted)
                                     if (now != null) ThinBar(now.progress(), if (hl) C.OnRed else C.RedText, Modifier.fillMaxWidth())
                                 }
-                                if (preview?.url == ch.url) Ico(R.drawable.lc_play, 13.dp, if (hl) C.OnRed else C.Green)
+                                if (active) Dot(C.Green, 8.dp)
                                 if (locked) Ico(R.drawable.lc_lock, 13.dp, if (hl) C.OnRed else C.Muted)
                                 // the channel has an archive (catch-up): you can go back in time
                                 if (archMark && ch.archive > 0) T("↺", 14.sp, if (hl) C.OnRed else C.Soft, FontWeight.Bold)
