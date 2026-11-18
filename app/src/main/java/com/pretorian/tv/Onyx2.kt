@@ -667,7 +667,7 @@ fun OnyxSearch(nav: Nav) {
         // the big search field, with the microphone
         Row(Modifier.fillMaxWidth().padding(top = 6.dp).height(52.dp).clip(Pill).background(C.Rail).border(1.dp, C.Line, Pill),
             verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.padding(start = 18.dp)) { Ico(R.drawable.lc_search, 18.dp, Color(0xFF0A0A0A)) }
+            Box(Modifier.padding(start = 18.dp)) { Ico(R.drawable.lc_search, 18.dp, C.Text) }
             androidx.compose.foundation.text.BasicTextField(q, { q = it }, singleLine = true,
                 textStyle = TextStyle(fontFamily = Inter, fontSize = 18.sp, color = C.Text, fontWeight = FontWeight.SemiBold),
                 cursorBrush = androidx.compose.ui.graphics.SolidColor(C.RedText),
@@ -676,10 +676,10 @@ fun OnyxSearch(nav: Nav) {
                 modifier = Modifier.weight(1f).padding(horizontal = 14.dp).focusRequesterSafe(fr),
                 decorationBox = { inner -> Box { if (q.isEmpty()) T("TV channel, movie, series or team", 16.sp, C.Muted); inner() } })
             // clear the search
-            if (q.isNotEmpty()) Focusable(onClick = { SearchHistory.add(q); q = ""; query = ""; SearchMem.clear(); try { fr.requestFocus() } catch (_: Exception) {} }, shape = Pill, normal = Color.Transparent, focused = Color(0x1F000000),
+            if (q.isNotEmpty()) Focusable(onClick = { SearchHistory.add(q); q = ""; query = ""; SearchMem.clear(); try { fr.requestFocus() } catch (_: Exception) {} }, shape = Pill, normal = Color.Transparent, focused = C.CardHi,
                 zoom = 1f, modifier = Modifier.height(40.dp)) { _ ->
                 Row(Modifier.align(Alignment.Center).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Ico(R.drawable.lc_x, 16.dp, Color(0xFF374151)); T("Obriši", 13.sp, Color(0xFF374151))
+                    Ico(R.drawable.lc_x, 16.dp, C.Muted); T("Clear Search", 13.sp, C.Muted)
                 }
             }
             Focusable(onClick = {
@@ -689,7 +689,7 @@ fun OnyxSearch(nav: Nav) {
                 catch (e: Exception) { Toast.makeText(ctx, tr("Glasovna pretraga nije dostupna na ovom uređaju"), Toast.LENGTH_LONG).show() }
             }, shape = Pill, normal = Color.Transparent, focused = Color(0x1F000000), zoom = 1f, modifier = Modifier.padding(end = 8.dp).height(40.dp)) { _ ->
                 Row(Modifier.align(Alignment.Center).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Ico(R.drawable.lc_mic, 16.dp, Color(0xFF374151)); T("glasom", 13.sp, Color(0xFF374151))
+                    Ico(R.drawable.lc_mic, 16.dp, C.Muted); T("Voice", 13.sp, C.Muted)
                 }
             }
         }
