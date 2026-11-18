@@ -152,6 +152,45 @@ object Watch {
             .take(30)
     }
 
+    /**
+     * Older progress entries may predate poster persistence. Recover missing artwork
+     * from active Xtream catalogs without changing playback position or timestamps.
+     */
+    suspend fun enrichMissingPosters(ctx: Context) {
+        val missing = all(ctx).values.filter { it.poster.isNullOrBlank() && (it.started || it.next) && !it.done }
+        if (missing.isEmpty()) return
+        val active = Store.actives(ctx).filter { it.type == SourceType.XTREAM }
+        if (active.isEmpty()) return
+        val resolved = HashMap<String, String>()
+        for (pl in active) {
+            val needMovies = missing.any { it.series == null && it.url.let { u -> owner(ctx, it) == pl.id } }
+            val needSeries = missing.any { it.series != null && owner(ctx, it) == pl.id }
+            if (needMovies) try {
+                Repo.catalog(pl, "vod").forEach { item ->
+                    val k = key(item.str("n"))
+                    if (k.isNotBlank() && item.str("i").isNotBlank())
+                        missing.filter { it.series == null && owner(ctx, it) == pl.id && key(it.title) == k }
+                            .forEach { resolved[it.url] = item.str("i") }
+                }
+            } catch (_: Exception) {}
+            if (needSeries) try {
+                Repo.catalog(pl, "series").forEach { item ->
+                    val k = key(item.str("n"))
+                    if (k.isNotBlank() && item.str("i").isNotBlank())
+                        missing.filter { it.series != null && owner(ctx, it) == pl.id && key(it.series!!) == k }
+                            .forEach { resolved[it.url] = item.str("i") }
+                }
+            } catch (_: Exception) {}
+        }
+        if (resolved.isNotEmpty()) {
+            val m = all(ctx)
+            resolved.forEach { (url, poster) -> m[url]?.let { old ->
+                if (old.poster.isNullOrBlank()) m[url] = old.copy(poster = poster)
+            } }
+            persist()
+        }
+    }
+
     /* ---- the same film or episode in another, switched-on playlist: Continue watching keeps it and plays it from there */
     private val alt = java.util.concurrent.ConcurrentHashMap<String, Pair<String, String>>()   // old link -> (playlist id, link there)
     fun altPid(url: String): String? = alt[url]?.first
