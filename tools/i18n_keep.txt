@@ -542,3 +542,4 @@ veličina redova u TV-u i listi u playeru
 tvoji kanali uvijek
 Nema podsjetnika. U TV programu ili Sportu: OK na emisiji › Podsjeti me.
 Mini-player se pokreće samo nakon prvog OK. Drugi OK na istom kanalu otvara cijeli ekran. Pregled kategorija i kanala nikada ne pokreće reprodukciju.
+U EPG programu ili Sports Centeru: OK na emisiji ili utakmici koja još nije počela › Podsjeti me.
