@@ -166,19 +166,25 @@ object Watch {
             val needMovies = missing.any { it.series == null && it.url.let { u -> owner(ctx, it) == pl.id } }
             val needSeries = missing.any { it.series != null && owner(ctx, it) == pl.id }
             if (needMovies) try {
+                val wanted = missing.filter { it.series == null && owner(ctx, it) == pl.id }
                 Repo.catalog(pl, "vod").forEach { item ->
-                    val k = key(item.str("n"))
-                    if (k.isNotBlank() && item.str("i").isNotBlank())
-                        missing.filter { it.series == null && owner(ctx, it) == pl.id && key(it.title) == k }
-                            .forEach { resolved[it.url] = item.str("i") }
+                    val image = item.str("i").trim()
+                    if (image.isNotBlank()) {
+                        val exactUrl = item.str("u")
+                        wanted.filter { it.url == exactUrl || key(it.title) == key(item.str("n")) }
+                            .forEach { resolved[it.url] = image }
+                    }
                 }
             } catch (_: Exception) {}
             if (needSeries) try {
+                val wanted = missing.filter { it.series != null && owner(ctx, it) == pl.id }
                 Repo.catalog(pl, "series").forEach { item ->
-                    val k = key(item.str("n"))
-                    if (k.isNotBlank() && item.str("i").isNotBlank())
-                        missing.filter { it.series != null && owner(ctx, it) == pl.id && key(it.series!!) == k }
-                            .forEach { resolved[it.url] = item.str("i") }
+                    val image = item.str("i").trim()
+                    if (image.isNotBlank()) {
+                        val catalogName = key(item.str("n"))
+                        wanted.filter { catalogName.isNotBlank() && key(it.series.orEmpty()) == catalogName }
+                            .forEach { resolved[it.url] = image }
+                    }
                 }
             } catch (_: Exception) {}
         }
