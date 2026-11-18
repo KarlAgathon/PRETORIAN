@@ -1,4 +1,10 @@
 PRETORIAN 1.0.41-beta11
+TV Guide: potpuno uklonjen iz TV navigacije, Search i Settings; stari TV prikaz ostaje jedini izbor.
+TV navigacija: UP/DOWN kružno prelazi između prve i posljednje kategorije i kanala, uključujući dugo držanje tipke.
+Mini-player: automatsko pokretanje pri fokusiranju je isključeno; prvi OK pokreće mini-player, drugi OK na istom kanalu otvara fullscreen.
+Zadržan PRETORIAN plavo-ljubičasti TV layout i EPG panel.
+
+PRETORIAN 1.0.41-beta11
 Full-screen player: isti meni opcija za kanale u svim layoutima — FAVORITES, SUBS, ZOOM, AUDIO, VIDEO, EPG i HISTORY
 Favorites: jedan OK dodaje ili uklanja kanal; žuta zvijezda označava aktivan favorit
 Subs: za TV kanale prikazuje ugrađene titlove koje stream nudi
