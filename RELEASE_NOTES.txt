@@ -13,3 +13,9 @@ PRETORIAN 1.0.39-beta7
 TV kategorije: prirodno pomjeranje fokusa red po red, kao na kanalima; držanje UP/DOWN prati ponavljanje daljinskog bez skakanja i treperenja
 TV kategorije: DOWN na posljednjoj kategoriji ostaje unutar liste
 Mini pregled i beta6 zaštita granica ostaju nepromijenjeni
+
+
+PRETORIAN 1.0.39-beta8
+TV grupe: zadržana ispravka prirodnog kretanja fokusa red po red, bez treperenja i skakanja pri držanju daljinskog
+TV kanali: aktivni kanal je jasno označen diskretnim zelenim indikatorom i blagim zelenim okvirom/pozadinom, uključujući povratak iz fullscreen playera
+Mini pregled i potvrda tipkom OK ostaju nepromijenjeni
