@@ -705,9 +705,9 @@ fun OnyxSearch(nav: Nav) {
                 }
             }
         }
+        SearchRecent { h -> q = h; query = h; jump++ }
         if (query.length < 2) {
             T("Upiši bar 2 slova ili klikni „glasom”", 13.sp, C.Muted)
-            SearchRecent { h -> q = h; query = h; jump++ }
             return@Column
         }
         // sport: matches already loaded in Sport (live scores) and sport broadcasts in the TV guide
