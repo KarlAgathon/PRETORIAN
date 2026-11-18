@@ -1,6 +1,4 @@
-PRETORIAN 1.0.38
-Kanal koji zamrzne više ne ostaje tiho stajati: poslije 4 pokušaja uzima rezervni stream, a ako ga nema, javlja poruku i pokušava ponovo svakih 20 s
-Kanali s arhivom: u traci playera dugmad "◀◀ 5 min" i "Uživo", a u uglu piše koliko si iza uživo
-Izgled › EPG: boja, veličina slova, prozirnost i svjetlina programa (EPG mreža, vodič u playeru, lista kanala)
-Nova instalacija: hardverski dekoder i skrivene kategorije za odrasle, XXX, LGBT i trans (otvara ih PIN)
-Zapis streamova: "Nikad" je preveden
+PRETORIAN 1.0.39-beta5
+TV kanali: mali pregled se pokreće tek nakon prvog OK; drugi OK na istom kanalu otvara cijeli ekran
+TV kategorije: UP na prvom redu i DOWN na posljednjem redu ostaju unutar liste, uključujući brzo ponavljanje tipke
+Home, Sport i Stable nisu mijenjani
