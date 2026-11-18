@@ -81,8 +81,8 @@ object Preview {
 /** Style of the channel lists (TV and the list in the player): 0 compact (default), 1 normal, 2 large,
  *  3 TiviMate mode (TV opens as the guide grid: groups left, channels with their shows by time, no small picture). */
 object ListStyle {
-    val mode get() = Prefs.long("tv_density", 0).toInt().coerceIn(0, 3)
-    val tivimate get() = mode == 3
+    val mode get() = Prefs.long("tv_density", 0).toInt().coerceIn(0, 2)
+    val tivimate get() = false
     val sideRow get() = when (mode) { 1 -> 52.dp; 2 -> 62.dp; else -> 42.dp }
     /** how strong the colour of the picked channel / show is, in every theme (Settings › Appearance, 10–100 %, default 40) */
     val strength get() = Prefs.long("tv_focus_pct", 40).toInt().coerceIn(10, 100) / 100f
@@ -189,11 +189,13 @@ suspend fun groupRows(ctx: android.content.Context): List<GRow> {
 fun TvScreen(nav: Nav) {
     val ctx = LocalContext.current
     if (Store.actives(ctx).isEmpty()) { NoPlaylist(nav); return }
-    var guide by remember { mutableStateOf(ListStyle.tivimate || Prefs.str("tv_view", "list") == "guide") }
-    if (guide) TvGuide(nav) { guide = false; Prefs.put("tv_view", "list") }
-    else if (Look.tvDesign == 1) TvList(nav) { guide = true; Prefs.put("tv_view", "guide") }
-    else if (Look.age) OnyxTv(nav) { guide = true; Prefs.put("tv_view", "guide") }
-    else TvList(nav) { guide = true; Prefs.put("tv_view", "guide") }
+    // BETA12: the full-screen TV Guide is retired. Always use the classic
+    // category · channel · mini-player/EPG layout, regardless of legacy saved preferences.
+    LaunchedEffect(Unit) {
+        Prefs.put("tv_view", "list")
+        if (Prefs.long("tv_density", 0) > 2) Prefs.put("tv_density", 2L)
+    }
+    TvList(nav)
 }
 
 /** The group column, shared by the list and the guide. */
@@ -362,7 +364,7 @@ fun openGroup(ctx: android.content.Context, st: TvState, g: GroupRef) {
 }
 
 @Composable
-private fun TvList(nav: Nav, onGuide: () -> Unit) {
+private fun TvList(nav: Nav) {
     val ctx = LocalContext.current
     val st = remember { TvState() }
     val rows by load(st.rev, Favs.rev, Recent.rev, keep = true) { groupRows(ctx) }
@@ -396,14 +398,7 @@ private fun TvList(nav: Nav, onGuide: () -> Unit) {
             onHeader = { p -> TvFold.toggle(p.id); if (p.id in TvFold.open) Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
             onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it },
             onFocusRow = { st.focusKey = it },
-            extra = {
-                Focusable(modifier = Modifier.padding(start = 4.dp, bottom = 8.dp).height(36.dp), onClick = onGuide, normal = C.Card, shape = Pill, zoom = 1.0f) { _ ->
-                    Row(Modifier.align(Alignment.Center).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Ico(R.drawable.lc_calendar_clock, 16.dp, C.RedText); T("TV vodič", 13.sp, C.Text, FontWeight.SemiBold)
-                    }
-                }
-            }, containVerticalFocus = true)
+            containVerticalFocus = false)
         Box(Modifier.width(1.dp).fillMaxHeight().background(C.Line))
         // Keep all three areas visible: provider categories, channels and the selected channel's EPG.
         LaunchedEffect(st.refocus, rows is Load.Ok) {
@@ -693,7 +688,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                             val active = PreviewSel.ch?.url == ch.url || TvMemory.preview?.url == ch.url ||
                                 (TvMemory.group?.key == g.key && TvMemory.channel == i)
                             Focusable(
-                                modifier = Modifier.fillMaxWidth().height(Rows.channel)
+                                modifier = Modifier.fillMaxWidth().height(Rows.channel).wrapKeys(i, list.size, cWrap)
                                     .then(if (active) Modifier.border(1.dp, C.Green.copy(alpha = 0.48f), Rnd(12.dp)) else Modifier),
                                 onClick = {
                                     gate.run("c:${ch.url}", locked) {
