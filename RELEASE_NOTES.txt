@@ -1,3 +1,10 @@
+PRETORIAN 1.0.46-beta18
+Fix Classic and Default TV navigation: LEFT from channels returns focus to the selected group
+Fix BACK handling from the channel list and restore focus only after the group row is visible
+Classic layout hides the main rail while browsing groups/channels to give the TV list more usable space
+Classic channel name, current EPG time and programme title are displayed on one horizontal line
+Default layout styling and Stable main remain unchanged
+
 PRETORIAN 1.0.45-beta17
 Classic TV layout refinement: smaller top preview/EPG area and more vertical space for groups and channels
 Narrower group column, reduced Classic channel row height and typography for improved TV readability
