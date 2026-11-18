@@ -1,3 +1,10 @@
+PRETORIAN 1.0.53 (STABLE)
+Classic TV: restore the full-screen workspace with mini-player at upper left and expanded EPG at upper right
+Classic TV: keep Groups on the left and Channels on the right at the same time; group width expands while browsing groups and collapses when browsing channels
+Classic TV: hide the main app rail until LEFT/BACK is pressed; LEFT from channels returns to groups, BACK from groups reveals Home navigation
+Classic TV: compact channel rows and rebalance channel-name/EPG proportions to prevent clipping and improve readability
+Default layout and player behavior remain unchanged
+
 PRETORIAN 1.0.52
 Classic TV: replace the permanent left groups column with a full-width group selection view opened using LEFT
 Classic TV: show the selected group name and channel count above one full-width channel list
