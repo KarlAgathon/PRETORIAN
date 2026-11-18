@@ -376,48 +376,45 @@ private fun TvList(nav: Nav, onGuide: () -> Unit) {
     LaunchedEffect(focusedCh) { val c = focusedCh ?: return@LaunchedEffect; delay(500); Dusk.set(c.logo, c.name) }
     Column(Modifier.fillMaxSize()) {
     Row(Modifier.weight(1f).fillMaxWidth()) {
-        if (!inChannels) {
-            GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, 290.dp, "TV", null,
-                onFocusGroup = { focusedGroup = it },
-                onOpen = { openGroup(ctx, st, it); enterTick++ },
-                onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
-                onHeader = { p -> TvFold.toggle(p.id); if (p.id in TvFold.open) Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
-                onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it },
-                onFocusRow = { st.focusKey = it },
-                extra = {
-                    Focusable(modifier = Modifier.padding(start = 4.dp, bottom = 8.dp).height(36.dp), onClick = onGuide, normal = C.Card, shape = Pill, zoom = 1.03f) { _ ->
-                        Row(Modifier.align(Alignment.Center).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Ico(R.drawable.lc_calendar_clock, 16.dp, C.RedText); T("TV vodič", 13.sp, C.Text, FontWeight.SemiBold)
-                        }
+        GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, 260.dp, "Kategorije", null,
+            onFocusGroup = { focusedGroup = it },
+            onOpen = { openGroup(ctx, st, it); enterTick++ },
+            onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
+            onHeader = { p -> TvFold.toggle(p.id); if (p.id in TvFold.open) Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
+            onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it },
+            onFocusRow = { st.focusKey = it },
+            extra = {
+                Focusable(modifier = Modifier.padding(start = 4.dp, bottom = 8.dp).height(36.dp), onClick = onGuide, normal = C.Card, shape = Pill, zoom = 1.0f) { _ ->
+                    Row(Modifier.align(Alignment.Center).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Ico(R.drawable.lc_calendar_clock, 16.dp, C.RedText); T("TV vodič", 13.sp, C.Text, FontWeight.SemiBold)
                     }
-                })
-            Box(Modifier.width(1.dp).fillMaxHeight().background(C.Line))
-            // focus the group we came from (start, Left/Back from channels, closed menu)
-            LaunchedEffect(st.refocus, rows is Load.Ok) {
-                val list = (rows as? Load.Ok)?.value ?: return@LaunchedEffect
-                if (st.refocus == 0) return@LaunchedEffect
-                if (st.focusKey.isEmpty() || list.none { it.id == st.focusKey }) {
-                    st.focusKey = st.group?.let { g -> "g:" + g.key }?.takeIf { k -> list.any { it.id == k } } ?: list.firstOrNull()?.id ?: ""
                 }
-                val idx = list.indexOfFirst { it.id == st.focusKey }.coerceAtLeast(0)
-                if (gState.layoutInfo.visibleItemsInfo.none { it.index == idx }) gState.scrollToItem((idx - 3).coerceAtLeast(0))
-                st.focusFr.tryFocus()
+            })
+        Box(Modifier.width(1.dp).fillMaxHeight().background(C.Line))
+        // Keep all three areas visible: provider categories, channels and the selected channel's EPG.
+        LaunchedEffect(st.refocus, rows is Load.Ok) {
+            val list = (rows as? Load.Ok)?.value ?: return@LaunchedEffect
+            if (st.refocus == 0) return@LaunchedEffect
+            if (st.focusKey.isEmpty() || list.none { it.id == st.focusKey }) {
+                st.focusKey = st.group?.let { g -> "g:" + g.key }?.takeIf { k -> list.any { it.id == k } } ?: list.firstOrNull()?.id ?: ""
             }
+            val idx = list.indexOfFirst { it.id == st.focusKey }.coerceAtLeast(0)
+            if (gState.layoutInfo.visibleItemsInfo.none { it.index == idx }) gState.scrollToItem((idx - 3).coerceAtLeast(0))
+            st.focusFr.tryFocus()
         }
         Box(Modifier.weight(1f).fillMaxHeight()) {
             val g = st.group
-            if (g == null) Message("Izaberi grupu", "Drži OK na grupi za opcije")
+            if (g == null) Message("Izaberi kategoriju", "Odaberi kategoriju od svog providera")
             else Row(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f).fillMaxHeight().onPreviewKeyEvent { e ->
-                    // Left from the channel list always goes back to the groups
                     if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { backToGroups(); true } else false
                 }) {
                     key(g.key, st.rev) {
                         ChannelList(g, nav, st.gate, rows, enterTick, onFocusCh = { focusedCh = it; inChannels = true }) { st.rev++ }
                     }
                 }
-                if (inChannels) EpgPanel(focusedCh, Modifier.width(340.dp))
+                EpgPanel(focusedCh, Modifier.width(330.dp))
             }
         }
     }
