@@ -986,6 +986,12 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         Popup(item.title, onDismiss = { resume = null; player.play() }) {
             OptionRow(trf("Nastavi od %s", fmt(r.pos)), R.drawable.lc_play, sub = trf("od %s", fmt(r.dur))) { resume = null; player.seekTo(r.pos); player.play() }
             OptionRow("Od početka", R.drawable.lc_rotate_ccw) { resume = null; player.seekTo(0); player.play() }
+            OptionRow("Ukloni nastavak", R.drawable.lc_x, sub = "Obriši zapamćenu poziciju za ovaj sadržaj") {
+                Watch.remove(ctx, item.url)
+                resume = null
+                player.seekTo(0)
+                player.play()
+            }
         }
     }
 
