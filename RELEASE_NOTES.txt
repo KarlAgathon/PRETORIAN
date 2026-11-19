@@ -1,3 +1,6 @@
+PRETORIAN 1.0.64 STABLE
+Catch-up: add “Ukloni nastavak” to the resume prompt; clears the saved playback position for the selected item.
+
 PRETORIAN 1.0.63 STABLE
 New Dawn is now the only layout (Default and Classic removed, no layout choice); every box switches to it, new installs start in it
 Themes: Midnight blue (default) and Black and white
