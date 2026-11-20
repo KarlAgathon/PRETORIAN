@@ -306,8 +306,15 @@ fun DawnNowNext(ch: Channel?, modifier: Modifier) {
                 T(cur?.title ?: if (st is Load.Loading) tr("Učitavam program…") else tr("Nema EPG vodiča"), 14.sp, Color(0xFFC3CCD8), modifier = Modifier.weight(1f))
                 if (cur != null) T(cur.times(), 14.sp, Color(0xFFC3CCD8))
             }
-            if (cur != null) Box(Modifier.padding(top = 6.dp).fillMaxWidth().height(4.dp).clip(Rnd(2.dp)).background(Color(0x33FFFFFF))) {
-                Box(Modifier.fillMaxWidth(cur.progress(t)).height(4.dp).background(Color.White))
+            if (cur != null) {
+                val progress = cur.progress(t)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(Modifier.weight(1f).height(4.dp).clip(Rnd(2.dp)).background(Color(0x33FFFFFF))) {
+                        Box(Modifier.fillMaxWidth(progress).height(4.dp).background(Color.White))
+                    }
+                    T("${(progress * 100).toInt()}%", 14.sp, Color.White)
+                }
             }
         }
         cur?.desc?.takeIf { it.isNotBlank() }?.let { T(it, 13.sp, Color.LightGray, maxLines = 2, modifier = Modifier.padding(horizontal = 16.dp)) }
