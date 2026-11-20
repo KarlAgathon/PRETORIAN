@@ -15,6 +15,58 @@ class TvRedesignRegressionTest {
 
     @Before fun setup() { Prefs.init(RuntimeEnvironment.getApplication()) }
 
+    @Test fun recentHistoryRetainsArchiveAndPromotesRewatchedChannels() {
+        Recent.clear()
+        for (i in 1..11) Recent.add(channel.copy(url = "stream/$i"), "one", "local", "News")
+        Recent.add(channel.copy(url = "stream/3"), "one", "local", "News")
+        assertEquals(listOf(3, 11, 10, 9, 8, 7, 6, 5, 4, 2).map { "stream/$it" }, Recent.list().map { it.ch.url })
+        Recent.remove("stream/10")
+        assertTrue(Recent.list().all { it.ch.catchup == channel.catchup })
+        Recent.clear()
+        assertTrue(Recent.list().isEmpty())
+    }
+
+    @Test fun freshTvEntryStartsAtRecentlyWatchedAndPlaybackReturnKeepsItsGroup() {
+        val previous = TvMemory.group
+        val restoring = TvMemory.restore
+        try {
+            val group = GroupRef("one", Category("local", "News"))
+            TvMemory.group = group
+            TvMemory.restore = false
+            assertNull(TvState().group)
+            TvMemory.restore = true
+            assertEquals(group, TvState().group)
+        } finally {
+            TvMemory.group = previous
+            TvMemory.restore = restoring
+        }
+    }
+
+    @Test fun remoteOkTapAndHoldNeverDispatchBothActions() {
+        val hold = RemoteOkHold()
+        var favorites = 0
+        var plays = 0
+        fun key(down: Boolean, repeat: Int, ms: Long) {
+            val consumed = hold.handle(down, repeat, ms, 650L) { favorites++ }
+            if (!down && !consumed) plays++
+        }
+        key(true, 0, 0); key(false, 0, 649)
+        key(true, 0, 0); key(true, 1, 500); key(true, 2, 650); key(true, 3, 800); key(false, 0, 900)
+        key(true, 0, 0); key(false, 0, 650)
+        key(true, 0, 0); key(false, 0, 100)
+        assertEquals(2, plays)
+        assertEquals(2, favorites)
+    }
+
+    @Test fun multiplePlaylistsShowOnlyOneNavigationLevel() {
+        val context = RuntimeEnvironment.getApplication() as android.content.Context
+        val lists = listOf("one", "two").map { Playlist(it, it, SourceType.M3U, active = true) }
+        Store.savePlaylists(context, lists)
+        val rows = kotlinx.coroutines.runBlocking { groupRows(context) }
+        assertEquals(listOf(RECENT_GROUP, "__all_favorites__"), rows.filterIsInstance<GRow.Group>().map { it.ref.cat.id })
+        assertEquals(lists.map { it.id }, rows.filterIsInstance<GRow.Header>().map { it.p.id })
+    }
+
     @Test fun sportsEventsStayOutOfGeneralNotifications() {
         val before = Notes.unread()
         Notes.add("sport", "Goal", "test-goal")
