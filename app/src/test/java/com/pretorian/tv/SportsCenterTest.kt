@@ -46,6 +46,13 @@ class SportsCenterTest {
         assertEquals(listOf(later), ApiFootball.extra(listOf(game), listOf(duplicate, later, later)))
     }
 
+    @Test fun restoreFocusAccountsForLeagueHeadingsAndBanner() {
+        val rows = listOf(game, game.copy(id = "second"), game.copy(id = "third", league = "League"))
+        assertEquals(1, sportsRowIndex(rows, "espn", false) { it.league })
+        assertEquals(5, sportsRowIndex(rows, "third", true) { it.league })
+        assertNull(sportsRowIndex(rows, "removed", true) { it.league })
+    }
+
     @Test fun selectedFiltersIntersect() {
         assertTrue(sportsFilter(game, setOf("Mainz", "Bayern"), setOf("de"), setOf("Cup")))
         assertFalse(sportsFilter(game, setOf("Mainz"), setOf("ba"), setOf("Cup")))
