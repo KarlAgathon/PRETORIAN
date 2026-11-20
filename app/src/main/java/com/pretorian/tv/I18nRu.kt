@@ -2,6 +2,12 @@ package com.pretorian.tv
 
 /** Russian: one line per text, "bosnian|russian" (kept apart so the 10-column table and its tools stay as they are). */
 internal val RU_TABLE = """
+Općenito|Общие
+Početak utakmice|Начало матча
+Sljedeća utakmica|Следующий матч
+Ostali izvori|Другие источники
+Moguće|Вероятно
+Zadnji podaci|Последние известные результаты
 ZOOM|ЗУМ
 Prilagodi širinu|Подогнать по ширине
 Zoom|Масштаб

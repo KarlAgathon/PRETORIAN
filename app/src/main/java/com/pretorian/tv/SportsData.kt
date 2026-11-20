@@ -163,7 +163,7 @@ object Sports {
 
     private fun espnDate(ms: Long) = SimpleDateFormat("yyyyMMdd", Locale.US).format(java.util.Date(ms))
 
-    private fun iso(s: String): Long? {
+    internal fun iso(s: String): Long? {
         for (p in listOf("yyyy-MM-dd'T'HH:mm:ss'Z'", "yyyy-MM-dd'T'HH:mm'Z'", "yyyy-MM-dd'T'HH:mm:ssXXX", "yyyy-MM-dd'T'HH:mmXXX")) {
             try { return SimpleDateFormat(p, Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.parse(s)?.time } catch (_: Exception) {}
         }
@@ -271,7 +271,7 @@ object Sports {
             try {
                 val raw = requests.withPermit {
                     if (System.currentTimeMillis() < rateLimitUntil) return@withLock cached(lg, date)
-                    http("https://site.api.espn.com/apis/site/v2/sports/${lg.path}/scoreboard?dates=$date&limit=500", 6500)
+                    http("https://site.api.espn.com/apis/site/v2/sports/${lg.path}/scoreboard?dates=$date&limit=500", 6500)  // i18n-ignore
                 }
                 val at = System.currentTimeMillis()
                 val events = parseBoard(lg, raw, at)
@@ -558,6 +558,9 @@ object Sports {
         return if (distinct.isNotEmpty()) distinct.any { it in words } else t.all { it in words }
     }
 
+    internal fun matchesTeams(home: Set<String>, away: Set<String>, title: Set<String>) =
+        teamIn(home - away, title) && teamIn(away - home, title)
+
     /** not a match at all: previews, magazines, studio shows */
     private val NOT_MATCH = Regex("highlights|sažetak|sazetak|najava|magazin|studio|emisija", RegexOption.IGNORE_CASE)
 
@@ -596,9 +599,16 @@ object Sports {
                 return@map ev.copy(channels = hits.flatMap { chans[it.channel] ?: emptyList() }.distinctBy { it.url })
             }
             val th = tokens(ev.home.name); val ta = tokens(ev.away.name)
-            val hits = near(ev.start, 75 * 60_000L).filter { pr -> val w = wd(pr); !REPLAY.containsMatchIn(pr.title) && teamIn(th - ta, w) && teamIn(ta - th, w) }
+            val window = near(ev.start, 75 * 60_000L).filterNot { REPLAY.containsMatchIn(it.title) }
+            val hits = window.filter { pr -> matchesTeams(th, ta, wd(pr)) }
+            val probable = window.filter { pr ->
+                val words = wd(pr)
+                pr !in hits && norm(ev.league).takeIf { it.length >= 4 }?.let { it in nt(pr) } == true &&
+                    (teamIn(th - ta, words) || teamIn(ta - th, words))
+            }
             used.addAll(hits)
-            ev.copy(channels = hits.flatMap { chans[it.channel] ?: emptyList() }.distinctBy { it.url })
+            ev.copy(channels = hits.flatMap { chans[it.channel].orEmpty() }.distinctBy { it.url },
+                ai = probable.flatMap { chans[it.channel].orEmpty() }.distinctBy { it.url })
         }
         // teams the score feed knows (today and the days already loaded): their match not in today's feed = a recording
         val known = (withCh + lastCombined.values.flatten()).flatMap { listOfNotNull(it.home, it.away) }.map { tokens(it.name).filter { w -> w !in GENERIC }.toSet() }.filter { it.isNotEmpty() }
@@ -907,8 +917,13 @@ object ApiFootball {
     }
     /** live matches ESPN does not have (same two teams = the same match) */
     fun extra(espn: List<SportEvent>, af: List<SportEvent>): List<SportEvent> {
-        fun k(e: SportEvent) = Sports.norm((e.home?.name ?: "") + (e.away?.name ?: "")).replace(" ", "")
-        val have = espn.map { k(it) }.toSet()
-        return af.filter { k(it) !in have }
+        fun same(a: SportEvent, b: SportEvent): Boolean {
+            if (a.sport != b.sport || kotlin.math.abs(a.start - b.start) > 30 * 60_000L) return false
+            val teams = listOf(a.home, a.away, b.home, b.away)
+            if (teams.any { it == null }) return false
+            return Sports.norm(a.home!!.name) == Sports.norm(b.home!!.name) &&
+                Sports.norm(a.away!!.name) == Sports.norm(b.away!!.name)
+        }
+        return af.distinctBy { it.id }.filter { candidate -> espn.none { same(it, candidate) } }
     }
 }

@@ -36,6 +36,12 @@ private const val COLS = "bs|en|de|hr|sr|bg|ro|tr|it|ar"
 
 /* One line per text: bs | en | de | hr | sr | bg | ro | tr | it | ar.  "=" means the same as Bosnian. */
 private val TABLE = """
+Općenito|General|Allgemein|Općenito|Опште|Общи|General|Genel|Generali|عام
+Početak utakmice|Match start|Spielbeginn|Početak utakmice|Почетак утакмице|Начало на мача|Începutul meciului|Maç başlangıcı|Inizio partita|بداية المباراة
+Sljedeća utakmica|Next match|Nächstes Spiel|Sljedeća utakmica|Следећа утакмица|Следващ мач|Următorul meci|Sonraki maç|Prossima partita|المباراة التالية
+Ostali izvori|Other sources|Weitere Quellen|Ostali izvori|Други извори|Други източници|Alte surse|Diğer kaynaklar|Altre fonti|مصادر أخرى
+Moguće|Probable|Wahrscheinlich|Moguće|Могуће|Вероятно|Probabil|Muhtemel|Probabile|محتمل
+Zadnji podaci|Last known scores|Letzter Ergebnisstand|Zadnji podaci|Последњи подаци|Последни резултати|Ultimele scoruri cunoscute|Bilinen son skorlar|Ultimi risultati noti|آخر النتائج المعروفة
 Ukloni nastavak|Clear resume|Fortsetzen entfernen|Ukloni nastavak|Уклони наставак|Премахни продължаването|Șterge reluarea|Devam etmeyi kaldır|Rimuovi ripresa|إزالة الاستئناف
 Obriši zapamćenu poziciju za ovaj sadržaj|Clear the saved position for this content|Gespeicherte Position für diesen Inhalt löschen|Obriši zapamćenu poziciju za ovaj sadržaj|Обриши запамћену позицију за овај садржај|Изтрий запазената позиция за това съдържание|Șterge poziția salvată pentru acest conținut|Bu içerik için kaydedilen konumu sil|Elimina la posizione salvata per questo contenuto|احذف الموضع المحفوظ لهذا المحتوى
 ZOOM|ZOOM|ZOOM|ZOOM|ЗУМ|МАЩАБИРАНЕ|ZOOM|YAKINLAŞTIR|ZOOM|تكبير

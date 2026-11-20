@@ -2174,18 +2174,20 @@ private fun SportV2() {
     var teamDlg by remember { mutableStateOf(false) }
     val main = listOf("football" to "Fudbal", "basketball" to "Košarka", "tennis" to "Tenis", "volleyball" to "Odbojka")
     val others = (Sports.SPORTS + Sports.MORE_SPORTS).filter { o -> main.none { it.first == o.first } }
-    fun changed() { Sports.lastCombined.clear(); rev++ }
+    fun changed() { Sports.lastCombined.clear(); SportCache.clear(); rev++ }
     key(rev) {
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             // ---------------------------------------------------------- left: what you follow
             Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 T("Sports Center", 20.sp, C.Text, FontWeight.Bold)
                 // one drop-down for the sports: only how many are chosen on the row; All / None / each, stays open until Back
+                SetSection("Sportovi")
                 val en = csv("sport_enabled", "football").toMutableSet()
                 val allSports = Sports.SPORTS + Sports.MORE_SPORTS
                 SetMulti("Sportovi", null, allSports.map { it.second }, allSports.indices.filter { allSports[it].first in en }.toSet(), none = true) { s2 ->
-                    Prefs.put("sport_enabled", (if (s2.isEmpty()) setOf(0) else s2).sorted().joinToString(",") { allSports[it].first }); changed()
+                    Prefs.remove("sm_sports"); Prefs.put("sport_enabled", (if (s2.isEmpty()) setOf(0) else s2).sorted().joinToString(",") { allSports[it].first }); changed()
                 }
+                SetSection("Države")
                 val conts = Sports.CONTINENTS
                 val cOn = csv("sport_cont", "eu").map { if (it == "am") "na" else it }
                 SetMulti("Kontinenti", "svjetska takmičenja uvijek", conts.map { it.second }, conts.indices.filter { conts[it].first in cOn }.toSet(), all = false) { s2 ->
@@ -2198,6 +2200,7 @@ private fun SportV2() {
                     note = tr("Ništa označeno = automatski (po uređaju)")) { s2 ->
                     Prefs.put("sport_country", s2.sorted().joinToString(",") { opts[it].first }); Sports.lastCombined.clear(); changed()
                 }
+                SetSection("Timovi")
                 val nOpts = COUNTRIES.drop(1).filter { it.first in MyTeams.NATIONS }
                 val nOn = Prefs.str("sport_nations").split(',').filter { it.isNotBlank() }.toSet()
                 SetMulti("Moje reprezentacije", "igraju prve u Sportu", nOpts.map { it.second }, nOpts.indices.filter { nOpts[it].first in nOn }.toSet(), all = false) { s2 ->
@@ -2216,8 +2219,10 @@ private fun SportV2() {
                 SetSwitch("Podsjetnik prije početka", "za timove i utakmice koje pratiš", (Prefs.str("sport_team_remind", "1").toIntOrNull() ?: 1) > 0) {
                     Prefs.put("sport_team_remind", if (it) "1" else "0"); rev++
                 }
+                SetSection("Općenito")
                 SetDrop("Osvježavanje", "dok je Sport otvoren", listOf("Svake minute", "Svake 3 min", "Svakih 5 min"),
                     listOf(1, 3, 5).indexOf(Prefs.str("sport_refresh", "1").toIntOrNull() ?: 1).coerceAtLeast(0)) { Prefs.put("sport_refresh", listOf(1, 3, 5)[it].toString()); rev++ }
+                SetSection("Izgled")
                 SetDrop("Mala slika utakmice", null, listOf("Na OK", "Isključena"), if (Prefs.bool("sport_preview", true)) 0 else 1) { Prefs.put("sport_preview", it == 0); rev++ }
                 SetSection("Ko prenosi")
                 val srcKeys = listOf("sport_src_rights", "sport_src_espn", "sport_src_ai")
