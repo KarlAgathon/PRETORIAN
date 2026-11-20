@@ -188,37 +188,6 @@ object TopMenus {
     var searchWhere by mutableStateOf(false)
 }
 
-/** Compact active-playlist status on Home. Warning colors: green >7 days, orange <=7, red <=2. */
-@Composable
-fun SubscriptionCard() {
-    val ctx = LocalContext.current
-    val pls = remember { Store.actives(ctx) }
-    val p = pls.firstOrNull() ?: return
-    val sec = p.exp.toLongOrNull()?.takeIf { it > 0 }
-    val days = sec?.let { (it * 1000 - System.currentTimeMillis()) / 86_400_000L }
-    val accent = when {
-        days == null -> C.Green
-        days <= 2 -> C.Danger
-        days <= 7 -> Color(0xFFFFA726)
-        else -> C.Green
-    }
-    Row(
-        Modifier.widthIn(min = 170.dp, max = 230.dp).height(42.dp)
-            .clip(Rnd(12.dp))
-            .background(Brush.horizontalGradient(listOf(accent.copy(alpha = 0.15f), C.Rail)))
-            .border(1.dp, accent.copy(alpha = 0.55f), Rnd(12.dp))
-            .padding(horizontal = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Box(Modifier.size(7.dp).clip(CircleShape).background(accent))
-        T(p.name, 12.sp, C.Text, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
-        if (days != null) {
-            T(if (days < 0) "0" else trf("%s dana", days.toString()), 12.sp, accent, FontWeight.Bold, maxLines = 1)
-        }
-    }
-}
-
 /** A sideways row that goes round: ▶ on the last item jumps to the first, ◀ on the first jumps to the last. */
 @Composable
 fun RoundRow(count: Int, gap: Dp, item: @Composable (Int, FocusRequester?, Modifier) -> Unit) {
