@@ -29,12 +29,14 @@ import org.json.JSONObject
  */
 object CatalogDb {
     private const val MAX_AGE = 24 * 3600_000L
+    private lateinit var cacheDir: java.io.File
     private var helper: SQLiteOpenHelper? = null
     private val locks = HashMap<String, Mutex>()
     private val bg = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun init(ctx: Context) {
         if (helper != null) return
+        cacheDir = ctx.cacheDir
         helper = object : SQLiteOpenHelper(ctx, "catalog.db", null, 3) { // i18n-ignore
             override fun onConfigure(db: SQLiteDatabase) { db.enableWriteAheadLogging() }
             override fun onCreate(db: SQLiteDatabase) {
@@ -101,24 +103,34 @@ object CatalogDb {
     fun download(p: Playlist, kind: String, progress: ((items: Int, read: Long, total: Long) -> Unit)? = null): Int {
         val d = db() ?: throw IllegalStateException("db") // i18n-ignore
         var n = 0; var lastBytes = 0L; var total = -1L
-        d.beginTransactionNonExclusive()
+        val stage = java.io.File.createTempFile("catalog-", ".jsonl", cacheDir)
         try {
-            d.delete("items", "pl=? AND kind=?", arrayOf(p.id, kind)) // i18n-ignore
-            val st = d.compileStatement("INSERT INTO items(pl, kind, id, c, n, i, r, u, k) VALUES(?,?,?,?,?,?,?,?,?)") // i18n-ignore
-            Xtream(p).catalogEach(kind, bytes = { r, t -> lastBytes = r; total = t; progress?.invoke(n, r, t) }) { o ->
-                st.clearBindings()
-                st.bindString(1, p.id); st.bindString(2, kind); st.bindString(3, o.str("id")); st.bindString(4, o.str("c"))
-                st.bindString(5, o.str("n")); st.bindString(6, o.str("i")); st.bindString(7, o.str("r")); st.bindString(8, o.str("u"))
-                st.bindString(9, Sports.norm(o.str("n")))
-                st.executeInsert()
-                n++
-                if (n % 500 == 0) progress?.invoke(n, lastBytes, total)
+            stage.bufferedWriter().use { writer ->
+                Xtream(p).catalogEach(kind, bytes = { r, t -> lastBytes = r; total = t; progress?.invoke(n, r, t) }) { item ->
+                    writer.write(item.toString())
+                    writer.newLine()
+                    n++
+                    if (n % 500 == 0) progress?.invoke(n, lastBytes, total)
+                }
             }
-            d.insertWithOnConflict("meta", null, ContentValues().apply { // i18n-ignore
-                put("pl", p.id); put("kind", kind); put("at", System.currentTimeMillis()); put("n", n) // i18n-ignore
-            }, SQLiteDatabase.CONFLICT_REPLACE)
-            d.setTransactionSuccessful()
-        } finally { d.endTransaction() }
+            d.beginTransactionNonExclusive()
+            try {
+                d.delete("items", "pl=? AND kind=?", arrayOf(p.id, kind)) // i18n-ignore
+                d.compileStatement("INSERT INTO items(pl, kind, id, c, n, i, r, u, k) VALUES(?,?,?,?,?,?,?,?,?)").use { st -> // i18n-ignore
+                    stage.forEachLine { line ->
+                        val o = JSONObject(line)
+                        st.bindString(1, p.id); st.bindString(2, kind); st.bindString(3, o.str("id")); st.bindString(4, o.str("c"))
+                        st.bindString(5, o.str("n")); st.bindString(6, o.str("i")); st.bindString(7, o.str("r")); st.bindString(8, o.str("u"))
+                        st.bindString(9, Sports.norm(o.str("n")))
+                        st.executeInsert()
+                    }
+                }
+                check(d.insertWithOnConflict("meta", null, ContentValues().apply { // i18n-ignore
+                    put("pl", p.id); put("kind", kind); put("at", System.currentTimeMillis()); put("n", n) // i18n-ignore
+                }, SQLiteDatabase.CONFLICT_REPLACE) != -1L)
+                d.setTransactionSuccessful()
+            } finally { d.endTransaction() }
+        } finally { stage.delete() }
         return n
     }
 
