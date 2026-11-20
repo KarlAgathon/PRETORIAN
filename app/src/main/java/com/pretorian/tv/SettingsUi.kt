@@ -1390,7 +1390,7 @@ private val SEARCH_INDEX = listOf(
     "appearance" to "Izgled, tema, boja, veličina, ikone, mod programa, Lite, Full, oblik ivica, jezik, meniji, opisi filmova, prevod",
     "sport" to "Sports Center, sport, sportovi, takmičenja, država, reprezentacije, timovi, ko prenosi, AI pretraga, rezultati",
     "notifications" to "Podsjetnici, obavijest, utakmica, emisija, zvuk obavijesti, čuvar ekrana, sat, datum, pauzirano",
-    "system" to "Dijagnostika, brzina interneta, VPN, protok, gledano, uptime, keš, zapis ažuriranja, zapis streama, backup, vraćanje, USB, fajl, Download, automatski backup, vrati na početak, ažuriranje, nova verzija, beta, stable, kanal, potpis, vrati prethodnu verziju, o aplikaciji, uređaj, kontakt, licence, privatnost, pomoć",
+    "system" to "Dijagnostika, brzina interneta, VPN, protok, gledano, uptime, keš, zapis ažuriranja, zapis streama, backup, vraćanje, USB, fajl, Download, automatski backup, vrati na početak, ažuriranje, nova verzija, stable, kanal, potpis, vrati prethodnu verziju, o aplikaciji, uređaj, kontakt, licence, privatnost, pomoć",
 )
 
 @Composable
@@ -2639,9 +2639,9 @@ private fun ModeV2() {
 /* ---------------------------------------------------------------- Ažuriranje */
 
 @Composable
-private fun VerBox(modifier: Modifier, label: String, value: String, color: Color, icon: Int, stable: Boolean = false, onLong: (() -> Unit)? = null) {
+private fun VerBox(modifier: Modifier, label: String, value: String, color: Color, icon: Int, stable: Boolean = false) {
     Box(modifier.padding(top = 8.dp)) {
-        Focusable(onClick = {}, onMenu = onLong, shape = Rnd(16.dp), normal = color.copy(alpha = 0.14f), focused = color.copy(alpha = 0.3f), zoom = 1.01f,
+        Focusable(onClick = {}, shape = Rnd(16.dp), normal = color.copy(alpha = 0.14f), focused = color.copy(alpha = 0.3f), zoom = 1.01f,
             modifier = Modifier.fillMaxWidth().border(1.dp, color.copy(alpha = 0.55f), Rnd(16.dp))) { _ ->
             Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Box(Modifier.size(38.dp).clip(Rnd(12.dp)).background(color), contentAlignment = Alignment.Center) { Ico(icon, 18.dp, Color(0xFF0F172A)) }
@@ -2673,9 +2673,6 @@ private fun UpdateV2() {
     var backDone by remember { mutableStateOf(false) }
     var backErr by remember { mutableStateOf<String?>(null) }
     var showAll by remember { mutableStateOf<Release?>(null) }
-    var verMenu by remember { mutableStateOf(false) }
-    var tokenAsk by remember { mutableStateOf(0) }   // 0 no, 1 PIN, 2 key field
-    var promoting by remember { mutableStateOf(false) }
     val rels by load(rev / 1000) { Updater.releases() }
     val releases = (rels as? Load.Ok)?.value ?: emptyList()
     val u = Updater.available
@@ -2683,8 +2680,8 @@ private fun UpdateV2() {
         SetPage("Ažuriranje") {
             // ---- on top: the version you have (green) and, next to it, the new one (yellow)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                VerBox(Modifier.weight(1f), "Trenutna verzija", BuildInfo.VERSION + if (Updater.beta && Updater.stableName != BuildInfo.VERSION) " · Beta" else "", C.Green, R.drawable.lc_check,
-                    stable = Updater.stableName == BuildInfo.VERSION, onLong = { verMenu = true })
+                VerBox(Modifier.weight(1f), "Trenutna verzija", BuildInfo.VERSION, C.Green, R.drawable.lc_check,
+                    stable = Updater.stableName == BuildInfo.VERSION)
                 if (u != null) VerBox(Modifier.weight(1f), "Nova verzija", u.name + (releases.firstOrNull { it.name == u.name }?.date?.let { " · $it" } ?: ""), C.Amber, R.drawable.lc_download)
             }
             val pr = Updater.progress
@@ -2721,14 +2718,6 @@ private fun UpdateV2() {
                 }
             }
             Updater.status?.let { T(it, 12.sp, C.Amber, maxLines = 2) }
-            // ---- channel
-            SetSection("Verzija ažuriranja")
-            val betaBuild = BuildConfig.APPLICATION_ID.endsWith(".beta")  // i18n-ignore
-            SetDrop("Kanal", if (Updater.beta) "probne verzije odmah, prije svih" else "samo provjerene verzije",
-                if (betaBuild) listOf("Beta") else listOf("Stable", "Beta"),
-                if (betaBuild) 0 else if (Updater.beta) 1 else 0) {
-                Prefs.put("upd_channel", if (betaBuild || it == 1) "beta" else "stable"); Prefs.put("upd_skip", ""); scope.launch { Updater.check(ctx); rev++ }
-            }
             // ---- how often
             SetSection("Provjera")
             SetDrop("Provjeravaj", "nove verzije", listOf("Pri pokretanju", "Svaki sat", "Dnevno", "Mjesečno"),
@@ -2743,33 +2732,6 @@ private fun UpdateV2() {
                 if (p0 != null) "›" else "", onLong = { p0?.let { back = it } }) { p0?.let { back = it } }
             SetRow("Zadnja Stable", stable?.let { it.name + " · " + it.date + if (it.name == BuildInfo.VERSION) " · " + tr("instalirana") else "" } ?: "",
                 if (stable != null && stable.name != BuildInfo.VERSION) "›" else "") { stable?.takeIf { it.name != BuildInfo.VERSION }?.let { back = it } }
-        }
-    }
-    // long OK on the version: make it the Stable one for everybody (author only, with his GitHub key)
-    // the title shows the real state: Stable when this version is the Stable one, otherwise Beta
-    if (verMenu) Popup(BuildInfo.VERSION + if (Updater.stableName == BuildInfo.VERSION) " · Stable" else " · Beta", { verMenu = false }, width = 520.dp) {  // i18n-ignore
-        if (Updater.stableName == BuildInfo.VERSION) T("Ova verzija je već Stable.", 13.sp, C.Green)
-        else OptionRow(if (promoting) "Objavljujem…" else "Označi kao Stable · pošalji svima", R.drawable.lc_shield_check, color = C.Amber) {
-            if (promoting) return@OptionRow
-            if (!Updater.canPublish) { verMenu = false; tokenAsk = 1; return@OptionRow }
-            promoting = true
-            scope.launch {
-                val err = Updater.promote(); promoting = false; verMenu = false
-                if (err == null) { Updater.stableName = BuildInfo.VERSION; Prefs.put("upd_stable_name", BuildInfo.VERSION) }
-                Toast.makeText(ctx, err ?: tr("Poslano: GitHub pravi Stable izdanje (oko 5 min)"), Toast.LENGTH_LONG).show()
-            }
-        }
-        if (Updater.canPublish) OptionRow("Promijeni GitHub ključ", R.drawable.lc_key_round) { verMenu = false; tokenAsk = 1 }
-        OptionRow("Odustani", R.drawable.lc_x) { verMenu = false }
-    }
-    if (tokenAsk == 1) PinDialog(tr("GitHub ključ"), tr("Unesi PIN"), onDismiss = { tokenAsk = 0 }) { pin -> val e = Lock.check(pin); if (e == null) tokenAsk = 2; e }
-    if (tokenAsk == 2) {
-        var t by remember { mutableStateOf("") }
-        Popup(tr("GitHub ključ (samo za autora)"), { tokenAsk = 0 }, width = 640.dp) {
-            T("Ključ ostaje samo na ovom boxu i služi samo za „Označi kao Stable“.", 12.sp, C.Muted, maxLines = 2)
-            Field("github_pat_…", t, { t = it }, Modifier.fillMaxWidth())  // i18n-ignore
-            OptionRow("Spremi", R.drawable.lc_check, color = C.Green) { Prefs.put("gh_token", t.trim()); tokenAsk = 0; verMenu = true }
-            OptionRow("Obriši ključ", R.drawable.lc_x) { Prefs.put("gh_token", ""); tokenAsk = 0 }
         }
     }
     if (later && u != null) Popup("Podsjeti me", { later = false }, width = 460.dp) {
@@ -2819,8 +2781,8 @@ private fun AboutV2(onSub: (String) -> Unit, onSection: (String) -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     T("v" + BuildInfo.VERSION, 22.sp, C.Text, FontWeight.ExtraBold, maxLines = 1)  // i18n-ignore
                     val stable = Updater.stableName == BuildInfo.VERSION
-                    Box(Modifier.clip(Pill).background((if (stable) Color(0xFFFBBF24) else C.Muted).copy(alpha = 0.18f)).padding(horizontal = 8.dp, vertical = 2.dp)) {
-                        T(if (stable) "STABLE" else "Beta", 10.sp, if (stable) Color(0xFFFBBF24) else C.Soft, FontWeight.Bold, maxLines = 1)  // i18n-ignore
+                    if (stable) Box(Modifier.clip(Pill).background(Color(0xFFFBBF24).copy(alpha = 0.18f)).padding(horizontal = 8.dp, vertical = 2.dp)) {
+                        T("STABLE", 10.sp, Color(0xFFFBBF24), FontWeight.Bold, maxLines = 1)  // i18n-ignore
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
