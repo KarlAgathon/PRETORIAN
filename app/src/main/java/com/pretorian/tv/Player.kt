@@ -289,6 +289,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     var bitrate by remember { mutableLongStateOf(0L) }
     var resUntil by remember { mutableLongStateOf(0L) }
     var channels by remember { mutableIntStateOf(0) }
+    var liveGuide by remember { mutableStateOf<List<EpgItem>>(emptyList()) }
+    var openGuide by remember { mutableStateOf(false) }
     var nowNext by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
     var notice by remember { mutableStateOf<String?>(null) }
     var noticeSequence by remember { mutableIntStateOf(0) }
@@ -485,7 +487,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             try { Recent.add(c, g?.pid, g?.cat?.id ?: c.group, g?.cat?.name ?: c.group) } catch (_: Exception) {}
             PlayerChannelHistory.add(c)
         }
-        error = null; retried = false; showInfo = true; videoH = 0
+        error = null; retried = false; showInfo = !s.live; videoH = 0
+        liveGuide = emptyList(); openGuide = false
         val cur = items[index]
         AudioDelay.use(cur.url)   // sound delay kept for this channel / film
         if (cur.channel?.url != items.getOrNull(prevIndex)?.channel?.url) backupTried.clear()
@@ -499,7 +502,11 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         else loadMedia(cur, subFile, 0L)
         nowNext = emptyList()
         val ch = cur.channel
-        if (s.live && ch != null && p != null) nowNext = Repo.nowNext(p, ch)
+        if (s.live && ch != null && p != null) {
+            liveGuide = Repo.epg(p, ch, 24)
+            nowNext = liveGuide.take(2).map { it.title to it.times() }
+            if (!bar && side == null && dialog == null) showInfo = liveGuide.any { System.currentTimeMillis() in it.start until it.end }
+        }
     }
     LaunchedEffect(retryToken) {
         if (retryToken == 0) return@LaunchedEffect
@@ -569,11 +576,22 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     }
     LaunchedEffect(index) { gaveUp = false; frozenMsg = false; if (!s.live) while (true) { delay(15_000); if (player.isPlaying) saveProgress(background = true) } }
 
-    BackHandler(enabled = dialog != null || side != null || resume != null || bar) {
+    LaunchedEffect(openGuide, item.url) {
+        if (!openGuide) return@LaunchedEffect
+        val channel = item.channel
+        val guide = if (channel != null && p != null) Repo.epg(p, channel, 24) else emptyList()
+        openGuide = false
+        if (guide.isEmpty()) inform(tr("Nema EPG podataka za ovaj kanal."))
+        else { liveGuide = guide; bar = false; showInfo = false; side = "epg" }
+    }
+
+    BackHandler(enabled = dialog != null || side != null || resume != null || bar || openGuide || (s.live && showInfo)) {
         when {
+            openGuide -> { openGuide = false; notice = null; showInfo = false; bar = false }
             resume != null -> { resume = null; player.seekTo(0); player.play() }
             dialog != null -> dialog = null
-            bar -> { bar = false; showInfo = false }
+            bar -> { bar = false; showInfo = false; notice = null }
+            side == null && showInfo -> { showInfo = false; notice = null }
             side == "channels" -> side = "groups"
             side == "groups" -> { side = null; sideGroup = null; nav.back() }
             else -> { side = null; sideGroup = null }
@@ -656,7 +674,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                     Key.DirectionLeft -> if (!s.live) { player.seekTo((player.currentPosition - step).coerceAtLeast(0)); showInfo = true; true }
                         else { side = "channels"; showInfo = false; true }
                     Key.DirectionRight -> if (!s.live) { player.seekTo(player.currentPosition + step); showInfo = true; true }
-                        else { side = "epg"; showInfo = false; true }
+                        else { openGuide = true; true }
                     Key.MediaPause, Key.MediaPlay -> { if (!s.live || Tech.livePause) { if (e.key == Key.MediaPause) player.pause() else player.play() }; showInfo = true; true }
                     Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.MediaPlayPause -> {
                         if (s.live) {
@@ -894,12 +912,30 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 }
             }
         }
-        if (showInfo && side == null) {
+        if (s.live && (showInfo || side != null || dialog != null)) {
+            val time = java.util.Date()
+            val current = liveGuide.firstOrNull { time.time in it.start until it.end }
+            Row(Modifier.align(Alignment.TopCenter).fillMaxWidth().background(Color(0x80000000)).padding(horizontal = 32.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                ChannelLogo(item.logo, item.title)
+                Column(Modifier.weight(1f)) {
+                    T(listOfNotNull(item.subtitle, item.title).joinToString("  "), 20.sp, Color.White, FontWeight.Bold)
+                    current?.let { T(it.title, 15.sp, Color.White); ThinBar(it.progress(time.time), C.Red, Modifier.width(160.dp)) }
+                    if (bar) liveGuide.firstOrNull { it.start > time.time }?.let { T(tr("Zatim") + " · " + it.title, 13.sp, Color.LightGray) }
+                }
+                T("UŽIVO", 13.sp, Color.White)
+                Column(horizontalAlignment = Alignment.End) {
+                    T(java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(time), 18.sp, Color.White)
+                    T(java.text.DateFormat.getDateInstance(java.text.DateFormat.FULL, Locale(Look.lang)).format(time), 13.sp, Color.LightGray)
+                }
+            }
+        }
+        if (showInfo && side == null && (!s.live || bar)) {
             Box(Modifier.align(Alignment.BottomStart).fillMaxWidth()
                 .background(if (Look.overlay == 1) Brush.verticalGradient(listOf(C.OverlayBar, C.OverlayBar)) else Brush.verticalGradient(listOf(Color.Transparent, Color(0xE6000000))))
                 .padding(start = 48.dp, end = 48.dp, top = 70.dp, bottom = 34.dp)) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                    if (!s.live) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                         if (s.live) ChannelLogo(item.logo, item.title)
                         Column(Modifier.weight(1f)) {
                             if (s.live) T("${item.subtitle ?: ""}  ·  ${index + 1}/$n", 14.sp, Color(0xFFB6BCC6))
@@ -926,7 +962,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                         }
                     }
                     val v = player.videoFormat; val a = player.audioFormat
-                    if (v != null) T(listOfNotNull("${v.width}×${v.height}", v.sampleMimeType?.substringAfter('/')?.uppercase(), if (v.frameRate > 0) "${v.frameRate.toInt()} fps" else null,
+                    if (!s.live && v != null) T(listOfNotNull("${v.width}×${v.height}", v.sampleMimeType?.substringAfter('/')?.uppercase(), if (v.frameRate > 0) "${v.frameRate.toInt()} fps" else null,
                         a?.let { (it.sampleMimeType?.substringAfter('/')?.uppercase() ?: "") + " " + if (it.channelCount >= 6) "5.1" else "Stereo" }).joinToString(" · "), 12.sp, Color(0xFF9AA4B2))
                     if (bar && s.live) {
                         val ch = item.channel
@@ -950,7 +986,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                                 "zoom" -> { bar = false; dialog = "zoom" }
                                 "audio" -> { bar = false; dialog = "audio" }
                                 "video" -> { bar = false; dialog = "video" }
-                                "epg" -> { bar = false; side = "epg" }
+                                "epg" -> { openGuide = true }
                                 "recent" -> { bar = false; dialog = "recent" }
                             }
                         })
@@ -1031,18 +1067,17 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 Box(Modifier.fillMaxWidth().height(320.dp)) { Archive(channel, day, { day = it }, nav) }
             }
         }
-        "menu" -> Popup(item.title, onDismiss = { dialog = null }) {
+        "menu" -> Popup(if (s.live) tr("Više") else item.title, onDismiss = { dialog = null }) {
             if (s.live && tracksOf(player, MC.TRACK_TYPE_TEXT).isNotEmpty()) OptionRow("Titlovi", R.drawable.lc_captions) { dialog = "subs" }
+            if (tracksOf(player, MC.TRACK_TYPE_AUDIO).size > 1) OptionRow("Audio", R.drawable.lc_volume, value = tracksOf(player, MC.TRACK_TYPE_AUDIO).firstOrNull { it.selected }?.label ?: "—") { dialog = "audio" }
             // Više: the rarer things, so the bar fits in one row
             OptionRow(if (Sleep.until > 0) trf("Tajmer: %s min", ((Sleep.until - System.currentTimeMillis()) / 60_000 + 1).coerceAtLeast(1)) else tr("Tajmer za spavanje"), R.drawable.lc_moon) { dialog = "sleep" }
             OptionRow("Kvalitet i informacije", R.drawable.lc_info, value = if (videoH > 0) qualityLabel(videoH) else null) { dialog = "info" }
-            if (s.live) item.channel?.let { c -> OptionRow("Pomak vremena", R.drawable.lc_clock, value = EpgShift.label(EpgShift.chMin(c.url))) { dialog = "epgshift" } }
+            if (s.live) item.channel?.let { c -> OptionRow("Upravljanje EPG vodičem", R.drawable.lc_clock, value = EpgShift.label(EpgShift.chMin(c.url))) { dialog = "epgshift" } }
             OptionRow("Vanjski plejer", R.drawable.lc_external_link) { saveProgress(); dialog = "ext" }
             if (s.live && player.isCurrentMediaItemLive && player.isCurrentMediaItemSeekable && duration > 0) OptionRow("Vremenski pomak uživo", R.drawable.lc_history) { dialog = "timeshift" }
-            if (s.live) OptionRow("Arhiva", R.drawable.lc_history, sub = tr("emisije koje su prošle")) { dialog = null; nav.push(Screen.Catchup) }
             if (!s.live && subFile != null) OptionRow("Podesi vrijeme titla", R.drawable.lc_clock, sub = "ako titl kasni ili žuri · SYNC") { dialog = "subsync" }
             if (Tech.audioDelay) OptionRow("Pomak zvuka", R.drawable.lc_volume, sub = tr("ako zvuk kasni ili žuri"), value = AudioDelay.label(AudioDelay.of(item.url))) { dialog = "adelay" }
-            if (tracksOf(player, MC.TRACK_TYPE_AUDIO).size > 1) OptionRow("Audio", R.drawable.lc_volume, value = tracksOf(player, MC.TRACK_TYPE_AUDIO).firstOrNull { it.selected }?.label ?: "—") { dialog = "audio" }
         }
         "fav" -> item.channel?.let { FavPicker(it) { dialog = null } }
         "epgshift" -> item.channel?.let { EpgShiftPopup(it) { dialog = null } }
@@ -1114,7 +1149,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         }
         "audio" -> {
             val tracks = tracksOf(player, MC.TRACK_TYPE_AUDIO)
-            Popup("Audio", onDismiss = { dialog = null }) {
+            Popup("Audio", onDismiss = { dialog = if (s.live) "menu" else null }) {
                 if (tracks.size <= 1) T("Film ima samo jednu audio stazu", 14.sp, C.Muted)
                 tracks.forEach { t ->
                     OptionRow(t.label, R.drawable.lc_volume, selected = t.selected) {
@@ -1131,7 +1166,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 val selected = tracks.firstOrNull { it.selected }?.label
                 val off = player.trackSelectionParameters.disabledTrackTypes.contains(MC.TRACK_TYPE_TEXT) || tracks.none { it.selected }
                 ProviderSubsPicker(item.url, selected, off,
-                    onDismiss = { dialog = null },
+                    onDismiss = { dialog = "menu" },
                     onOff = {
                         subFile = null
                         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
@@ -1172,7 +1207,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 }
             }
         }
-        "sleep" -> Popup("Tajmer za spavanje", onDismiss = { dialog = null }) {
+        "sleep" -> Popup("Tajmer za spavanje", onDismiss = { dialog = if (s.live) "menu" else null }) {
             T("Kad vrijeme istekne, gledanje stane i aplikacija se vrati na početnu.", 14.sp, C.Soft, maxLines = 3)
             OptionRow("Isključen", if (Sleep.until <= 0) R.drawable.lc_check else R.drawable.lc_moon, color = if (Sleep.until <= 0) C.Green else null) { Sleep.until = 0; dialog = null }
             listOf(15, 30, 60, 90).forEach { m ->
@@ -1187,7 +1222,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 }
             }
         }
-        "info" -> Popup("Kvalitet i informacije", onDismiss = { dialog = null }) {
+        "info" -> Popup("Kvalitet i informacije", onDismiss = { dialog = if (s.live) "menu" else null }) {
             val v = player.videoFormat; val a = player.audioFormat
             OptionRow("Slika", R.drawable.lc_monitor, value = if (v != null) "${qualityLabel(v.height)} · ${v.width}×${v.height}" + (if (v.frameRate > 0) " · ${v.frameRate.toInt()} FPS" else "") else "—") {}
             OptionRow("Video kodek", R.drawable.lc_file_video, value = v?.sampleMimeType?.substringAfter('/')?.uppercase() ?: "—") {}
