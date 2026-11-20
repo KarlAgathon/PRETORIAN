@@ -792,7 +792,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         LaunchedEffect(Sleep.until) {
             val u = Sleep.until; if (u <= 0) return@LaunchedEffect
             delay((u - System.currentTimeMillis()).coerceAtLeast(0))
-            if (Sleep.until == u) { Sleep.until = 0; player.pause(); nav.root(Screen.Home) }
+            if (Sleep.until == u) { Sleep.clear(); player.pause(); nav.root(Screen.Home) }
         }
 
         // daily watching limit (Settings › Simple mode and PIN): when the time is used up, the PIN is needed to go on today
@@ -1234,17 +1234,23 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             }
         }
         "sleep" -> Popup("Tajmer za spavanje", onDismiss = { dialog = if (s.live) "menu" else null }) {
-            T("Kad vrijeme istekne, gledanje stane i aplikacija se vrati na početnu.", 14.sp, C.Soft, maxLines = 3)
-            OptionRow("Isključen", if (Sleep.until <= 0) R.drawable.lc_check else R.drawable.lc_moon, color = if (Sleep.until <= 0) C.Green else null) { Sleep.until = 0; dialog = null }
-            listOf(15, 30, 60, 90).forEach { m ->
-                OptionRow(trf("%s min", m), R.drawable.lc_moon) { Sleep.until = System.currentTimeMillis() + m * 60_000L; dialog = null }
+            if (!s.live) T("Kad vrijeme istekne, gledanje stane i aplikacija se vrati na početnu.", 14.sp, C.Soft, maxLines = 3)
+            OptionRow("Isključen", R.drawable.lc_moon, value = if (Sleep.until == 0L) "✓" else null, valueColor = Color.White) {
+                Sleep.clear()
+                dialog = null
             }
-            nowNext.getOrNull(0)?.let { now ->
+            listOf(15, 30, 60, 90).forEach { minutes ->
+                OptionRow(trf("%s min", minutes), R.drawable.lc_moon, value = if (Sleep.minutes == minutes) "✓" else null, valueColor = Color.White) {
+                    Sleep.start(minutes)
+                    dialog = null
+                }
+            }
+            if (!s.live) nowNext.getOrNull(0)?.let { now ->
                 val end = Regex("(\\d{1,2}):(\\d{2})").findAll(now.first).lastOrNull()
                 if (end != null) OptionRow("Na kraju emisije", R.drawable.lc_moon, value = end.value) {
                     val c = java.util.Calendar.getInstance(); c.set(java.util.Calendar.HOUR_OF_DAY, end.groupValues[1].toInt()); c.set(java.util.Calendar.MINUTE, end.groupValues[2].toInt()); c.set(java.util.Calendar.SECOND, 0)
                     if (c.timeInMillis < System.currentTimeMillis()) c.add(java.util.Calendar.DAY_OF_MONTH, 1)
-                    Sleep.until = c.timeInMillis; dialog = null
+                    Sleep.setDeadline(c.timeInMillis); dialog = null
                 }
             }
         }
@@ -1435,7 +1441,24 @@ object WatchLimit {
 }
 
 /** Sleep timer of the player (survives switching channels). */
-object Sleep { var until by mutableLongStateOf(0L) }
+object Sleep {
+    var until by mutableLongStateOf(0L)
+        private set
+    var minutes by mutableIntStateOf(0)
+        private set
+
+    fun start(durationMinutes: Int) {
+        minutes = durationMinutes
+        until = System.currentTimeMillis() + durationMinutes * 60_000L
+    }
+
+    fun setDeadline(deadline: Long) {
+        minutes = 0
+        until = deadline
+    }
+
+    fun clear() = setDeadline(0L)
+}
 
 private fun digitOf(k: Key): Int? = when (k) {
     Key.Zero, Key.NumPad0 -> 0; Key.One, Key.NumPad1 -> 1; Key.Two, Key.NumPad2 -> 2; Key.Three, Key.NumPad3 -> 3; Key.Four, Key.NumPad4 -> 4
