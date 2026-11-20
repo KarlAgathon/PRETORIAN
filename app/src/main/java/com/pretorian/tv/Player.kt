@@ -286,7 +286,6 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     var videoH by remember { mutableIntStateOf(0) }
     var videoW by remember { mutableIntStateOf(0) }
     var fps by remember { mutableStateOf(0f) }
-    var bitrate by remember { mutableLongStateOf(0L) }
     var resUntil by remember { mutableLongStateOf(0L) }
     var channels by remember { mutableIntStateOf(0) }
     var liveGuide by remember { mutableStateOf<List<EpgItem>>(emptyList()) }
@@ -463,7 +462,6 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         }
         val a = object : androidx.media3.exoplayer.analytics.AnalyticsListener {
             override fun onBandwidthEstimate(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime, totalLoadTimeMs: Int, totalBytesLoaded: Long, bitrateEstimate: Long) {
-                bitrate = bitrateEstimate
                 // data used for Diagnostics: the bytes loaded since the last estimate (works for live TV too)
                 val it = items.getOrNull(index)
                 if (totalBytesLoaded > 0) Stats.bytes(if (s.live) "tv" else if (it?.season != null) "ser" else "mov", totalBytesLoaded)
@@ -1255,12 +1253,21 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             }
         }
         "info" -> Popup("Kvalitet i informacije", onDismiss = { dialog = if (s.live) "menu" else null }) {
-            val v = player.videoFormat; val a = player.audioFormat
-            OptionRow("Slika", R.drawable.lc_monitor, value = if (v != null) "${qualityLabel(v.height)} · ${v.width}×${v.height}" + (if (v.frameRate > 0) " · ${v.frameRate.toInt()} FPS" else "") else "—") {}
-            OptionRow("Video kodek", R.drawable.lc_file_video, value = v?.sampleMimeType?.substringAfter('/')?.uppercase() ?: "—") {}
-            OptionRow("Zvuk", R.drawable.lc_volume, value = if (a != null) "${a.sampleMimeType?.substringAfter('/')?.uppercase() ?: ""} · ${if (a.channelCount >= 6) "5.1" else if (a.channelCount == 1) "Mono" else "Stereo"}" else "—") {}
-            val br = v?.bitrate?.takeIf { it > 0 }?.toLong() ?: bitrate.takeIf { it > 0 }
-            OptionRow("Bitrate", R.drawable.lc_gauge2, value = br?.let { String.format(Locale.US, "%.1f Mbps", it / 1_000_000.0) } ?: "—") {}
+            val video = player.videoFormat
+            val audio = player.audioFormat
+            val picture = listOfNotNull(
+                video?.takeIf { it.width > 0 && it.height > 0 }?.let { "${it.width}×${it.height}" },
+                video?.frameRate?.takeIf { it > 0 }?.let { "${it} FPS" },
+            ).joinToString(" · ")
+            OptionRow("Slika", R.drawable.lc_monitor, value = picture.ifEmpty { "—" }) {}
+            OptionRow("Video kodek", R.drawable.lc_file_video, value = video?.sampleMimeType?.substringAfter('/')?.uppercase(Locale.ROOT) ?: "—") {}
+            val sound = listOfNotNull(
+                audio?.sampleMimeType?.substringAfter('/')?.uppercase(Locale.ROOT),
+                audio?.channelCount?.takeIf { it > 0 }?.let { "${it} ch" },
+            ).joinToString(" · ")
+            OptionRow("Zvuk", R.drawable.lc_volume, value = sound.ifEmpty { "—" }) {}
+            val videoBitrate = video?.bitrate?.takeIf { it > 0 }
+            OptionRow("Bitrate", R.drawable.lc_gauge2, value = videoBitrate?.let { String.format(Locale.US, "%.1f Mbps", it / 1_000_000.0) } ?: "—") {}
         }
     }
 
