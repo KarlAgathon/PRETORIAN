@@ -132,7 +132,7 @@ fun DawnShell(top: Screen, nav: Nav, content: @Composable () -> Unit) {
                 else -> listOf("▲▼" to "Navigacija", "OK" to "Odaberi", "Back" to "Nazad")
             }
             if (!menu) Box {
-                DawnHintBar(hints)
+                DawnHintBar(hints, preview = top == Screen.Tv && Dawn.previewBrowser)
                 if (top == Screen.Tv && Dawn.previewBrowser) Dawn.favoriteNotice?.let { added ->
                     Row(Modifier.align(Alignment.CenterEnd).padding(end = 18.dp).clip(Rnd(8.dp))
                         .background(Color(0xFF383B3E)).border(1.dp, Color.LightGray, Rnd(8.dp)).padding(6.dp),
@@ -147,12 +147,15 @@ fun DawnShell(top: Screen, nav: Nav, content: @Composable () -> Unit) {
 }
 
 @Composable
-fun DawnHintBar(hints: List<Pair<String, String>>) {
+fun DawnHintBar(hints: List<Pair<String, String>>, preview: Boolean = false) {
     Row(Modifier.fillMaxWidth().height(46.dp).padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(30.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically) {
         hints.forEach { (key, label) ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                Box(Modifier.clip(Rnd(6.dp)).border(1.dp, Color(0x99FFFFFF), Rnd(6.dp)).padding(horizontal = 7.dp, vertical = 1.dp)) {
+                if (preview && (key == "OK" || key == "Drži OK")) {
+                    Ico(if (key == "OK") R.drawable.lc_info else R.drawable.lc_star, 18.dp, Color.White)
+                    T(key, 13.sp, Color.White, FontWeight.SemiBold)
+                } else Box(Modifier.clip(Rnd(6.dp)).border(1.dp, Color(0x99FFFFFF), Rnd(6.dp)).padding(horizontal = 7.dp, vertical = 1.dp)) {
                     T(key, 13.sp, Color.White, FontWeight.SemiBold)
                 }
                 T(label, 15.sp, Color(0xFFD5DBE3))
