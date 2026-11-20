@@ -166,13 +166,6 @@ object Profiles {
         }
         return o
     }
-    /** after a restore: writes the other profiles' files and loads the current one */
-    fun restoreSnapshots(c: Context, o: JSONObject) {
-        val cur = current(c).id
-        o.keys().forEach { id -> if (id != cur) File(dir(c), "$id.json").writeText(o.getJSONObject(id).toString()) }
-        o.optJSONObject(cur)?.let { apply(c, it) }
-    }
-
     /** deletes the profile you are in: moves to [target] first, then removes it */
     fun deleteCurrentAndSwitch(c: Context, target: Profile) {
         val cur = current(c)
