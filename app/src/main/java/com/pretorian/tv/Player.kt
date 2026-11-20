@@ -1154,7 +1154,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             OptionRow("Odustani", R.drawable.lc_x) { dialog = "recent" }
         }
         "adelay" -> AudioDelayPopup(item.url) { dialog = null }
-        "ext" -> ExternalPicker(item.url, item.title, player.currentPosition, onDismiss = { dialog = null })
+        "ext" -> ExternalPicker(item.url, item.title, player.currentPosition, onDismiss = { dialog = null },
+            onBack = { dialog = if (s.live && moreSelection == "ext") "menu" else null })
         "subsync" -> {
             val base = remember { subFile }
             if (base == null) dialog = null

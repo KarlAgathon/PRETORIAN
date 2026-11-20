@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -105,11 +107,12 @@ fun AppIcon(d: android.graphics.drawable.Drawable?) {
 
 /** Choose the external player, once or always. */
 @Composable
-fun ExternalPicker(url: String, title: String, posMs: Long, onDismiss: () -> Unit) {
+fun ExternalPicker(url: String, title: String, posMs: Long, onDismiss: () -> Unit, onBack: () -> Unit = onDismiss) {
     val ctx = LocalContext.current
     val apps = remember { ExtPlayer.installed(ctx) }
     var selected by remember(url) { mutableStateOf<AppChoice?>(null) }
     var saved by remember { mutableStateOf(ExtPlayer.saved) }
+    var lastPackage by remember(url) { mutableStateOf<String?>(null) }
     val choice = selected
     if (choice != null) {
         fun launch(rememberChoice: Boolean) {
@@ -122,12 +125,17 @@ fun ExternalPicker(url: String, title: String, posMs: Long, onDismiss: () -> Uni
             OptionRow("Samo jednom", R.drawable.lc_play) { launch(false) }
             OptionRow("Zapamti moj izbor", R.drawable.lc_check) { launch(true) }
         }
-    } else Popup("Vanjski plejer", onDismiss) {
+    } else Popup("Vanjski plejer", onBack) {
+        val previousRow = remember { FocusRequester() }
+        LaunchedEffect(lastPackage) {
+            if (apps.any { it.pkg == lastPackage }) previousRow.tryFocus()
+        }
         OptionRow("Ugrađeni plejer", R.drawable.lc_play, value = if (saved.isEmpty()) "✓" else null) {
             ExtPlayer.saved = ""; onDismiss()
         }
         apps.forEach { app ->
-            Focusable(modifier = Modifier.fillMaxWidth().height(52.dp), onClick = { selected = app },
+            Focusable(modifier = Modifier.fillMaxWidth().height(52.dp), focusRequester = previousRow.takeIf { app.pkg == lastPackage },
+                onClick = { lastPackage = app.pkg; selected = app },
                 normal = C.Card, zoom = 1f) { _ ->
                 Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(14.dp)) {
