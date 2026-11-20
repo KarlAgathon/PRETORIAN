@@ -125,7 +125,9 @@ object Http {
 /** TMDB (posters, overview in the app language, cast, trailer) + OMDb (IMDb rating). */
 object Tmdb {
     private const val IMG = "https://image.tmdb.org/t/p/"
-    private val cache = HashMap<String, Meta?>()
+    private val cache = java.util.Collections.synchronizedMap(object : LinkedHashMap<String, Meta>(128, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Meta>?) = size > 128
+    })
 
     fun enabled() = Prefs.tmdbKey.isNotBlank()
 
@@ -144,7 +146,7 @@ object Tmdb {
     suspend fun find(rawTitle: String, tv: Boolean): Meta? = withContext(Dispatchers.IO) {
         if (!enabled()) return@withContext null
         val ck = "${if (tv) "tv" else "mv"}|$rawTitle|${metaLanguage()}"
-        if (cache.containsKey(ck)) return@withContext cache[ck]
+        cache[ck]?.let { return@withContext it }
         val (title, year) = cleanTitle(rawTitle)
         val lang = metaLanguage()
         val kind = if (tv) "tv" else "movie"
@@ -152,7 +154,7 @@ object Tmdb {
         if (year != null) q += if (tv) "&first_air_date_year=$year" else "&year=$year"
         var results = get("/search/$kind", q).optJSONArray("results")
         if ((results == null || results.length() == 0) && year != null) results = get("/search/$kind", "query=${Net.enc(title)}&language=$lang").optJSONArray("results")
-        val first = results?.optJSONObject(0) ?: run { cache[ck] = null; return@withContext null }
+        val first = results?.optJSONObject(0) ?: return@withContext null
         val id = first.optInt("id")
         val d = get("/$kind/$id", "language=$lang&append_to_response=credits,videos,external_ids,watch/providers")
         var overview = d.str("overview").orNullIfBlank()

@@ -148,7 +148,7 @@ object Updater {
         paused = false; pauseReq = false
         try {
             if (Prefs.str("upd_pre", "").split(',').contains("backup")) {
-                val saved = withContext(Dispatchers.IO) { backupBefore(ctx, "prije-${info.name}") }
+                val saved = withContext(Dispatchers.IO) { backupBefore(ctx, "prije-${info.name}") } // i18n-ignore
                 if (!saved) throw IOException(tr("Backup nije spremljen"))
             }
             UpdLog.add(trf("Instalacija %s pokrenuta", info.name))

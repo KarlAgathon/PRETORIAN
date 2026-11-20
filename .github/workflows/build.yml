@@ -30,8 +30,10 @@ jobs:
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
         env:
           KS: ${{ secrets.LEAD_KEYSTORE_B64 }}
+          KEY_PASSWORD: ${{ secrets.LEAD_KEY_PASSWORD }}
         run: |
           if [ -z "$KS" ]; then echo "::error::Secret LEAD_KEYSTORE_B64 is missing"; exit 1; fi
+          if [ -z "$KEY_PASSWORD" ]; then echo "::error::Signing password is missing"; exit 1; fi
           echo "$KS" | base64 -d > app/release.keystore
       - name: Translation check
         run: python3 tools/check_i18n.py

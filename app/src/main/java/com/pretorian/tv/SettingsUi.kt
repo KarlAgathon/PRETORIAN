@@ -1390,7 +1390,7 @@ private val SEARCH_INDEX = listOf(
     "appearance" to "Izgled, tema, boja, veličina, ikone, mod programa, Lite, Full, oblik ivica, jezik, meniji, opisi filmova, prevod",
     "sport" to "Sports Center, sport, sportovi, takmičenja, država, reprezentacije, timovi, ko prenosi, AI pretraga, rezultati",
     "notifications" to "Podsjetnici, obavijest, utakmica, emisija, zvuk obavijesti, čuvar ekrana, sat, datum, pauzirano",
-    "system" to "Dijagnostika, brzina interneta, VPN, protok, gledano, uptime, keš, zapis ažuriranja, zapis streama, backup, vraćanje, USB, fajl, Download, automatski backup, vrati na početak, ažuriranje, nova verzija, stable, kanal, potpis, vrati prethodnu verziju, o aplikaciji, uređaj, kontakt, licence, privatnost, pomoć",
+    "system" to "Dijagnostika, brzina interneta, VPN, protok, gledano, uptime, keš, zapis ažuriranja, zapis streama, backup, vraćanje, USB, fajl, Download, automatski backup, vrati na početak, ažuriranje, nova verzija, beta, stable, kanal, potpis, vrati prethodnu verziju, o aplikaciji, uređaj, kontakt, licence, privatnost, pomoć",
 )
 
 @Composable

@@ -67,7 +67,7 @@ object Backup {
         }
         val files = JSONObject()
         if (parts == null || 5 in parts) listOf("progress.json").forEach { n -> File(ctx.filesDir, n).takeIf { it.exists() }?.let { files.put(n, it.readText()) } }
-        val out = JSONObject().put("prefs", p).put("files", files).put("full", parts == null)
+        val out = JSONObject().put("prefs", p).put("files", files).put("full", parts == null) // i18n-ignore
         if (parts != null) out.put("parts", org.json.JSONArray(parts.toList()))
         if (parts == null || 3 in parts) out.put("profiles", Profiles.allSnapshots(ctx).also { profiles ->
             for (id in profiles.keys()) {
@@ -123,7 +123,7 @@ object Backup {
             } catch (e: Exception) { throw IllegalArgumentException(tr("Pogrešna lozinka")) }
         } else o.getJSONObject("data")
         val p = data.getJSONObject("prefs")
-        val full = data.optBoolean("full", false)
+        val full = data.optBoolean("full", false) // i18n-ignore
         val selection = data.optJSONArray("parts")?.let { array ->
             (0 until array.length()).map { array.getInt(it) }.toSet()
         }
