@@ -297,6 +297,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     fun inform(message: String) { notice = message; noticeSequence++ }
     LaunchedEffect(noticeSequence) { if (notice != null) { delay(1500); notice = null } }
     var dialog by remember { mutableStateOf<String?>(null) }   // menu, audio, subs, info, fav, ext
+
     var side by remember { mutableStateOf<String?>(null) }     // channels, groups, epg (live only)
     // the player owns the focus: a left menu that held it before must not block the lists here
     remember { Chrome.inRail = false; 0 }
@@ -314,6 +315,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     val step = Prefs.seekStep * 1000L
     val focus = remember { FocusRequester() }
     val item = items.getOrElse(index) { items.first() }
+    var moreSelection by remember(item.url) { mutableStateOf<String?>(null) }
+    LaunchedEffect(dialog) { if (dialog == null) moreSelection = null }
     val p = item.channel?.let { Store.byId(ctx, it.pid) } ?: Store.ownerOf(ctx, item.url) ?: Store.active(ctx)
 
     /** audio / built-in subtitle picked on the movie page, applied when the stream's tracks are known */
@@ -1068,19 +1071,39 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             }
         }
         "menu" -> Popup(if (s.live) tr("Više") else item.title, onDismiss = { dialog = null }) {
-            if (s.live && tracksOf(player, MC.TRACK_TYPE_TEXT).isNotEmpty()) OptionRow("Titlovi", R.drawable.lc_captions) { dialog = "subs" }
-            if (tracksOf(player, MC.TRACK_TYPE_AUDIO).size > 1) OptionRow("Audio", R.drawable.lc_volume, value = tracksOf(player, MC.TRACK_TYPE_AUDIO).firstOrNull { it.selected }?.label ?: "—") { dialog = "audio" }
+            val returnFocus = remember { FocusRequester() }
+            val menuSubs = "subs"
+            val menuAudio = "audio"
+            val menuSleep = "sleep"
+            val menuInfo = "info"
+            val menuEpgshift = "epgshift"
+            val menuExt = "ext"
+            val menuTimeshift = "timeshift"
+            val menuAdelay = "adelay"
+            fun requester(id: String) = returnFocus.takeIf { s.live && moreSelection == id }
+            LaunchedEffect(Unit) { if (s.live && moreSelection != null) returnFocus.tryFocus() }
+
+            if (s.live && tracksOf(player, MC.TRACK_TYPE_TEXT).isNotEmpty()) OptionRow("Titlovi", R.drawable.lc_captions,
+                focusRequester = requester(menuSubs)) { moreSelection = menuSubs; dialog = menuSubs }
+            if (tracksOf(player, MC.TRACK_TYPE_AUDIO).size > 1) OptionRow("Audio", R.drawable.lc_volume, value = tracksOf(player, MC.TRACK_TYPE_AUDIO).firstOrNull { it.selected }?.label ?: "—",
+                focusRequester = requester(menuAudio)) { moreSelection = menuAudio; dialog = menuAudio }
             // Više: the rarer things, so the bar fits in one row
-            OptionRow(if (Sleep.until > 0) trf("Tajmer: %s min", ((Sleep.until - System.currentTimeMillis()) / 60_000 + 1).coerceAtLeast(1)) else tr("Tajmer za spavanje"), R.drawable.lc_moon) { dialog = "sleep" }
-            OptionRow("Kvalitet i informacije", R.drawable.lc_info, value = if (videoH > 0) qualityLabel(videoH) else null) { dialog = "info" }
-            if (s.live) item.channel?.let { c -> OptionRow("Upravljanje EPG vodičem", R.drawable.lc_clock, value = EpgShift.label(EpgShift.chMin(c.url))) { dialog = "epgshift" } }
-            OptionRow("Vanjski plejer", R.drawable.lc_external_link) { saveProgress(); dialog = "ext" }
-            if (s.live && player.isCurrentMediaItemLive && player.isCurrentMediaItemSeekable && duration > 0) OptionRow("Vremenski pomak uživo", R.drawable.lc_history) { dialog = "timeshift" }
+            OptionRow(if (Sleep.until > 0) trf("Tajmer: %s min", ((Sleep.until - System.currentTimeMillis()) / 60_000 + 1).coerceAtLeast(1)) else tr("Tajmer za spavanje"), R.drawable.lc_moon,
+                focusRequester = requester(menuSleep)) { moreSelection = menuSleep; dialog = menuSleep }
+            OptionRow("Kvalitet i informacije", R.drawable.lc_info, value = if (videoH > 0) qualityLabel(videoH) else null,
+                focusRequester = requester(menuInfo)) { moreSelection = menuInfo; dialog = menuInfo }
+            if (s.live) item.channel?.let { c -> OptionRow("Upravljanje EPG vodičem", R.drawable.lc_clock, value = EpgShift.label(EpgShift.chMin(c.url)),
+                focusRequester = requester(menuEpgshift)) { moreSelection = menuEpgshift; dialog = menuEpgshift } }
+            OptionRow("Vanjski plejer", R.drawable.lc_external_link,
+                focusRequester = requester(menuExt)) { saveProgress(); moreSelection = menuExt; dialog = menuExt }
+            if (s.live && player.isCurrentMediaItemLive && player.isCurrentMediaItemSeekable && duration > 0) OptionRow("Vremenski pomak uživo", R.drawable.lc_history,
+                focusRequester = requester(menuTimeshift)) { moreSelection = menuTimeshift; dialog = menuTimeshift }
             if (!s.live && subFile != null) OptionRow("Podesi vrijeme titla", R.drawable.lc_clock, sub = "ako titl kasni ili žuri · SYNC") { dialog = "subsync" }
-            if (Tech.audioDelay) OptionRow("Pomak zvuka", R.drawable.lc_volume, sub = tr("ako zvuk kasni ili žuri"), value = AudioDelay.label(AudioDelay.of(item.url))) { dialog = "adelay" }
+            if (Tech.audioDelay) OptionRow("Pomak zvuka", R.drawable.lc_volume, sub = tr("ako zvuk kasni ili žuri"), value = AudioDelay.label(AudioDelay.of(item.url)),
+                focusRequester = requester(menuAdelay)) { moreSelection = menuAdelay; dialog = menuAdelay }
         }
         "fav" -> item.channel?.let { FavPicker(it) { dialog = null } }
-        "epgshift" -> item.channel?.let { EpgShiftPopup(it) { dialog = null } }
+        "epgshift" -> item.channel?.let { EpgShiftPopup(it) { dialog = if (s.live && moreSelection == "epgshift") "menu" else null } }
         "zoom" -> Popup("Format slike", onDismiss = { dialog = null }, width = 760.dp) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(0 to "Automatski / original", 3 to "Fit", 5 to "Zoom", 4 to "Rastegni").forEach { (mode, label) ->
