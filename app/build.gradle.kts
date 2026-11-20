@@ -64,6 +64,7 @@ dependencies {
     implementation("com.google.zxing:core:3.5.3")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.14.1")
     implementation("androidx.media3:media3-exoplayer:1.5.0")
     implementation("androidx.media3:media3-exoplayer-hls:1.5.0")
     implementation("androidx.media3:media3-ui:1.5.0")
