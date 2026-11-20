@@ -1402,7 +1402,7 @@ private fun SideLists(mode: String, sideGroup: GroupRef?, items: List<PlayItem>,
                             Focusable(modifier = Modifier.fillMaxWidth().height(Rows.group), onClick = { onGroup(g) },
                                 focusRequester = if (i == target) fr else null,
                                 normal = if (sel) C.CardFocus else Color.Transparent, zoom = 1f) { _ ->
-                                T(g.cat.name, 15.sp, C.Text, if (sel) FontWeight.Bold else FontWeight.Normal,
+                                T(tvGroupLabel(g.cat.name), 15.sp, C.Text, if (sel) FontWeight.Bold else FontWeight.Normal,
                                     modifier = Modifier.align(Alignment.CenterStart).padding(horizontal = 12.dp))
                             }
                         }

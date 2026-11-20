@@ -148,6 +148,11 @@ const val ALL_GROUP = "__all__"
 private const val UNIFIED_FAVORITES = "__all_favorites__"
 const val RECENT_GROUP = "__recent__"
 
+internal fun tvGroupLabel(name: String): String {
+    if (name.codePointCount(0, name.length) <= 11) return name
+    return name.substring(0, name.offsetByCodePoints(0, 10)) + "."
+}
+
 suspend fun channelsOf(ctx: android.content.Context, ref: GroupRef): List<Channel> {
     if (ref.cat.id == RECENT_GROUP) return Recent.list().map { it.ch }
     if (ref.cat.id == UNIFIED_FAVORITES) return Favs.lists(ctx).flatMap { Favs.channels(it.id) }.distinctBy { it.url }
@@ -264,10 +269,20 @@ fun GroupColumn(
                                 ) { gf ->
                                     Row(Modifier.fillMaxSize().padding(horizontal = if (Look.dawn) 20.dp else 12.dp), verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        if (Look.dawn) T(if (g.cat.name.length > 11) g.cat.name.take(10) + "." else g.cat.name, 18.sp, Color.White, if (gf) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, modifier = Modifier.weight(1f))
-                                        else {
-                                        if (selected) Dot(C.Red, 7.dp)
-                                        if (width > 100.dp) T(g.cat.name, if (classicStyle) 13.sp else Rows.font, if (selected) C.Text else C.Soft, if (selected) FontWeight.Bold else FontWeight.Normal, maxLines = 1, modifier = Modifier.weight(1f)) else Ico(R.drawable.lc_layers, 18.dp, if (selected) C.Text else C.Muted)
+                                        val label = tvGroupLabel(g.cat.name)
+                                        if (Look.dawn) {
+                                            val icon = when (g.cat.id) {
+                                                RECENT_GROUP -> R.drawable.lc_history
+                                                UNIFIED_FAVORITES -> R.drawable.lc_star
+                                                ALL_GROUP -> R.drawable.lc_list
+                                                else -> R.drawable.lc_tv
+                                            }
+                                            Ico(icon, 18.dp, Color.White)
+                                            T(label, 18.sp, Color.White, if (gf) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, modifier = Modifier.weight(1f))
+                                            Ico(R.drawable.lc_chevron_right, 16.dp, Color.White)
+                                        } else {
+                                            if (selected) Dot(C.Red, 7.dp)
+                                            if (width > 100.dp) T(label, if (classicStyle) 13.sp else Rows.font, if (selected) C.Text else C.Soft, if (selected) FontWeight.Bold else FontWeight.Normal, maxLines = 1, modifier = Modifier.weight(1f)) else Ico(R.drawable.lc_layers, 18.dp, if (selected) C.Text else C.Muted)
                                         }
                                         if (locked) Ico(R.drawable.lc_lock, 15.dp, C.Muted)
                                     }
