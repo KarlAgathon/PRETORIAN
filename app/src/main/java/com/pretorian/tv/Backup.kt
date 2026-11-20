@@ -129,14 +129,18 @@ object Backup {
         val selection = data.optJSONArray("parts")?.let { array ->
             (0 until array.length()).map { array.getInt(it) }.toSet()
         }
-        val ed = prefs(ctx).edit()
-        if (full) prefs(ctx).all.keys.filter(::portable).forEach { ed.remove(it) }
+        require(!full || selection == null)
+        val store = prefs(ctx)
+        val original = store.all
+        val ed = store.edit()
+        if (full) original.keys.filter(::portable).forEach { ed.remove(it) }
         p.keys().forEach { k ->
             if (!included(k, selection)) return@forEach
             val v = p.getJSONObject(k)
-            when (v.str("t")) {
-                "s" -> ed.putString(k, v.str("v")); "b" -> ed.putBoolean(k, v.optBoolean("v"))
-                "i" -> ed.putInt(k, v.optInt("v")); "l" -> ed.putLong(k, v.optLong("v")); "f" -> ed.putFloat(k, v.optDouble("v").toFloat())
+            when (v.getString("t")) {
+                "s" -> ed.putString(k, v.getString("v")); "b" -> ed.putBoolean(k, v.getBoolean("v"))
+                "i" -> ed.putInt(k, v.getInt("v")); "l" -> ed.putLong(k, v.getLong("v")); "f" -> ed.putFloat(k, v.getDouble("v").toFloat())
+                else -> throw IllegalArgumentException(tr("Fajl nije PRETORIAN backup"))
             }
         }
         val writes = mutableMapOf<File, String>()
@@ -174,7 +178,24 @@ object Backup {
                 changed.add(file)
                 file.writeText(contents)
             }
-            check(ed.commit())
+            if (!ed.commit()) {
+                // SharedPreferences updates its in-memory map even when writing to disk fails.
+                val rollback = store.edit()
+                (p.keys().asSequence().toSet() + if (full) original.keys else emptySet())
+                    .filter { included(it, selection) }.forEach { k ->
+                        when (val value = original[k]) {
+                            null -> rollback.remove(k)
+                            is String -> rollback.putString(k, value)
+                            is Boolean -> rollback.putBoolean(k, value)
+                            is Int -> rollback.putInt(k, value)
+                            is Long -> rollback.putLong(k, value)
+                            is Float -> rollback.putFloat(k, value)
+                            is Set<*> -> rollback.putStringSet(k, value.filterIsInstance<String>().toSet())
+                        }
+                    }
+                rollback.commit()
+                throw java.io.IOException(tr("Fajl nije PRETORIAN backup"))
+            }
         } catch (failure: Exception) {
             changed.asReversed().forEach { file ->
                 runCatching { previous[file]?.let { file.writeBytes(it) } ?: file.delete() }
