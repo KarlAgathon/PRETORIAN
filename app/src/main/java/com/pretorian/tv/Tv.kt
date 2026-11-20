@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyRow
@@ -1249,7 +1250,7 @@ fun EpgList(ch: Channel, limit: Int = 12, modifier: Modifier = Modifier, compact
 @Composable
 fun Bell(count: Int) {
     if (count <= 0) return
-    Box(Modifier.size(18.dp).clip(CircleShape).background(C.Danger), contentAlignment = Alignment.Center) {
+    Box(Modifier.height(18.dp).widthIn(min = 18.dp).clip(CircleShape).background(C.Danger).padding(horizontal = 3.dp), contentAlignment = Alignment.Center) {
         T(if (count > 99) "99+" else "$count", 10.sp, Color.White, FontWeight.Bold)
     }
 }

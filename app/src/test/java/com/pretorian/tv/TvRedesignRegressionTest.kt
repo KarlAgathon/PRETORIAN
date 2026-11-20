@@ -15,6 +15,13 @@ class TvRedesignRegressionTest {
 
     @Before fun setup() { Prefs.init(RuntimeEnvironment.getApplication()) }
 
+    @Test fun sportsEventsStayOutOfGeneralNotifications() {
+        val before = Notes.unread()
+        Notes.add("sport", "Goal", "test-goal")
+        assertEquals(before, Notes.unread())
+        assertFalse(Notes.list.any { it.id == "test-goal" })
+    }
+
     @Test fun playlistExpiryCountsCalendarDaysAcrossSpringClockChange() {
         val zone = java.util.TimeZone.getTimeZone("Europe/Berlin")
         val calendar = java.util.Calendar.getInstance(zone)

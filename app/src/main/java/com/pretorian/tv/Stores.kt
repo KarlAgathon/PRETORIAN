@@ -398,7 +398,7 @@ object Notes {
 
     fun add(kind: String, text: String, id: String = "$kind:${System.currentTimeMillis()}") {
         load()
-        if (!Prefs.bool("general_notes", true) || list.any { it.id == id }) return
+        if (kind == "sport" || !Prefs.bool("general_notes", true) || list.any { it.id == id }) return
         if (kind == "update") list.removeAll { it.kind == "update" }   // only the newest version is announced
         list.add(0, Note(id, kind, text, System.currentTimeMillis(), false)); save()
     }
