@@ -155,7 +155,7 @@ fun DawnHintBar(hints: List<Pair<String, String>>, preview: Boolean = false) {
                 if (preview && (key == "OK" || key == "Drži OK")) {
                     Ico(if (key == "OK") R.drawable.lc_info else R.drawable.lc_star, 18.dp, Color.White)
                     T(key, 13.sp, Color.White, FontWeight.SemiBold)
-                } else Box(Modifier.clip(Rnd(6.dp)).border(1.dp, Color(0x99FFFFFF), Rnd(6.dp)).padding(horizontal = 7.dp, vertical = 1.dp)) {
+                } else if (key.isNotEmpty()) Box(Modifier.clip(Rnd(6.dp)).border(1.dp, Color(0x99FFFFFF), Rnd(6.dp)).padding(horizontal = 7.dp, vertical = 1.dp)) {
                     T(key, 13.sp, Color.White, FontWeight.SemiBold)
                 }
                 T(label, 15.sp, Color(0xFFD5DBE3))

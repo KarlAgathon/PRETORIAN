@@ -75,7 +75,7 @@ import java.io.File
 import androidx.media3.common.C as MC
 
 @OptIn(UnstableApi::class)
-fun buildPlayer(ctx: Context, preview: Boolean = false): ExoPlayer {
+fun buildPlayer(ctx: Context, preview: Boolean = false, live: Boolean = false): ExoPlayer {
     val http = DefaultHttpDataSource.Factory()
         .setUserAgent(Net.UA)
         .setAllowCrossProtocolRedirects(true)
@@ -115,6 +115,7 @@ fun buildPlayer(ctx: Context, preview: Boolean = false): ExoPlayer {
             mb >= 96 -> lc.setBufferDurationsMs(30_000, 120_000, 3_000, 6_000)
             else -> {}
         }
+        if (live) lc.setBackBuffer(Prefs.long("live_back_buffer_s", 0L).coerceIn(0L, 15L).toInt() * 1000, false)
         builder.setLoadControl(lc.build())
     }
     val player = builder.build()
@@ -306,7 +307,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     var subFile by remember { mutableStateOf(s.items.getOrNull(index)?.subFile) }
     // picture format: 0 Auto, 1 4:3, 2 16:9, 3 Fit, 4 Stretch, 5 Original — remembered per channel
     var resize by remember { mutableIntStateOf(0) }
-    val player = remember { Preview.stop(); buildPlayer(ctx) }
+    val player = remember { Preview.stop(); buildPlayer(ctx, live = s.live) }
     val playerScope = rememberCoroutineScope()
     val mediaRequest = remember { PlaybackRequest() }
     val readyOnce = remember { booleanArrayOf(false) }   // the stream played since it was (re)loaded
@@ -921,7 +922,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 ChannelLogo(item.logo, item.title)
                 Column(Modifier.weight(1f)) {
                     T(listOfNotNull(item.subtitle, item.title).joinToString("  "), 20.sp, Color.White, FontWeight.Bold)
-                    current?.let { T(it.title, 15.sp, Color.White); ThinBar(it.progress(time.time), C.Red, Modifier.width(160.dp)) }
+                    current?.let { T(it.title + "  ·  " + it.times(), 15.sp, Color.White); ThinBar(it.progress(time.time), C.Red, Modifier.width(160.dp)) }
                     if (bar) liveGuide.firstOrNull { it.start > time.time }?.let { T(tr("Zatim") + " · " + it.title, 13.sp, Color.LightGray) }
                 }
                 T("UŽIVO", 13.sp, Color.White)
@@ -1061,6 +1062,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         }
     }
 
+    val timeshiftMenu = "timeshift"
     when (dialog) {
         "archive" -> item.channel?.let { channel ->
             var day by remember(channel.url) { mutableIntStateOf(0) }
@@ -1143,6 +1145,19 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 OptionRow("Premotavanje unazad") { player.seekTo((player.currentPosition - step).coerceAtLeast(0)) }
                 OptionRow("Premotaj unaprijed") { player.seekTo((player.currentPosition + step).coerceAtMost(duration)) }
                 OptionRow("Vrati se na prijenos uživo") { player.seekToDefaultPosition(); player.play() }
+                OptionRow("Postavke vremenskog pomaka", R.drawable.lc_settings) { dialog = "timeshiftSettings" }
+
+            }
+        }
+        "timeshiftSettings" -> Popup("Postavke vremenskog pomaka", { dialog = timeshiftMenu }) {
+            T("Trajanje međuspremnika u RAM-u pri sljedećem otvaranju plejera", 14.sp, C.Soft)
+            val seconds = Prefs.long("live_back_buffer_s", 0L)
+            for (durationSeconds in listOf(0L, 5L, 10L, 15L)) {
+                OptionRow(if (durationSeconds == 0L) tr("Isključeno") else trf("%s s", durationSeconds),
+                    selected = seconds == durationSeconds) {
+                    Prefs.put("live_back_buffer_s", durationSeconds)
+                    dialog = timeshiftMenu
+                }
             }
         }
         "recent" -> {
@@ -1388,7 +1403,7 @@ private fun SideLists(mode: String, sideGroup: GroupRef?, items: List<PlayItem>,
             }, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (mode == "groups") {
                 T("Grupe", 20.sp, C.Text, FontWeight.Bold)
-                val rows by load(Favs.rev) { groupRows(ctx).mapNotNull { (it as? GRow.Group)?.ref } }
+                val rows by load(Favs.rev) { groupRows(ctx, allPlaylists = true).mapNotNull { (it as? GRow.Group)?.ref } }
                 when (val s = rows) {
                     is Load.Ok -> {
                         // the current group may be far down the list: scroll to it first, else the focus has nowhere to go (stuck panel)

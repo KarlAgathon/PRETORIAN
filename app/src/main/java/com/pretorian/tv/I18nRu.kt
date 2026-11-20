@@ -2,6 +2,9 @@ package com.pretorian.tv
 
 /** Russian: one line per text, "bosnian|russian" (kept apart so the 10-column table and its tools stay as they are). */
 internal val RU_TABLE = """
+U omiljenim|В избранном
+Postavke vremenskog pomaka|Настройки отложенного просмотра
+Trajanje međuspremnika u RAM-u pri sljedećem otvaranju plejera|Длительность буфера перемотки в оперативной памяти при следующем открытии плеера
 Playlista je istekla. Obratite se svom pružaocu usluge.|Срок действия плейлиста истёк. Обратитесь к провайдеру.
 Otvori pomoću %s?|Открыть с помощью %s?
 Zapamti moj izbor|Запомнить мой выбор
