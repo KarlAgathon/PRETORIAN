@@ -155,7 +155,7 @@ object Watch {
 
     fun get(ctx: Context, url: String): Progress? = all(ctx)[url]
 
-    fun save(ctx: Context, current: Progress, next: Progress?, background: Boolean) {
+    fun save(ctx: Context, current: Progress, next: Progress? = null, background: Boolean = false) {
         val entries = all(ctx)
         entries[current.url] = current
         if (next != null) entries[next.url] = next
