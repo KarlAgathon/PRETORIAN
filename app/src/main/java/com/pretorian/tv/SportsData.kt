@@ -226,7 +226,7 @@ object Sports {
         val det = comp.optJSONArray("details")?.let { d -> (0 until d.length()).mapNotNull { d.optJSONObject(it) }.mapNotNull { x ->
             val t = x.optJSONObject("type")?.str("text")?.lowercase() ?: ""
             val kind = when { x.optBoolean("redCard") || t.contains("red") -> "red"; x.optBoolean("yellowCard") || t.contains("yellow") -> "yellow"
-                x.optBoolean("scoringPlay") || t.contains("goal") -> "goal"; else -> return@mapNotNull null }
+                x.optBoolean("scoringPlay") || t.contains("goal") -> "goal"; t.contains("penalty awarded") -> "penalty"; else -> return@mapNotNull null }
             val who = x.optJSONArray("athletesInvolved")?.optJSONObject(0)?.str("displayName") ?: ""
             val min = x.optJSONObject("clock")?.str("displayValue") ?: ""
             MatchDetail(if (x.optJSONObject("team")?.str("id") == homeId) "h" else "a", kind + (if (x.optBoolean("penaltyKick")) "_pen" else "") + (if (x.optBoolean("ownGoal")) "_og" else ""), min, who)
@@ -253,7 +253,7 @@ object Sports {
     private val failures = java.util.concurrent.ConcurrentHashMap<String, Int>()
     private val cooldown = java.util.concurrent.ConcurrentHashMap<String, Long>()
     @Volatile private var rateLimitUntil = 0L
-    fun feedDelayed() = System.currentTimeMillis().let { now -> rateLimitUntil > now || cooldown.isNotEmpty() }
+    fun feedDelayed() = System.currentTimeMillis().let { now -> rateLimitUntil > now || cooldown.values.any { it >= now - 60_000L } }
 
     private fun cacheFile(lg: League, date: String) = Repo.diskDir?.resolve("sports-feeds")?.resolve(lg.path.replace('/', '_') + "_" + date + ".json")
 
@@ -265,7 +265,7 @@ object Sports {
 
     private suspend fun espn(lg: League, date: String): List<SportEvent> {
         val key = lg.path + date
-        return locks[Math.floorMod(key.hashCode(), locks.size)].withLock {
+        return locks[(key.hashCode() and Int.MAX_VALUE) % locks.size].withLock {
             val file = cacheFile(lg, date)
             val now = System.currentTimeMillis()
             val ttl = if ('-' in date) 20 * 60_000L else if (date < espnDate(dayStart(-1))) 6 * 3600_000L else 50_000L
@@ -401,7 +401,7 @@ object Sports {
     private val guideLock = kotlinx.coroutines.sync.Mutex()
     suspend fun guide(ctx: android.content.Context, pls: List<Playlist>): Guide = guideLock.withLock { guideNow(ctx, pls) }
     private suspend fun guideNow(ctx: android.content.Context, pls: List<Playlist>): Guide = withContext(Dispatchers.IO) {
-        val key = pls.joinToString(",") { it.id }
+        val key = pls.joinToString(",") { it.id } + "|" + EpgSources.urls(null).joinToString("|").hashCode()
         val cur = guideData
         if (guideFor == key && cur != null && System.currentTimeMillis() - guideAt < 3 * 3600_000L) return@withContext cur
         val all = pls.flatMap { p -> try { Repo.allChannels(p) } catch (e: Exception) { emptyList() } }
@@ -605,10 +605,10 @@ object Sports {
             if (ev.home == null || ev.away == null) {
                 // races: guide titles with "Formula 1" / "Grand Prix" around the start
                 if (ev.sport != "f1") return@map ev
-                val hits = near(ev.start, 90 * 60_000L).filter {
+                val hits = near(ev.start, 90 * 60_000L).filterNot { REPLAY.containsMatchIn(it.title) }.filter {
                     nt(it).let { t -> t.contains("formula") || t.contains("grand prix") || t.contains(" f1") || t.startsWith("f1") } }
                 used.addAll(hits)
-                return@map ev.copy(channels = hits.flatMap { chans[it.channel] ?: emptyList() }.distinctBy { it.url })
+                return@map ev.copy(ai = hits.flatMap { chans[it.channel] ?: emptyList() }.distinctBy { it.url })
             }
             val th = tokens(ev.home.name); val ta = tokens(ev.away.name)
             val window = near(ev.start, 75 * 60_000L).filterNot { REPLAY.containsMatchIn(it.title) }

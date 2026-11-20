@@ -186,12 +186,18 @@ object GoalNote {
             if (team && e.state == "pre" && java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date(e.start)) == today)
                 send("today", e, "🕘 " + tr("Danas igra tvoj tim") + " · " + name + " · " +
                     java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(e.start)), "sp:${e.id}:today")  // i18n-ignore
+            if (e.stale || e.state == CACHED_SCORE || e.fromGuide) return@forEach
             val reds = e.details.count { it.kind.startsWith("red") }
             val ph = phase(e)
-            val now = sc + "|" + reds + "|" + ph
+            val penalties = e.details.count { it.kind.contains("_pen") || it.kind == "penalty" }
+            val now = sc + "|" + reds + "|" + ph + "|" + penalties
             val old = last.put(e.id, now) ?: return@forEach
             val (oSc, oRed, oPh) = old.split('|').let { Triple(it[0], it.getOrNull(1)?.toIntOrNull() ?: 0, it.getOrNull(2) ?: "") }
-            if (e.sport == "football" && oSc != sc && "–" !in oSc && "–" !in sc && ph != "end" && e.details.any { it.kind.startsWith("goal") }) {
+            val oldTotal = oSc.split(':').mapNotNull { it.toIntOrNull() }
+            val newTotal = sc.split(':').mapNotNull { it.toIntOrNull() }
+            if (penalties > (old.substringAfterLast('|').toIntOrNull() ?: 0))
+                send("pen", e, tr("Penali") + " · " + board, "sp:${e.id}:pen:$penalties") // i18n-ignore
+            if (e.sport == "football" && oldTotal.size == 2 && newTotal.size == 2 && newTotal.sum() > oldTotal.sum() && ph != "end") {
                 val g = e.details.lastOrNull { it.kind.startsWith("goal") }
                 send("goal", e, "⚽ " + tr("GOL") + " · " + board + (g?.let { " · " + it.minute + " " + it.player } ?: ""), "sp:${e.id}:g:$sc")  // i18n-ignore
             }
@@ -474,8 +480,10 @@ fun SportMixScreen(nav: Nav) {
             if (delayed) T("Osvježavanje nije uspjelo", 13.sp, Color.LightGray)
             val updated = (if (shown.any { it.state == CACHED_SCORE }) shown.filter { it.state == CACHED_SCORE }.minOfOrNull { it.observedAt } else shown.maxOfOrNull { it.observedAt }) ?: 0
             if (updated > 0) T((if (shown.any { it.state == CACHED_SCORE }) tr("Zadnji podaci") else tr("Osvježavanje")) + " · " + java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT).format(java.util.Date(updated)), 12.sp, Color.LightGray)
-            val next = if (tab == "all") shown.filter { it.state == "pre" && it.start > System.currentTimeMillis() }
-                .minWithOrNull(compareBy({ !fav(it) }, { it.start })) else null
+            val next = remember(shown, tick, tab) {
+                if (tab == "all") shown.filter { it.state == "pre" && it.start > System.currentTimeMillis() }
+                    .minWithOrNull(compareBy({ !fav(it) }, { it.start })) else null
+            }
             if (next != null) Chip2(tr("Sljedeća utakmica") + " · " + next.title + " · " + whenShort(next.start), false) { sel = next.id; jumpTick++ }
             if (loading && shown.isEmpty()) Loading("Učitavam utakmice…")
             else if (shown.isEmpty()) Message(when (tab) { ALL_MATCHES -> "Nema rezultata"; "live" -> "Trenutno nema utakmica uživo"; "soon" -> "Nema utakmica uskoro"; "mine" -> "Ne pratiš nijednu utakmicu · dugi OK na utakmicu › Prati"; "fav" -> "Nema utakmica tvojih favorita u idućih 10 dana · ＋ Države ili ＋ Timovi"; else -> "Nema završenih utakmica" })
@@ -494,7 +502,7 @@ fun SportMixScreen(nav: Nav) {
             }
         }
         // ------------------------------------------------ right: small screen (only after a channel is chosen) and the match
-        Column(Modifier.width(420.dp).fillMaxHeight().background(Color(0xFF181818), Rnd(4.dp)).verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(12.dp).onFocusChanged { rightFocus = it.hasFocus },
+        Column(Modifier.weight(0.92f).fillMaxHeight().background(Color(0xFF181818), Rnd(4.dp)).verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(12.dp).onFocusChanged { rightFocus = it.hasFocus },
             verticalArrangement = Arrangement.spacedBy(10.dp)) {
             val pc = playing
             if (pc != null) Focusable(onClick = { SportUi.back = "preview"; ev?.let { playMatch(nav, it, pc) } ?: playChannels(nav, listOf(pc), 0) }, onLongClick = null, focusRequester = previewFr, shape = Rnd(14.dp),
@@ -710,6 +718,7 @@ private fun MatchCard(e: SportEvent, playing: Channel?, playingFr: FocusRequeste
             }
         } else T(e.title, 17.sp, Color.White, FontWeight.Bold, maxLines = 2)
         if (e.state == CACHED_SCORE) T("Zadnji podaci", 13.sp, Color.LightGray)
+        if (e.state != "pre") T(whenLong(e.start), 12.sp, Color.LightGray)
         if (e.state == "pre") T(whenLong(e.start), 13.sp, Color.White, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.fillMaxWidth(), align = androidx.compose.ui.text.style.TextAlign.Center)
         T(listOfNotNull(if (e.onAir) "📺 " + tr(if (e.replay) "SNIMAK" else "NA TV") else if (e.state == "in") "● " + (e.clock ?: tr("UŽIVO")) else null, e.league, e.round).joinToString(" · "), 11.sp,  // i18n-ignore
             if (e.onAir) C.Amber else if (e.state == "in") C.Danger else Color.LightGray, FontWeight.Bold, maxLines = 1, modifier = Modifier.fillMaxWidth(), align = androidx.compose.ui.text.style.TextAlign.Center)
@@ -718,7 +727,7 @@ private fun MatchCard(e: SportEvent, playing: Channel?, playingFr: FocusRequeste
             listOf("h", "a").forEach { side ->
                 Column(Modifier.weight(1f), horizontalAlignment = if (side == "h") Alignment.Start else Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     e.details.filter { it.side == side }.take(6).forEach { d ->
-                        val icon = when { d.kind.startsWith("goal") -> "⚽"; d.kind == "red" -> "🟥"; else -> "🟨" }  // i18n-ignore
+                        val icon = when { d.kind.startsWith("goal") -> "⚽"; d.kind == "red" -> "🟥"; d.kind == "penalty" -> "🎯"; else -> "🟨" }  // i18n-ignore
                         T(icon + " " + d.player + " " + d.minute + (if (d.kind.contains("_pen")) " (pen.)" else "") + (if (d.kind.contains("_og")) " (ag)" else ""), 11.sp, Color.LightGray, maxLines = 1)  // i18n-ignore
                     }
                 }
@@ -755,7 +764,7 @@ private fun MatchCard(e: SportEvent, playing: Channel?, playingFr: FocusRequeste
         if (rights.isNotEmpty() || e.tv.isNotEmpty() || aiTv.isNotEmpty() || usual.isNotEmpty()) Kicker(tr("Ostali izvori"), Color.LightGray)
         val espn = if (Prefs.bool("sport_src_espn", true)) tvNames else emptyList()
         if (rights.isNotEmpty()) T(tr("Prava po ligi") + " · " + rights.take(6).joinToString(" · "), 12.sp, Color.LightGray)
-        if (espn.isNotEmpty()) T("ESPN · " + espn.take(6).joinToString(" · "), 12.sp, Color.LightGray) // i18n-ignore
+        if (espn.isNotEmpty()) T("ESPN" + " · " + espn.take(6).joinToString(" · "), 12.sp, Color.LightGray) // i18n-ignore
         if (aiTv.isNotEmpty()) T(tr("Moguće") + " · " + aiTv.take(6).joinToString(" · "), 12.sp, Color.LightGray)
         if (rights.isEmpty() && usual.isNotEmpty()) T("📺 " + tr("Obično prenose:") + " " + usual.take(8).joinToString(" · "), 12.sp, Color.LightGray, maxLines = 3)  // i18n-ignore
         if (e.maybe.isNotEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
