@@ -36,6 +36,9 @@ private const val COLS = "bs|en|de|hr|sr|bg|ro|tr|it|ar"
 
 /* One line per text: bs | en | de | hr | sr | bg | ro | tr | it | ar.  "=" means the same as Bosnian. */
 private val TABLE = """
+Osvježavanje nije uspjelo|Some scores could not be refreshed|Einige Ergebnisse konnten nicht aktualisiert werden|Osvježavanje nije uspjelo|Освежавање није успело|Обновяването не успя|Actualizarea a eșuat|Yenileme başarısız oldu|Aggiornamento non riuscito|تعذر تحديث بعض النتائج
+Moja takmičenja|My competitions|Meine Wettbewerbe|Moja natjecanja|Моја такмичења|Моите турнири|Competițiile mele|Turnuvalarım|Le mie competizioni|بطولاتي
+Nema potvrđenog EPG prenosa|No confirmed EPG match|Kein bestätigter EPG-Treffer|Nema potvrđenog EPG prijenosa|Нема потврђеног преноса у водичу|Няма потвърдено предаване в справочника|Nicio transmisie confirmată în ghid|Rehberde doğrulanmış yayın yok|Nessuna trasmissione confermata nella guida|لا يوجد بث مؤكد في دليل البرامج
 Općenito|General|Allgemein|Općenito|Опште|Общи|General|Genel|Generali|عام
 Početak utakmice|Match start|Spielbeginn|Početak utakmice|Почетак утакмице|Начало на мача|Începutul meciului|Maç başlangıcı|Inizio partita|بداية المباراة
 Sljedeća utakmica|Next match|Nächstes Spiel|Sljedeća utakmica|Следећа утакмица|Следващ мач|Următorul meci|Sonraki maç|Prossima partita|المباراة التالية

@@ -122,10 +122,10 @@ object Sports {
     /** competitions you follow: chosen competitions (all when none chosen) on the chosen continents */
     fun activeLeagues(): List<League> {
         val raw = Prefs.str("sport_leagues", BIG.joinToString(","))
-        if (raw == "-") return emptyList()
         val sel = raw.split(',').filter { it.isNotBlank() }.toSet()
         val cont = Prefs.str("sport_cont", "eu").split(',').map { if (it == "am") "na" else it }.toSet() + "world"
-        return LEAGUES.filter { (sel.isEmpty() || it.abbr in sel) && contOf(it) in cont }
+        val followed = Prefs.str("sm_follow_leagues").split('|').toSet()
+        return LEAGUES.filter { it.name in followed || ((sel.isEmpty() || it.abbr in sel) && contOf(it) in cont) }
     }
     /** favourite teams, written in Settings (comma separated) */
     fun teams(): List<String> = Prefs.str("sport_teams").split(',').map { norm(it.trim()) }.filter { it.length >= 3 }
@@ -252,6 +252,8 @@ object Sports {
     private val locks = Array(32) { kotlinx.coroutines.sync.Mutex() }
     private val cooldown = java.util.concurrent.ConcurrentHashMap<String, Long>()
     @Volatile private var rateLimitUntil = 0L
+    fun feedDelayed() = System.currentTimeMillis().let { now -> rateLimitUntil > now || cooldown.values.any { it > now } }
+
     private fun cacheFile(lg: League, date: String) = Repo.diskDir?.resolve("sports-feeds")?.resolve(lg.path.replace('/', '_') + "_" + date + ".json")
 
     private fun cached(lg: League, date: String): List<SportEvent> {
@@ -286,6 +288,7 @@ object Sports {
             } catch (e: kotlinx.coroutines.CancellationException) { throw e }
             catch (e: Exception) {
                 if (e.message == "HTTP 429") rateLimitUntil = System.currentTimeMillis() + 5 * 60_000L
+                cooldown.entries.removeAll { it.value < System.currentTimeMillis() - 86_400_000L }
                 cooldown[key] = System.currentTimeMillis() + 60_000L
                 cached(lg, date)
             }
@@ -324,28 +327,37 @@ object Sports {
     /** Matches of one day from all leagues; leagues that fail are skipped. */
     suspend fun day(offset: Int, onPart: ((List<SportEvent>) -> Unit)? = null): List<SportEvent> = withContext(Dispatchers.IO) {
         val from = dayStart(offset); val to = dayStart(offset + 1)
-        // at most 8 requests at a time (many at once made the box and ESPN slow); every league that answers is shown at once
         val dates = listOf(espnDate(from), espnDate(dayStart(offset - 1))).distinct()
         val leagues = activeLeagues()
+        val result = boards(leagues, dates, onPart) { it.start in from until to }
+        if (offset == 0 && onPart != null) {
+            Repo.diskDir?.resolve("sports-feeds")?.listFiles()?.filter {
+                it.lastModified() < System.currentTimeMillis() - 7 * 86_400_000L
+            }?.forEach { it.delete() }
+        }
+        result
+    }
+
+    private suspend fun boards(leagues: List<League>, dates: List<String>,
+        onPart: ((List<SportEvent>) -> Unit)?, include: (SportEvent) -> Boolean): List<SportEvent> = coroutineScope {
+        val rows = linkedMapOf<String, List<SportEvent>>()
+        fun snapshot() = rows.values.flatten().filter(include).distinctBy { it.id }.sortedBy { it.start }
         if (onPart != null) {
-            val saved = leagues.flatMap { lg -> dates.flatMap { cached(lg, it) } }
-                .filter { it.start in from until to }.distinctBy { it.id }
-            if (saved.isNotEmpty()) onPart(saved)
-            cacheFile(leagues.firstOrNull() ?: return@withContext emptyList(), dates.first())?.parentFile?.listFiles()
-                ?.filter { it.lastModified() < System.currentTimeMillis() - 7 * 86_400_000L }?.forEach { it.delete() }
+            leagues.forEach { lg -> rows[lg.path] = dates.flatMap { cached(lg, it) } }
+            snapshot().takeIf { it.isNotEmpty() }?.let(onPart)
         }
-        val got = java.util.Collections.synchronizedList(ArrayList<SportEvent>())
-        fun part() = synchronized(got) { got.toList() }.filter { it.start in from until to }.distinctBy { it.id }.sortedBy { it.start }
-        coroutineScope {
-            leagues.sortedBy { if (countryOf(it.path).uppercase() in Prefs.str("sport_country").split(',')) 0 else if (it.abbr in BIG) 1 else 2 }.map { lg ->
-                async {
-                    // US-dated feeds: European evening matches are on the same date, night games on the day before
-                    val r = dates.flatMap { d -> espn(lg, d) }
-                    if (r.isNotEmpty()) synchronized(got) { got.addAll(r); onPart?.invoke(part()) }
+        val countries = Prefs.str("sport_country").lowercase().split(',').toSet()
+        val followed = Prefs.str("sm_follow_leagues").split('|').toSet()
+        leagues.sortedBy { when { it.name in followed -> 0; countryOf(it.path) in countries -> 1; it.abbr in BIG -> 2; else -> 3 } }.map { lg ->
+            async {
+                val result = dates.flatMap { espn(lg, it) }
+                synchronized(rows) {
+                    val previous = rows.put(lg.path, result)
+                    if (result != previous && (result.isNotEmpty() || !previous.isNullOrEmpty())) onPart?.invoke(snapshot())
                 }
-            }.awaitAll()
-        }
-        part()
+            }
+        }.awaitAll()
+        snapshot()
     }
 
     /** only the leagues of these matches, today (a followed match is live: one small request instead of every league) */
@@ -361,12 +373,11 @@ object Sports {
      * matches that have not started yet, the next [days] days: football first, then what is closest to you
      * (your country's leagues, the region, the big European ones), then by time
      */
-    suspend fun upcoming(days: Int = 7): List<SportEvent> = withContext(Dispatchers.IO) {
+    suspend fun upcoming(days: Int = 7, onPart: ((List<SportEvent>) -> Unit)? = null): List<SportEvent> = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
-        val range = espnDate(dayStart(0) - 86_400_000L) + "-" + espnDate(dayStart(days))
-        val list = coroutineScope {
-            activeLeagues().map { lg -> async { try { espn(lg, range) } catch (e: Exception) { emptyList() } } }.awaitAll().flatten()
-        }.filter { it.state == "pre" && it.start > now - 60_000 && it.start < dayStart(days) }.distinctBy { it.id }
+        val range = espnDate(dayStart(-1)) + "-" + espnDate(dayStart(days))
+        val end = dayStart(days)
+        val list = boards(activeLeagues(), listOf(range), onPart) { it.state == "pre" && it.start >= now && it.start < end }
         list.sortedWith(compareBy({ if (it.sport == "football") 0 else 1 }, { priority(it) }, { it.start }))
     }
 
@@ -462,12 +473,11 @@ object Sports {
         w.lowercase().split(' ').joinToString(" ") { p -> if (p.length <= 3 && p.none { it.isDigit() }) p.uppercase() else p.replaceFirstChar { it.uppercase() } } }.distinct()
 
     /** live and coming matches of the next [days] days for your favourite countries (national teams and their leagues) and teams */
-    suspend fun favorites(days: Int, codes: Set<String>): List<SportEvent> = withContext(Dispatchers.IO) {
+    suspend fun favorites(days: Int, codes: Set<String>, onPart: ((List<SportEvent>) -> Unit)? = null): List<SportEvent> = withContext(Dispatchers.IO) {
         val nat = setOf("WC", "EURO", "UNL", "WCQ", "FRI")
         val lgs = (activeLeagues() + LEAGUES.filter { it.abbr in nat || countryOf(it.path) in codes }).distinctBy { it.path }
         val range = espnDate(dayStart(0)) + "-" + espnDate(dayStart(days))
-        coroutineScope { lgs.map { lg -> async { try { espn(lg, range) } catch (e: Exception) { emptyList() } } }.awaitAll().flatten() }
-            .distinctBy { it.id }.filter { it.state != "post" }.sortedBy { it.start }
+        boards(lgs, listOf(range), onPart) { it.state != "post" }
     }
 
     private fun maybeFor(ev: SportEvent, all: List<Pair<Channel, String>>): List<Channel> {
@@ -572,7 +582,7 @@ object Sports {
     fun combine(events: List<SportEvent>, g: Guide, offset: Int): List<SportEvent> {
         val progs = g.progs; val chans = g.byEpg
         val from = dayStart(offset); val to = dayStart(offset + 1)
-        val day = progs.filter { it.start < to + 2 * 3600_000L && it.end > from && !NOT_MATCH.containsMatchIn(it.title) }.sortedBy { it.start }
+        val day = progs.filterNot { NOT_MATCH.containsMatchIn(it.title) }.sortedBy { it.start }
         val starts = LongArray(day.size) { day[it].start }
         val normTitle = HashMap<Prog, String>(day.size * 2)
         val words = HashMap<Prog, Set<String>>(day.size * 2)

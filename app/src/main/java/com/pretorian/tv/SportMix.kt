@@ -73,7 +73,7 @@ fun FavTeamsDialog(onDismiss: () -> Unit) {
     val mine = remember(rev, MyTeams.rev) { Prefs.str("sport_teams").split(',').map { it.trim() }.filter { it.isNotBlank() } }
     if (add) {
         var q by remember { mutableStateOf("") }
-        val known = remember { (SportCache.today.orEmpty() + SportCache.other.values.flatten() + SportCache.combined)
+        val known = remember(q.isBlank()) { if (q.isBlank()) emptyList() else (SportCache.today.orEmpty() + SportCache.other.values.flatten() + SportCache.combined)
             .flatMap { listOfNotNull(it.home?.name, it.away?.name) }.distinct().sorted() }
         Popup(tr("Dodaj tim"), { add = false }, width = 640.dp) {
             Field(tr("Traži ili upiši ime tima"), q, { q = it }, Modifier.fillMaxWidth())
@@ -232,46 +232,67 @@ fun SportMixScreen(nav: Nav) {
     var pick by remember { mutableStateOf<String?>(null) }   // "sport" / "country"
     val listFr = remember { FocusRequester() }
     LaunchedEffect(tab) { SportsMemory.view = tab }
-    // live scores every minute, only text (no pictures): light for the box
-    LaunchedEffect(Unit) { while (true) { delay((Prefs.str("sport_refresh", "1").toLongOrNull() ?: 1L).coerceIn(1, 5) * 60_000L); tick++ } }
+    val lifecycle = androidx.compose.ui.platform.LocalLifecycleOwner.current.lifecycle
+    var visible by remember { mutableStateOf(lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) }
+    DisposableEffect(lifecycle) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, _ ->
+            visible = lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(visible) {
+        if (visible) while (true) { delay(60_000); tick++ }
+    }
     // kept between visits: coming back to Sport shows the last list at once, only the scores are refreshed in the background
     var today by remember { mutableStateOf(SportCache.today) }
     var other by remember(tab) { mutableStateOf(SportCache.other[tab]) }
-    var loading by remember { mutableStateOf(false) }
-    LaunchedEffect(tick, SportCache.rev) {
-        if (SportCache.today == null || System.currentTimeMillis() - SportCache.todayAt > 50_000L) {
-            loading = SportCache.today == null
-            val first = SportCache.today == null
+    var loadingToday by remember { mutableStateOf(today == null) }
+    var loadingOther by remember(tab) { mutableStateOf(false) }
+    var delayed by remember { mutableStateOf(false) }
+    val loading = loadingToday || loadingOther
+    LaunchedEffect(tick, SportCache.rev, visible) {
+        if (!visible) return@LaunchedEffect
+        val interval = (Prefs.str("sport_refresh", "1").toLongOrNull() ?: 1L).coerceIn(1, 5) * 60_000L - 10_000L
+        if (SportCache.today == null || System.currentTimeMillis() - SportCache.todayAt > interval) {
+            loadingToday = SportCache.today == null
             try {
-                val r = Sports.day(0) { part -> if (first) { SportCache.today = part; today = part; loading = false } }
+                val r = Sports.day(0) { part -> today = part; loadingToday = false }
                 // with an API-Football key: live football ESPN does not know about is added (one request, at most every 15 min)
                 val all = if (ApiFootball.on) r + ApiFootball.extra(r, ApiFootball.live()) else r
-                if (all.isNotEmpty() || SportCache.today == null) SportCache.today = all
-                SportCache.todayAt = if (all.isEmpty()) 0L else System.currentTimeMillis()
-            } catch (_: Exception) {}
-            loading = false
+                SportCache.today = all
+                SportCache.todayAt = System.currentTimeMillis()
+                delayed = Sports.feedDelayed()
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) {}
+            loadingToday = false
 
         }
         today = SportCache.today
     }
-    LaunchedEffect(tab, SportCache.rev) {
-        // kept 10 min; an empty answer (network hiccup) is asked again next time
-        if (tab !in listOf("live", "all") && (SportCache.other[tab].isNullOrEmpty() || System.currentTimeMillis() - (SportCache.otherAt[tab] ?: 0L) > 1_200_000L)) {
-            loading = SportCache.other[tab] == null
+    LaunchedEffect(tab, SportCache.rev, visible, tick / 20) {
+        if (!visible) return@LaunchedEffect
+        if (tab != "live" && (SportCache.other[tab] == null || System.currentTimeMillis() - (SportCache.otherAt[tab] ?: 0L) > 1_200_000L)) {
+            loadingOther = SportCache.other[tab] == null
             try {
                 val r = when (tab) {
-                    "soon" -> Sports.upcoming(3)
-                    "fav", "mine" -> Sports.favorites(10, Prefs.str("sport_country").split(',').filter { it.isNotBlank() }.map { it.lowercase() }.toSet())
-                    else -> Sports.day(-1)
+                    "soon", "all" -> Sports.upcoming(3) { other = it }
+                    "fav", "mine" -> Sports.favorites(10, Prefs.str("sport_country").split(',').filter { it.isNotBlank() }.map { it.lowercase() }.toSet()) { other = it }
+                    else -> Sports.day(-1) { other = it }
                 }
-                // a refresh that comes back empty never wipes a list you already had
-                if (r.isNotEmpty() || SportCache.other[tab] == null) { SportCache.other[tab] = r; SportCache.otherAt[tab] = System.currentTimeMillis() }
-            } catch (_: Exception) {}
-            loading = false
+                SportCache.other[tab] = r; SportCache.otherAt[tab] = System.currentTimeMillis()
+                delayed = Sports.feedDelayed()
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) {}
+            loadingOther = false
         }
         other = SportCache.other[tab]
     }
-    LaunchedEffect(SportCache.rev) { if (SportCache.guide == null) try { SportCache.guide = Sports.guide(ctx, Store.actives(ctx)) } catch (_: Exception) {}; SportCache.guideRev++ }
+    LaunchedEffect(visible, tick / 15) {
+        if (!visible) return@LaunchedEffect
+        val guide = try { withContext(Dispatchers.IO) { Sports.guide(ctx, Store.actives(ctx)) } }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) { return@LaunchedEffect }
+        if (guide !== SportCache.guide) { SportCache.guide = guide; SportCache.guideRev++ }
+    }
     val all = remember(today, other) { ((today ?: emptyList()) + (other ?: emptyList())).distinctBy { it.id } }
     // your channels for each match: matched in the background, the list shows before that
     // Scores change more often than programme titles, team identity or kickoff.
@@ -297,7 +318,8 @@ fun SportMixScreen(nav: Nav) {
     val favC = remember(SportCache.rev) { Prefs.str("sport_country").split(',').filter { it.isNotBlank() }.map { it.lowercase() }.toSet() }
     // a favourite country = its leagues and its national team
     val favNations = remember(favC) { favC.flatMap { MyTeams.NATIONS[it.uppercase()] ?: emptyList() } }
-    fun fav(e: SportEvent) = e.country in favC || MyTeams.has(e.home?.name ?: "-") || MyTeams.has(e.away?.name ?: "-") || MatchFollow.has(e.id) ||
+    val followedLeagues = remember(SportCache.rev) { Prefs.str("sm_follow_leagues").split('|').filter { it.isNotBlank() }.toSet() }
+    fun fav(e: SportEvent) = e.league in followedLeagues || e.country in favC || MyTeams.has(e.home?.name ?: "-") || MyTeams.has(e.away?.name ?: "-") || MatchFollow.has(e.id) ||
         favNations.any { it.equals(e.home?.name, true) || it.equals(e.away?.name, true) }
     val sportsOn = remember(SportCache.rev) { Prefs.str("sm_sports", Prefs.str("sport_enabled", "football")).split(',').filter { it.isNotBlank() && it != "*" }.toSet() }
     val selectedTeams = remember(SportCache.rev) { Prefs.str("sm_teams").split('|').filter { it.isNotBlank() }.toSet() }
@@ -316,7 +338,7 @@ fun SportMixScreen(nav: Nav) {
     // Live: real matches by league, then what your channels show right now (from the guide, no live score)
     fun group(e: SportEvent) = if (e.onAir) tr("Sada na tvojim kanalima") else e.league
     val noRealLive = tab == "live" && shown.none { it.live }
-    LaunchedEffect(ev?.id) { SportsMemory.evId = ev?.id; if (playing != null && ev?.let { e -> (e.channels + e.ai).none { it.url == playing?.url } } == true) playing = null }
+    LaunchedEffect(ev?.id) { SportsMemory.evId = ev?.id; if (playing != null && ev?.let { e -> (e.channels + e.ai + e.maybe).none { it.url == playing?.url } } == true) playing = null }
     // Back: first the small screen stops, then out of Sport
     // the match you chose (OK) stays chosen while you move through the list; Left or Back from the right side lands on it again
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -348,7 +370,7 @@ fun SportMixScreen(nav: Nav) {
         if (back != null && playing != null) { delay(250); (if (back == "chip") chipFr else previewFr).tryFocus() }
     }
     val mineRev = MyTeams.rev
-    val mine = remember(mineRev, withCh) { MyTeams.list().mapNotNull { t -> withCh.filter { e -> e.home?.name.equals(t, true) || e.away?.name.equals(t, true) }
+    val mine = remember(mineRev, withCh, SportCache.rev) { MyTeams.list().distinct().mapNotNull { t -> withCh.filter { e -> inSport(e) && inUserFilters(e) && (e.home?.name.equals(t, true) || e.away?.name.equals(t, true)) }
         .sortedWith(compareBy({ it.state != "in" }, { it.state == "post" }, { it.start })).firstOrNull()?.let { t to it } } }
 
     Column(Modifier.fillMaxSize().background(Color.Black).padding(horizontal = 24.dp)) {
@@ -368,6 +390,8 @@ fun SportMixScreen(nav: Nav) {
             Chip2(tr("Države") + if (selectedCountries.isEmpty()) "" else " · " + selectedCountries.size, false) { pick = "countries" }
             Chip2(tr("Regije") + " ▾", false) { pick = "region" }
             Chip2(tr("Takmičenja") + if (selectedLeagues.isEmpty()) "" else " · " + selectedLeagues.size, false) { pick = "leagues" }
+            Chip2(tr("Omiljeni timovi"), false) { pick = "myTeams" }
+            Chip2(tr("Moja takmičenja"), false) { pick = "myLeagues" }
             // followed matches and teams in one press
             if (Look.dawn) Chip2("🔔 " + tr("Pratim") + " · " + withCh.count { followedEv(it) }, tab == "mine") { tab = "mine" }  // i18n-ignore
         }
@@ -430,13 +454,14 @@ fun SportMixScreen(nav: Nav) {
                     Chip2((if (id == "live") "● " else "") + tr(l) + (if (id == "done" || (id == "soon" && other == null && tab != "soon")) "" else " · $n"), tab == id, if (tab == id) tabFr else null) { tab = id }
                 }
             }
+            if (delayed) T("Osvježavanje nije uspjelo", 13.sp, C.Muted)
             val updated = shown.maxOfOrNull { it.observedAt } ?: 0
             if (updated > 0) T((if (shown.any { it.state == CACHED_SCORE }) tr("Zadnji podaci") else tr("Osvježavanje")) + " · " + java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(updated)), 12.sp, C.Muted)
             val next = if (tab == "all") shown.filter { it.state == "pre" && it.start > System.currentTimeMillis() }
                 .minWithOrNull(compareBy({ !fav(it) }, { it.start })) else null
             if (next != null) Chip2(tr("Sljedeća utakmica") + " · " + next.title + " · " + whenShort(next.start), false) { sel = next.id; jumpTick++ }
             if (loading && shown.isEmpty()) Loading("Učitavam utakmice…")
-            else if (shown.isEmpty()) Message(when (tab) { "live" -> "Trenutno nema utakmica uživo"; "soon" -> "Nema utakmica uskoro"; "mine" -> "Ne pratiš nijednu utakmicu · dugi OK na utakmicu › Prati"; "fav" -> "Nema utakmica tvojih favorita u idućih 10 dana · ＋ Države ili ＋ Timovi"; else -> "Nema završenih utakmica" })
+            else if (shown.isEmpty()) Message(when (tab) { "all" -> "Nema rezultata"; "live" -> "Trenutno nema utakmica uživo"; "soon" -> "Nema utakmica uskoro"; "mine" -> "Ne pratiš nijednu utakmicu · dugi OK na utakmicu › Prati"; "fav" -> "Nema utakmica tvojih favorita u idućih 10 dana · ＋ Države ili ＋ Timovi"; else -> "Nema završenih utakmica" })
             else LazyColumn(state = listState, modifier = Modifier.onFocusChanged { listFocus = it.hasFocus }, verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
                 var lastLeague = ""
                 if (noRealLive) item(key = "nolive") { T("Trenutno nema utakmica uživo", 13.sp, C.Muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp, start = 4.dp)) }
@@ -452,7 +477,7 @@ fun SportMixScreen(nav: Nav) {
             }
         }
         // ------------------------------------------------ right: small screen (only after a channel is chosen) and the match
-        Column(Modifier.width(420.dp).fillMaxHeight().background(Color(0xFF181818), Rnd(4.dp)).padding(12.dp).onFocusChanged { rightFocus = it.hasFocus }
+        Column(Modifier.width(420.dp).fillMaxHeight().background(Color(0xFF181818), Rnd(4.dp)).verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(12.dp).onFocusChanged { rightFocus = it.hasFocus }
             .onPreviewKeyEvent { k -> if (k.type == KeyEventType.KeyDown && k.key == Key.DirectionLeft) { focusSel(); true } else false },
             verticalArrangement = Arrangement.spacedBy(10.dp)) {
             val pc = playing
@@ -500,8 +525,9 @@ fun SportMixScreen(nav: Nav) {
             }
         }
     }
+    if (pick == "myTeams") FavTeamsDialog { pick = null }
     // teams: the list with ✕ and "＋ Add team" (search or any name), several at once
-    pick?.let { k ->
+    pick?.takeUnless { it == "myTeams" }?.let { k ->
         Popup(tr(when (k) { "sport" -> "Sportovi"; "region" -> "Regije"; "fav" -> "Favoriti – države"; "countries" -> "Države"; "teams" -> "Timovi"; else -> "Takmičenja" }), { pick = null }, width = 520.dp) {
             var query by remember(k) { mutableStateOf("") }
             Field(tr("Pretraga"), query, { query = it }, Modifier.fillMaxWidth())
@@ -535,13 +561,25 @@ fun SportMixScreen(nav: Nav) {
                         }
                     }
                     "teams" -> {
-                        val options = if (query.isBlank()) selectedTeams else selectedTeams + withCh.asSequence()
-                            .flatMap { listOfNotNull(it.home?.name, it.away?.name) }.filter { matches(it) }.distinct().take(30).toList() + query.trim()
-                        if (options.isEmpty()) T("Traži tim", 14.sp, C.Muted)
+                        val options = if (query.isBlank()) selectedTeams else selectedTeams + (withCh.asSequence()
+                            .flatMap { listOfNotNull(it.home?.name, it.away?.name) }.plus(MyTeams.NATIONS.values.flatten()).filter { matches(it) }.distinct().take(30).toList())
+                        if (options.isEmpty()) T(if (query.isBlank()) "Traži tim" else "Nema rezultata", 14.sp, C.Muted)
                         options.sorted().forEach { team ->
                             ToggleRow(team, team in selectedTeams) { v ->
                                 val next = if (v) selectedTeams + team else selectedTeams - team
                                 Prefs.put("sm_teams", next.joinToString("|")); SportCache.rev++
+                            }
+                        }
+                    }
+                    "myLeagues" -> {
+                        val options = if (query.isBlank()) followedLeagues else
+                            (followedLeagues + Sports.LEAGUES.map { it.name }).filter { matches(it) }.take(32)
+                        if (options.isEmpty()) T(if (query.isBlank()) "Pretraga" else "Nema rezultata", 14.sp, C.Muted)
+                        options.forEach { league ->
+                            ToggleRow(league, league in followedLeagues) { enabled ->
+                                val next = if (enabled) followedLeagues + league else followedLeagues - league
+                                Prefs.put("sm_follow_leagues", next.joinToString("|"))
+                                SportCache.clear()
                             }
                         }
                     }
@@ -650,23 +688,7 @@ private fun MatchCard(e: SportEvent, playing: Channel?, playingFr: FocusRequeste
         val chs = (e.channels + e.ai).distinctBy { it.url }.take(6)
         if (Look.dawn && e.state != "post") DawnFollow(e)
         Kicker(tr("Prenose") + " · " + tr("OK gledaj · drži OK 🔔"), C.Muted)
-        if (chs.isEmpty()) T("Nijedan tvoj kanal ne prenosi ovu utakmicu", 12.sp, C.Muted)
-        // who broadcasts it anywhere (TV houses), also when it is not in your list
-        val tvNames = remember(e.id, e.tv) { e.tv }
-        LaunchedEffect(Unit) { try { Rights.refresh() } catch (_: Exception) {} }
-        var aiTv by remember(e.id) { mutableStateOf<List<String>>(emptyList()) }
-        LaunchedEffect(e.id) {
-            if (!SportsAI.ready) return@LaunchedEffect
-            delay(1200)
-            aiTv = try { SportsAI.broadcasters(e).map { (if (it.country.isNotBlank()) it.country + " · " else "") + it.name } } catch (_: Exception) { emptyList() }
-        }
-        val usual = remember(e.id) { Sports.usualTv(e) }
-        // who shows it: rights where you live first, then ESPN's list, then the AI (each source can be switched off in Settings › Sports Center)
-        val rights = remember(e.id) { Sports.rightsTv(e) }
-        if (rights.isNotEmpty() || e.tv.isNotEmpty() || aiTv.isNotEmpty() || usual.isNotEmpty()) Kicker(tr("Ostali izvori"), C.Muted)
-        val espn = if (Prefs.bool("sport_src_espn", true)) tvNames else emptyList()
-        if (rights.isNotEmpty() || espn.isNotEmpty() || aiTv.isNotEmpty()) T("📺 " + tr("TV:") + " " + (rights + espn + aiTv).distinct().take(10).joinToString(" · "), 12.sp, C.Soft, maxLines = 3)  // i18n-ignore
-        else if (usual.isNotEmpty()) T("📺 " + tr("Obično prenose:") + " " + usual.take(8).joinToString(" · "), 12.sp, C.Soft, maxLines = 3)  // i18n-ignore
+        if (chs.isEmpty()) T("Nema potvrđenog EPG prenosa", 12.sp, C.Muted)
         // your channels that show it: always as buttons (OK on a match brings the focus to the first one)
         if (chs.isNotEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             itemsIndexed(chs, key = { _, c -> c.url }) { i, ch ->
@@ -679,6 +701,28 @@ private fun MatchCard(e: SportEvent, playing: Channel?, playingFr: FocusRequeste
                 }
             }
         }
+        // who broadcasts it anywhere (TV houses), also when it is not in your list
+        val tvNames = remember(e.id, e.tv) { e.tv }
+        LaunchedEffect(Unit) { try { Rights.refresh() } catch (_: Exception) {} }
+        var aiTv by remember(e.id) { mutableStateOf<List<String>>(emptyList()) }
+        LaunchedEffect(e.id) {
+            if (!SportsAI.ready || !Prefs.bool("sport_src_ai", true)) return@LaunchedEffect
+            delay(1200)
+            aiTv = try { SportsAI.broadcasters(e).map { (if (it.country.isNotBlank()) it.country + " · " else "") + it.name } } catch (_: Exception) { emptyList() }
+        }
+        val usual = remember(e.id) { if (Prefs.bool("sport_src_rights", true)) Sports.usualTv(e) else emptyList() }
+        // who shows it: rights where you live first, then ESPN's list, then the AI (each source can be switched off in Settings › Sports Center)
+        val rights = remember(e.id) { Sports.rightsTv(e) }
+        if (rights.isNotEmpty() || e.tv.isNotEmpty() || aiTv.isNotEmpty() || usual.isNotEmpty()) Kicker(tr("Ostali izvori"), C.Muted)
+        val espn = if (Prefs.bool("sport_src_espn", true)) tvNames else emptyList()
+        if (rights.isNotEmpty() || espn.isNotEmpty() || aiTv.isNotEmpty()) T("📺 " + tr("TV:") + " " + (rights + espn + aiTv).distinct().take(10).joinToString(" · "), 12.sp, C.Soft, maxLines = 3)  // i18n-ignore
+        else if (usual.isNotEmpty()) T("📺 " + tr("Obično prenose:") + " " + usual.take(8).joinToString(" · "), 12.sp, C.Soft, maxLines = 3)  // i18n-ignore
+        if (e.maybe.isNotEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            items(e.maybe, key = { it.url }) { channel ->
+                Chip2(channel.name, playing?.url == channel.url) { onPlay(channel) }
+            }
+        }
+
     }
 }
 
@@ -697,7 +741,7 @@ private fun DawnFollow(e: SportEvent) {
                         T("Prati ovu utakmicu", 14.sp, if (f) Dawn.onPill else Color.White, FontWeight.SemiBold)
                         T("Obavijesti uživo na Početnoj", 11.sp, if (f) Dawn.onPill.copy(alpha = 0.7f) else Color(0xFFC3CCD8))
                     }
-                    Box(Modifier.width(44.dp).height(24.dp).clip(Pill).background(if (on) Color(0xFF22C55E) else Color(0x4DFFFFFF)), contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart) {
+                    Box(Modifier.width(44.dp).height(24.dp).clip(Pill).background(if (on) Color.Gray else Color(0x4DFFFFFF)), contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart) {
                         Box(Modifier.padding(3.dp).size(18.dp).clip(CircleShape).background(Color.White))
                     }
                 }
@@ -708,7 +752,7 @@ private fun DawnFollow(e: SportEvent) {
                     Focusable(onClick = { Prefs.put("sa_$k", !c); rev++ }, shape = Rnd(8.dp), normal = Color.Transparent, focused = Dawn.pill,
                         focusBorderColor = Color.Transparent, zoom = 1f, modifier = Modifier.height(34.dp)) { f ->
                         Row(Modifier.align(Alignment.Center).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Box(Modifier.size(16.dp).clip(Rnd(4.dp)).background(if (c) Color(0xFF3B82F6) else Color.Transparent).border(1.dp, if (c) Color(0xFF3B82F6) else Color(0x99FFFFFF), Rnd(4.dp)),
+                            Box(Modifier.size(16.dp).clip(Rnd(4.dp)).background(if (c) Color.Gray else Color.Transparent).border(1.dp, if (c) Color.Gray else Color(0x99FFFFFF), Rnd(4.dp)),
                                 contentAlignment = Alignment.Center) { if (c) Ico(R.drawable.lc_check, 12.dp, Color.White) }
                             T(label, 12.sp, if (f) Dawn.onPill else Color.White)
                         }
