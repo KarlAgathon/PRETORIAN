@@ -66,6 +66,7 @@ data class GroupRef(val pid: String?, val cat: Category) {
 object TvMemory {
     var group: GroupRef? = null
     var channel = -1
+    var returnUrl: String? = null
     /** true while coming back from the player: focus goes back to the channel that was playing */
     var restore = false
     /** the channel confirmed with OK: it plays in the small picture until another one is confirmed */
@@ -425,7 +426,15 @@ private fun TvList(nav: Nav) {
         Dawn.hints = if (inChannels) listOf("▲▼" to "Izaberi kanal", "OK" to "Gledaj", "Back" to "Grupe")
             else listOf("▲▼" to "Izaberi grupu", "OK" to "Otvori grupu", "Back" to "Meni")
     }
-    DisposableEffect(Unit) { onDispose { Dawn.crumb = ""; Dawn.pos = ""; Dawn.hints = emptyList() } }
+    LaunchedEffect(inChannels, st.group?.key, focusedCh?.url, Favs.rev) {
+        Dawn.previewBrowser = inChannels && st.group?.pid != null
+        if (Dawn.previewBrowser) {
+            val favorite = focusedCh?.let { Favs.inAny(ctx, it) } == true
+            Dawn.hints = listOf("OK" to "Gledaj", "Drži OK" to if (favorite) "Ukloni iz favorita" else "Dodaj u favorite")
+        }
+    }
+    LaunchedEffect(Dawn.favoriteEvent) { delay(2000); Dawn.favoriteNotice = null }
+    DisposableEffect(Unit) { onDispose { Dawn.previewBrowser = false; Dawn.favoriteNotice = null; Dawn.crumb = ""; Dawn.pos = ""; Dawn.hints = emptyList() } }
     // first time on the groups: the focus goes to the last opened group (or the first one)
     var placed by remember { mutableStateOf(false) }
     LaunchedEffect(rows is Load.Ok, inChannels) { if (!inChannels && rows is Load.Ok && !placed) { placed = true; backToGroups() } }
@@ -633,6 +642,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
     val ctx = LocalContext.current
     var listRev by remember { mutableIntStateOf(0) }
     val isFav = g.pid == null && g.cat.id != RECENT_GROUP
+    val restoreUrl = remember(g.key) { TvMemory.returnUrl.takeIf { TvMemory.restore } }
     val state by load(g.key, listRev, Favs.rev, Recent.rev, keep = true) { channelsOf(ctx, g) }
     var menu by remember { mutableStateOf<Channel?>(null) }
     var menuUrl by remember { mutableStateOf<String?>(null) }
@@ -662,12 +672,8 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                         itemsIndexed(list, key = { _, ch -> "${ch.pid}|${ch.id}|${ch.url}" }) { i, ch ->
                             val ovr = remember(ch.pid, g.pid) { Ovr(ctx, ch.pid.ifBlank { g.pid ?: "" }) }
                             val locked = ovr.isChLocked(ch) || (g.cat.id != ch.group && ovr.isLocked("live", ch.group))
-                            // Mark the channel actually playing (or in the confirmed mini-preview), not merely the focused row.
-                            val active = PreviewSel.ch?.url == ch.url || TvMemory.preview?.url == ch.url ||
-                                (TvMemory.group?.key == g.key && TvMemory.channel == i)
                             Focusable(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp).height(50.dp).wrapKeys(i, list.size, cWrap)
-                                    .then(if (active) Modifier.border(1.dp, C.Green.copy(alpha = 0.48f), Rnd(12.dp)) else Modifier),
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp).height(if (g.pid == null) 44.dp else 36.dp).wrapKeys(i, list.size, cWrap),
                                 onClick = {
                                     gate.run("c:${ch.url}", locked) {
                                         ovr.countWatch(ch)
@@ -676,6 +682,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                         playChannels(nav, list, i)
                                     }
                                 },
+                                holdMillis = if (g.pid != null) 650L else 0L,
                                 onMenu = {
                                     if (g.pid == null) { menu = ch; menuUrl = ch.url }
                                     else {
@@ -683,22 +690,23 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                         val containing = lists.filter { Favs.contains(it.id, ch) }
                                         if (containing.isEmpty()) Favs.toggle(lists.first().id, ch)
                                         else containing.forEach { Favs.toggle(it.id, ch) }
-                                        android.widget.Toast.makeText(ctx, if (containing.isEmpty()) "★ " + tr("Dodano u favorite") else "☆ " + tr("Uklonjeno iz favorita"), android.widget.Toast.LENGTH_SHORT).show()
+                                        Dawn.favoriteNotice = containing.isEmpty()
+                                        Dawn.favoriteEvent++
                                     }
                                 },
                                 onFocus = { onFocusCh(ch); if (g.pid != null && !locked) PreviewSel.ch = ch else PreviewSel.ch = null },
                                 focusRequester = cWrap.requester(i, if (ch.url == menuUrl) chFr else null),
-                                normal = if (Look.dawn) Color.Transparent else if (active) C.Green.copy(alpha = 0.10f) else C.Card,
-                                focused = if (Look.dawn) Dawn.pill else null,
-                                focusBorderColor = if (Look.dawn) Color.Transparent else null,
+                                normal = Color(0x44333333),
+                                focused = Color(0x88555555),
+                                focusBorderColor = Color.White,
                                 zoom = if (Look.dawn) 1.0f else 1.01f,
                             ) { f ->
                                 Row(Modifier.fillMaxSize().clipToBounds().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    T("%03d".format(ch.num), 15.sp, if (f) Dawn.onPill else Color(0xFFD5DBE3),
+                                    T("%03d".format(ch.num), 15.sp, Color.LightGray,
                                         modifier = Modifier.width(34.dp))
                                     ChannelLogo(ch.logo, ch.name)
-                                    T(ch.name, 16.sp, if (f) Dawn.onPill else Color(0xFFEFF2F6), if (f) FontWeight.SemiBold else FontWeight.Normal,
+                                    T(ch.name, 16.sp, Color.White, if (f) FontWeight.SemiBold else FontWeight.Normal,
                                         maxLines = 1, modifier = Modifier.weight(1f))
                                     if (locked) Ico(R.drawable.lc_lock, 16.dp, C.Muted)
                                     if (isFav) T("★", 17.sp, C.Amber)
@@ -716,11 +724,11 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                     if (TvMemory.restore && TvMemory.channel >= 0) { TvMemory.restore = false; cWrap.target = TvMemory.channel.coerceAtMost(list.lastIndex) }
                 }
                 // New Dawn: the list appears only after OK on a group, so it takes the focus as soon as it is there
-                LaunchedEffect(list.isNotEmpty()) { if (focusOnStart && list.isNotEmpty()) cWrap.target = TvMemory.channel.coerceIn(0, list.lastIndex) }
+                LaunchedEffect(list.isNotEmpty()) { if (focusOnStart && list.isNotEmpty()) cWrap.target = list.indexOfFirst { it.url == restoreUrl }.takeIf { it >= 0 } ?: TvMemory.channel.coerceIn(0, list.lastIndex) }
                 // OK on a group: the focus goes into its channels
                 val enter0 = remember { enterTick }
                 // the channels take focus only after OK on a group, never while the groups are being browsed
-                LaunchedEffect(enterTick, list.isNotEmpty()) { if (enterTick != enter0 && list.isNotEmpty()) cWrap.target = TvMemory.channel.coerceIn(0, list.lastIndex) }
+                LaunchedEffect(enterTick, list.isNotEmpty()) { if (enterTick != enter0 && list.isNotEmpty()) cWrap.target = list.indexOfFirst { it.url == restoreUrl }.takeIf { it >= 0 } ?: TvMemory.channel.coerceIn(0, list.lastIndex) }
                 menu?.let { ch ->
                     val groups = (rows as? Load.Ok)?.value?.mapNotNull { (it as? GRow.Group)?.ref }
                         ?.filter { it.pid != null && it.pid == ch.pid.ifBlank { g.pid } && it.cat.id != ALL_GROUP }?.map { it.cat } ?: emptyList()
@@ -871,11 +879,44 @@ fun ChannelOptions(g: GroupRef, ch: Channel, list: List<Channel>, groups: List<C
 /** The guide of one channel runs early or late: move it by minutes or hours (kept for that channel). */
 @Composable
 fun EpgShiftPopup(ch: Channel, onDismiss: () -> Unit) {
+    val ctx = LocalContext.current
     val cur = EpgShift.chMin(ch.url)
-    Popup(tr("Pomak vremena") + " · " + ch.name, onDismiss) {
-        listOf(0, 5, 10, 30, 60, 120, 180, -5, -10, -30, -60, -120, -180).forEach { m ->
-            OptionRow(EpgShift.label(m), if (m == 0) R.drawable.lc_rotate_ccw else R.drawable.lc_clock, selected = m == cur, color = if (m == cur) C.Green else null) {
-                EpgShift.setCh(ch.url, m); onDismiss()
+    var pending by remember(ch.url) { mutableIntStateOf(cur) }
+    var query by remember(ch.url) { mutableStateOf("") }
+    var searching by remember { mutableStateOf(false) }
+    var selected by remember(ch.url, query) { mutableStateOf<Pair<String, String>?>(null) }
+    val matches by load(ch.pid, query) {
+        val playlist = Store.byId(ctx, ch.pid)
+        val sources = EpgSources.srcs(ch.pid).map { GuideDb.srcOf(it.url) }.toMutableList()
+        if (playlist != null && EpgSources.providerOn(ch.pid)) sources.add(GuideDb.srcOf(playlist))
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            sources.distinct().flatMap { src -> GuideDb.channelIds(src, query).map { src to it } }.take(30)
+        }
+    }
+    if (searching) TextDialog("EPG", "Search", query, onDismiss = { searching = false }) {
+        query = it.trim(); searching = false
+    } else Popup("EPG Management · " + ch.name, onDismiss, width = 800.dp) {
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(Modifier.weight(1f)) {
+                T(EpgShift.mapping(ch)?.second ?: ch.epg.orEmpty(), 15.sp, C.Text)
+                OptionRow("Search", R.drawable.lc_search, value = query) { searching = true }
+                (matches as? Load.Ok)?.value.orEmpty().forEach { result ->
+                    OptionRow(result.second, selected = result == selected) { selected = result }
+                }
+                selected?.let { OptionRow("Assign EPG to this channel") { EpgShift.assign(ch, it); onDismiss() } }
+                if (EpgShift.mapping(ch) != null) OptionRow("Reset assignment") { EpgShift.assign(ch, null); onDismiss() }
+            }
+            Column(Modifier.weight(1f)) {
+                T("Current offset · " + EpgShift.label(cur), 15.sp, C.Text)
+                T("New offset · " + EpgShift.label(pending), 15.sp, C.Text)
+                listOf(5, 15, 30, 60, 120, 180).forEach { step ->
+                    Row {
+                        Box(Modifier.weight(1f)) { OptionRow("−" + step + " min") { pending = (pending - step).coerceAtLeast(-720) } }
+                        Box(Modifier.weight(1f)) { OptionRow("+" + step + " min") { pending = (pending + step).coerceAtMost(720) } }
+                    }
+                }
+                OptionRow("Reset", R.drawable.lc_rotate_ccw) { pending = 0 }
+                OptionRow("Save", R.drawable.lc_check) { EpgShift.setCh(ch.url, pending); onDismiss() }
             }
         }
     }

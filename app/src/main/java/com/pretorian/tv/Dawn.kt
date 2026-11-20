@@ -57,6 +57,9 @@ object Dawn {
     var homeOpen by mutableStateOf(false)
     /** extra part of the path in the top bar (the TV group) */
     var crumb by mutableStateOf("")
+    var previewBrowser by mutableStateOf(false)
+    var favoriteNotice by mutableStateOf<Boolean?>(null)
+    var favoriteEvent by mutableStateOf(0)
     /** "3 / 124" in the top bar while channels are shown */
     var pos by mutableStateOf("")
     /** remote hints at the bottom, set by the TV screen; empty = the shell's own */
@@ -117,7 +120,7 @@ fun DawnShell(top: Screen, nav: Nav, content: @Composable () -> Unit) {
     val menu = top == Screen.Home && !Dawn.homeOpen
     BackHandler(enabled = top == Screen.Home && Dawn.homeOpen) { Dawn.homeOpen = false }
     Box(Modifier.fillMaxSize().background(Color(0xFF16243A))) {
-        DawnBackground()
+        if (top == Screen.Tv && Dawn.previewBrowser) Box(Modifier.fillMaxSize().background(Color(0xFF393C40))) else DawnBackground()
         Column(Modifier.fillMaxSize()) {
             DawnTopBar(top, menu, nav)
             Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -128,7 +131,17 @@ fun DawnShell(top: Screen, nav: Nav, content: @Composable () -> Unit) {
                 menu -> listOf("▲▼" to "Navigacija", "OK" to "Odaberi")
                 else -> listOf("▲▼" to "Navigacija", "OK" to "Odaberi", "Back" to "Nazad")
             }
-            if (!menu) DawnHintBar(hints)
+            if (!menu) Box {
+                DawnHintBar(hints)
+                if (top == Screen.Tv && Dawn.previewBrowser) Dawn.favoriteNotice?.let { added ->
+                    Row(Modifier.align(Alignment.CenterEnd).padding(end = 18.dp).clip(Rnd(8.dp))
+                        .background(Color(0xFF383B3E)).border(1.dp, Color.LightGray, Rnd(8.dp)).padding(6.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        T(if (added) "★" else "☆", 15.sp, if (added) Color(0xFFFFCA28) else Color.LightGray)
+                        T(if (added) "Dodano u favorite" else "Uklonjeno iz favorita", 12.sp, Color.White)
+                    }
+                }
+            }
         }
     }
 }
@@ -240,7 +253,12 @@ private fun DawnTopBar(top: Screen, menu: Boolean, nav: Nav) {
             }
             PillButton(null, R.drawable.lc_bell, Notes.unread()) { showNotes = true }
         }
-        if (section.isNotEmpty()) {
+        if (top == Screen.Tv && Dawn.previewBrowser) {
+            Ico(R.drawable.lc_tv, 24.dp, Color.White)
+            T("TV UŽIVO", 20.sp, Color.White, FontWeight.Bold)
+            T("LIVE", 14.sp, Color.White, FontWeight.Bold, modifier = Modifier.clip(Rnd(4.dp)).background(Color.Red).padding(4.dp))
+            T(Dawn.crumb, 16.sp, Color.White, maxLines = 1)
+        } else if (section.isNotEmpty()) {
             if (Dawn.crumb.isEmpty()) T(section, 18.sp, Color.White, FontWeight.SemiBold)
             else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 T(section, 17.sp, Color(0xFFD5DBE3))
@@ -274,20 +292,26 @@ fun DawnNowNext(ch: Channel?, modifier: Modifier) {
         if (ch == null) { Box(Modifier.fillMaxWidth().padding(16.dp)) { T("Stani na kanal da vidiš program", 14.sp, C.Muted) }; return@Column }
         val st by load(ch.url, EpgShift.rev) { Store.byId(ctx, ch.pid)?.let { Repo.epg(it, ch, 3) } ?: emptyList() }
         val list = (st as? Load.Ok)?.value.orEmpty()
-        val t = System.currentTimeMillis()
+        var t by remember(ch.url) { mutableStateOf(System.currentTimeMillis()) }
+        LaunchedEffect(ch.url) { while (true) { delay(15000); t = System.currentTimeMillis() } }
         val cur = list.firstOrNull { it.start <= t && it.end > t }
-        val next = list.firstOrNull { it.start > t }
+        val upcoming = list.filter { it.start > t }.take(2)
         Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            T(ch.name, 18.sp, Color.White, FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ChannelLogo(ch.logo, ch.name)
+                T(ch.name, 18.sp, Color.White, FontWeight.Bold, modifier = Modifier.weight(1f))
+                qualityOf(ch.name)?.let { T(it, 14.sp, Color.White) }
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 T(cur?.title ?: if (st is Load.Loading) tr("Učitavam program…") else tr("Nema EPG vodiča"), 14.sp, Color(0xFFC3CCD8), modifier = Modifier.weight(1f))
                 if (cur != null) T(cur.times(), 14.sp, Color(0xFFC3CCD8))
             }
             if (cur != null) Box(Modifier.padding(top = 6.dp).fillMaxWidth().height(4.dp).clip(Rnd(2.dp)).background(Color(0x33FFFFFF))) {
-                Box(Modifier.fillMaxWidth(cur.progress()).height(4.dp).background(Color(0xFFB9D0F0)))
+                Box(Modifier.fillMaxWidth(cur.progress(t)).height(4.dp).background(Color.White))
             }
         }
-        if (next != null) {
+        cur?.desc?.takeIf { it.isNotBlank() }?.let { T(it, 13.sp, Color.LightGray, maxLines = 2, modifier = Modifier.padding(horizontal = 16.dp)) }
+        upcoming.forEach { next ->
             Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0x1FFFFFFF)))
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)) {

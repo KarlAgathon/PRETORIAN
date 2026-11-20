@@ -108,6 +108,7 @@ fun Focusable(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
+    holdMillis: Long = 0L,
     shape: Shape = Rnd(14.dp),
     normal: Color = Color.Transparent,
     focused: Color? = null,
@@ -137,9 +138,10 @@ fun Focusable(
                 ok && e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount == 0 -> { fired[0] = false; false }
                 // holding OK sends repeated key-downs: open the options once
                 ok && e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount > 0 -> {
-                    if (!fired[0]) { fired[0] = true; long() }
+                    if (!fired[0] && e.nativeKeyEvent.eventTime - e.nativeKeyEvent.downTime >= holdMillis) { fired[0] = true; long() }
                     true
                 }
+                ok && e.type == KeyEventType.KeyUp && !fired[0] && holdMillis > 0 && e.nativeKeyEvent.eventTime - e.nativeKeyEvent.downTime >= holdMillis -> { long(); true }
                 ok && e.type == KeyEventType.KeyUp && fired[0] -> { fired[0] = false; true }
                 else -> false
             }
