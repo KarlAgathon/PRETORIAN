@@ -50,7 +50,7 @@ class TvCatalogRegressionTest {
     }
 
     @Test fun sportsMatchNeedsDistinctTeamEvidence() {
-        assertFalse(Sports.matchesTeams("Manchester City", "Manchester United", setOf("manchester")))
-        assertTrue(Sports.matchesTeams("Manchester City", "Manchester United", setOf("manchester", "city", "united")))
+        assertFalse(Sports.matchesTeams(setOf("manchester", "city"), setOf("manchester", "united"), setOf("manchester")))
+        assertTrue(Sports.matchesTeams(setOf("manchester", "city"), setOf("manchester", "united"), setOf("manchester", "city", "united")))
     }
 }
