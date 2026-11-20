@@ -303,6 +303,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     remember { Chrome.inRail = false; 0 }
     var sideGroup by remember { mutableStateOf<GroupRef?>(null) }
     var resume by remember { mutableStateOf<Progress?>(null) }
+    var guideFromBar by remember { mutableStateOf(false) }
     var bar by remember { mutableStateOf(false) }   // button bar at the bottom
     var subFile by remember { mutableStateOf(s.items.getOrNull(index)?.subFile) }
     // picture format: 0 Auto, 1 4:3, 2 16:9, 3 Fit, 4 Stretch, 5 Original — remembered per channel
@@ -587,6 +588,13 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         else { liveGuide = guide; bar = false; showInfo = false; side = "epg" }
     }
 
+    fun closeGuide() {
+        side = null
+        bar = guideFromBar
+        showInfo = guideFromBar
+        guideFromBar = false
+    }
+
     BackHandler(enabled = dialog != null || side != null || resume != null || bar || openGuide || (s.live && showInfo)) {
         when {
             openGuide -> { openGuide = false; notice = null; showInfo = false; bar = false }
@@ -594,8 +602,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             dialog != null -> dialog = null
             bar -> { bar = false; showInfo = false; notice = null }
             side == null && showInfo -> { showInfo = false; notice = null }
-            side == "channels" -> side = "groups"
-            side == "groups" -> { side = null; sideGroup = null; nav.back() }
+            side == "groups" -> side = "channels"
+            side == "epg" -> closeGuide()
             else -> { side = null; sideGroup = null }
         }
     }
@@ -676,7 +684,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                     Key.DirectionLeft -> if (!s.live) { player.seekTo((player.currentPosition - step).coerceAtLeast(0)); showInfo = true; true }
                         else { side = "channels"; showInfo = false; true }
                     Key.DirectionRight -> if (!s.live) { player.seekTo(player.currentPosition + step); showInfo = true; true }
-                        else { openGuide = true; true }
+                        else { guideFromBar = false; openGuide = true; true }
                     Key.MediaPause, Key.MediaPlay -> { if (!s.live || Tech.livePause) { if (e.key == Key.MediaPause) player.pause() else player.play() }; showInfo = true; true }
                     Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.MediaPlayPause -> {
                         if (s.live) {
@@ -972,7 +980,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                         ChannelOptionsBar(playing = playing, favOn = ch != null && Favs.inAny(ctx, ch), onAction = { action ->
                             when (action) {
                                 "pause" -> if (player.playWhenReady) player.pause() else player.play()
-                                "more" -> { bar = false; dialog = "menu" }
+                                "more" -> { dialog = "menu" }
                                 "archive" -> {
                                     if (ch != null && Catchups.has(p, ch)) dialog = "archive"
                                     else inform(tr("Arhiva nije dostupna za ovaj kanal."))
@@ -988,7 +996,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                                 "zoom" -> { dialog = "zoom" }
                                 "audio" -> { bar = false; dialog = "audio" }
                                 "video" -> { bar = false; dialog = "video" }
-                                "epg" -> { openGuide = true }
+                                "epg" -> { guideFromBar = true; openGuide = true }
                                 "recent" -> { bar = false; dialog = "recent" }
                             }
                         })
@@ -1025,9 +1033,9 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 if (sideGroup != null) { items = list.map { c -> PlayItem(c.name, c.url, c.logo, "${c.num}", c) }; TvMemory.group = sideGroup }
                 index = i; side = null; sideGroup = null
             },
-            onBackToChannels = { side = null; sideGroup = null; nav.back() })
+            onBackToChannels = { side = "channels" })
         // ------------------------------------------------------------ live: guide on the right, over the picture
-        if (side == "epg") {
+        if (side == "epg" && dialog == null) {
             val ch = item.channel
             Column(Modifier.align(Alignment.TopEnd).fillMaxWidth(0.4f).fillMaxHeight().background(C.Overlay).padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1040,8 +1048,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 if (Hints.show()) T("◀ ili Nazad = slika preko cijelog ekrana · OK na emisiji = podsjeti me", 11.sp, C.Muted, maxLines = 2)
                 val fr = remember { FocusRequester() }
                 Box(Modifier.weight(1f).focusRequester(fr).onPreviewKeyEvent { e ->
-                    if (e.key == Key.Back || e.key == Key.Escape) { if (e.type == KeyEventType.KeyUp) side = null; true }
-                    else if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { side = null; true } else false
+                    if (e.key == Key.Back || e.key == Key.Escape) { if (e.type == KeyEventType.KeyUp) closeGuide(); true }
+                    else if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { closeGuide(); true } else false
                 }) { if (ch != null) EpgList(ch, 24) else T("Nema EPG podataka za ovaj kanal.", 14.sp, C.Soft) }
                 LaunchedEffect(Unit) { delay(150); fr.tryFocus() }
             }
@@ -1092,12 +1100,12 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 focusRequester = requester(menuSleep)) { moreSelection = menuSleep; dialog = menuSleep }
             OptionRow("Kvalitet i informacije", R.drawable.lc_info, value = if (videoH > 0) qualityLabel(videoH) else null,
                 focusRequester = requester(menuInfo)) { moreSelection = menuInfo; dialog = menuInfo }
-            if (s.live) item.channel?.let { c -> OptionRow("Upravljanje EPG vodičem", R.drawable.lc_clock, value = EpgShift.label(EpgShift.chMin(c.url)),
-                focusRequester = requester(menuEpgshift)) { moreSelection = menuEpgshift; dialog = menuEpgshift } }
             OptionRow("Vanjski plejer", R.drawable.lc_external_link,
                 focusRequester = requester(menuExt)) { saveProgress(); moreSelection = menuExt; dialog = menuExt }
             if (s.live && player.isCurrentMediaItemLive && player.isCurrentMediaItemSeekable && duration > 0) OptionRow("Vremenski pomak uživo", R.drawable.lc_history,
                 focusRequester = requester(menuTimeshift)) { moreSelection = menuTimeshift; dialog = menuTimeshift }
+            if (s.live) item.channel?.let { c -> OptionRow("Upravljanje EPG vodičem", R.drawable.lc_clock, value = EpgShift.label(EpgShift.chMin(c.url)),
+                focusRequester = requester(menuEpgshift)) { moreSelection = menuEpgshift; dialog = menuEpgshift } }
             if (!s.live && subFile != null) OptionRow("Podesi vrijeme titla", R.drawable.lc_clock, sub = "ako titl kasni ili žuri · SYNC") { dialog = "subsync" }
             if (Tech.audioDelay) OptionRow("Pomak zvuka", R.drawable.lc_volume, sub = tr("ako zvuk kasni ili žuri"), value = AudioDelay.label(AudioDelay.of(item.url)),
                 focusRequester = requester(menuAdelay)) { moreSelection = menuAdelay; dialog = menuAdelay }
@@ -1391,7 +1399,7 @@ private fun SideLists(mode: String, sideGroup: GroupRef?, items: List<PlayItem>,
             .onPreviewKeyEvent { e ->
                 // Back works like Left: channels → groups → out of the player to TV
                 if (e.key == Key.Back || e.key == Key.Escape) {
-                    if (e.type == KeyEventType.KeyUp) { if (mode == "groups") onBackToChannels() else onGroups() }
+                    if (e.type == KeyEventType.KeyUp) { if (mode == "groups") onBackToChannels() else onClose() }
                     return@onPreviewKeyEvent true
                 }
                 if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false

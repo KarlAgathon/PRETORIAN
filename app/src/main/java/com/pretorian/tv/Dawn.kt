@@ -240,7 +240,7 @@ private fun DawnTopBar(top: Screen, menu: Boolean, nav: Nav) {
     val sep: @Composable () -> Unit = { Box(Modifier.width(1.dp).height(20.dp).background(Color(0x4DFFFFFF))) }
     Row(Modifier.fillMaxWidth().height(72.dp).padding(horizontal = 38.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        if (menu) {
+        if (top != Screen.Tv) {
             val playlist = Store.active(ctx)
             val expiry = playlist?.exp?.toLongOrNull()?.takeIf { it in 1..Long.MAX_VALUE / 1000 }?.times(1000)
             if (expiry != null && expiry <= now.time) {
@@ -269,7 +269,8 @@ private fun DawnTopBar(top: Screen, menu: Boolean, nav: Nav) {
             T("TV uživo", 20.sp, Color.White, FontWeight.Bold)
             T("UŽIVO", 14.sp, Color.White, FontWeight.Bold, modifier = Modifier.clip(Rnd(4.dp)).background(Color.Red).padding(4.dp))
             T(Dawn.crumb, 16.sp, Color.White, maxLines = 1)
-        } else if (section.isNotEmpty()) {
+        } else if (top == Screen.Tv && section.isNotEmpty()) {
+            Ico(R.drawable.lc_tv, 20.dp, Color.White)
             if (Dawn.crumb.isEmpty()) T(section, 18.sp, Color.White, FontWeight.SemiBold)
             else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 T(section, 17.sp, Color(0xFFD5DBE3))

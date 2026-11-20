@@ -1,3 +1,10 @@
+PRETORIAN 1.0.67
+
+• Aplikacija se otvara na početnom meniju. Status playliste i sportska obavještenja prikazuju se odvojeno.
+• TV grupe i liste kanala otvaraju se korak po korak. Povratak iz plejera vraća izbor kanala.
+• Kontrole za EPG, arhivu, format slike i vremenski pomak dostupne su tokom reprodukcije.
+• U pregledu kanala kratki pritisak na OK pokreće kanal, a dugi mijenja status favorita.
+
 PRETORIAN 1.0.66 Stable
 
 • Pouzdanije vraćanje djelimičnih sigurnosnih kopija i čuvanje napretka gledanja.
