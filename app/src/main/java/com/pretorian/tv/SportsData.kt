@@ -57,13 +57,15 @@ data class SportEvent(
     val replay: Boolean = false,
     /** "ht" halftime, "et" extra time, "pen" penalties, from the feed's status (not translated) */
     val stage: String = "",
+    val observedAt: Long = 0,
 ) {
+    val stale get() = observedAt > 0 && state == "in" && System.currentTimeMillis() - observedAt > 120_000L
     /** live now: a real match from the score feed ("in"), never a guide broadcast, never one that started more than 6 hours ago */
-    val live get() = !fromGuide && state == "in" && System.currentTimeMillis() - start < 6 * 3600_000L
+    val live get() = !fromGuide && state == "in" && System.currentTimeMillis() - start in 0 until 6 * 3600_000L && !stale
     /** a guide broadcast on your channels right now (no live score) */
     val onAir get() = fromGuide && state == "in"
     /** finished, also a stale "live" one */
-    val over get() = state == "post" || (state == "in" && !fromGuide && !live)
+    val over get() = state == "post" || (state == "in" && !fromGuide && !live && !stale)
 }
 
 data class League(val sport: String, val path: String, val name: String, val abbr: String)
@@ -246,9 +248,52 @@ object Sports {
         )
     }
 
-    private fun espn(lg: League, date: String, timeout: Int = 15000): List<SportEvent> {
-        val o = JSONObject(http("https://site.api.espn.com/apis/site/v2/sports/${lg.path}/scoreboard?dates=$date&limit=500", timeout))  // i18n-ignore
-        val evs = o.optJSONArray("events") ?: return emptyList()
+    private val requests = kotlinx.coroutines.sync.Semaphore(4)
+    private val locks = Array(32) { kotlinx.coroutines.sync.Mutex() }
+    private val cooldown = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    @Volatile private var rateLimitUntil = 0L
+    private fun cacheFile(lg: League, date: String) = Repo.diskDir?.resolve("sports-feeds")?.resolve(lg.path.replace('/', '_') + "_" + date + ".json")
+
+    private fun cached(lg: League, date: String): List<SportEvent> {
+        val file = cacheFile(lg, date) ?: return emptyList()
+        if (!file.isFile) return emptyList()
+        return try { parseBoard(lg, file.readText(), file.lastModified()) } catch (_: Exception) { emptyList() }
+    }
+
+    private suspend fun espn(lg: League, date: String): List<SportEvent> {
+        val key = lg.path + date
+        return locks[Math.floorMod(key.hashCode(), locks.size)].withLock {
+            val file = cacheFile(lg, date)
+            val now = System.currentTimeMillis()
+            val ttl = if ('-' in date) 20 * 60_000L else if (date < espnDate(dayStart(-1))) 6 * 3600_000L else 50_000L
+            if ((file != null && file.isFile && now - file.lastModified() in 0 until ttl) ||
+                now < rateLimitUntil || now < (cooldown[key] ?: 0L)) return@withLock cached(lg, date)
+            try {
+                val raw = requests.withPermit {
+                    if (System.currentTimeMillis() < rateLimitUntil) return@withLock cached(lg, date)
+                    http("https://site.api.espn.com/apis/site/v2/sports/${lg.path}/scoreboard?dates=$date&limit=500", 6500)
+                }
+                val at = System.currentTimeMillis()
+                val events = parseBoard(lg, raw, at)
+                if (file != null) try {
+                    val dir = file.parentFile!!
+                    dir.mkdirs()
+                    val temp = File.createTempFile("board", ".tmp", dir)
+                    try { temp.writeText(raw); temp.renameTo(file) } finally { temp.delete() }
+                } catch (_: java.io.IOException) {}
+                cooldown.remove(key)
+                events
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) {
+                if (e.message == "HTTP 429") rateLimitUntil = System.currentTimeMillis() + 5 * 60_000L
+                cooldown[key] = System.currentTimeMillis() + 60_000L
+                cached(lg, date)
+            }
+        }
+    }
+
+    private fun parseBoard(lg: League, raw: String, at: Long): List<SportEvent> {
+        val evs = JSONObject(raw).getJSONArray("events")
         val out = ArrayList<SportEvent>()
         for (i in 0 until evs.length()) {
             val e = evs.optJSONObject(i) ?: continue
@@ -273,23 +318,30 @@ object Sports {
                 else -> e.optJSONArray("competitions")?.optJSONObject(0)?.let { parseCompetition(lg, e, it, e.str("name"))?.let(out::add) }
             }
         }
-        return out
+        return out.map { it.copy(observedAt = at) }
     }
 
     /** Matches of one day from all leagues; leagues that fail are skipped. */
     suspend fun day(offset: Int, onPart: ((List<SportEvent>) -> Unit)? = null): List<SportEvent> = withContext(Dispatchers.IO) {
         val from = dayStart(offset); val to = dayStart(offset + 1)
         // at most 8 requests at a time (many at once made the box and ESPN slow); every league that answers is shown at once
-        val gate = kotlinx.coroutines.sync.Semaphore(8)
+        val dates = listOf(espnDate(from), espnDate(dayStart(offset - 1))).distinct()
+        val leagues = activeLeagues()
+        if (onPart != null) {
+            val saved = leagues.flatMap { lg -> dates.flatMap { cached(lg, it) } }
+                .filter { it.start in from until to }.distinctBy { it.id }
+            if (saved.isNotEmpty()) onPart(saved)
+            cacheFile(leagues.firstOrNull() ?: return@withContext emptyList(), dates.first())?.parentFile?.listFiles()
+                ?.filter { it.lastModified() < System.currentTimeMillis() - 7 * 86_400_000L }?.forEach { it.delete() }
+        }
         val got = java.util.Collections.synchronizedList(ArrayList<SportEvent>())
         fun part() = synchronized(got) { got.toList() }.filter { it.start in from until to }.distinctBy { it.id }.sortedBy { it.start }
         coroutineScope {
-            activeLeagues().sortedBy { if (it.abbr in BIG) 0 else 1 }.map { lg ->
+            leagues.sortedBy { if (countryOf(it.path).uppercase() in Prefs.str("sport_country").split(',')) 0 else if (it.abbr in BIG) 1 else 2 }.map { lg ->
                 async {
                     // US-dated feeds: European evening matches are on the same date, night games on the day before
-                    val dates = listOf(espnDate(from), espnDate(from - 86_400_000L)).distinct()
-                    val r = dates.flatMap { d -> gate.withPermit { try { espnQuick(lg, d) } catch (e: Exception) { emptyList() } } }
-                    if (r.isNotEmpty()) { got.addAll(r); onPart?.invoke(part()) }
+                    val r = dates.flatMap { d -> espn(lg, d) }
+                    if (r.isNotEmpty()) synchronized(got) { got.addAll(r); onPart?.invoke(part()) }
                 }
             }.awaitAll()
         }
@@ -301,13 +353,9 @@ object Sports {
         val abbrs = evs.map { it.leagueAbbr }.toSet()
         val from = dayStart(0)
         LEAGUES.filter { it.abbr in abbrs }.distinctBy { it.path }.flatMap { lg ->
-            listOf(espnDate(from), espnDate(from - 86_400_000L)).distinct().flatMap { d -> try { espnQuick(lg, d) } catch (e: Exception) { emptyList() } }
+            listOf(espnDate(from), espnDate(from - 86_400_000L)).distinct().flatMap { d -> try { espn(lg, d) } catch (e: Exception) { emptyList() } }
         }.distinctBy { it.id }
     }
-
-    /** one league, with a short timeout and one quick retry */
-    private fun espnQuick(lg: League, date: String): List<SportEvent> =
-        try { espn(lg, date, 8000) } catch (e: Exception) { espn(lg, date, 8000) }
 
     /**
      * matches that have not started yet, the next [days] days: football first, then what is closest to you
@@ -515,7 +563,7 @@ object Sports {
 
     /** Adds your channels to each match and returns extra matches found only in your guide. */
     /** Last result per day, shown at once when you come back to the Sports Center. */
-    val lastCombined = HashMap<Int, List<SportEvent>>()
+    val lastCombined = java.util.concurrent.ConcurrentHashMap<Int, List<SportEvent>>()
 
     /** Heavy: always call off the main thread. */
     fun combine(events: List<SportEvent>, g: Guide, offset: Int): List<SportEvent> {
@@ -548,7 +596,7 @@ object Sports {
                 return@map ev.copy(channels = hits.flatMap { chans[it.channel] ?: emptyList() }.distinctBy { it.url })
             }
             val th = tokens(ev.home.name); val ta = tokens(ev.away.name)
-            val hits = near(ev.start, 75 * 60_000L).filter { pr -> val w = wd(pr); teamIn(th, w) && teamIn(ta, w) }
+            val hits = near(ev.start, 75 * 60_000L).filter { pr -> val w = wd(pr); !REPLAY.containsMatchIn(pr.title) && teamIn(th - ta, w) && teamIn(ta - th, w) }
             used.addAll(hits)
             ev.copy(channels = hits.flatMap { chans[it.channel] ?: emptyList() }.distinctBy { it.url })
         }
@@ -842,7 +890,7 @@ object ApiFootball {
         try {
             val c = java.net.URL("https://v3.football.api-sports.io/fixtures?live=all").openConnection() as java.net.HttpURLConnection  // i18n-ignore
             c.connectTimeout = 8000; c.readTimeout = 8000; c.setRequestProperty("x-apisports-key", key)
-            val t = c.inputStream.bufferedReader().use { it.readText() }
+            val t = try { c.inputStream.bufferedReader().use { it.readText() } } finally { c.disconnect() }
             val arr = JSONObject(t).optJSONArray("response") ?: return@withContext cache
             fun team(o: JSONObject?, goals: Any?) = o?.let { Team(it.str("name"), it.str("name").take(3).uppercase(), it.str("logo").ifBlank { null }, null, null, goals?.toString()?.takeIf { g -> g != "null" }) }
             cache = (0 until arr.length()).mapNotNull { i ->
@@ -852,7 +900,7 @@ object ApiFootball {
                 val el = f.optJSONObject("status")?.optInt("elapsed", 0) ?: 0
                 SportEvent("af" + f.optLong("id"), "football", lg?.str("name") ?: "", "AF", lg?.str("round"), f.optLong("timestamp") * 1000, "in",
                     if (el > 0) "$el'" else null, team(tm?.optJSONObject("home"), g?.opt("home")), team(tm?.optJSONObject("away"), g?.opt("away")),
-                    "", null, country = (lg?.str("country") ?: "").let { cn -> Locale.getAvailableLocales().firstOrNull { it.getDisplayCountry(Locale.ENGLISH).equals(cn, true) }?.country?.lowercase() ?: "int" })  // i18n-ignore
+                    "", null, observedAt = at, country = (lg?.str("country") ?: "").let { cn -> Locale.getAvailableLocales().firstOrNull { it.getDisplayCountry(Locale.ENGLISH).equals(cn, true) }?.country?.lowercase() ?: "int" })  // i18n-ignore
             }
         } catch (_: Exception) {}
         cache
