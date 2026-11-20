@@ -984,7 +984,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                                     Toast.makeText(ctx, tr(if (wasFavorite) "Uklonjeno iz favorita" else "Dodano u favorite"), Toast.LENGTH_SHORT).show()
                                 }
                                 "subs" -> { bar = false; dialog = "subs" }
-                                "zoom" -> { bar = false; dialog = "zoom" }
+                                "zoom" -> { dialog = "zoom" }
                                 "audio" -> { bar = false; dialog = "audio" }
                                 "video" -> { bar = false; dialog = "video" }
                                 "epg" -> { openGuide = true }
@@ -1103,16 +1103,30 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         "fav" -> item.channel?.let { FavPicker(it) { dialog = null } }
         "epgshift" -> item.channel?.let { EpgShiftPopup(it) { dialog = if (s.live && moreSelection == "epgshift") "menu" else null } }
         "zoom" -> Popup("Format slike", onDismiss = { dialog = null }, width = 760.dp) {
+            val selectedFocus = remember { FocusRequester() }
+            LaunchedEffect(Unit) { selectedFocus.tryFocus() }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(0 to "Automatski / original", 3 to "Fit", 5 to "Zoom", 4 to "Rastegni").forEach { (mode, label) ->
                     val chosen = mode == resize
-                    Focusable(modifier = Modifier.weight(1f).height(54.dp), onClick = {
+                    Focusable(modifier = Modifier.weight(1f).height(72.dp),
+                        focusRequester = selectedFocus.takeIf { chosen || (mode == 0 && resize in 1..2) },
+                        onClick = {
                         resize = mode
                         item.channel?.let { Prefs.put("fmt_v2_" + it.url.hashCode(), mode.toLong()) }
                         dialog = null
                         bar = true
                     }, normal = Color(0xCC222222), borderColor = if (chosen) C.Red else C.Line, zoom = 1f) {
-                        T(if (chosen) "✓ " + tr(label) else tr(label), 15.sp, Color.White, modifier = Modifier.align(Alignment.Center))
+                        Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                            when (mode) {
+                                4 -> T("↔", 21.sp, Color.White)
+                                5 -> Ico(R.drawable.lc_maximize, 22.dp, Color.White)
+                                else -> Ico(R.drawable.lc_monitor, 22.dp, Color.White)
+                            }
+                            T(tr(label), 15.sp, Color.White)
+                        }
+                        if (chosen) Box(Modifier.align(Alignment.TopEnd).padding(4.dp)) {
+                            Ico(R.drawable.lc_check, 16.dp, Color.White)
+                        }
                     }
                 }
             }
