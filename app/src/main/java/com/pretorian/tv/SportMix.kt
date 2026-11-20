@@ -269,7 +269,7 @@ fun SportMixScreen(nav: Nav) {
     var loadingOther by remember(tab) { mutableStateOf(false) }
     var delayed by remember { mutableStateOf(false) }
     val loading = loadingToday || loadingOther
-    LaunchedEffect(tick, SportCache.rev, visible) {
+    LaunchedEffect(tick, SportCache.dataRev, visible) {
         if (!visible) return@LaunchedEffect
         val interval = (Prefs.str("sport_refresh", "1").toLongOrNull() ?: 1L).coerceIn(1, 5) * 60_000L - 10_000L
         if (SportCache.today == null || System.currentTimeMillis() - SportCache.todayAt > interval) {
@@ -287,7 +287,7 @@ fun SportMixScreen(nav: Nav) {
         }
         today = SportCache.today
     }
-    LaunchedEffect(tab, SportCache.rev, visible, tick / 20) {
+    LaunchedEffect(tab, SportCache.dataRev, visible, tick / 20) {
         if (!visible) return@LaunchedEffect
         if (tab != "live" && (SportCache.other[tab] == null || System.currentTimeMillis() - (SportCache.otherAt[tab] ?: 0L) > 1_200_000L)) {
             loadingOther = SportCache.other[tab] == null
@@ -640,7 +640,7 @@ fun SportMixScreen(nav: Nav) {
             }
         }
     }
-    LaunchedEffect(shown.isNotEmpty()) { if (shown.isNotEmpty()) { delay(100); focusSel() } }
+    LaunchedEffect(shown.isNotEmpty()) { if (shown.isNotEmpty() && playing == null && pick == null) { delay(100); focusSel() } }
 }
 
 @Composable
@@ -908,6 +908,7 @@ fun FollowCard(nav: Nav, width: androidx.compose.ui.unit.Dp) {
 
 /** Sport data kept between visits; refreshed only when stale (scores) or when the filters change. */
 object SportCache {
+    var dataRev by mutableIntStateOf(0); private set
     var rev by mutableIntStateOf(0)
     var guideRev by mutableIntStateOf(0)
     var today: List<SportEvent>? = null; var todayAt = 0L
@@ -915,26 +916,24 @@ object SportCache {
     val otherAt = HashMap<String, Long>()
     var combined: List<SportEvent> = emptyList()
     var guide: Sports.Guide? = null
-    fun clear() { today = null; other.clear(); otherAt.clear(); combined = emptyList(); rev++ }
+    fun clear() { today = null; other.clear(); otherAt.clear(); combined = emptyList(); dataRev++; rev++ }
 }
 
 
 /** "Tue 20:45" for this week, "17.11. 20:45" later, only the time for today */
 fun whenShort(ms: Long): String {
     val loc = java.util.Locale(Look.lang)
-    val days = ((ms - Sports.dayStart(0)) / 86_400_000L).toInt()
     return when {
-        days <= 0 -> java.text.SimpleDateFormat("HH:mm", loc).format(java.util.Date(ms))  // i18n-ignore
-        days < 7 -> java.text.SimpleDateFormat("EEE HH:mm", loc).format(java.util.Date(ms))  // i18n-ignore
+        ms in Sports.dayStart(0) until Sports.dayStart(1) -> java.text.SimpleDateFormat("HH:mm", loc).format(java.util.Date(ms))  // i18n-ignore
+        ms in Sports.dayStart(1) until Sports.dayStart(7) -> java.text.SimpleDateFormat("EEE HH:mm", loc).format(java.util.Date(ms))  // i18n-ignore
         else -> java.text.SimpleDateFormat("dd.MM. HH:mm", loc).format(java.util.Date(ms))  // i18n-ignore
     }
 }
 /** "Tuesday, 17 November" (today / tomorrow named) */
 fun whenLong(ms: Long): String {
     val loc = java.util.Locale(Look.lang)
-    val days = ((ms - Sports.dayStart(0)) / 86_400_000L).toInt()
     val d = java.text.SimpleDateFormat("EEEE, d. MMMM", loc).format(java.util.Date(ms))  // i18n-ignore
-    return when (days) { 0 -> tr("Danas") + " · " + d; 1 -> tr("Sutra") + " · " + d; else -> d }  // i18n-ignore
+    return when (ms) { in Sports.dayStart(0) until Sports.dayStart(1) -> tr("Danas") + " · " + d; in Sports.dayStart(1) until Sports.dayStart(2) -> tr("Sutra") + " · " + d; else -> d }  // i18n-ignore
 }
 
 

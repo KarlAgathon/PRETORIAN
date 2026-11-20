@@ -189,7 +189,7 @@ object Sports {
         val t = c.optJSONObject("team")
         val a = c.optJSONObject("athlete")
         val name = t?.str("displayName")?.ifBlank { null } ?: a?.str("displayName")?.ifBlank { null } ?: return null
-        val score = c.str("score").ifBlank { null } ?: c.optJSONArray("linescores")?.let { ls ->
+        val score = (c.optJSONObject("score")?.str("displayValue") ?: c.str("score")).takeIf { it.isNotBlank() && !it.startsWith("{") } ?: c.optJSONArray("linescores")?.let { ls ->
             (0 until ls.length()).mapNotNull { ls.optJSONObject(it)?.optDouble("value")?.takeIf { v -> !v.isNaN() }?.toInt()?.toString() }
                 .joinToString(" ").ifBlank { null }
         }
@@ -225,7 +225,7 @@ object Sports {
         val homeId = home?.optJSONObject("team")?.str("id") ?: ""
         val det = comp.optJSONArray("details")?.let { d -> (0 until d.length()).mapNotNull { d.optJSONObject(it) }.mapNotNull { x ->
             val t = x.optJSONObject("type")?.str("text")?.lowercase() ?: ""
-            val kind = when { x.optBoolean("redCard") || t.contains("red") -> "red"; x.optBoolean("yellowCard") || t.contains("yellow") -> "yellow"
+            val kind = when { x.optBoolean("redCard") || t.contains("red card") -> "red"; x.optBoolean("yellowCard") || t.contains("yellow") -> "yellow"  // i18n-ignore
                 x.optBoolean("scoringPlay") || t.contains("goal") -> "goal"; t.contains("penalty awarded") -> "penalty"; else -> return@mapNotNull null }
             val who = x.optJSONArray("athletesInvolved")?.optJSONObject(0)?.str("displayName") ?: ""
             val min = x.optJSONObject("clock")?.str("displayValue") ?: ""
@@ -619,6 +619,7 @@ object Sports {
                     (teamIn(th - ta, words) || teamIn(ta - th, words))
             }
             used.addAll(hits)
+            used.addAll(probable)
             ev.copy(channels = hits.flatMap { chans[it.channel].orEmpty() }.distinctBy { it.url },
                 ai = probable.flatMap { chans[it.channel].orEmpty() }.distinctBy { it.url })
         }

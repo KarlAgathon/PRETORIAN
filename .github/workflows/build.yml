@@ -44,6 +44,12 @@ jobs:
         env:
           LEAD_KEY_PASSWORD: ${{ secrets.LEAD_KEY_PASSWORD }}
           TMDB_KEY: ${{ secrets.TMDB_KEY }}
+      - name: Sports review Android lint
+        if: github.ref == 'refs/heads/feature/sports-redesign'
+        run: gradle lintRelease --no-daemon
+        env:
+          LEAD_KEY_PASSWORD: ${{ secrets.LEAD_KEY_PASSWORD }}
+          TMDB_KEY: ${{ secrets.TMDB_KEY }}
       - name: Remove signing key
         if: always()
         run: rm -f app/release.keystore
