@@ -167,6 +167,11 @@ sealed class GRow {
     val id get() = when (this) { is Group -> "g:" + ref.key; is Header -> "h:" + p.id; is NewFav -> "nf"; is NewGroup -> "ng:$pid" }
 }
 
+internal fun groupFocusTarget(rows: List<GRow>, selected: GroupRef?): String? {
+    val groups = rows.filterIsInstance<GRow.Group>()
+    return (groups.firstOrNull { it.ref.key == selected?.key } ?: groups.firstOrNull())?.id
+}
+
 suspend fun groupRows(ctx: android.content.Context): List<GRow> {
     val out = ArrayList<GRow>()
     if (Look.age && !Look.dawn && Recent.list().isNotEmpty()) out.add(GRow.Group(GroupRef(null, Category(RECENT_GROUP, tr("Zadnje gledano")))))
@@ -394,10 +399,7 @@ private fun TvList(nav: Nav) {
     val focusScope = rememberCoroutineScope()
     fun backToGroups() {
         val groupRows = (rows as? Load.Ok)?.value.orEmpty()
-        val target = st.group?.let { "g:" + it.key }
-            ?.takeIf { key -> groupRows.any { it.id == key } }
-            ?: groupRows.filterIsInstance<GRow.Group>().firstOrNull()?.let { "g:" + it.ref.key }
-            ?: return
+        val target = groupFocusTarget(groupRows, st.group) ?: return
         st.focusKey = target
         inChannels = false
         Chrome.rail = 2
@@ -701,7 +703,7 @@ fun playChannels(nav: Nav, list: List<Channel>, index: Int) {
 }
 
 @Composable
-private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GRow>>, enterTick: Int = 0, onFocusCh: (Channel) -> Unit = {}, onBackToGroups: () -> Unit, onChanged: () -> Unit, fullWidthClassic: Boolean = false, focusOnStart: Boolean = false) {
+private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GRow>>, enterTick: Int = 0, onFocusCh: (Channel) -> Unit = {}, onBackToGroups: () -> Unit, onChanged: () -> Unit, focusOnStart: Boolean = false) {
     val ctx = LocalContext.current
     var listRev by remember { mutableIntStateOf(0) }
     val isFav = g.pid == null
@@ -713,22 +715,12 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
     val chFr = remember { FocusRequester() }
     WrapEffect(cWrap, cState)
 
-    Column(Modifier.fillMaxSize().padding(start = if (Look.layout == 0 || Look.dawn) 6.dp else 20.dp, end = if (Look.layout == 0 || Look.dawn) 6.dp else 20.dp, top = if (fullWidthClassic) 4.dp else if (Look.layout == 0) 12.dp else if (Look.dawn) 6.dp else 22.dp)) {
-        if (!fullWidthClassic && !Look.dawn) {
-            T(g.cat.name, if (Look.layout == 0) Rows.font else 20.sp, C.Text, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.fillMaxWidth())
-            T("OK gledaj · drži OK = opcije · ◀ grupe", 12.sp, C.Muted, maxLines = 1, modifier = Modifier.padding(bottom = 10.dp))
-        }
+    Column(Modifier.fillMaxSize().padding(start = 6.dp, end = 6.dp, top = 6.dp)) {
         when (val s = state) {
             is Load.Loading -> Loading("Učitavam kanale…")
             is Load.Err -> Message("Kanali se nisu učitali", s.message)
             is Load.Ok -> {
                 val list = s.value
-                if (fullWidthClassic) {
-                    Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 14.dp, top = 7.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        T(g.cat.name.uppercase(), 14.sp, C.Text, FontWeight.Bold, maxLines = 1, modifier = Modifier.weight(1f))
-                        T(trf("%s KANALA", list.size), 11.sp, C.Muted, FontWeight.SemiBold)
-                    }
-                }
                 if (list.isEmpty()) {
                     Message(if (isFav) "Nema favorita" else "Grupa je prazna",
                         if (isFav) "Na kanalu drži OK › Dodaj u favorite" else "Kanale možeš prebaciti ovamo preko opcija kanala")
@@ -748,7 +740,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                             val active = PreviewSel.ch?.url == ch.url || TvMemory.preview?.url == ch.url ||
                                 (TvMemory.group?.key == g.key && TvMemory.channel == i)
                             Focusable(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = if (Look.layout == 0 || Look.dawn) 4.dp else 0.dp).height(if (fullWidthClassic) 46.dp else if (Look.dawn) 50.dp else if (Look.layout == 0) 58.dp else Rows.channel).wrapKeys(i, list.size, cWrap)
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp).height(50.dp).wrapKeys(i, list.size, cWrap)
                                     .then(if (active) Modifier.border(1.dp, C.Green.copy(alpha = 0.48f), Rnd(12.dp)) else Modifier),
                                 onClick = {
                                     gate.run("c:${ch.url}", locked) {
@@ -771,29 +763,13 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                 focusBorderColor = if (Look.dawn) Color.Transparent else null,
                                 zoom = if (Look.dawn) 1.0f else 1.01f,
                             ) { f ->
-                                Row(Modifier.fillMaxSize().clipToBounds().padding(horizontal = if (fullWidthClassic) 14.dp else 10.dp), verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(if (fullWidthClassic) 12.dp else 10.dp)) {
-                                    T(if (Look.dawn) "%03d".format(ch.num) else "${ch.num}", if (fullWidthClassic) 13.sp else if (Look.layout == 0) 11.sp else if (Look.dawn) 15.sp else 13.sp, if (Look.dawn) (if (f) Dawn.onPill else Color(0xFFD5DBE3)) else C.Muted,
-                                        modifier = Modifier.width(if (fullWidthClassic) 34.dp else if (Look.layout == 0) 26.dp else 34.dp))
+                                Row(Modifier.fillMaxSize().clipToBounds().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    T("%03d".format(ch.num), 15.sp, if (f) Dawn.onPill else Color(0xFFD5DBE3),
+                                        modifier = Modifier.width(34.dp))
                                     ChannelLogo(ch.logo, ch.name)
-                                    if (fullWidthClassic) {
-                                        T(ch.name, 14.sp, if (f) C.Text else C.Soft, if (f) FontWeight.SemiBold else FontWeight.Medium,
-                                            maxLines = 1, modifier = Modifier.weight(0.32f))
-                                        ChannelEpgCells(ch, Modifier.weight(0.68f))
-                                    } else {
-                                        if (Look.layout == 0) {
-                                            T(ch.name, Rows.font, if (f) C.Text else C.Soft, if (f) FontWeight.SemiBold else FontWeight.Normal,
-                                                maxLines = 1, modifier = Modifier.weight(0.34f))
-                                            ChannelEpgLine(ch, Modifier.weight(0.66f))
-                                        } else if (Look.dawn) {
-                                            T(ch.name, 16.sp, if (f) Dawn.onPill else Color(0xFFEFF2F6), if (f) FontWeight.SemiBold else FontWeight.Normal,
-                                                maxLines = 1, modifier = Modifier.weight(1f))
-                                        } else {
-                                            T(ch.name, Rows.font, if (f) C.Text else C.Soft, if (f) FontWeight.SemiBold else FontWeight.Normal,
-                                                maxLines = 1, modifier = Modifier.weight(1f))
-                                        }
-                                    }
-                                    if (!Look.dawn) qualityOf(ch.name)?.let { Chip(it, C.Card, C.Soft) }
+                                    T(ch.name, 16.sp, if (f) Dawn.onPill else Color(0xFFEFF2F6), if (f) FontWeight.SemiBold else FontWeight.Normal,
+                                        maxLines = 1, modifier = Modifier.weight(1f))
                                     if (locked) Ico(R.drawable.lc_lock, 16.dp, C.Muted)
                                     if (!isFav && Favs.inAny(ctx, ch)) T("★", 17.sp, C.Amber)
                                     if (active) Dot(C.Green, 8.dp)
@@ -1241,64 +1217,6 @@ fun PreviewBox(ch: Channel?, modifier: Modifier) {
     }
 }
 
-/** Compact now-playing EPG text shown inside a channel row. */
-@Composable
-private fun ChannelEpgLine(ch: Channel, modifier: Modifier = Modifier) {
-    val ctx = LocalContext.current
-    val state by load(ch.url, EpgShift.rev) { Store.byId(ctx, ch.pid)?.let { Repo.epg(it, ch, 2) } ?: emptyList() }
-    val now = System.currentTimeMillis()
-    val current = (state as? Load.Ok)?.value?.firstOrNull { it.start <= now && it.end > now }
-    if (current != null) {
-        Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            T(current.times(), 12.sp, C.Muted, maxLines = 1)
-            T(current.title, 13.sp, C.Soft, maxLines = 1, modifier = Modifier.weight(1f))
-        }
-    } else if (state is Load.Loading) {
-        T("EPG …", 9.sp, C.Muted, maxLines = 1, modifier = modifier)
-    }
-}
-
-/** Three aligned programme cells in the full-width Classic channel list. */
-@Composable
-private fun ChannelEpgCells(ch: Channel, modifier: Modifier = Modifier) {
-    val ctx = LocalContext.current
-    val state by load(ch.url, EpgShift.rev) {
-        Store.byId(ctx, ch.pid)?.let { Repo.epg(it, ch, 3) } ?: emptyList()
-    }
-    when (val result = state) {
-        is Load.Loading -> Box(modifier.fillMaxHeight().clip(Rnd(8.dp)).background(C.Card), contentAlignment = Alignment.Center) {
-            T("Učitavam EPG…", 11.sp, C.Muted)
-        }
-        is Load.Err -> Box(modifier.fillMaxHeight().clip(Rnd(8.dp)).background(C.Card), contentAlignment = Alignment.Center) {
-            T("EPG nije dostupan", 11.sp, C.Muted)
-        }
-        is Load.Ok -> {
-            val now = System.currentTimeMillis()
-            val current = result.value.firstOrNull { it.start <= now && it.end > now }
-            val upcoming = result.value.filter { it.start > now }.take(2)
-            val entries = if (current != null) listOf(current) + upcoming else result.value.take(3)
-            if (entries.isEmpty()) {
-                Box(modifier.fillMaxHeight().clip(Rnd(8.dp)).background(C.Card).padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) {
-                    T("Nema EPG vodiča", 12.sp, C.Muted)
-                }
-            } else {
-                Row(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    entries.forEachIndexed { index, item ->
-                        val cellWeight = if (current != null && entries.size > 1) {
-                            if (index == 0) 0.28f else 0.72f / (entries.size - 1)
-                        } else 1f / entries.size.coerceAtLeast(1)
-                        Column(Modifier.weight(cellWeight).fillMaxHeight().clip(Rnd(8.dp)).background(if (index == 0 && current != null) C.CardFocus else C.Card)
-                            .padding(horizontal = 10.dp, vertical = 6.dp), verticalArrangement = Arrangement.Center) {
-                            T(item.times(), 10.sp, if (index == 0 && current != null) C.RedText else C.Muted, FontWeight.SemiBold, maxLines = 1)
-                            T(item.title, 13.sp, C.Text, FontWeight.Medium, maxLines = 1)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
 @Composable
 fun EpgList(ch: Channel, limit: Int = 12, modifier: Modifier = Modifier, compact: Boolean = false) {
     val ctx = LocalContext.current
@@ -1345,24 +1263,6 @@ fun EpgList(ch: Channel, limit: Int = 12, modifier: Modifier = Modifier, compact
             }
         }
         }
-    }
-}
-
-/** Right side while browsing channels: live preview + programme guide of the focused channel. */
-@Composable
-fun EpgPanel(ch: Channel?, modifier: Modifier) {
-    var shown by remember { mutableStateOf<Channel?>(null) }
-    LaunchedEffect(ch?.url) { delay(150); shown = ch }
-    Column(modifier.fillMaxHeight().background(C.Rail).padding(horizontal = 18.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        val c = shown
-        PreviewSel.ch?.let { PreviewBox(it, Modifier.fillMaxWidth()) }
-        if (c == null) { T("Stani na kanal da vidiš program", 14.sp, C.Muted); return@Column }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            ChannelLogo(c.logo, c.name)
-            T(c.name, 17.sp, C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
-            qualityOf(c.name)?.let { Chip(it, C.Card, C.Soft) }
-        }
-        EpgList(c)
     }
 }
 
