@@ -51,6 +51,7 @@ object Backup {
         portable(k) && (parts == null || part(k) < 0 || part(k) in parts)
 
     private fun payload(ctx: Context, parts: Set<Int>? = null): JSONObject {
+        Watch.flush()
         val p = JSONObject()
         prefs(ctx).all.forEach { (k, v) ->
             if (!included(k, parts)) return@forEach
@@ -112,6 +113,7 @@ object Backup {
 
     /** restores everything; throws with a message when the password is wrong or the file is broken */
     fun restore(ctx: Context, text: String, password: String?) {
+        Watch.flush()
         val o = JSONObject(text)
         if (o.optInt("pretorian_backup") != 1) throw IllegalArgumentException(tr("Fajl nije PRETORIAN backup"))
         val data = if (o.has("enc")) {

@@ -367,7 +367,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     }
 
     /** remembers where you are in a movie or episode (continue watching, watched marks) */
-    fun saveProgress(done: Boolean = false) {
+    fun saveProgress(done: Boolean = false, background: Boolean = false) {
         if (s.live) return
         val it = items.getOrNull(index) ?: return
         val dur = player.duration.takeIf { d -> d > 0 } ?: return
@@ -375,13 +375,13 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         if ((done || pos >= dur * 0.9) && Watch.get(ctx, it.url)?.watched != true) {
             if (it.season != null) Stats.episode(it.search ?: it.title, it.season) else Stats.film()
         }
-        Watch.save(ctx, Progress(it.url, it.title, it.logo, pos, dur, System.currentTimeMillis(), it.search.takeIf { _ -> it.season != null },
-            it.season, it.episode, next = false, done = done || pos >= dur * 0.9, pid = p?.id ?: ""))
-        // finished an episode: the next one shows up in "Continue watching"
-        if ((done || pos >= dur * 0.9) && it.season != null) items.getOrNull(index + 1)?.let { nx ->
-            if (Watch.get(ctx, nx.url)?.watched != true)
-                Watch.save(ctx, Progress(nx.url, nx.title, nx.logo, 0, 0, System.currentTimeMillis() + 1, nx.search, nx.season, nx.episode, next = true, pid = p?.id ?: ""))
-        }
+        val current = Progress(it.url, it.title, it.logo, pos, dur, System.currentTimeMillis(), it.search.takeIf { _ -> it.season != null },
+            it.season, it.episode, next = false, done = done || pos >= dur * 0.9, pid = p?.id ?: "")
+        val next = if (current.done && it.season != null) items.getOrNull(index + 1)
+            ?.takeIf { nx -> Watch.get(ctx, nx.url)?.watched != true }
+            ?.let { nx -> Progress(nx.url, nx.title, nx.logo, 0, 0, System.currentTimeMillis() + 1, nx.search, nx.season, nx.episode, next = true, pid = p?.id ?: "") }
+        else null
+        Watch.save(ctx, current, next, background)
     }
 
     /** ◀◀ / ▶▶ on a live channel with archive: 5 minutes per press through the provider's archive; past "now" = live again */
@@ -563,7 +563,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             }
         }
     }
-    LaunchedEffect(index) { gaveUp = false; frozenMsg = false; if (!s.live) while (true) { delay(15_000); if (player.isPlaying) saveProgress() } }
+    LaunchedEffect(index) { gaveUp = false; frozenMsg = false; if (!s.live) while (true) { delay(15_000); if (player.isPlaying) saveProgress(background = true) } }
 
     BackHandler(enabled = dialog != null || side != null || resume != null || bar) {
         when {

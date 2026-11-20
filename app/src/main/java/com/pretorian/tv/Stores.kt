@@ -115,20 +115,52 @@ object Watch {
         return m
     }
 
-    private fun persist() {
-        val m = map ?: return
+    private val writer = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private var pending: java.util.concurrent.Future<*>? = null
+
+    @Synchronized
+    fun flush() {
+        pending?.get()
+        pending = null
+    }
+
+    @Synchronized
+    private fun persist(background: Boolean = false) {
+        val entries = map?.values?.toList() ?: return
+        pending = writer.submit { writeHistory(entries) }
+        if (!background) flush()
+        rev++
+    }
+
+    private fun writeHistory(entries: List<Progress>) {
         val a = JSONArray()
-        m.values.sortedByDescending { it.ts }.take(600).forEach { p ->
+        entries.sortedByDescending { it.ts }.take(600).forEach { p ->
             a.put(JSONObject().put("url", p.url).put("title", p.title).put("poster", p.poster ?: "").put("pos", p.pos).put("dur", p.dur).put("ts", p.ts)
                 .put("series", p.series ?: "").put("season", p.season ?: -1).put("episode", p.episode ?: -1).put("next", p.next).put("done", p.done).put("pid", p.pid))
         }
-        try { file.writeText(a.toString()) } catch (_: Exception) {}
-        rev++
+        val atomic = androidx.core.util.AtomicFile(file)
+        try {
+            val stream = atomic.startWrite()
+            try {
+                stream.write(a.toString().toByteArray())
+                atomic.finishWrite(stream)
+            } catch (failure: Exception) {
+                atomic.failWrite(stream)
+                throw failure
+            }
+        } catch (failure: java.io.IOException) {
+            android.util.Log.w("Watch", "Could not save playback progress", failure)
+        }
     }
 
     fun get(ctx: Context, url: String): Progress? = all(ctx)[url]
 
-    fun save(ctx: Context, p: Progress) { all(ctx)[p.url] = p; persist() }
+    fun save(ctx: Context, current: Progress, next: Progress?, background: Boolean) {
+        val entries = all(ctx)
+        entries[current.url] = current
+        if (next != null) entries[next.url] = next
+        persist(background)
+    }
 
     fun setWatched(ctx: Context, url: String, title: String, poster: String?, on: Boolean) {
         val m = all(ctx)
