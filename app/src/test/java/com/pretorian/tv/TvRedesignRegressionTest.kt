@@ -15,6 +15,18 @@ class TvRedesignRegressionTest {
 
     @Before fun setup() { Prefs.init(RuntimeEnvironment.getApplication()) }
 
+    @Test fun playlistExpiryCountsCalendarDaysAcrossSpringClockChange() {
+        val zone = java.util.TimeZone.getTimeZone("Europe/Berlin")
+        val calendar = java.util.Calendar.getInstance(zone)
+        calendar.clear()
+        calendar.set(2026, java.util.Calendar.MARCH, 29, 0, 30)
+        val start = calendar.timeInMillis
+        calendar.add(java.util.Calendar.DAY_OF_MONTH, 1)
+        assertEquals(23 * 3600000L, calendar.timeInMillis - start)
+        assertEquals(1L, playlistDaysRemaining(start, calendar.timeInMillis, zone))
+        assertEquals(0L, playlistDaysRemaining(start, start + 3600000L, zone))
+    }
+
     @Test fun favoritesPreserveOriginalGroupAndCatchupMetadata() {
         Favs.toggle("chosen", channel)
         val favorite = Favs.channels("chosen").single()

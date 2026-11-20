@@ -220,6 +220,11 @@ private fun DawnMenu(nav: Nav) {
     }
 }
 
+internal fun playlistDaysRemaining(now: Long, expiry: Long, zone: java.util.TimeZone): Long {
+    fun localDay(millis: Long) = (millis / 1000 + zone.getOffset(millis) / 1000) / 86400
+    return localDay(expiry) - localDay(now)
+}
+
 @Composable
 private fun DawnTopBar(top: Screen, menu: Boolean, nav: Nav) {
     val ctx = LocalContext.current
@@ -247,11 +252,14 @@ private fun DawnTopBar(top: Screen, menu: Boolean, nav: Nav) {
                     sep()
                     Ico(R.drawable.lc_calendar, 18.dp, Color.White)
                     T(SimpleDateFormat("d MMM yyyy", Locale(Look.lang)).format(Date(expiry)), 15.sp, Color.White)
-                    val zone = java.util.TimeZone.getDefault()
-                    fun localDay(ms: Long) = (ms / 1000 + zone.getOffset(ms) / 1000) / 86400
-                    val days = localDay(expiry) - localDay(now.time)
+                    val days = playlistDaysRemaining(now.time, expiry, java.util.TimeZone.getDefault())
                     val color = when { days <= 2 -> Color(0xFFFF7777); days <= 7 -> Color(0xFFFFC457); else -> Color(0xFF80D795) }
-                    T(trf("%s dana", days), 15.sp, color, FontWeight.Bold)
+                    Row(Modifier.clip(Rnd(12.dp)).background(color.copy(alpha = 0.12f))
+                        .border(1.dp, color, Rnd(12.dp)).padding(horizontal = 8.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Ico(R.drawable.lc_calendar, 16.dp, color)
+                        T(trf("%s dana", days), 15.sp, color, FontWeight.Bold)
+                    }
                 }
             }
             PillButton(null, R.drawable.lc_bell, Notes.unread()) { showNotes = true }
