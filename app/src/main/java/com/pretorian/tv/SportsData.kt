@@ -57,13 +57,15 @@ data class SportEvent(
     val replay: Boolean = false,
     /** "ht" halftime, "et" extra time, "pen" penalties, from the feed's status (not translated) */
     val stage: String = "",
+    val observedAt: Long = 0,
 ) {
+    val stale get() = observedAt > 0 && state == "in" && System.currentTimeMillis() - observedAt > 120_000L
     /** live now: a real match from the score feed ("in"), never a guide broadcast, never one that started more than 6 hours ago */
-    val live get() = !fromGuide && state == "in" && System.currentTimeMillis() - start < 6 * 3600_000L
+    val live get() = !fromGuide && state == "in" && System.currentTimeMillis() - start in 0 until 6 * 3600_000L && !stale
     /** a guide broadcast on your channels right now (no live score) */
     val onAir get() = fromGuide && state == "in"
     /** finished, also a stale "live" one */
-    val over get() = state == "post" || (state == "in" && !fromGuide && !live)
+    val over get() = state == "post" || (state == "in" && !fromGuide && !live && !stale)
 }
 
 data class League(val sport: String, val path: String, val name: String, val abbr: String)
@@ -120,10 +122,10 @@ object Sports {
     /** competitions you follow: chosen competitions (all when none chosen) on the chosen continents */
     fun activeLeagues(): List<League> {
         val raw = Prefs.str("sport_leagues", BIG.joinToString(","))
-        if (raw == "-") return emptyList()
         val sel = raw.split(',').filter { it.isNotBlank() }.toSet()
         val cont = Prefs.str("sport_cont", "eu").split(',').map { if (it == "am") "na" else it }.toSet() + "world"
-        return LEAGUES.filter { (sel.isEmpty() || it.abbr in sel) && contOf(it) in cont }
+        val followed = Prefs.str("sm_follow_leagues").split('|').toSet()
+        return LEAGUES.filter { it.name in followed || ((sel.isEmpty() || it.abbr in sel) && contOf(it) in cont) }
     }
     /** favourite teams, written in Settings (comma separated) */
     fun teams(): List<String> = Prefs.str("sport_teams").split(',').map { norm(it.trim()) }.filter { it.length >= 3 }
@@ -161,7 +163,7 @@ object Sports {
 
     private fun espnDate(ms: Long) = SimpleDateFormat("yyyyMMdd", Locale.US).format(java.util.Date(ms))
 
-    private fun iso(s: String): Long? {
+    internal fun iso(s: String): Long? {
         for (p in listOf("yyyy-MM-dd'T'HH:mm:ss'Z'", "yyyy-MM-dd'T'HH:mm'Z'", "yyyy-MM-dd'T'HH:mm:ssXXX", "yyyy-MM-dd'T'HH:mmXXX")) {
             try { return SimpleDateFormat(p, Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.parse(s)?.time } catch (_: Exception) {}
         }
@@ -187,7 +189,7 @@ object Sports {
         val t = c.optJSONObject("team")
         val a = c.optJSONObject("athlete")
         val name = t?.str("displayName")?.ifBlank { null } ?: a?.str("displayName")?.ifBlank { null } ?: return null
-        val score = c.str("score").ifBlank { null } ?: c.optJSONArray("linescores")?.let { ls ->
+        val score = (c.optJSONObject("score")?.str("displayValue") ?: c.str("score")).takeIf { it.isNotBlank() && !it.startsWith("{") } ?: c.optJSONArray("linescores")?.let { ls ->
             (0 until ls.length()).mapNotNull { ls.optJSONObject(it)?.optDouble("value")?.takeIf { v -> !v.isNaN() }?.toInt()?.toString() }
                 .joinToString(" ").ifBlank { null }
         }
@@ -223,8 +225,8 @@ object Sports {
         val homeId = home?.optJSONObject("team")?.str("id") ?: ""
         val det = comp.optJSONArray("details")?.let { d -> (0 until d.length()).mapNotNull { d.optJSONObject(it) }.mapNotNull { x ->
             val t = x.optJSONObject("type")?.str("text")?.lowercase() ?: ""
-            val kind = when { x.optBoolean("redCard") || t.contains("red") -> "red"; x.optBoolean("yellowCard") || t.contains("yellow") -> "yellow"
-                x.optBoolean("scoringPlay") || t.contains("goal") -> "goal"; else -> return@mapNotNull null }
+            val kind = when { x.optBoolean("redCard") || t.contains("red card") -> "red"; x.optBoolean("yellowCard") || t.contains("yellow") -> "yellow"  // i18n-ignore
+                x.optBoolean("scoringPlay") || t.contains("goal") -> "goal"; t.contains("penalty awarded") -> "penalty"; else -> return@mapNotNull null }
             val who = x.optJSONArray("athletesInvolved")?.optJSONObject(0)?.str("displayName") ?: ""
             val min = x.optJSONObject("clock")?.str("displayValue") ?: ""
             MatchDetail(if (x.optJSONObject("team")?.str("id") == homeId) "h" else "a", kind + (if (x.optBoolean("penaltyKick")) "_pen" else "") + (if (x.optBoolean("ownGoal")) "_og" else ""), min, who)
@@ -246,9 +248,57 @@ object Sports {
         )
     }
 
-    private fun espn(lg: League, date: String, timeout: Int = 15000): List<SportEvent> {
-        val o = JSONObject(http("https://site.api.espn.com/apis/site/v2/sports/${lg.path}/scoreboard?dates=$date&limit=500", timeout))  // i18n-ignore
-        val evs = o.optJSONArray("events") ?: return emptyList()
+    private val requests = kotlinx.coroutines.sync.Semaphore(4)
+    private val locks = Array(32) { kotlinx.coroutines.sync.Mutex() }
+    private val failures = java.util.concurrent.ConcurrentHashMap<String, Int>()
+    private val cooldown = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    @Volatile private var rateLimitUntil = 0L
+    fun feedDelayed() = System.currentTimeMillis().let { now -> rateLimitUntil > now || cooldown.values.any { it >= now - 60_000L } }
+
+    private fun cacheFile(lg: League, date: String) = Repo.diskDir?.resolve("sports-feeds")?.resolve(lg.path.replace('/', '_') + "_" + date + ".json")
+
+    private fun cached(lg: League, date: String): List<SportEvent> {
+        val file = cacheFile(lg, date) ?: return emptyList()
+        if (!file.isFile) return emptyList()
+        return try { parseBoard(lg, file.readText(), file.lastModified()) } catch (_: Exception) { emptyList() }
+    }
+
+    private suspend fun espn(lg: League, date: String): List<SportEvent> {
+        val key = lg.path + date
+        return locks[(key.hashCode() and Int.MAX_VALUE) % locks.size].withLock {
+            val file = cacheFile(lg, date)
+            val now = System.currentTimeMillis()
+            val ttl = if ('-' in date) 20 * 60_000L else if (date < espnDate(dayStart(-1))) 6 * 3600_000L else 50_000L
+            if (SportsFeedCache.fresh(file, now, ttl) ||
+                now < rateLimitUntil || now < (cooldown[key] ?: 0L)) return@withLock cached(lg, date)
+            try {
+                val raw = requests.withPermit {
+                    if (System.currentTimeMillis() < rateLimitUntil) return@withLock cached(lg, date)
+                    http("https://site.api.espn.com/apis/site/v2/sports/${lg.path}/scoreboard?dates=$date&limit=500", 6500)  // i18n-ignore
+                }
+                val at = System.currentTimeMillis()
+                val events = parseBoard(lg, raw, at)
+                if (file != null) try {
+                    SportsFeedCache.save(file, raw)
+                } catch (_: java.io.IOException) {}
+                failures.remove(key)
+                cooldown.remove(key)
+                events
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) {
+                if (e.message == "HTTP 429") rateLimitUntil = System.currentTimeMillis() + 5 * 60_000L
+                val expired = cooldown.filterValues { it < now - 86_400_000L }.keys
+                expired.forEach { cooldown.remove(it); failures.remove(it) }
+                val attempts = ((failures[key] ?: 0) + 1).coerceAtMost(5)
+                failures[key] = attempts
+                cooldown[key] = System.currentTimeMillis() + (30_000L shl (attempts - 1))
+                cached(lg, date)
+            }
+        }
+    }
+
+    private fun parseBoard(lg: League, raw: String, at: Long): List<SportEvent> {
+        val evs = JSONObject(raw).getJSONArray("events")
         val out = ArrayList<SportEvent>()
         for (i in 0 until evs.length()) {
             val e = evs.optJSONObject(i) ?: continue
@@ -273,27 +323,43 @@ object Sports {
                 else -> e.optJSONArray("competitions")?.optJSONObject(0)?.let { parseCompetition(lg, e, it, e.str("name"))?.let(out::add) }
             }
         }
-        return out
+        return out.map { it.copy(observedAt = at) }
     }
 
     /** Matches of one day from all leagues; leagues that fail are skipped. */
     suspend fun day(offset: Int, onPart: ((List<SportEvent>) -> Unit)? = null): List<SportEvent> = withContext(Dispatchers.IO) {
         val from = dayStart(offset); val to = dayStart(offset + 1)
-        // at most 8 requests at a time (many at once made the box and ESPN slow); every league that answers is shown at once
-        val gate = kotlinx.coroutines.sync.Semaphore(8)
-        val got = java.util.Collections.synchronizedList(ArrayList<SportEvent>())
-        fun part() = synchronized(got) { got.toList() }.filter { it.start in from until to }.distinctBy { it.id }.sortedBy { it.start }
-        coroutineScope {
-            activeLeagues().sortedBy { if (it.abbr in BIG) 0 else 1 }.map { lg ->
-                async {
-                    // US-dated feeds: European evening matches are on the same date, night games on the day before
-                    val dates = listOf(espnDate(from), espnDate(from - 86_400_000L)).distinct()
-                    val r = dates.flatMap { d -> gate.withPermit { try { espnQuick(lg, d) } catch (e: Exception) { emptyList() } } }
-                    if (r.isNotEmpty()) { got.addAll(r); onPart?.invoke(part()) }
-                }
-            }.awaitAll()
+        val dates = listOf(espnDate(from), espnDate(dayStart(offset - 1))).distinct()
+        val leagues = activeLeagues()
+        val result = boards(leagues, dates, onPart) { it.start in from until to }
+        if (offset == 0 && onPart != null) {
+            Repo.diskDir?.resolve("sports-feeds")?.listFiles()?.filter {
+                it.lastModified() < System.currentTimeMillis() - 7 * 86_400_000L
+            }?.forEach { it.delete() }
         }
-        part()
+        result
+    }
+
+    private suspend fun boards(leagues: List<League>, dates: List<String>,
+        onPart: ((List<SportEvent>) -> Unit)?, include: (SportEvent) -> Boolean): List<SportEvent> = coroutineScope {
+        val rows = linkedMapOf<String, List<SportEvent>>()
+        fun snapshot() = rows.values.flatten().filter(include).distinctBy { it.id }.sortedBy { it.start }
+        if (onPart != null) {
+            leagues.forEach { lg -> rows[lg.path] = dates.flatMap { cached(lg, it) } }
+            snapshot().takeIf { it.isNotEmpty() }?.let(onPart)
+        }
+        val countries = Prefs.str("sport_country").lowercase().split(',').toSet()
+        val followed = Prefs.str("sm_follow_leagues").split('|').toSet()
+        leagues.sortedBy { when { it.name in followed -> 0; countryOf(it.path) in countries -> 1; it.abbr in BIG -> 2; else -> 3 } }.map { lg ->
+            async {
+                val result = dates.flatMap { espn(lg, it) }
+                synchronized(rows) {
+                    val previous = rows.put(lg.path, result)
+                    if (result != previous && (result.isNotEmpty() || !previous.isNullOrEmpty())) onPart?.invoke(snapshot())
+                }
+            }
+        }.awaitAll()
+        snapshot()
     }
 
     /** only the leagues of these matches, today (a followed match is live: one small request instead of every league) */
@@ -301,24 +367,19 @@ object Sports {
         val abbrs = evs.map { it.leagueAbbr }.toSet()
         val from = dayStart(0)
         LEAGUES.filter { it.abbr in abbrs }.distinctBy { it.path }.flatMap { lg ->
-            listOf(espnDate(from), espnDate(from - 86_400_000L)).distinct().flatMap { d -> try { espnQuick(lg, d) } catch (e: Exception) { emptyList() } }
+            listOf(espnDate(from), espnDate(from - 86_400_000L)).distinct().flatMap { d -> try { espn(lg, d) } catch (e: Exception) { emptyList() } }
         }.distinctBy { it.id }
     }
-
-    /** one league, with a short timeout and one quick retry */
-    private fun espnQuick(lg: League, date: String): List<SportEvent> =
-        try { espn(lg, date, 8000) } catch (e: Exception) { espn(lg, date, 8000) }
 
     /**
      * matches that have not started yet, the next [days] days: football first, then what is closest to you
      * (your country's leagues, the region, the big European ones), then by time
      */
-    suspend fun upcoming(days: Int = 7): List<SportEvent> = withContext(Dispatchers.IO) {
+    suspend fun upcoming(days: Int = 7, onPart: ((List<SportEvent>) -> Unit)? = null): List<SportEvent> = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
-        val range = espnDate(dayStart(0) - 86_400_000L) + "-" + espnDate(dayStart(days))
-        val list = coroutineScope {
-            activeLeagues().map { lg -> async { try { espn(lg, range) } catch (e: Exception) { emptyList() } } }.awaitAll().flatten()
-        }.filter { it.state == "pre" && it.start > now - 60_000 && it.start < dayStart(days) }.distinctBy { it.id }
+        val range = espnDate(dayStart(-1)) + "-" + espnDate(dayStart(days))
+        val end = dayStart(days)
+        val list = boards(activeLeagues(), listOf(range), onPart) { it.state == "pre" && it.start >= now && it.start < end }
         list.sortedWith(compareBy({ if (it.sport == "football") 0 else 1 }, { priority(it) }, { it.start }))
     }
 
@@ -340,7 +401,7 @@ object Sports {
     private val guideLock = kotlinx.coroutines.sync.Mutex()
     suspend fun guide(ctx: android.content.Context, pls: List<Playlist>): Guide = guideLock.withLock { guideNow(ctx, pls) }
     private suspend fun guideNow(ctx: android.content.Context, pls: List<Playlist>): Guide = withContext(Dispatchers.IO) {
-        val key = pls.joinToString(",") { it.id }
+        val key = pls.joinToString(",") { it.id } + "|" + EpgSources.urls(null).joinToString("|").hashCode()
         val cur = guideData
         if (guideFor == key && cur != null && System.currentTimeMillis() - guideAt < 3 * 3600_000L) return@withContext cur
         val all = pls.flatMap { p -> try { Repo.allChannels(p) } catch (e: Exception) { emptyList() } }
@@ -414,12 +475,11 @@ object Sports {
         w.lowercase().split(' ').joinToString(" ") { p -> if (p.length <= 3 && p.none { it.isDigit() }) p.uppercase() else p.replaceFirstChar { it.uppercase() } } }.distinct()
 
     /** live and coming matches of the next [days] days for your favourite countries (national teams and their leagues) and teams */
-    suspend fun favorites(days: Int, codes: Set<String>): List<SportEvent> = withContext(Dispatchers.IO) {
+    suspend fun favorites(days: Int, codes: Set<String>, onPart: ((List<SportEvent>) -> Unit)? = null): List<SportEvent> = withContext(Dispatchers.IO) {
         val nat = setOf("WC", "EURO", "UNL", "WCQ", "FRI")
         val lgs = (activeLeagues() + LEAGUES.filter { it.abbr in nat || countryOf(it.path) in codes }).distinctBy { it.path }
         val range = espnDate(dayStart(0)) + "-" + espnDate(dayStart(days))
-        coroutineScope { lgs.map { lg -> async { try { espn(lg, range) } catch (e: Exception) { emptyList() } } }.awaitAll().flatten() }
-            .distinctBy { it.id }.filter { it.state != "post" }.sortedBy { it.start }
+        boards(lgs, listOf(range), onPart) { it.state != "post" }
     }
 
     private fun maybeFor(ev: SportEvent, all: List<Pair<Channel, String>>): List<Channel> {
@@ -510,18 +570,21 @@ object Sports {
         return if (distinct.isNotEmpty()) distinct.any { it in words } else t.all { it in words }
     }
 
+    internal fun matchesTeams(home: Set<String>, away: Set<String>, title: Set<String>) =
+        teamIn(home - away, title) && teamIn(away - home, title)
+
     /** not a match at all: previews, magazines, studio shows */
     private val NOT_MATCH = Regex("highlights|sažetak|sazetak|najava|magazin|studio|emisija", RegexOption.IGNORE_CASE)
 
     /** Adds your channels to each match and returns extra matches found only in your guide. */
     /** Last result per day, shown at once when you come back to the Sports Center. */
-    val lastCombined = HashMap<Int, List<SportEvent>>()
+    val lastCombined = java.util.concurrent.ConcurrentHashMap<Int, List<SportEvent>>()
 
     /** Heavy: always call off the main thread. */
     fun combine(events: List<SportEvent>, g: Guide, offset: Int): List<SportEvent> {
         val progs = g.progs; val chans = g.byEpg
         val from = dayStart(offset); val to = dayStart(offset + 1)
-        val day = progs.filter { it.start < to + 2 * 3600_000L && it.end > from && !NOT_MATCH.containsMatchIn(it.title) }.sortedBy { it.start }
+        val day = progs.filterNot { NOT_MATCH.containsMatchIn(it.title) }.sortedBy { it.start }
         val starts = LongArray(day.size) { day[it].start }
         val normTitle = HashMap<Prog, String>(day.size * 2)
         val words = HashMap<Prog, Set<String>>(day.size * 2)
@@ -542,15 +605,23 @@ object Sports {
             if (ev.home == null || ev.away == null) {
                 // races: guide titles with "Formula 1" / "Grand Prix" around the start
                 if (ev.sport != "f1") return@map ev
-                val hits = near(ev.start, 90 * 60_000L).filter {
+                val hits = near(ev.start, 90 * 60_000L).filterNot { REPLAY.containsMatchIn(it.title) }.filter {
                     nt(it).let { t -> t.contains("formula") || t.contains("grand prix") || t.contains(" f1") || t.startsWith("f1") } }
                 used.addAll(hits)
-                return@map ev.copy(channels = hits.flatMap { chans[it.channel] ?: emptyList() }.distinctBy { it.url })
+                return@map ev.copy(ai = hits.flatMap { chans[it.channel] ?: emptyList() }.distinctBy { it.url })
             }
             val th = tokens(ev.home.name); val ta = tokens(ev.away.name)
-            val hits = near(ev.start, 75 * 60_000L).filter { pr -> val w = wd(pr); teamIn(th, w) && teamIn(ta, w) }
+            val window = near(ev.start, 75 * 60_000L).filterNot { REPLAY.containsMatchIn(it.title) }
+            val hits = window.filter { pr -> matchesTeams(th, ta, wd(pr)) }
+            val probable = window.filter { pr ->
+                val words = wd(pr)
+                pr !in hits && norm(ev.league).takeIf { it.length >= 4 }?.let { it in nt(pr) } == true &&
+                    (teamIn(th - ta, words) || teamIn(ta - th, words))
+            }
             used.addAll(hits)
-            ev.copy(channels = hits.flatMap { chans[it.channel] ?: emptyList() }.distinctBy { it.url })
+            used.addAll(probable)
+            ev.copy(channels = hits.flatMap { chans[it.channel].orEmpty() }.distinctBy { it.url },
+                ai = probable.flatMap { chans[it.channel].orEmpty() }.distinctBy { it.url })
         }
         // teams the score feed knows (today and the days already loaded): their match not in today's feed = a recording
         val known = (withCh + lastCombined.values.flatten()).flatMap { listOfNotNull(it.home, it.away) }.map { tokens(it.name).filter { w -> w !in GENERIC }.toSet() }.filter { it.isNotEmpty() }
@@ -842,7 +913,7 @@ object ApiFootball {
         try {
             val c = java.net.URL("https://v3.football.api-sports.io/fixtures?live=all").openConnection() as java.net.HttpURLConnection  // i18n-ignore
             c.connectTimeout = 8000; c.readTimeout = 8000; c.setRequestProperty("x-apisports-key", key)
-            val t = c.inputStream.bufferedReader().use { it.readText() }
+            val t = try { c.inputStream.bufferedReader().use { it.readText() } } finally { c.disconnect() }
             val arr = JSONObject(t).optJSONArray("response") ?: return@withContext cache
             fun team(o: JSONObject?, goals: Any?) = o?.let { Team(it.str("name"), it.str("name").take(3).uppercase(), it.str("logo").ifBlank { null }, null, null, goals?.toString()?.takeIf { g -> g != "null" }) }
             cache = (0 until arr.length()).mapNotNull { i ->
@@ -852,15 +923,20 @@ object ApiFootball {
                 val el = f.optJSONObject("status")?.optInt("elapsed", 0) ?: 0
                 SportEvent("af" + f.optLong("id"), "football", lg?.str("name") ?: "", "AF", lg?.str("round"), f.optLong("timestamp") * 1000, "in",
                     if (el > 0) "$el'" else null, team(tm?.optJSONObject("home"), g?.opt("home")), team(tm?.optJSONObject("away"), g?.opt("away")),
-                    "", null, country = (lg?.str("country") ?: "").let { cn -> Locale.getAvailableLocales().firstOrNull { it.getDisplayCountry(Locale.ENGLISH).equals(cn, true) }?.country?.lowercase() ?: "int" })  // i18n-ignore
+                    "", null, observedAt = at, country = (lg?.str("country") ?: "").let { cn -> Locale.getAvailableLocales().firstOrNull { it.getDisplayCountry(Locale.ENGLISH).equals(cn, true) }?.country?.lowercase() ?: "int" })  // i18n-ignore
             }
         } catch (_: Exception) {}
         cache
     }
     /** live matches ESPN does not have (same two teams = the same match) */
     fun extra(espn: List<SportEvent>, af: List<SportEvent>): List<SportEvent> {
-        fun k(e: SportEvent) = Sports.norm((e.home?.name ?: "") + (e.away?.name ?: "")).replace(" ", "")
-        val have = espn.map { k(it) }.toSet()
-        return af.filter { k(it) !in have }
+        fun same(a: SportEvent, b: SportEvent): Boolean {
+            if (a.sport != b.sport || kotlin.math.abs(a.start - b.start) > 30 * 60_000L) return false
+            val teams = listOf(a.home, a.away, b.home, b.away)
+            if (teams.any { it == null }) return false
+            return Sports.norm(a.home!!.name) == Sports.norm(b.home!!.name) &&
+                Sports.norm(a.away!!.name) == Sports.norm(b.away!!.name)
+        }
+        return af.distinctBy { it.id }.filter { candidate -> espn.none { same(it, candidate) } }
     }
 }
