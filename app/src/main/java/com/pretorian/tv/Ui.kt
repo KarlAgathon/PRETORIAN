@@ -102,6 +102,25 @@ fun T(
     )
 }
 
+/** Consumes repeats and the matching release once a remote OK hold has run its action. */
+internal class RemoteOkHold {
+    private var fired = false
+
+    fun handle(down: Boolean, repeats: Int, elapsed: Long, threshold: Long, onHold: () -> Unit): Boolean {
+        if (down && repeats == 0) {
+            fired = false
+            return false
+        }
+        if (!fired && elapsed >= threshold && (down || threshold > 0)) {
+            fired = true
+            onHold()
+        }
+        val consumed = down || fired
+        if (!down) fired = false
+        return consumed
+    }
+}
+
 /** Remote-friendly focusable box: accent frame + slight zoom when focused. */
 @Composable
 fun Focusable(
@@ -129,20 +148,16 @@ fun Focusable(
     if (focusRequester != null) m = m.focusRequester(focusRequester)
     val long = onMenu ?: onLongClick
     if (long != null) {
-        val fired = remember { booleanArrayOf(false) }
+        val hold = remember { RemoteOkHold() }
         m = m.onPreviewKeyEvent { e ->
             val ok = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter
             when {
                 e.key == Key.Menu && e.type == KeyEventType.KeyUp -> { long(); true }
-                // a new press: forget a hold whose release went to the menu window
-                ok && e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount == 0 -> { fired[0] = false; false }
-                // holding OK sends repeated key-downs: open the options once
-                ok && e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount > 0 -> {
-                    if (!fired[0] && e.nativeKeyEvent.eventTime - e.nativeKeyEvent.downTime >= holdMillis) { fired[0] = true; long() }
-                    true
+                ok && (e.type == KeyEventType.KeyDown || e.type == KeyEventType.KeyUp) -> {
+                    val event = e.nativeKeyEvent
+                    hold.handle(e.type == KeyEventType.KeyDown, event.repeatCount,
+                        event.eventTime - event.downTime, holdMillis, long)
                 }
-                ok && e.type == KeyEventType.KeyUp && !fired[0] && holdMillis > 0 && e.nativeKeyEvent.eventTime - e.nativeKeyEvent.downTime >= holdMillis -> { long(); true }
-                ok && e.type == KeyEventType.KeyUp && fired[0] -> { fired[0] = false; true }
                 else -> false
             }
         }
@@ -479,11 +494,11 @@ fun Modifier.wrapKeys(i: Int, n: Int, w: Wrap): Modifier = this.onPreviewKeyEven
 }
 
 @Composable
-fun WrapEffect(w: Wrap, state: androidx.compose.foundation.lazy.LazyListState) {
+fun WrapEffect(w: Wrap, state: androidx.compose.foundation.lazy.LazyListState, keepVisiblePosition: Boolean = false) {
     LaunchedEffect(w.target) {
         val t = w.target
         if (t < 0) return@LaunchedEffect
-        state.scrollToItem(t)
+        if (!keepVisiblePosition || state.layoutInfo.visibleItemsInfo.none { it.index == t }) state.scrollToItem(t)
         kotlinx.coroutines.delay(80)
         if (!Chrome.inRail) try { w.fr.requestFocus() } catch (_: Exception) {}
         w.target = -1

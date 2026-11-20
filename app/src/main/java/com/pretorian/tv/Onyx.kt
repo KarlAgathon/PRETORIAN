@@ -282,25 +282,24 @@ object Recent {
         val a = JSONArray(Prefs.str("recent_ch", "[]"))
         (0 until a.length()).map { a.getJSONObject(it) }.map { o ->
             Item(Channel(o.optString("id"), o.optInt("num"), o.optString("n"), o.optString("l").ifBlank { null }, o.optString("g"), o.optString("u"),
-                o.optString("e").ifBlank { null }, o.optString("p"), o.optInt("a")), o.optString("gp").ifBlank { null }, o.optString("gi"), o.optString("gn"))
+                o.optString("e").ifBlank { null }, o.optString("p"), o.optInt("a"), o.optString("catchup").ifBlank { null }), o.optString("gp").ifBlank { null }, o.optString("gi"), o.optString("gn"))
         }
     } catch (e: Exception) { emptyList() }
     fun add(c: Channel, pid: String?, catId: String, catName: String) {
         val keep = list().filter { it.ch.url != c.url }.take(9)
+        save(listOf(Item(c, pid, catId, catName)) + keep)
+    }
+    private fun save(items: List<Item>) {
         val a = JSONArray()
-        (listOf(Item(c, pid, catId, catName)) + keep).forEach { i ->
+        items.forEach { i ->
             a.put(JSONObject().put("id", i.ch.id).put("num", i.ch.num).put("n", i.ch.name).put("l", i.ch.logo ?: "").put("g", i.ch.group).put("u", i.ch.url)
-                .put("e", i.ch.epg ?: "").put("p", i.ch.pid).put("a", i.ch.archive).put("gp", i.pid ?: "").put("gi", i.catId).put("gn", i.catName))
+                .put("e", i.ch.epg ?: "").put("p", i.ch.pid).put("a", i.ch.archive).put("catchup", i.ch.catchup ?: "").put("gp", i.pid ?: "").put("gi", i.catId).put("gn", i.catName))
         }
         Prefs.put("recent_ch", a.toString()); rev++
     }
     fun clear() { Prefs.put("recent_ch", "[]"); rev++ }
     fun remove(url: String) {
-        val a = JSONArray(); list().filter { it.ch.url != url }.forEach { i ->
-            a.put(JSONObject().put("id", i.ch.id).put("num", i.ch.num).put("n", i.ch.name).put("l", i.ch.logo ?: "").put("g", i.ch.group).put("u", i.ch.url)
-                .put("e", i.ch.epg ?: "").put("p", i.ch.pid).put("a", i.ch.archive).put("gp", i.pid ?: "").put("gi", i.catId).put("gn", i.catName))
-        }
-        Prefs.put("recent_ch", a.toString()); rev++
+        save(list().filter { it.ch.url != url })
     }
 }
 

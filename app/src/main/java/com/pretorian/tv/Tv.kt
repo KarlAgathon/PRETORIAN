@@ -68,6 +68,9 @@ object TvMemory {
     var group: GroupRef? = null
     var channel = -1
     var returnUrl: String? = null
+    var viewportGroup: String? = null
+    var firstVisibleChannel = 0
+    var channelScrollOffset = 0
     /** true while coming back from the player: focus goes back to the channel that was playing */
     var restore = false
     /** the channel confirmed with OK: it plays in the small picture until another one is confirmed */
@@ -180,23 +183,26 @@ internal fun groupFocusTarget(rows: List<GRow>, selected: GroupRef?): String? {
     return (groups.firstOrNull { it.ref.key == selected?.key } ?: groups.firstOrNull())?.id
 }
 
-suspend fun groupRows(ctx: android.content.Context): List<GRow> {
-    val out = ArrayList<GRow>()
-    out.add(GRow.Group(GroupRef(null, Category(RECENT_GROUP, tr("Zadnje gledano")))))
-    out.add(GRow.Group(GroupRef(null, Category(UNIFIED_FAVORITES, tr("Favoriti")))))
-    val pls = Store.actives(ctx)
-    pls.forEachIndexed { _, p ->
-        // several playlists: all folded until you open one (its groups are read only then)
-        val open = pls.size == 1 || p.id in TvFold.open
-        if (pls.size > 1) out.add(GRow.Header(p, open))
-        if (open) {
+suspend fun groupRows(ctx: android.content.Context, playlistId: String? = null, allPlaylists: Boolean = false): List<GRow> {
+    val playlists = Store.actives(ctx)
+    val nested = playlists.size > 1 && playlistId != null && playlists.any { it.id == playlistId }
+    return buildList {
+        if (!nested) {
+            add(GRow.Group(GroupRef(null, Category(RECENT_GROUP, tr("Zadnje gledano")))))
+            add(GRow.Group(GroupRef(null, Category(UNIFIED_FAVORITES, tr("Favoriti")))))
+        }
+        for (p in playlists) {
+            if (playlists.size > 1 && !nested && !allPlaylists) {
+                add(GRow.Header(p, false))
+                continue
+            }
+            if (nested && p.id != playlistId) continue
             val ovr = Ovr(ctx, p.id)
-            out.add(GRow.Group(GroupRef(p.id, Category(ALL_GROUP, tr("Svi kanali")))))
-            ovr.groups("live", Repo.liveGroups(p)).forEach { out.add(GRow.Group(GroupRef(p.id, it))) }
-            if (!Lock.simple) out.add(GRow.NewGroup(p.id))
+            add(GRow.Group(GroupRef(p.id, Category(ALL_GROUP, tr("Svi kanali")))))
+            ovr.groups("live", Repo.liveGroups(p)).forEach { add(GRow.Group(GroupRef(p.id, it))) }
+            if (!Lock.simple) add(GRow.NewGroup(p.id))
         }
     }
-    return out
 }
 
 @Composable
@@ -322,7 +328,7 @@ fun GroupColumn(
 /** State and dialogs the list and the guide share. */
 class TvState {
     var rev by mutableIntStateOf(0)
-    var group by mutableStateOf(TvMemory.group)
+    var group by mutableStateOf(TvMemory.group.takeIf { TvMemory.restore })
     var focusKey by mutableStateOf("")
     var refocus by mutableIntStateOf(0)
     var groupMenu by mutableStateOf<GroupRef?>(null)
@@ -397,7 +403,9 @@ fun openGroup(ctx: android.content.Context, st: TvState, g: GroupRef, onOpened: 
 private fun TvList(nav: Nav) {
     val ctx = LocalContext.current
     val st = remember { TvState() }
-    val rows by load(st.rev, Favs.rev, Recent.rev, keep = true) { groupRows(ctx) }
+    var playlistId by remember { mutableStateOf(st.group?.pid.takeIf { Store.actives(ctx).size > 1 }) }
+    var returningHeader by remember { mutableStateOf<String?>(null) }
+    val rows by load(playlistId, st.rev, Favs.rev, Recent.rev) { groupRows(ctx, playlistId) }
     val gState = rememberLazyListState()
     WrapEffect(st.wrap, gState)
     val coming = remember { TvMemory.restore && TvMemory.group != null && TvMemory.channel >= 0 }
@@ -414,9 +422,16 @@ private fun TvList(nav: Nav) {
     }
 
     val focusScope = rememberCoroutineScope()
+    fun backToPlaylists() {
+        returningHeader = playlistId?.let { "h:" + it }
+        playlistId = null
+        st.group = null
+    }
     fun backToGroups() {
         val groupRows = (rows as? Load.Ok)?.value.orEmpty()
-        val target = groupFocusTarget(groupRows, st.group) ?: return
+        val target = returningHeader?.takeIf { key -> groupRows.any { it.id == key } }
+            ?: groupFocusTarget(groupRows, st.group) ?: return
+        returningHeader = null
         st.focusKey = target
         inChannels = false
         Chrome.rail = 2
@@ -424,7 +439,7 @@ private fun TvList(nav: Nav) {
         // Scroll the target row into view before asking its FocusRequester for focus.
         focusScope.launch {
             val index = groupRows.indexOfFirst { it.id == target }
-            if (index >= 0) runCatching { gState.scrollToItem(index) }
+            if (index >= 0 && gState.layoutInfo.visibleItemsInfo.none { it.index == index }) runCatching { gState.scrollToItem(index) }
             delay(180)
             runCatching { st.focusFr.requestFocus() }
         }
@@ -435,6 +450,7 @@ private fun TvList(nav: Nav) {
     LaunchedEffect(focusedCh) { val c = focusedCh ?: return@LaunchedEffect; delay(500); Dusk.set(c.logo, c.name) }
     // New Dawn: groups alone › channels alone with preview, now/next and options › full screen.
     // Back and ◀ go exactly one level out; at the groups they return to the menu (on TV).
+    BackHandler(enabled = st.groupMenu == null && !inChannels && playlistId != null) { backToPlaylists() }
     BackHandler(enabled = st.groupMenu == null && inChannels) { PreviewSel.ch = null; Preview.stop(); backToGroups() }
     LaunchedEffect(inChannels, st.group?.key) {
         Dawn.crumb = if (inChannels) st.group?.cat?.name ?: "" else tr("Grupe")
@@ -446,19 +462,23 @@ private fun TvList(nav: Nav) {
         Dawn.previewBrowser = inChannels && st.group?.pid != null
         if (Dawn.previewBrowser) {
             val favorite = focusedCh?.let { Favs.inAny(ctx, it) } == true
-            Dawn.hints = listOf("OK" to "Gledaj", "Drži OK" to if (favorite) "Ukloni iz favorita" else "Dodaj u favorite")
+            Dawn.hints = buildList {
+                add("OK" to "Gledaj")
+                if (favorite) add("" to "U omiljenim")
+                add("Drži OK" to if (favorite) "Ukloni iz favorita" else "Dodaj u favorite")
+            }
         }
     }
     LaunchedEffect(Dawn.favoriteEvent) { delay(2000); Dawn.favoriteNotice = null }
     DisposableEffect(Unit) { onDispose { Dawn.previewBrowser = false; Dawn.favoriteNotice = null; Dawn.crumb = ""; Dawn.pos = ""; Dawn.hints = emptyList() } }
     // first time on the groups: the focus goes to the last opened group (or the first one)
-    var placed by remember { mutableStateOf(false) }
+    var placed by remember(playlistId) { mutableStateOf(false) }
     LaunchedEffect(rows is Load.Ok, inChannels) { if (!inChannels && rows is Load.Ok && !placed) { placed = true; backToGroups() } }
     if (!inChannels) Box(Modifier.fillMaxSize().padding(start = 34.dp, top = 6.dp, bottom = 8.dp)) {
         Box(Modifier.width(360.dp).fillMaxHeight().dawnGlass().padding(vertical = 8.dp)
             .onPreviewKeyEvent { e ->
                 if (e.type != KeyEventType.KeyDown) false
-                else if (e.key == Key.DirectionLeft) { nav.back(); true }
+                else if (e.key == Key.DirectionLeft) { if (playlistId != null) backToPlaylists() else nav.back(); true }
                 else if (e.key == Key.DirectionRight) {
                     val g = (rows as? Load.Ok)?.value?.filterIsInstance<GRow.Group>()?.firstOrNull { "g:" + it.ref.key == st.focusKey }?.ref
                     if (g != null) { focusedCh = null; openGroup(ctx, st, g) { enterTick++; inChannels = true }; true } else false
@@ -468,7 +488,7 @@ private fun TvList(nav: Nav) {
                 onFocusGroup = { },
                 onOpen = { focusedCh = null; openGroup(ctx, st, it) { enterTick++; inChannels = true } },
                 onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
-                onHeader = { p -> TvFold.toggle(p.id); if (p.id in TvFold.open) Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
+                onHeader = { p -> Store.open(ctx, p.id); st.group = null; playlistId = p.id },
                 onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it },
                 onFocusRow = { st.focusKey = it })
         }
@@ -663,9 +683,13 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
     var menu by remember { mutableStateOf<Channel?>(null) }
     var menuUrl by remember { mutableStateOf<String?>(null) }
     val cWrap = remember { Wrap() }
-    val cState = rememberLazyListState()
+    val restoreViewport = remember(g.key) { TvMemory.restore && TvMemory.viewportGroup == g.key }
+    val cState = rememberLazyListState(
+        initialFirstVisibleItemIndex = if (restoreViewport) TvMemory.firstVisibleChannel else 0,
+        initialFirstVisibleItemScrollOffset = if (restoreViewport) TvMemory.channelScrollOffset else 0
+    )
     val chFr = remember { FocusRequester() }
-    WrapEffect(cWrap, cState)
+    WrapEffect(cWrap, cState, keepVisiblePosition = true)
 
     Column(Modifier.fillMaxSize().padding(start = 6.dp, end = 6.dp, top = 6.dp)) {
         when (val s = state) {
@@ -693,6 +717,10 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                 onClick = {
                                     gate.run("c:${ch.url}", locked) {
                                         ovr.countWatch(ch)
+                                        TvMemory.viewportGroup = g.key
+                                        TvMemory.firstVisibleChannel = cState.firstVisibleItemIndex
+                                        TvMemory.channelScrollOffset = cState.firstVisibleItemScrollOffset
+                                        TvMemory.returnUrl = ch.url
                                         TvMemory.channel = i; TvMemory.group = g
                                         TvMemory.restore = true
                                         playChannels(nav, list, i)
@@ -735,16 +763,14 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                         }
                     }
                 }
-                LaunchedEffect(list) {
-                    // back from the player: focus the channel that was playing (once)
-                    if (TvMemory.restore && TvMemory.channel >= 0) { TvMemory.restore = false; cWrap.target = TvMemory.channel.coerceAtMost(list.lastIndex) }
+                LaunchedEffect(enterTick, list.isNotEmpty()) {
+                    if (list.isEmpty()) return@LaunchedEffect
+                    if (focusOnStart || TvMemory.restore) {
+                        cWrap.target = list.indexOfFirst { it.url == restoreUrl }.takeIf { it >= 0 }
+                            ?: TvMemory.channel.coerceIn(0, list.lastIndex)
+                    }
+                    TvMemory.restore = false
                 }
-                // New Dawn: the list appears only after OK on a group, so it takes the focus as soon as it is there
-                LaunchedEffect(list.isNotEmpty()) { if (focusOnStart && list.isNotEmpty()) cWrap.target = list.indexOfFirst { it.url == restoreUrl }.takeIf { it >= 0 } ?: TvMemory.channel.coerceIn(0, list.lastIndex) }
-                // OK on a group: the focus goes into its channels
-                val enter0 = remember { enterTick }
-                // the channels take focus only after OK on a group, never while the groups are being browsed
-                LaunchedEffect(enterTick, list.isNotEmpty()) { if (enterTick != enter0 && list.isNotEmpty()) cWrap.target = list.indexOfFirst { it.url == restoreUrl }.takeIf { it >= 0 } ?: TvMemory.channel.coerceIn(0, list.lastIndex) }
                 menu?.let { ch ->
                     val groups = (rows as? Load.Ok)?.value?.mapNotNull { (it as? GRow.Group)?.ref }
                         ?.filter { it.pid != null && it.pid == ch.pid.ifBlank { g.pid } && it.cat.id != ALL_GROUP }?.map { it.cat } ?: emptyList()
