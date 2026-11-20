@@ -135,7 +135,7 @@ class MainActivity : ComponentActivity() {
         super.onRestart()
         val away = System.currentTimeMillis() - stoppedAt
         val fromExternal = ExtPlayer.launchedAt > 0 && ExtPlayer.launchedAt >= stoppedAt - 10_000
-        if (stoppedAt > 0 && away > 15_000 && !fromExternal && Profiles.askAtStart && Profiles.awayLong(away)) Profiles.picker = true
+        if (stoppedAt > 0 && !fromExternal && Profiles.askAtStart && Profiles.awayLong(away)) Profiles.picker = true
         // every start of the app opens Home (not after the external player or a short trip to the system)
         if (stoppedAt > 0 && away > 15_000 && !fromExternal) AppHome.tick++
     }

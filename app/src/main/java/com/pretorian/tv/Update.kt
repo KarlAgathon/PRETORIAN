@@ -147,7 +147,10 @@ object Updater {
         cancel = false
         paused = false; pauseReq = false
         try {
-            if (Prefs.str("upd_pre", "").split(',').contains("backup")) withContext(Dispatchers.IO) { backupBefore(ctx, "prije-${info.name}") }  // i18n-ignore
+            if (Prefs.str("upd_pre", "").split(',').contains("backup")) {
+                val saved = withContext(Dispatchers.IO) { backupBefore(ctx, "prije-${info.name}") }
+                if (!saved) throw IOException(tr("Backup nije spremljen"))
+            }
             UpdLog.add(trf("Instalacija %s pokrenuta", info.name))
             val wasReady = ready(ctx, info)
             val file = if (wasReady) readyFile(ctx) else withContext(Dispatchers.IO) { download(ctx, info) }
@@ -352,18 +355,25 @@ class UpdateResultReceiver : BroadcastReceiver() {
 
 /** Files in the public Download/PRETORIAN folder: they stay there even when PRETORIAN is uninstalled. */
 object PublicFiles {
-    fun save(ctx: Context, name: String, bytes: ByteArray) {
+    fun save(ctx: Context, name: String, bytes: ByteArray) = bytes.inputStream().use { save(ctx, name, it) }
+
+    fun save(ctx: Context, name: String, input: java.io.InputStream) {
         if (Build.VERSION.SDK_INT >= 29) {
             val cv = android.content.ContentValues().apply {
                 put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, name)
                 put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS + "/PRETORIAN")
             }
             val uri = ctx.contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv) ?: throw IOException("Download")
-            ctx.contentResolver.openOutputStream(uri)?.use { it.write(bytes) } ?: throw IOException("Download")
+            try {
+                ctx.contentResolver.openOutputStream(uri)?.use { input.copyTo(it) } ?: throw IOException("Download")
+            } catch (failure: Exception) {
+                ctx.contentResolver.delete(uri, null, null)
+                throw failure
+            }
         } else {
             @Suppress("DEPRECATION")
             val dir = File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "PRETORIAN")
-            dir.mkdirs(); File(dir, name).writeBytes(bytes)
+            dir.mkdirs(); File(dir, name).outputStream().use { input.copyTo(it) }
         }
     }
 }
@@ -379,7 +389,7 @@ object Rollback {
             val c = URL(r.apk).openConnection() as HttpURLConnection
             c.instanceFollowRedirects = true; c.connectTimeout = 15_000; c.readTimeout = 60_000
             c.inputStream.use { ins -> f.outputStream().use { ins.copyTo(it) } }
-            PublicFiles.save(ctx, "Pretorian-${r.name}.apk", f.readBytes())
+            f.inputStream().use { PublicFiles.save(ctx, "Pretorian-${r.name}.apk", it) }
             PublicFiles.save(ctx, "vrati.json", JSONObject().put("version", r.name).put("apk", "Pretorian-${r.name}.apk").put("backup", "backup-za-${r.name}.json").toString().toByteArray())
             f.delete()
             null

@@ -302,6 +302,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     var resize by remember { mutableIntStateOf(0) }
     val player = remember { Preview.stop(); buildPlayer(ctx) }
     val playerScope = rememberCoroutineScope()
+    val mediaRequest = remember { PlaybackRequest() }
     val readyOnce = remember { booleanArrayOf(false) }   // the stream played since it was (re)loaded
     val applied = remember { booleanArrayOf(false) }
     val step = Prefs.seekStep * 1000L
@@ -334,11 +335,16 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     }
 
     fun loadMedia(item: PlayItem, file: String?, at: Long, play: Boolean = true) {
+        val request = mediaRequest.begin()
+        val selectedIndex = index
         // Stalker portal: the real address is asked for right before playing
         if (Stalker.isLink(item.url)) {
             playerScope.launch {
-                try { loadMedia(item.copy(url = Stalker.resolve(ctx, item.url)), file, at, play) }
-                catch (e: Exception) { error = e.message ?: tr("Portal nije dao link") }
+                try {
+                    val resolved = Stalker.resolve(ctx, item.url)
+                    if (mediaRequest.current(request) && index == selectedIndex) loadMedia(item.copy(url = resolved), file, at, play)
+                }
+                catch (e: Exception) { if (mediaRequest.current(request) && index == selectedIndex) error = e.message ?: tr("Portal nije dao link") }
             }
             return
         }
@@ -401,10 +407,14 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         val cur = items.getOrNull(index)
         fun fail() { if (e != null) error = errorText(e, s.live) else frozenMsg = true }
         if (s.live && (Tech.backup || MatchWatch.on(cur?.url)) && cur?.channel != null && shiftFrom == 0L) {
+            val request = mediaRequest.begin()
+            val selectedIndex = index
             backupTried += cur.url
+            val tried = backupTried.toSet()
             playerScope.launch {
                 // a match: first another of your channels that shows the same match, then the same channel from elsewhere
-                val alt = (if (MatchWatch.on(cur.url)) MatchWatch.next(backupTried) else null) ?: if (!Tech.backup) null else try { StreamBackup.find(ctx, cur.channel, backupTried) } catch (_: Exception) { null }
+                val alt = (if (MatchWatch.on(cur.url)) MatchWatch.next(tried) else null) ?: if (!Tech.backup) null else try { StreamBackup.find(ctx, cur.channel, tried) } catch (_: Exception) { null }
+                if (!mediaRequest.current(request) || index != selectedIndex || items.getOrNull(index) != cur) return@launch
                 if (alt != null) {
                     backupTried += alt.url
                     Toast.makeText(ctx, trf("Kanal ne radi · prebacujem na rezervni: %s", alt.name), Toast.LENGTH_LONG).show()
@@ -452,6 +462,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         }
         player.addListener(l); player.addAnalyticsListener(a)
         onDispose {
+            mediaRequest.begin()
             saveProgress(); player.removeListener(l); player.removeAnalyticsListener(a); player.release()
             Afr.reset(ctx as? android.app.Activity); AudioDelay.us = 0L
             // leaving the player: big lists and pictures are let go at once (they come back from the disk when needed)
@@ -1355,4 +1366,10 @@ fun AudioDelayPopup(url: String, onDismiss: () -> Unit) {
             }
         }
     }
+}
+
+internal class PlaybackRequest {
+    private var generation = 0L
+    fun begin(): Long = ++generation
+    fun current(request: Long) = request == generation
 }
