@@ -379,7 +379,7 @@ object Notes {
         if (loaded) return; loaded = true
         try {
             val a = JSONArray(Prefs.str("notes", "[]"))
-            for (i in 0 until a.length()) { val o = a.getJSONObject(i); list.add(Note(o.str("id"), o.str("kind"), o.str("text"), o.optLong("time"), o.optBoolean("read"))) }
+            for (i in 0 until a.length()) { val o = a.getJSONObject(i); if (o.str("kind") == "sport") continue; list.add(Note(o.str("id"), o.str("kind"), o.str("text"), o.optLong("time"), o.optBoolean("read"))) }
         } catch (_: Exception) {}
         // a note about an update that is already installed (or older) is gone
         if (list.removeAll { it.kind == "update" && !newer(it.id.removePrefix("update:"), BuildInfo.VERSION) }) save()
@@ -398,7 +398,7 @@ object Notes {
 
     fun add(kind: String, text: String, id: String = "$kind:${System.currentTimeMillis()}") {
         load()
-        if (list.any { it.id == id }) return
+        if (!Prefs.bool("general_notes", true) || list.any { it.id == id }) return
         if (kind == "update") list.removeAll { it.kind == "update" }   // only the newest version is announced
         list.add(0, Note(id, kind, text, System.currentTimeMillis(), false)); save()
     }

@@ -123,7 +123,8 @@ object MatchFollow {
  * They land on Home (top right) and in the bell; a live one also shows for 8 s in the corner, wherever you are.
  */
 object GoalNote {
-    var text by mutableStateOf<String?>(null)
+    data class Alert(val id: String, val text: String, val kind: String, val expiresAt: Long)
+    val alerts = mutableStateListOf<Alert>()
     /** a followed match is live: check every minute instead of every 3 */
     var hot = false; private set
     private val last = HashMap<String, String>()
@@ -149,8 +150,9 @@ object GoalNote {
         if (kind != "today") { lastEvent[e.id] = System.currentTimeMillis(); lastRev++ }
         if (!on(kind) || !sent.add(id)) return
         Prefs.put("sa_sent", sent.toList().takeLast(300).joinToString(","))
-        Notes.add("sport", txt, id)
-        if (kind != "today") text = txt
+        if (kind == "today" || !Prefs.bool("sports_popups", true) || Prefs.bool("sports_dnd")) return
+        alerts.add(0, Alert(id, txt, kind, android.os.SystemClock.elapsedRealtime() + 2000))
+        while (alerts.size > 3) alerts.removeAt(alerts.lastIndex)
     }
     /** followed matches of today (live first): the "Following" card on Home */
     val followed = androidx.compose.runtime.mutableStateListOf<SportEvent>()
@@ -831,18 +833,27 @@ private fun countryName(c: String) = when (c) {
 }
 
 
-/** The goal note in the corner, for 8 seconds; it never takes the focus (watching goes on). */
 @Composable
 fun GoalNoteOverlay() {
-    val t = GoalNote.text ?: return
-    LaunchedEffect(t) { delay(8000); GoalNote.text = null }
     Box(Modifier.fillMaxSize().padding(end = 30.dp, bottom = 30.dp), contentAlignment = Alignment.BottomEnd) {
-        Row(Modifier.clip(Rnd(14.dp)).background(Color(0xF20F172A)).border(1.dp, Color(0xFF22C55E), Rnd(14.dp)).padding(horizontal = 16.dp, vertical = 10.dp)) {
-            T(t, 14.sp, Color.White, FontWeight.Bold, maxLines = 1)
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp), horizontalAlignment = Alignment.End) {
+            GoalNote.alerts.forEach { alert -> key(alert.id) {
+                val remaining = alert.expiresAt - android.os.SystemClock.elapsedRealtime()
+                LaunchedEffect(alert.id) { delay(remaining.coerceAtLeast(0)); GoalNote.alerts.remove(alert) }
+                if (remaining > 0) {
+                    val color = when (alert.kind) {
+                        "red" -> Color(0xFFFF6060)
+                        "pen" -> Color(0xFFFFBA47)
+                        "end" -> Color.LightGray
+                        else -> Color.White
+                    }
+                    T(alert.text, 14.sp, Color.White, FontWeight.SemiBold, maxLines = 1,
+                        modifier = Modifier.border(1.dp, color, Rnd(8.dp)).padding(horizontal = 12.dp, vertical = 6.dp))
+                }
+            } }
         }
     }
 }
-
 
 /** Matches hidden from Home with a long OK (until you follow them again). */
 object HomeHide {

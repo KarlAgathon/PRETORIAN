@@ -119,7 +119,7 @@ fun DawnShell(top: Screen, nav: Nav, content: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize().background(Color(0xFF16243A))) {
         DawnBackground()
         Column(Modifier.fillMaxSize()) {
-            DawnTopBar(top, menu)
+            DawnTopBar(top, menu, nav)
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 if (menu) DawnMenu(nav) else content()
             }
@@ -128,7 +128,7 @@ fun DawnShell(top: Screen, nav: Nav, content: @Composable () -> Unit) {
                 menu -> listOf("▲▼" to "Navigacija", "OK" to "Odaberi")
                 else -> listOf("▲▼" to "Navigacija", "OK" to "Odaberi", "Back" to "Nazad")
             }
-            DawnHintBar(hints)
+            if (!menu) DawnHintBar(hints)
         }
     }
 }
@@ -201,75 +201,14 @@ private fun DawnMenu(nav: Nav) {
             }
         }
     }
-    DawnNotes(nav, Modifier.align(Alignment.TopEnd).padding(end = 38.dp, top = 6.dp).width(520.dp))
-    DawnPlaylists(Modifier.align(Alignment.BottomEnd).padding(end = 38.dp, bottom = 10.dp))
     }
 }
 
-/** Home notices (goals, cards, match end, reminders, new version): the newest few, OK opens them. Nothing when there are none. */
 @Composable
-private fun DawnNotes(nav: Nav, modifier: Modifier) {
-    val notes = Notes.list.filter { System.currentTimeMillis() - it.time < 6 * 3600_000L }.take(4)
-    if (notes.isEmpty()) return
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        notes.forEach { n ->
-            val tone = when {
-                n.text.startsWith("⚽") -> Color(0xFF22C55E)
-                n.text.startsWith("🟥") -> Color(0xFFEF4444)
-                n.text.startsWith("🟨") -> Color(0xFFFBBF24)
-                n.kind == "update" -> Color(0xFF60A5FA)
-                else -> Color(0xFFD5DBE3)
-            }
-            Focusable(onClick = { openNote(nav, n) }, shape = Rnd(12.dp), normal = Color(0x8C0E1724), focused = Dawn.pill, focusBorderColor = Color.Transparent,
-                zoom = 1f, modifier = Modifier.fillMaxWidth().height(46.dp).border(1.dp, tone.copy(alpha = 0.55f), Rnd(12.dp))) { f ->
-                Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Box(Modifier.width(4.dp).height(22.dp).clip(Rnd(2.dp)).background(tone))
-                    T(n.text, 14.sp, if (f) Dawn.onPill else Color.White, FontWeight.Medium, modifier = Modifier.weight(1f))
-                    T(whenAgo(n.time), 12.sp, if (f) Dawn.onPill else Color(0xFF9AA6B5))
-                }
-            }
-        }
-    }
-}
-
-/** "sada", "2 min", "1 h" */
-private fun whenAgo(t: Long): String {
-    val m = ((System.currentTimeMillis() - t) / 60_000L).toInt()
-    return when { m < 1 -> tr("sada"); m < 60 -> trf("prije %s min", m); else -> trf("prije %s h", m / 60) }
-}
-
-/** Active playlists and how many days they still have, small and calm (amber under 7 days, red when expired). */
-@Composable
-private fun DawnPlaylists(modifier: Modifier) {
+private fun DawnTopBar(top: Screen, menu: Boolean, nav: Nav) {
     val ctx = LocalContext.current
-    val pls = remember { Store.actives(ctx) }
-    if (pls.isEmpty()) return
-    Column(modifier, horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        pls.take(4).forEach { p ->
-            val ex = expiryText(p.exp)
-            val left = dawnDaysLeft(p.exp)
-            val col = when { ex?.second == 2 -> Color(0xFFF87171); ex?.second == 1 -> Color(0xFFFBBF24); else -> Color(0xFFD5DBE3) }
-            Row(Modifier.dawnGlass(12.dp).padding(horizontal = 14.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Box(Modifier.size(8.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Color(0xFF4ADE80)))
-                T(p.name, 14.sp, Color.White, FontWeight.SemiBold)
-                if (left != null) { T("·", 14.sp, Color(0xFF9AA6B5)); T(left, 14.sp, col) }
-            }
-        }
-    }
-}
-
-/** "23 dana", "Bez isteka" or "Istekla" for a playlist's expiry (unix seconds or "0"). */
-private fun dawnDaysLeft(exp: String): String? {
-    if (exp.isBlank()) return null
-    if (exp == "0") return tr("Bez isteka")
-    val sec = exp.toLongOrNull() ?: return null
-    val days = ((sec * 1000 - System.currentTimeMillis()) / 86_400_000L).toInt()
-    return if (days < 0) tr("Istekla") else trf("još %s dana", days)
-}
-
-@Composable
-private fun DawnTopBar(top: Screen, menu: Boolean) {
+    var showNotes by remember { mutableStateOf(false) }
+    if (showNotes) NotesPopup({ showNotes = false }, nav)
     val section = if (menu) "" else when (top) {
         Screen.Home -> "Početna"; Screen.Tv -> "TV"; Screen.Movies, is Screen.MovieDetail -> "Filmovi"; Screen.Series, is Screen.SeriesDetail -> "Serije"
         Screen.Catchup -> "Catch-up"; Screen.Sports -> "Sport"; Screen.Search -> "Pretraga"
@@ -280,6 +219,27 @@ private fun DawnTopBar(top: Screen, menu: Boolean) {
     val sep: @Composable () -> Unit = { Box(Modifier.width(1.dp).height(20.dp).background(Color(0x4DFFFFFF))) }
     Row(Modifier.fillMaxWidth().height(72.dp).padding(horizontal = 38.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        if (menu) {
+            val playlist = Store.active(ctx)
+            val expiry = playlist?.exp?.toLongOrNull()?.takeIf { it in 1..Long.MAX_VALUE / 1000 }?.times(1000)
+            if (expiry != null && expiry <= now.time) {
+                T("Playlist expired. | Please contact your provider.", 16.sp, Color(0xFFFF7777), FontWeight.SemiBold)
+            } else if (playlist != null) {
+                Ico(R.drawable.lc_server, 20.dp, Color.White)
+                T(playlist.name, 16.sp, Color.White, FontWeight.SemiBold, modifier = Modifier.weight(1f), maxLines = 1)
+                if (expiry != null) {
+                    sep()
+                    Ico(R.drawable.lc_calendar, 18.dp, Color.White)
+                    T(SimpleDateFormat("d MMM yyyy", Locale(Look.lang)).format(Date(expiry)), 15.sp, Color.White)
+                    val zone = java.util.TimeZone.getDefault()
+                    fun localDay(ms: Long) = (ms / 1000 + zone.getOffset(ms) / 1000) / 86400
+                    val days = localDay(expiry) - localDay(now.time)
+                    val color = when { days <= 2 -> Color(0xFFFF7777); days <= 7 -> Color(0xFFFFC457); else -> Color(0xFF80D795) }
+                    T(trf("%s dana", days), 15.sp, color, FontWeight.Bold)
+                }
+            }
+            PillButton(null, R.drawable.lc_bell, Notes.unread()) { showNotes = true }
+        }
         if (section.isNotEmpty()) {
             if (Dawn.crumb.isEmpty()) T(section, 18.sp, Color.White, FontWeight.SemiBold)
             else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -290,7 +250,7 @@ private fun DawnTopBar(top: Screen, menu: Boolean) {
         }
         Spacer(Modifier.weight(1f))
         if (top == Screen.Tv && Dawn.pos.isNotEmpty()) { T(Dawn.pos, 15.sp, Color(0xFFD5DBE3)); sep() }
-        T(SimpleDateFormat("EEE, d MMM", Locale(Look.lang)).format(now), 15.sp, Color(0xFFD5DBE3))
+        T(SimpleDateFormat("EEE, d MMM yyyy", Locale(Look.lang)).format(now), 15.sp, Color(0xFFD5DBE3))
         sep()
         T(SimpleDateFormat("HH:mm", Locale.getDefault()).format(now), 17.sp, Color.White, FontWeight.Bold)
     }

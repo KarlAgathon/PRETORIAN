@@ -157,7 +157,7 @@ fun HomeTopPill(nav: Nav, onBell: (() -> Unit)?) {
 }
 
 @Composable
-private fun PillButton(label: String?, icon: Int, badge: Int = 0, onClick: () -> Unit) {
+internal fun PillButton(label: String?, icon: Int, badge: Int = 0, onClick: () -> Unit) {
     Box {
         Focusable(onClick = onClick, shape = Pill, normal = Color.Transparent, focused = C.Red.copy(alpha = 0.35f), zoom = 1.05f, modifier = Modifier.height(40.dp)) { _ ->
             Row(Modifier.align(Alignment.Center).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically,

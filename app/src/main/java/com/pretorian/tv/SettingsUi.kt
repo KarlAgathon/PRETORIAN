@@ -2287,6 +2287,10 @@ private fun RemindersV2(nav: Nav) {
     var menu by remember { mutableStateOf<Reminder?>(null) }
     key(rev, Reminders.rev) {
         SetPage("Podsjetnici") {
+            SetSection("Obavještenja")
+            SetSwitch("General notifications", null, Prefs.bool("general_notes", true)) { Prefs.put("general_notes", it); rev++ }
+            SetSwitch("Sports notifications", "2 s", Prefs.bool("sports_popups", true)) { Prefs.put("sports_popups", it); if (!it) GoalNote.alerts.clear(); rev++ }
+            SetSwitch("Do not disturb", null, Prefs.bool("sports_dnd")) { Prefs.put("sports_dnd", it); if (it) GoalNote.alerts.clear(); rev++ }
             val all = Reminders.all().filter { it.start > System.currentTimeMillis() - 3600_000L }.sortedBy { it.start }
             SetSection(trf("Nadolazeći · %s", all.size))
             if (all.isEmpty()) T("Nema podsjetnika. U programu kanala ili Sportu: OK na emisiji › Podsjeti me.", 12.sp, C.Muted, maxLines = 2)
