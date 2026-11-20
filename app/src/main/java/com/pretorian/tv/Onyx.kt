@@ -89,8 +89,8 @@ object Perf {
         // Android version: 15 points (Android 9 and older = an older box, usually from before 2022)
         val os = when { sdk >= 33 -> 15; sdk >= 31 -> 12; sdk >= 30 -> 8; sdk >= 29 -> 5; else -> 0 }
         // performance class (Android 12+, set by the maker) and chip name: 15 points
-        val pc = if (sdk >= 31) android.os.Build.VERSION.MEDIA_PERFORMANCE_CLASS else 0
-        val socOld = (if (sdk >= 31) android.os.Build.SOC_MODEL else android.os.Build.HARDWARE).lowercase().let { h ->
+        val pc = if (android.os.Build.VERSION.SDK_INT >= 31) android.os.Build.VERSION.MEDIA_PERFORMANCE_CLASS else 0
+        val socOld = (if (android.os.Build.VERSION.SDK_INT >= 31) android.os.Build.SOC_MODEL else android.os.Build.HARDWARE).lowercase().let { h ->
             listOf("amlogic", "s905x", "s905w", "s905l", "s905y2", "mt8695", "mt8167", "rk3229", "rk3328", "h616", "h313").any { h.contains(it) } }
         val gpu = when { pc >= 31 -> 15; socOld -> 3; sdk >= 31 -> 12; else -> 7 }
         // short speed test: 15 points

@@ -445,7 +445,7 @@ object Subs {
         }
         val dir = File(ctx.cacheDir, "subs").apply { mkdirs() }
         val f = File(dir, "sub_${System.currentTimeMillis()}_$lang.srt")
-        f.writeText(text.removePrefix("﻿"), Charsets.UTF_8)
+        f.writeText(text.removePrefix("\uFEFF"), Charsets.UTF_8)
         return f
     }
 
