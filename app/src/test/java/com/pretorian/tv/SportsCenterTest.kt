@@ -9,6 +9,24 @@ class SportsCenterTest {
     private val game = SportEvent("espn", "football", "Cup", "C", null, now - 60_000,
         "in", null, team("Köln"), team("Mainz"), "", null, country = "de", observedAt = now)
 
+    @Test fun diskSnapshotSurvivesReopenAndExpiresAtBoundary() {
+        val directory = java.nio.file.Files.createTempDirectory("sports-test").toFile()
+        try {
+            val file = directory.resolve("league.json")
+            assertFalse(SportsFeedCache.fresh(file, now, 60_000L))
+            SportsFeedCache.save(file, "first")
+            SportsFeedCache.save(file, "second")
+            val reopened = directory.resolve("league.json")
+            val at = reopened.lastModified()
+            assertEquals("second", reopened.readText())
+            assertEquals(1, directory.listFiles()!!.size)
+            assertTrue(SportsFeedCache.fresh(reopened, at + 59_999L, 60_000L))
+            assertFalse(SportsFeedCache.fresh(reopened, at + 60_000L, 60_000L))
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
     @Test fun cachedScoreExpiresWithoutClaimingFullTime() {
         val old = game.copy(observedAt = now - 180_000)
         assertTrue(game.live)

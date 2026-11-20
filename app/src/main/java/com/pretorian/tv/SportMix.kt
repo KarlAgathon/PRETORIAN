@@ -42,6 +42,7 @@ internal fun sportsFilter(event: SportEvent, teams: Set<String>, countries: Set<
     (countries.isEmpty() || event.country.lowercase() in countries) &&
     (leagues.isEmpty() || event.league in leagues)
 
+private const val ALL_MATCHES = "all"
 private const val CACHED_SCORE = "cached"
 
 /** Your teams (long OK on a match adds them): shown on top of Sport, and a goal of theirs pops up anywhere in the app. */
@@ -293,7 +294,9 @@ fun SportMixScreen(nav: Nav) {
             catch (_: Exception) { return@LaunchedEffect }
         if (guide !== SportCache.guide) { SportCache.guide = guide; SportCache.guideRev++ }
     }
-    val all = remember(today, other) { ((today ?: emptyList()) + (other ?: emptyList())).distinctBy { it.id } }
+    val all = remember(today, other) {
+        (today.orEmpty() + other.orEmpty()).groupBy { it.id }.values.map { versions -> versions.maxBy { it.observedAt } }
+    }
     // your channels for each match: matched in the background, the list shows before that
     // Scores change more often than programme titles, team identity or kickoff.
     val fixtures = remember(all) { all.map { e -> e.copy(state = "", clock = null, details = emptyList(),
@@ -311,7 +314,9 @@ fun SportMixScreen(nav: Nav) {
         } + matched.filter { it.fromGuide }
     }
     LaunchedEffect(withCh) {
-        Sports.lastCombined[0] = withCh
+        val start = Sports.dayStart(0)
+        val end = Sports.dayStart(1)
+        Sports.lastCombined[0] = withCh.filter { it.start in start until end }
         SportCache.combined = withCh
         GoalNote.check(withCh.filter { it.state != CACHED_SCORE })
     }
@@ -455,13 +460,13 @@ fun SportMixScreen(nav: Nav) {
                 }
             }
             if (delayed) T("Osvježavanje nije uspjelo", 13.sp, C.Muted)
-            val updated = shown.maxOfOrNull { it.observedAt } ?: 0
-            if (updated > 0) T((if (shown.any { it.state == CACHED_SCORE }) tr("Zadnji podaci") else tr("Osvježavanje")) + " · " + java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(updated)), 12.sp, C.Muted)
+            val updated = (if (shown.any { it.state == CACHED_SCORE }) shown.filter { it.state == CACHED_SCORE }.minOfOrNull { it.observedAt } else shown.maxOfOrNull { it.observedAt }) ?: 0
+            if (updated > 0) T((if (shown.any { it.state == CACHED_SCORE }) tr("Zadnji podaci") else tr("Osvježavanje")) + " · " + java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT).format(java.util.Date(updated)), 12.sp, C.Muted)
             val next = if (tab == "all") shown.filter { it.state == "pre" && it.start > System.currentTimeMillis() }
                 .minWithOrNull(compareBy({ !fav(it) }, { it.start })) else null
             if (next != null) Chip2(tr("Sljedeća utakmica") + " · " + next.title + " · " + whenShort(next.start), false) { sel = next.id; jumpTick++ }
             if (loading && shown.isEmpty()) Loading("Učitavam utakmice…")
-            else if (shown.isEmpty()) Message(when (tab) { "all" -> "Nema rezultata"; "live" -> "Trenutno nema utakmica uživo"; "soon" -> "Nema utakmica uskoro"; "mine" -> "Ne pratiš nijednu utakmicu · dugi OK na utakmicu › Prati"; "fav" -> "Nema utakmica tvojih favorita u idućih 10 dana · ＋ Države ili ＋ Timovi"; else -> "Nema završenih utakmica" })
+            else if (shown.isEmpty()) Message(when (tab) { ALL_MATCHES -> "Nema rezultata"; "live" -> "Trenutno nema utakmica uživo"; "soon" -> "Nema utakmica uskoro"; "mine" -> "Ne pratiš nijednu utakmicu · dugi OK na utakmicu › Prati"; "fav" -> "Nema utakmica tvojih favorita u idućih 10 dana · ＋ Države ili ＋ Timovi"; else -> "Nema završenih utakmica" })
             else LazyColumn(state = listState, modifier = Modifier.onFocusChanged { listFocus = it.hasFocus }, verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
                 var lastLeague = ""
                 if (noRealLive) item(key = "nolive") { T("Trenutno nema utakmica uživo", 13.sp, C.Muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp, start = 4.dp)) }
@@ -531,7 +536,8 @@ fun SportMixScreen(nav: Nav) {
         Popup(tr(when (k) { "sport" -> "Sportovi"; "region" -> "Regije"; "fav" -> "Favoriti – države"; "countries" -> "Države"; "teams" -> "Timovi"; else -> "Takmičenja" }), { pick = null }, width = 520.dp) {
             var query by remember(k) { mutableStateOf("") }
             Field(tr("Pretraga"), query, { query = it }, Modifier.fillMaxWidth())
-            fun matches(label: String) = Sports.norm(label).contains(Sports.norm(query.trim()))
+            fun matches(label: String) = label.contains(query.trim(), ignoreCase = true) ||
+                Sports.norm(query).let { it.isNotEmpty() && Sports.norm(label).contains(it) }
             Column(Modifier.heightIn(max = 350.dp).verticalScroll(androidx.compose.foundation.rememberScrollState())) {
                 when (k) {
                     "sport" -> {
@@ -686,7 +692,7 @@ private fun MatchCard(e: SportEvent, playing: Channel?, playingFr: FocusRequeste
             }
         }
         val chs = (e.channels + e.ai).distinctBy { it.url }.take(6)
-        if (Look.dawn && e.state != "post") DawnFollow(e)
+        if (e.state != "post") DawnFollow(e)
         Kicker(tr("Prenose") + " · " + tr("OK gledaj · drži OK 🔔"), C.Muted)
         if (chs.isEmpty()) T("Nema potvrđenog EPG prenosa", 12.sp, C.Muted)
         // your channels that show it: always as buttons (OK on a match brings the focus to the first one)
@@ -765,7 +771,7 @@ private fun DawnFollow(e: SportEvent) {
 
 /** A match full screen: the other channels of yours that show it are kept, so a stuck picture switches to one of them. */
 fun playMatch(nav: Nav, e: SportEvent, ch: Channel) {
-    val all = (e.channels + e.ai).distinctBy { it.url }
+    val all = (e.channels + e.ai + e.maybe).distinctBy { it.url }
     MatchWatch.set(e.title, listOf(ch) + all.filter { it.url != ch.url })
     playChannels(nav, listOf(ch), 0)
 }

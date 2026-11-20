@@ -250,9 +250,10 @@ object Sports {
 
     private val requests = kotlinx.coroutines.sync.Semaphore(4)
     private val locks = Array(32) { kotlinx.coroutines.sync.Mutex() }
+    private val failures = java.util.concurrent.ConcurrentHashMap<String, Int>()
     private val cooldown = java.util.concurrent.ConcurrentHashMap<String, Long>()
     @Volatile private var rateLimitUntil = 0L
-    fun feedDelayed() = System.currentTimeMillis().let { now -> rateLimitUntil > now || cooldown.values.any { it > now } }
+    fun feedDelayed() = System.currentTimeMillis().let { now -> rateLimitUntil > now || cooldown.isNotEmpty() }
 
     private fun cacheFile(lg: League, date: String) = Repo.diskDir?.resolve("sports-feeds")?.resolve(lg.path.replace('/', '_') + "_" + date + ".json")
 
@@ -268,7 +269,7 @@ object Sports {
             val file = cacheFile(lg, date)
             val now = System.currentTimeMillis()
             val ttl = if ('-' in date) 20 * 60_000L else if (date < espnDate(dayStart(-1))) 6 * 3600_000L else 50_000L
-            if ((file != null && file.isFile && now - file.lastModified() in 0 until ttl) ||
+            if (SportsFeedCache.fresh(file, now, ttl) ||
                 now < rateLimitUntil || now < (cooldown[key] ?: 0L)) return@withLock cached(lg, date)
             try {
                 val raw = requests.withPermit {
@@ -278,18 +279,19 @@ object Sports {
                 val at = System.currentTimeMillis()
                 val events = parseBoard(lg, raw, at)
                 if (file != null) try {
-                    val dir = file.parentFile!!
-                    dir.mkdirs()
-                    val temp = File.createTempFile("board", ".tmp", dir)
-                    try { temp.writeText(raw); temp.renameTo(file) } finally { temp.delete() }
+                    SportsFeedCache.save(file, raw)
                 } catch (_: java.io.IOException) {}
+                failures.remove(key)
                 cooldown.remove(key)
                 events
             } catch (e: kotlinx.coroutines.CancellationException) { throw e }
             catch (e: Exception) {
                 if (e.message == "HTTP 429") rateLimitUntil = System.currentTimeMillis() + 5 * 60_000L
-                cooldown.entries.removeAll { it.value < System.currentTimeMillis() - 86_400_000L }
-                cooldown[key] = System.currentTimeMillis() + 60_000L
+                val expired = cooldown.filterValues { it < now - 86_400_000L }.keys
+                expired.forEach { cooldown.remove(it); failures.remove(it) }
+                val attempts = ((failures[key] ?: 0) + 1).coerceAtMost(5)
+                failures[key] = attempts
+                cooldown[key] = System.currentTimeMillis() + (30_000L shl (attempts - 1))
                 cached(lg, date)
             }
         }
