@@ -37,6 +37,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
+internal fun sportsFilter(event: SportEvent, teams: Set<String>, countries: Set<String>, leagues: Set<String>) =
+    (teams.isEmpty() || event.home?.name in teams || event.away?.name in teams) &&
+    (countries.isEmpty() || event.country.lowercase() in countries) &&
+    (leagues.isEmpty() || event.league in leagues)
+
 private const val CACHED_SCORE = "cached"
 
 /** Your teams (long OK on a match adds them): shown on top of Sport, and a goal of theirs pops up anywhere in the app. */
@@ -300,10 +305,7 @@ fun SportMixScreen(nav: Nav) {
     val selectedLeagues = remember(SportCache.rev) { Prefs.str("sm_leagues").split('|').filter { it.isNotBlank() }.toSet() }
     // Independent multi-select filters apply to all Sport tabs.
     fun inSport(e: SportEvent) = sportsOn.isEmpty() || e.sport in sportsOn
-    fun inUserFilters(e: SportEvent) =
-        (selectedTeams.isEmpty() || e.home?.name in selectedTeams || e.away?.name in selectedTeams) &&
-        (selectedCountries.isEmpty() || e.country.lowercase() in selectedCountries) &&
-        (selectedLeagues.isEmpty() || e.league in selectedLeagues)
+    fun inUserFilters(e: SportEvent) = sportsFilter(e, selectedTeams, selectedCountries, selectedLeagues)
     fun followedEv(e: SportEvent) = MatchFollow.has(e.id) || MyTeams.list().any { t -> t.equals(e.home?.name, true) || t.equals(e.away?.name, true) }
     fun inTab(e: SportEvent, t: String) = when (t) { "all" -> true; "live" -> e.live; "soon" -> e.state == "pre"; "mine" -> followedEv(e); "fav" -> fav(e) && !e.over; else -> e.over }
     val shown = remember(withCh, tab, SportCache.rev, MyTeams.rev, MatchFollow.rev) {
