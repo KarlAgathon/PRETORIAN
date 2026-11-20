@@ -395,7 +395,7 @@ private fun EpgSourcesBlock(pl: Playlist?) {
     var groupPlaylist by remember { mutableStateOf<Playlist?>(null) }
     var groupChoice by remember { mutableStateOf<Category?>(null) }
     (pl?.let { listOf(it) } ?: pls).forEach { playlist ->
-        OptionRow("Group EPG time offset", R.drawable.lc_clock, sub = playlist.name) { groupPlaylist = playlist }
+        OptionRow("Pomak EPG vremena za grupu", R.drawable.lc_clock, sub = playlist.name) { groupPlaylist = playlist }
     }
     groupPlaylist?.let { playlist ->
         val groups by load(playlist.id) { Repo.liveGroups(playlist) }
@@ -410,8 +410,8 @@ private fun EpgSourcesBlock(pl: Playlist?) {
                 T(EpgShift.label(minutes), 18.sp, C.Text)
                 OptionRow("−15 min") { minutes = (minutes - 15).coerceAtLeast(-720) }
                 OptionRow("+15 min") { minutes = (minutes + 15).coerceAtMost(720) }
-                OptionRow("Reset") { minutes = 0 }
-                OptionRow("Save") { EpgShift.setGroup(playlist.id, group.id, minutes); groupChoice = null }
+                OptionRow("Resetuj") { minutes = 0 }
+                OptionRow("Spremi") { EpgShift.setGroup(playlist.id, group.id, minutes); groupChoice = null }
             }
         }
     }
@@ -2311,10 +2311,10 @@ private fun RemindersV2(nav: Nav) {
     key(rev, Reminders.rev) {
         SetPage("Podsjetnici") {
             SetSection("Obavještenja")
-            SetSwitch("General notifications", null, Prefs.bool("general_notes", true)) { Prefs.put("general_notes", it); rev++ }
-            SetSwitch("Sports notifications", "2 s", Prefs.bool("sports_popups", true)) { Prefs.put("sports_popups", it); if (!it) GoalNote.alerts.clear(); rev++ }
-            SetSwitch("Do not disturb", null, Prefs.bool("sports_dnd")) { Prefs.put("sports_dnd", it); if (it) GoalNote.alerts.clear(); rev++ }
-            SetRow("Manage followed matches") { SportsMemory.view = "mine"; nav.push(Screen.Sports) }
+            SetSwitch("Opća obavještenja", null, Prefs.bool("general_notes", true)) { Prefs.put("general_notes", it); rev++ }
+            SetSwitch("Sportska obavještenja", "2 s", Prefs.bool("sports_popups", true)) { Prefs.put("sports_popups", it); if (!it) GoalNote.alerts.clear(); rev++ }
+            SetSwitch("Ne uznemiravaj", null, Prefs.bool("sports_dnd")) { Prefs.put("sports_dnd", it); if (it) GoalNote.alerts.clear(); rev++ }
+            SetRow("Upravljaj praćenim utakmicama") { SportsMemory.view = "mine"; nav.push(Screen.Sports) }
             val all = Reminders.all().filter { it.start > System.currentTimeMillis() - 3600_000L }.sortedBy { it.start }
             SetSection(trf("Nadolazeći · %s", all.size))
             if (all.isEmpty()) T("Nema podsjetnika. U programu kanala ili Sportu: OK na emisiji › Podsjeti me.", 12.sp, C.Muted, maxLines = 2)

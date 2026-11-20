@@ -118,12 +118,12 @@ fun ExternalPicker(url: String, title: String, posMs: Long, onDismiss: () -> Uni
                 onDismiss()
             } else selected = null
         }
-        Popup(trf("Open with %s?", choice.label), { selected = null }) {
-            OptionRow("Just once", R.drawable.lc_play) { launch(false) }
-            OptionRow("Remember my choice", R.drawable.lc_check) { launch(true) }
+        Popup(trf("Otvori pomoću %s?", choice.label), { selected = null }) {
+            OptionRow("Samo jednom", R.drawable.lc_play) { launch(false) }
+            OptionRow("Zapamti moj izbor", R.drawable.lc_check) { launch(true) }
         }
     } else Popup("Vanjski plejer", onDismiss) {
-        OptionRow("Internal Player", R.drawable.lc_play, value = if (saved.isEmpty()) "✓" else null) {
+        OptionRow("Ugrađeni plejer", R.drawable.lc_play, value = if (saved.isEmpty()) "✓" else null) {
             ExtPlayer.saved = ""; onDismiss()
         }
         apps.forEach { app ->
@@ -137,11 +137,11 @@ fun ExternalPicker(url: String, title: String, posMs: Long, onDismiss: () -> Uni
                 }
             }
         }
-        if (saved.isNotEmpty()) OptionRow("Reset remembered choice", R.drawable.lc_rotate_ccw,
-            sub = "Restore the default internal player.") {
+        if (saved.isNotEmpty()) OptionRow("Poništi zapamćeni izbor", R.drawable.lc_rotate_ccw,
+            sub = "Vrati zadani ugrađeni plejer.") {
             ExtPlayer.saved = ""
             saved = ""
-            Toast.makeText(ctx, tr("Internal Player"), Toast.LENGTH_SHORT).show()
+            Toast.makeText(ctx, tr("Ugrađeni plejer"), Toast.LENGTH_SHORT).show()
         }
     }
 }

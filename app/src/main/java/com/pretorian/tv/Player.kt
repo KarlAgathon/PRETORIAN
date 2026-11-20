@@ -937,7 +937,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                                 "more" -> { bar = false; dialog = "menu" }
                                 "archive" -> {
                                     if (ch != null && Catchups.has(p, ch)) dialog = "archive"
-                                    else inform("Archive (Catch-up) is not available for this channel.")
+                                    else inform(tr("Arhiva nije dostupna za ovaj kanal."))
                                 }
                                 "favorites" -> ch?.let { c ->
                                     val lists = Favs.lists(ctx)
@@ -1038,7 +1038,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             OptionRow("Kvalitet i informacije", R.drawable.lc_info, value = if (videoH > 0) qualityLabel(videoH) else null) { dialog = "info" }
             if (s.live) item.channel?.let { c -> OptionRow("Pomak vremena", R.drawable.lc_clock, value = EpgShift.label(EpgShift.chMin(c.url))) { dialog = "epgshift" } }
             OptionRow("Vanjski plejer", R.drawable.lc_external_link) { saveProgress(); dialog = "ext" }
-            if (s.live && player.isCurrentMediaItemLive && player.isCurrentMediaItemSeekable && duration > 0) OptionRow("Time Shift (Live TV)", R.drawable.lc_history) { dialog = "timeshift" }
+            if (s.live && player.isCurrentMediaItemLive && player.isCurrentMediaItemSeekable && duration > 0) OptionRow("Vremenski pomak uživo", R.drawable.lc_history) { dialog = "timeshift" }
             if (s.live) OptionRow("Arhiva", R.drawable.lc_history, sub = tr("emisije koje su prošle")) { dialog = null; nav.push(Screen.Catchup) }
             if (!s.live && subFile != null) OptionRow("Podesi vrijeme titla", R.drawable.lc_clock, sub = "ako titl kasni ili žuri · SYNC") { dialog = "subsync" }
             if (Tech.audioDelay) OptionRow("Pomak zvuka", R.drawable.lc_volume, sub = tr("ako zvuk kasni ili žuri"), value = AudioDelay.label(AudioDelay.of(item.url))) { dialog = "adelay" }
@@ -1046,9 +1046,9 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         }
         "fav" -> item.channel?.let { FavPicker(it) { dialog = null } }
         "epgshift" -> item.channel?.let { EpgShiftPopup(it) { dialog = null } }
-        "zoom" -> Popup("Format", onDismiss = { dialog = null }, width = 760.dp) {
+        "zoom" -> Popup("Format slike", onDismiss = { dialog = null }, width = 760.dp) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(0 to "Auto / Original", 3 to "Fit", 5 to "Zoom", 4 to "Stretch").forEach { (mode, label) ->
+                listOf(0 to "Automatski / original", 3 to "Fit", 5 to "Zoom", 4 to "Rastegni").forEach { (mode, label) ->
                     val chosen = mode == resize
                     Focusable(modifier = Modifier.weight(1f).height(54.dp), onClick = {
                         resize = mode
@@ -1064,15 +1064,15 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         "timeshift" -> {
             if (!player.isCurrentMediaItemLive || !player.isCurrentMediaItemSeekable || duration <= 0) {
                 LaunchedEffect(Unit) { dialog = "menu" }
-            } else Popup("Time Shift (Live TV)", { dialog = "menu" }) {
-                T(fmt(position.coerceAtLeast(0)) + " / " + fmt(duration) + " · LIVE", 15.sp, C.Text)
+            } else Popup("Vremenski pomak uživo", { dialog = "menu" }) {
+                T(fmt(position.coerceAtLeast(0)) + " / " + fmt(duration) + " · " + tr("UŽIVO"), 15.sp, C.Text)
                 Box(Modifier.fillMaxWidth().height(4.dp).background(C.Line)) {
                     Box(Modifier.fillMaxWidth((position.toFloat() / duration).coerceIn(0f, 1f)).height(4.dp).background(C.Red))
                 }
                 OptionRow(if (playing) "Pauza" else "Nastavi") { if (player.playWhenReady) player.pause() else player.play() }
-                OptionRow("Rewind") { player.seekTo((player.currentPosition - step).coerceAtLeast(0)) }
-                OptionRow("Fast Forward") { player.seekTo((player.currentPosition + step).coerceAtMost(duration)) }
-                OptionRow("Go to Live") { player.seekToDefaultPosition(); player.play() }
+                OptionRow("Premotavanje unazad") { player.seekTo((player.currentPosition - step).coerceAtLeast(0)) }
+                OptionRow("Premotaj unaprijed") { player.seekTo((player.currentPosition + step).coerceAtMost(duration)) }
+                OptionRow("Vrati se na prijenos uživo") { player.seekToDefaultPosition(); player.play() }
             }
         }
         "recent" -> {
@@ -1213,7 +1213,7 @@ private fun ChannelOptionsBar(playing: Boolean, favOn: Boolean, onAction: (Strin
         B("pause", if (playing) "Pauza" else "Nastavi", if (playing) R.drawable.lc_pause else R.drawable.lc_play),
         B("favorites", "Favorit", R.drawable.lc_star),
         B("epg", "EPG", R.drawable.lc_calendar_clock),
-        B("zoom", "Format", R.drawable.lc_maximize),
+        B("zoom", "Format slike", R.drawable.lc_maximize),
         B("archive", "Arhiva", R.drawable.lc_history),
         B("more", "Više", R.drawable.lc_settings),
     )

@@ -402,7 +402,7 @@ object GuideDb {
     fun channelIds(source: String, query: String): List<String> {
         if (query.isBlank()) return emptyList()
         return CatalogDb.db()?.rawQuery(
-            "SELECT DISTINCT ch FROM progs WHERE src=? AND instr(ch,?)>0 ORDER BY ch LIMIT 30",
+            "SELECT DISTINCT ch FROM progs WHERE src=? AND instr(ch,?)>0 ORDER BY ch LIMIT 30", // i18n-ignore: SQL
             arrayOf(source, query.trim().lowercase())
         )?.use { cursor -> buildList { while (cursor.moveToNext()) add(cursor.getString(0)) } }.orEmpty()
     }

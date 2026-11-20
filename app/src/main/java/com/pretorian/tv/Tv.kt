@@ -715,7 +715,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                             }
                         }
                         if (g.cat.id == RECENT_GROUP) item {
-                            OptionRow("Clear History", R.drawable.lc_trash_2) { Recent.clear() }
+                            OptionRow("Obriši historiju", R.drawable.lc_trash_2) { Recent.clear() }
                         }
                     }
                 }
@@ -733,7 +733,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                     val groups = (rows as? Load.Ok)?.value?.mapNotNull { (it as? GRow.Group)?.ref }
                         ?.filter { it.pid != null && it.pid == ch.pid.ifBlank { g.pid } && it.cat.id != ALL_GROUP }?.map { it.cat } ?: emptyList()
                     if (g.cat.id == UNIFIED_FAVORITES) Popup(ch.name, { menu = null }) {
-                        OptionRow("Remove from Favorites", R.drawable.lc_trash_2) {
+                        OptionRow("Ukloni iz favorita", R.drawable.lc_trash_2) {
                             Favs.lists(ctx).filter { Favs.contains(it.id, ch) }.forEach { Favs.toggle(it.id, ch) }
                             menu = null
                         }
@@ -893,30 +893,30 @@ fun EpgShiftPopup(ch: Channel, onDismiss: () -> Unit) {
             sources.distinct().flatMap { src -> GuideDb.channelIds(src, query).map { src to it } }.take(30)
         }
     }
-    if (searching) TextDialog("EPG", "Search", query, onDismiss = { searching = false }) {
+    if (searching) TextDialog("EPG", "Pretraga", query, onDismiss = { searching = false }) {
         query = it.trim(); searching = false
-    } else Popup("EPG Management · " + ch.name, onDismiss, width = 800.dp) {
+    } else Popup(tr("Upravljanje EPG vodičem") + " · " + ch.name, onDismiss, width = 800.dp) {
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Column(Modifier.weight(1f)) {
                 T(EpgShift.mapping(ch)?.second ?: ch.epg.orEmpty(), 15.sp, C.Text)
-                OptionRow("Search", R.drawable.lc_search, value = query) { searching = true }
+                OptionRow("Pretraga", R.drawable.lc_search, value = query) { searching = true }
                 (matches as? Load.Ok)?.value.orEmpty().forEach { result ->
                     OptionRow(result.second, selected = result == selected) { selected = result }
                 }
-                selected?.let { OptionRow("Assign EPG to this channel") { EpgShift.assign(ch, it); onDismiss() } }
-                if (EpgShift.mapping(ch) != null) OptionRow("Reset assignment") { EpgShift.assign(ch, null); onDismiss() }
+                selected?.let { OptionRow("Dodijeli EPG ovom kanalu") { EpgShift.assign(ch, it); onDismiss() } }
+                if (EpgShift.mapping(ch) != null) OptionRow("Poništi dodjelu") { EpgShift.assign(ch, null); onDismiss() }
             }
             Column(Modifier.weight(1f)) {
-                T("Current offset · " + EpgShift.label(cur), 15.sp, C.Text)
-                T("New offset · " + EpgShift.label(pending), 15.sp, C.Text)
+                T(tr("Trenutni pomak") + " · " + EpgShift.label(cur), 15.sp, C.Text)
+                T(tr("Novi pomak") + " · " + EpgShift.label(pending), 15.sp, C.Text)
                 listOf(5, 15, 30, 60, 120, 180).forEach { step ->
                     Row {
                         Box(Modifier.weight(1f)) { OptionRow("−" + step + " min") { pending = (pending - step).coerceAtLeast(-720) } }
                         Box(Modifier.weight(1f)) { OptionRow("+" + step + " min") { pending = (pending + step).coerceAtMost(720) } }
                     }
                 }
-                OptionRow("Reset", R.drawable.lc_rotate_ccw) { pending = 0 }
-                OptionRow("Save", R.drawable.lc_check) { EpgShift.setCh(ch.url, pending); onDismiss() }
+                OptionRow("Resetuj", R.drawable.lc_rotate_ccw) { pending = 0 }
+                OptionRow("Spremi", R.drawable.lc_check) { EpgShift.setCh(ch.url, pending); onDismiss() }
             }
         }
     }

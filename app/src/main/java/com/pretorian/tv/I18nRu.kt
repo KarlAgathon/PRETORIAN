@@ -2,6 +2,28 @@ package com.pretorian.tv
 
 /** Russian: one line per text, "bosnian|russian" (kept apart so the 10-column table and its tools stay as they are). */
 internal val RU_TABLE = """
+Playlista je istekla. Obratite se svom pružaocu usluge.|Срок действия плейлиста истёк. Обратитесь к провайдеру.
+Otvori pomoću %s?|Открыть с помощью %s?
+Zapamti moj izbor|Запомнить мой выбор
+Ugrađeni plejer|Встроенный проигрыватель
+Poništi zapamćeni izbor|Сбросить сохранённый выбор
+Vrati zadani ugrađeni plejer.|Восстановить встроенный проигрыватель по умолчанию.
+Vremenski pomak uživo|Сдвиг прямого эфира
+Premotaj unaprijed|Перемотать вперёд
+Vrati se na prijenos uživo|Вернуться в прямой эфир
+Automatski / original|Авто / оригинал
+Pomak EPG vremena za grupu|Сдвиг телепрограммы группы
+Opća obavještenja|Общие уведомления
+Sportska obavještenja|Спортивные уведомления
+Ne uznemiravaj|Не беспокоить
+Upravljaj praćenim utakmicama|Управление отслеживаемыми матчами
+Nema nedavno gledanih kanala|Нет недавно просмотренных каналов
+Upravljanje EPG vodičem|Управление телепрограммой
+Dodijeli EPG ovom kanalu|Назначить телепрограмму каналу
+Poništi dodjelu|Сбросить назначение
+Trenutni pomak|Текущий сдвиг
+Novi pomak|Новый сдвиг
+Arhiva nije dostupna za ovaj kanal.|Для этого канала архив недоступен.
 Osvježavanje nije uspjelo|Не удалось обновить результаты
 Moja takmičenja|Мои турниры
 Nema potvrđenog EPG prenosa|Нет подтверждённой трансляции в телегиде

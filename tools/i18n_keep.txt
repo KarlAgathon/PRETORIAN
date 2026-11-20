@@ -552,3 +552,12 @@ New Dawn
 EEE, d MMM
 %03d
 PRETORIAN TV
+# Localized date patterns, numeric intervals and preference keys
+d MMM yyyy
+EEE, d MMM yyyy
+−15 min
++15 min
+2 s
+general_notes
+sports_popups
+sports_dnd

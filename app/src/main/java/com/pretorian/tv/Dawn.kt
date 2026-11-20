@@ -236,7 +236,7 @@ private fun DawnTopBar(top: Screen, menu: Boolean, nav: Nav) {
             val playlist = Store.active(ctx)
             val expiry = playlist?.exp?.toLongOrNull()?.takeIf { it in 1..Long.MAX_VALUE / 1000 }?.times(1000)
             if (expiry != null && expiry <= now.time) {
-                T("Playlist expired. | Please contact your provider.", 16.sp, Color(0xFFFF7777), FontWeight.SemiBold)
+                T("Playlista je istekla. Obratite se svom pružaocu usluge.", 16.sp, Color(0xFFFF7777), FontWeight.SemiBold)
             } else if (playlist != null) {
                 Ico(R.drawable.lc_server, 20.dp, Color.White)
                 T(playlist.name, 16.sp, Color.White, FontWeight.SemiBold, modifier = Modifier.weight(1f), maxLines = 1)
@@ -255,8 +255,8 @@ private fun DawnTopBar(top: Screen, menu: Boolean, nav: Nav) {
         }
         if (top == Screen.Tv && Dawn.previewBrowser) {
             Ico(R.drawable.lc_tv, 24.dp, Color.White)
-            T("TV UŽIVO", 20.sp, Color.White, FontWeight.Bold)
-            T("LIVE", 14.sp, Color.White, FontWeight.Bold, modifier = Modifier.clip(Rnd(4.dp)).background(Color.Red).padding(4.dp))
+            T("TV uživo", 20.sp, Color.White, FontWeight.Bold)
+            T("UŽIVO", 14.sp, Color.White, FontWeight.Bold, modifier = Modifier.clip(Rnd(4.dp)).background(Color.Red).padding(4.dp))
             T(Dawn.crumb, 16.sp, Color.White, maxLines = 1)
         } else if (section.isNotEmpty()) {
             if (Dawn.crumb.isEmpty()) T(section, 18.sp, Color.White, FontWeight.SemiBold)
