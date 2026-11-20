@@ -191,6 +191,7 @@ object Backup {
                             is Long -> rollback.putLong(k, value)
                             is Float -> rollback.putFloat(k, value)
                             is Set<*> -> rollback.putStringSet(k, value.filterIsInstance<String>().toSet())
+                            else -> error("Unsupported preference type")
                         }
                     }
                 rollback.commit()
@@ -203,6 +204,7 @@ object Backup {
             }
             throw failure
         }
+        Watch.reloadAfterRestore()
     }
 
     fun fileName() = "PRETORIAN-backup-" + SimpleDateFormat("yyyy-MM-dd_HH-mm", Locale.US).format(Date()) + ".json"

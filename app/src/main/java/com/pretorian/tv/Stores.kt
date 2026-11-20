@@ -132,6 +132,13 @@ object Watch {
         rev++
     }
 
+    fun reloadAfterRestore() {
+        flush()
+        map = null
+        alt.clear()
+        rev++
+    }
+
     private fun writeHistory(entries: List<Progress>) {
         val a = JSONArray()
         entries.sortedByDescending { it.ts }.take(600).forEach { p ->
