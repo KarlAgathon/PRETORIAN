@@ -2392,8 +2392,6 @@ private fun GeneralV2() {
     key(rev) {
         SetPage("Opće", "Sve je isključeno dok ga ne uključiš.") {
             SetSection("Pokretanje")
-            SetDrop("Kad se aplikacija otvori, prvo vidiš", "Nazad s tog ekrana vodi na Početnu",
-                listOf("Početna", "TV", "Filmovi", "Serije", "Sports Center", "Zadnji kanal"), General.start) { Prefs.put("start_screen", it.toLong()); rev++ }
             SetSwitch("Pokreni s boxom", "PRETORIAN se otvori kad se box upali", General.boot) { Prefs.put("gen_boot", it); rev++ }
             SetSection("Izlaz")
             SetSwitch("Potvrdi izlaz", "Nazad na Početnoj prvo pita", General.confirmExit) { Prefs.put("gen_exit", it); rev++ }

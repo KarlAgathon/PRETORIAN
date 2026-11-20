@@ -169,7 +169,7 @@ fun PretorianApp() {
     // Diagnostics › Long run: how long the start took, up to the first screen
     LaunchedEffect(Unit) { if (Monitor.startMs == 0L) Monitor.startMs = android.os.SystemClock.uptimeMillis() - android.os.Process.getStartUptimeMillis() }
     val stack = remember {
-        mutableStateListOf<Screen>(if (Store.playlists(ctx).isEmpty()) Screen.AddPlaylist else Screen.Home)
+        mutableStateListOf<Screen>(Screen.Home)
     }
     var version by remember { mutableIntStateOf(0) }
     LaunchedEffect(Look.layout) { Chrome.rail = if (Look.layout == 0) 2 else 3 }
@@ -210,21 +210,6 @@ fun PretorianApp() {
                 else { GoalNote.check(Sports.day(0)); full = System.currentTimeMillis() }
             } catch (_: Exception) {}
             delay(if (GoalNote.hot) General.sportLive * 1000L else General.sportEvery * 60_000L)
-        }
-    }
-    // Settings › General › Last channel at start
-    LaunchedEffect(Unit) {
-        if (General.start != 0 && !General.startedOnce && !Lock.simple) {
-            General.startedOnce = true
-            delay(if (General.start == 5) 1500 else 50)
-            // Settings › General › "When the app opens, you first see": Back from there goes to Home
-            if (stack.lastOrNull() == Screen.Home) when (General.start) {
-                1 -> nav.push(Screen.Tv)
-                2 -> nav.push(Screen.Movies)
-                3 -> nav.push(Screen.Series)
-                4 -> nav.push(Screen.Sports)
-                5 -> Recent.list().firstOrNull()?.let { r -> playChannels(nav, listOf(r.ch), 0) }
-            }
         }
     }
     LaunchedEffect(AppHome.tick) { if (AppHome.tick > 0 && Store.playlists(ctx).isNotEmpty()) { Preview.stop(); Dawn.homeOpen = false; stack.clear(); stack.add(Screen.Home) } }

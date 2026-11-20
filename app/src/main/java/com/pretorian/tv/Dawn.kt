@@ -162,9 +162,9 @@ private fun DawnMenu(nav: Nav) {
     )
     val frs = remember { items.map { FocusRequester() } }
     DisposableEffect(Unit) { onDispose { Chrome.inRail = false } }
-    // back from a section: the focus waits on that section's item (first start: TV)
+    // back from a section: the focus waits on that section's item (first start: Home)
     LaunchedEffect(Unit) {
-        val i = items.indexOfFirst { it.screen == (Dawn.last ?: Screen.Tv) }.coerceAtLeast(0)
+        val i = items.indexOfFirst { it.screen == (Dawn.last ?: Screen.Home) }.coerceAtLeast(0)
         delay(120); frs[i].tryFocus()
     }
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -280,10 +280,7 @@ private fun DawnTopBar(top: Screen, menu: Boolean) {
     val sep: @Composable () -> Unit = { Box(Modifier.width(1.dp).height(20.dp).background(Color(0x4DFFFFFF))) }
     Row(Modifier.fillMaxWidth().height(72.dp).padding(horizontal = 38.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        Ico(R.drawable.lc_play, 30.dp, Color.White)
-        T("PRETORIAN TV", 21.sp, Color.White, FontWeight.Bold)
         if (section.isNotEmpty()) {
-            sep()
             if (Dawn.crumb.isEmpty()) T(section, 18.sp, Color.White, FontWeight.SemiBold)
             else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 T(section, 17.sp, Color(0xFFD5DBE3))
