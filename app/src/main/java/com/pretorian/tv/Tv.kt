@@ -380,7 +380,7 @@ private fun TvList(nav: Nav) {
     WrapEffect(st.wrap, gState)
     val coming = remember { TvMemory.restore && TvMemory.group != null && TvMemory.channel >= 0 }
     // New Dawn opens TV on the groups (one level at a time); only the way back from the player lands in the channels
-    var inChannels by remember { mutableStateOf(coming || (st.group != null && !Look.dawn)) }
+    var inChannels by remember { mutableStateOf(coming) }
     var focusedCh by remember { mutableStateOf<Channel?>(null) }
     LaunchedEffect(Unit) {
         if (!coming) {
@@ -410,190 +410,71 @@ private fun TvList(nav: Nav) {
             runCatching { st.focusFr.requestFocus() }
         }
     }
-    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
-    fun revealMainRail() {
-        Chrome.rail = if (Look.layout == 0) 2 else 1
-        focusScope.launch {
-            delay(80)
-            runCatching { focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Left) }
-        }
-    }
-    BackHandler(enabled = st.groupMenu == null && Look.layout == 0) {
-        if (inChannels) backToGroups() else revealMainRail()
-    }
-
     // Group focus only moves the highlight. The channel list changes only after OK (onOpen).
     var enterTick by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(focusedCh) { val c = focusedCh ?: return@LaunchedEffect; delay(500); Dusk.set(c.logo, c.name) }
-    if (Look.dawn) {
-        // New Dawn: groups alone › channels alone with preview, now/next and options › full screen.
-        // Back and ◀ go exactly one level out; at the groups they return to the menu (on TV).
-        BackHandler(enabled = st.groupMenu == null && inChannels) { PreviewSel.ch = null; Preview.stop(); backToGroups() }
-        LaunchedEffect(inChannels, st.group?.key) {
-            Dawn.crumb = if (inChannels) st.group?.cat?.name ?: "" else ""
-            if (!inChannels) Dawn.pos = ""
-            Dawn.hints = if (inChannels) listOf("▲▼" to "Izaberi kanal", "OK" to "Pregled", "OK" to "Cijeli ekran", "Back" to "Grupe")
-                else listOf("▲▼" to "Izaberi grupu", "OK" to "Otvori grupu", "Back" to "Meni")
-        }
-        DisposableEffect(Unit) { onDispose { Dawn.crumb = ""; Dawn.pos = ""; Dawn.hints = emptyList() } }
-        // first time on the groups: the focus goes to the last opened group (or the first one)
-        var placed by remember { mutableStateOf(false) }
-        LaunchedEffect(rows is Load.Ok, inChannels) { if (!inChannels && rows is Load.Ok && !placed) { placed = true; backToGroups() } }
-        if (!inChannels) Box(Modifier.fillMaxSize().padding(start = 34.dp, top = 6.dp, bottom = 8.dp)) {
-            Box(Modifier.width(360.dp).fillMaxHeight().dawnGlass().padding(vertical = 8.dp)
-                .onPreviewKeyEvent { e ->
-                    if (e.type != KeyEventType.KeyDown) false
-                    else if (e.key == Key.DirectionLeft) { nav.back(); true }
-                    else if (e.key == Key.DirectionRight) {
-                        val g = (rows as? Load.Ok)?.value?.filterIsInstance<GRow.Group>()?.firstOrNull { "g:" + it.ref.key == st.focusKey }?.ref
-                        if (g != null) { focusedCh = null; openGroup(ctx, st, g); enterTick++; inChannels = true; true } else false
-                    } else false
-                }) {
-                GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, 360.dp, "", null,
-                    onFocusGroup = { },
-                    onOpen = { focusedCh = null; openGroup(ctx, st, it); enterTick++; inChannels = true },
-                    onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
-                    onHeader = { p -> TvFold.toggle(p.id); if (p.id in TvFold.open) Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
-                    onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it },
-                    onFocusRow = { st.focusKey = it })
-            }
-        } else {
-            val g = st.group
-            val chs by load(g?.key, Favs.rev, keep = true) { g?.let { channelsOf(ctx, it) } ?: emptyList() }
-            var opts by remember { mutableStateOf<Channel?>(null) }
-            LaunchedEffect(focusedCh, chs) {
-                val list = (chs as? Load.Ok)?.value ?: return@LaunchedEffect
-                val i = focusedCh?.let { c -> list.indexOfFirst { it.url == c.url } } ?: -1
-                Dawn.pos = if (i >= 0) "${i + 1} / ${list.size}" else ""
-            }
-            Row(Modifier.fillMaxSize().padding(start = 34.dp, end = 38.dp, top = 6.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Box(Modifier.weight(0.42f).fillMaxHeight().dawnGlass().padding(vertical = 4.dp)) {
-                    if (g != null) key(g.key, st.rev) {
-                        ChannelList(g, nav, st.gate, rows, enterTick, onFocusCh = { focusedCh = it },
-                            onBackToGroups = { PreviewSel.ch = null; Preview.stop(); backToGroups() }, onChanged = { st.rev++ }, focusOnStart = true)
-                    }
-                }
-                Column(Modifier.weight(0.58f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    DawnPreview(Modifier.fillMaxWidth().weight(1f, fill = false))
-                    DawnNowNext(focusedCh ?: PreviewSel.ch, Modifier.fillMaxWidth())
-                    Spacer(Modifier.weight(0.001f))
-                    DawnOptions(focusedCh ?: PreviewSel.ch, onOptions = { opts = focusedCh ?: PreviewSel.ch }, modifier = Modifier.fillMaxWidth().height(68.dp))
-                }
-            }
-            opts?.let { ch ->
-                val list = (chs as? Load.Ok)?.value.orEmpty()
-                val groups = (rows as? Load.Ok)?.value?.mapNotNull { (it as? GRow.Group)?.ref }
-                    ?.filter { it.pid != null && it.pid == ch.pid.ifBlank { g?.pid } && it.cat.id != ALL_GROUP }?.map { it.cat } ?: emptyList()
-                if (g != null) ChannelOptions(g, ch, list, groups, onDismiss = { opts = null }) { reload, close ->
-                    if (close) opts = null
-                    if (reload) st.rev++
-                }
-            }
-        }
-    } else if (Look.layout == 0) {
-        // Classic TV: full-screen workspace; the app rail appears only on LEFT/BACK.
-        LaunchedEffect(inChannels) { Chrome.driven = true; Chrome.rail = if (inChannels) 0 else 2 }
-        DisposableEffect(Unit) { onDispose { Chrome.driven = false; Chrome.rail = if (Look.layout == 0) 2 else 3 } }
-        Row(Modifier.fillMaxSize().padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            // Reference layout: persistent category column on the left; preview and EPG workspace on the right.
-            val groupsWidth = 206.dp
-            if (!inChannels) Box(Modifier.width(groupsWidth).fillMaxHeight().clip(Rnd(12.dp)).background(C.Rail)
-                .onPreviewKeyEvent { e ->
-                    if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionRight) {
-                        val focusedGroup = (rows as? Load.Ok)?.value?.filterIsInstance<GRow.Group>()
-                            ?.firstOrNull { "g:" + it.ref.key == st.focusKey }?.ref
-                        if (focusedGroup != null) {
-                            openGroup(ctx, st, focusedGroup); focusedCh = null
-                            enterTick++; inChannels = true; Chrome.rail = 0
-                            true
-                        } else false
-                    } else false
-                }
-                .border(1.dp, C.Line, Rnd(12.dp))
-                .onPreviewKeyEvent { e ->
-                    if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { revealMainRail(); true } else false
-                }) {
-                GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, groupsWidth, "", null,
-                    onFocusGroup = { Chrome.rail = 2 },
-                    onOpen = { focusedCh = null; openGroup(ctx, st, it); enterTick++; inChannels = true; Chrome.rail = 0 },
-                    onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
-                    onHeader = { p ->
-                        TvFold.toggle(p.id)
-                        if (p.id in TvFold.open) Store.open(ctx, p.id)
-                        st.focusKey = "h:" + p.id; st.rev++; st.refocus++
-                    },
-                    onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it },
-                    onFocusRow = { st.focusKey = it; inChannels = false; Chrome.rail = 2 },
-                    containVerticalFocus = false, classicStyle = true)
-            }
-            if (!inChannels) Box(Modifier.width(1.dp).fillMaxHeight().background(C.Line))
-            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                val previewCh = PreviewSel.ch
-                Row(Modifier.fillMaxWidth().weight(0.32f).clipToBounds(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Box(Modifier.weight(0.43f).fillMaxHeight().clip(Rnd(12.dp)), contentAlignment = Alignment.Center) {
-                        if (previewCh != null) PreviewBox(previewCh, Modifier.fillMaxSize())
-                        else Box(Modifier.fillMaxSize().clip(Rnd(12.dp)).background(C.Rail), contentAlignment = Alignment.Center) {
-                            T(tr("Izaberi kanal za pregled"), 12.sp, C.Muted)
-                        }
-                    }
-                    Column(Modifier.weight(0.57f).fillMaxHeight().clip(Rnd(12.dp)).background(C.Rail)
-                        .border(1.dp, C.Line, Rnd(12.dp)).padding(horizontal = 14.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        if (previewCh == null) {
-                            T("TV · EPG", 13.sp, C.Muted, FontWeight.SemiBold)
-                            T(tr("Potvrdi kanal tipkom OK da pokreneš mini-player."), 12.sp, C.Soft)
-                        } else {
-                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                ChannelLogo(previewCh.logo, previewCh.name)
-                                Column(Modifier.weight(1f)) {
-                                    T(previewCh.name, 15.sp, C.Text, FontWeight.Bold, maxLines = 1)
-                                    T(tr("TV · EPG"), 10.sp, C.Muted, maxLines = 1)
-                                }
-                                qualityOf(previewCh.name)?.let { label -> Box(Modifier.width(44.dp).height(24.dp).clip(Rnd(8.dp)).background(C.Card), contentAlignment = Alignment.Center) { T(label, 10.sp, C.Soft, FontWeight.SemiBold, maxLines = 1) } }
-                            }
-                            EpgList(previewCh, limit = 3, modifier = Modifier.fillMaxWidth().weight(1f), compact = true)
-                        }
-                    }
-                }
-                Box(Modifier.fillMaxWidth().weight(0.68f).clip(Rnd(12.dp)).background(C.Rail)
-                    .border(1.dp, C.Line, Rnd(12.dp))
-                    .onPreviewKeyEvent { e ->
-                        if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { backToGroups(); true } else false
-                    }) {
-                    val g = st.group
-                    if (g == null) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Message("Izaberi grupu", "Pritisni OK na grupi za prikaz kanala")
-                    } else key(g.key, st.rev) {
-                        ChannelList(g, nav, st.gate, rows, enterTick,
-                            onFocusCh = { focusedCh = it; inChannels = true; Chrome.rail = 0 },
-                            onBackToGroups = { backToGroups() }, onChanged = { st.rev++ },
-                            fullWidthClassic = true)
-                    }
-                }
-            }
+    // New Dawn: groups alone › channels alone with preview, now/next and options › full screen.
+    // Back and ◀ go exactly one level out; at the groups they return to the menu (on TV).
+    BackHandler(enabled = st.groupMenu == null && inChannels) { PreviewSel.ch = null; Preview.stop(); backToGroups() }
+    LaunchedEffect(inChannels, st.group?.key) {
+        Dawn.crumb = if (inChannels) st.group?.cat?.name ?: "" else ""
+        if (!inChannels) Dawn.pos = ""
+        Dawn.hints = if (inChannels) listOf("▲▼" to "Izaberi kanal", "OK" to "Pregled", "OK" to "Cijeli ekran", "Back" to "Grupe")
+            else listOf("▲▼" to "Izaberi grupu", "OK" to "Otvori grupu", "Back" to "Meni")
+    }
+    DisposableEffect(Unit) { onDispose { Dawn.crumb = ""; Dawn.pos = ""; Dawn.hints = emptyList() } }
+    // first time on the groups: the focus goes to the last opened group (or the first one)
+    var placed by remember { mutableStateOf(false) }
+    LaunchedEffect(rows is Load.Ok, inChannels) { if (!inChannels && rows is Load.Ok && !placed) { placed = true; backToGroups() } }
+    if (!inChannels) Box(Modifier.fillMaxSize().padding(start = 34.dp, top = 6.dp, bottom = 8.dp)) {
+        Box(Modifier.width(360.dp).fillMaxHeight().dawnGlass().padding(vertical = 8.dp)
+            .onPreviewKeyEvent { e ->
+                if (e.type != KeyEventType.KeyDown) false
+                else if (e.key == Key.DirectionLeft) { nav.back(); true }
+                else if (e.key == Key.DirectionRight) {
+                    val g = (rows as? Load.Ok)?.value?.filterIsInstance<GRow.Group>()?.firstOrNull { "g:" + it.ref.key == st.focusKey }?.ref
+                    if (g != null) { focusedCh = null; openGroup(ctx, st, g); enterTick++; inChannels = true; true } else false
+                } else false
+            }) {
+            GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, 360.dp, "", null,
+                onFocusGroup = { },
+                onOpen = { focusedCh = null; openGroup(ctx, st, it); enterTick++; inChannels = true },
+                onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
+                onHeader = { p -> TvFold.toggle(p.id); if (p.id in TvFold.open) Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
+                onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it },
+                onFocusRow = { st.focusKey = it })
         }
     } else {
-        Column(Modifier.fillMaxSize()) {
-            Row(Modifier.weight(1f).fillMaxWidth()) {
-                GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, 260.dp, "Kategorije", null,
-                    onFocusGroup = { }, onOpen = { openGroup(ctx, st, it); enterTick++ }, onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
-                    onHeader = { p -> TvFold.toggle(p.id); if (p.id in TvFold.open) Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
-                    onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it }, onFocusRow = { st.focusKey = it; inChannels = false }, containVerticalFocus = false)
-                Box(Modifier.width(1.dp).fillMaxHeight().background(C.Line))
-                Box(Modifier.weight(1f).fillMaxHeight()) {
-                    val g = st.group
-                    if (g == null) Message("Izaberi grupu", "Drži OK na grupi za opcije")
-                    else Row(Modifier.fillMaxSize()) {
-                        Box(Modifier.weight(1f).fillMaxHeight().onPreviewKeyEvent { e -> if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { backToGroups(); true } else false }) {
-                            key(g.key, st.rev) { ChannelList(g, nav, st.gate, rows, enterTick, onFocusCh = { focusedCh = it; inChannels = true }, onBackToGroups = { backToGroups() }, onChanged = { st.rev++ }) }
-                        }
-                        EpgPanel(focusedCh, Modifier.width(330.dp))
-                    }
+        val g = st.group
+        val chs by load(g?.key, Favs.rev, keep = true) { g?.let { channelsOf(ctx, it) } ?: emptyList() }
+        var opts by remember { mutableStateOf<Channel?>(null) }
+        LaunchedEffect(focusedCh, chs) {
+            val list = (chs as? Load.Ok)?.value ?: return@LaunchedEffect
+            val i = focusedCh?.let { c -> list.indexOfFirst { it.url == c.url } } ?: -1
+            Dawn.pos = if (i >= 0) "${i + 1} / ${list.size}" else ""
+        }
+        Row(Modifier.fillMaxSize().padding(start = 34.dp, end = 38.dp, top = 6.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Box(Modifier.weight(0.42f).fillMaxHeight().dawnGlass().padding(vertical = 4.dp)) {
+                if (g != null) key(g.key, st.rev) {
+                    ChannelList(g, nav, st.gate, rows, enterTick, onFocusCh = { focusedCh = it },
+                        onBackToGroups = { PreviewSel.ch = null; Preview.stop(); backToGroups() }, onChanged = { st.rev++ }, focusOnStart = true)
                 }
+            }
+            Column(Modifier.weight(0.58f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                DawnPreview(Modifier.fillMaxWidth().weight(1f, fill = false))
+                DawnNowNext(focusedCh ?: PreviewSel.ch, Modifier.fillMaxWidth())
+                Spacer(Modifier.weight(0.001f))
+                DawnOptions(focusedCh ?: PreviewSel.ch, onOptions = { opts = focusedCh ?: PreviewSel.ch }, modifier = Modifier.fillMaxWidth().height(68.dp))
+            }
+        }
+        opts?.let { ch ->
+            val list = (chs as? Load.Ok)?.value.orEmpty()
+            val groups = (rows as? Load.Ok)?.value?.mapNotNull { (it as? GRow.Group)?.ref }
+                ?.filter { it.pid != null && it.pid == ch.pid.ifBlank { g?.pid } && it.cat.id != ALL_GROUP }?.map { it.cat } ?: emptyList()
+            if (g != null) ChannelOptions(g, ch, list, groups, onDismiss = { opts = null }) { reload, close ->
+                if (close) opts = null
+                if (reload) st.rev++
             }
         }
     }
