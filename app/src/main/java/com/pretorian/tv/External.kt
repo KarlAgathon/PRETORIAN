@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -108,24 +108,40 @@ fun AppIcon(d: android.graphics.drawable.Drawable?) {
 fun ExternalPicker(url: String, title: String, posMs: Long, onDismiss: () -> Unit) {
     val ctx = LocalContext.current
     val apps = remember { ExtPlayer.installed(ctx) }
-    var always by remember { mutableIntStateOf(0) }
-    Popup("Otvori u playeru", onDismiss) {
-        if (apps.isEmpty()) { T("Nema instaliranog eksternog playera. Instaliraj VLC iz Google Play prodavnice.", 14.sp, C.Soft, maxLines = 3); return@Popup }
-        Segmented(listOf("Samo jednom", "Uvijek"), always) { always = it }
-        apps.forEach { a ->
-            androidx.compose.foundation.layout.Box {
-                Focusable(modifier = Modifier.fillMaxWidth().height(60.dp), onClick = {
-                    if (always == 1) { ExtPlayer.saved = a.pkg; Toast.makeText(ctx, trf("Uvijek: %s", a.label), Toast.LENGTH_SHORT).show() }
-                    onDismiss()
-                    ExtPlayer.launch(ctx, a.pkg, url, title, posMs)
-                }, normal = C.Card, zoom = 1.01f) { _ ->
-                    Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        AppIcon(a.icon)
-                        T(a.label, 16.sp, C.Text, FontWeight.Medium, modifier = Modifier.weight(1f))
-                        if (ExtPlayer.saved == a.pkg) T("Uvijek", 12.sp, C.RedText)
-                    }
+    var selected by remember(url) { mutableStateOf<AppChoice?>(null) }
+    var saved by remember { mutableStateOf(ExtPlayer.saved) }
+    val choice = selected
+    if (choice != null) {
+        fun launch(rememberChoice: Boolean) {
+            if (ExtPlayer.launch(ctx, choice.pkg, url, title, posMs)) {
+                if (rememberChoice) ExtPlayer.saved = choice.pkg
+                onDismiss()
+            } else selected = null
+        }
+        Popup(trf("Open with %s?", choice.label), { selected = null }) {
+            OptionRow("Just once", R.drawable.lc_play) { launch(false) }
+            OptionRow("Remember my choice", R.drawable.lc_check) { launch(true) }
+        }
+    } else Popup("Vanjski plejer", onDismiss) {
+        OptionRow("Internal Player", R.drawable.lc_play, value = if (saved.isEmpty()) "✓" else null) {
+            ExtPlayer.saved = ""; onDismiss()
+        }
+        apps.forEach { app ->
+            Focusable(modifier = Modifier.fillMaxWidth().height(52.dp), onClick = { selected = app },
+                normal = C.Card, zoom = 1f) { _ ->
+                Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    AppIcon(app.icon)
+                    T(app.label, 16.sp, C.Text, FontWeight.Medium, modifier = Modifier.weight(1f))
+                    if (saved == app.pkg) T("✓", 16.sp, androidx.compose.ui.graphics.Color.White)
                 }
             }
+        }
+        if (saved.isNotEmpty()) OptionRow("Reset remembered choice", R.drawable.lc_rotate_ccw,
+            sub = "Restore the default internal player.") {
+            ExtPlayer.saved = ""
+            saved = ""
+            Toast.makeText(ctx, tr("Internal Player"), Toast.LENGTH_SHORT).show()
         }
     }
 }

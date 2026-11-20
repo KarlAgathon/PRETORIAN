@@ -92,7 +92,7 @@ fun CatchupScreen(nav: Nav) {
 }
 
 @Composable
-private fun Archive(c: Channel, day: Int, onDay: (Int) -> Unit, nav: Nav) {
+internal fun Archive(c: Channel, day: Int, onDay: (Int) -> Unit, nav: Nav) {
     val ctx = LocalContext.current
     var shown by remember { mutableStateOf<Channel?>(null) }
     LaunchedEffect(c.url) { delay(350); shown = c }

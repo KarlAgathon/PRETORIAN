@@ -290,6 +290,10 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     var resUntil by remember { mutableLongStateOf(0L) }
     var channels by remember { mutableIntStateOf(0) }
     var nowNext by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
+    var notice by remember { mutableStateOf<String?>(null) }
+    var noticeSequence by remember { mutableIntStateOf(0) }
+    fun inform(message: String) { notice = message; noticeSequence++ }
+    LaunchedEffect(noticeSequence) { if (notice != null) { delay(1500); notice = null } }
     var dialog by remember { mutableStateOf<String?>(null) }   // menu, audio, subs, info, fav, ext
     var side by remember { mutableStateOf<String?>(null) }     // channels, groups, epg (live only)
     // the player owns the focus: a left menu that held it before must not block the lists here
@@ -474,7 +478,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     LaunchedEffect(index, items) {
         if (lastIndex >= 0 && lastIndex != index) prevIndex = lastIndex
         lastIndex = index
-        if (s.live) TvMemory.channel = index
+        if (s.live) { TvMemory.channel = index; TvMemory.returnUrl = items.getOrNull(index)?.url }
         reconnect = 0
         if (s.live) items.getOrNull(index)?.channel?.let { c ->
             val g = TvMemory.group
@@ -508,7 +512,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     }
     // the guide of this channel was moved: now / next in the info bar follow at once
     LaunchedEffect(EpgShift.rev) { val c = item.channel; if (EpgShift.rev > 0 && s.live && c != null && p != null) nowNext = try { Repo.nowNext(p, c) } catch (_: Exception) { nowNext } }
-    LaunchedEffect(showInfo, index, playing, bar) { if (showInfo && !bar && (s.live || playing)) { delay(5000); showInfo = false } }
+    LaunchedEffect(showInfo, index, playing, bar) { if (showInfo && !bar && (s.live || playing)) { delay(if (s.live) 2500 else 5000); showInfo = false } }
     LaunchedEffect(Unit) { while (true) { position = player.currentPosition; duration = player.duration.coerceAtLeast(0); delay(500) } }
     // time watched for Settings › Diagnostics
     LaunchedEffect(Unit) {
@@ -701,7 +705,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                         if (sv.paddingLeft != l || sv.paddingRight != r) sv.setPadding(l, sv.paddingTop, r, sv.paddingBottom)
                     }
                     v.resizeMode = when (resize) {
-                        3 -> AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
+                        3 -> if (s.live) AspectRatioFrameLayout.RESIZE_MODE_FIT else AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
                         4 -> AspectRatioFrameLayout.RESIZE_MODE_FILL
                         5 -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                         else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
@@ -882,6 +886,14 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             }
         }
 
+        notice?.let { message ->
+            Box(Modifier.align(Alignment.TopCenter).padding(top = 40.dp).clip(Rnd(9.dp)).background(Color(0xCC181818)).padding(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Ico(R.drawable.lc_info, 18.dp, Color.White)
+                    T(message, 15.sp, Color.White)
+                }
+            }
+        }
         if (showInfo && side == null) {
             Box(Modifier.align(Alignment.BottomStart).fillMaxWidth()
                 .background(if (Look.overlay == 1) Brush.verticalGradient(listOf(C.OverlayBar, C.OverlayBar)) else Brush.verticalGradient(listOf(Color.Transparent, Color(0xE6000000))))
@@ -924,8 +936,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                                 "pause" -> if (player.playWhenReady) player.pause() else player.play()
                                 "more" -> { bar = false; dialog = "menu" }
                                 "archive" -> {
-                                    if (ch != null && (ch.archive > 0 || !ch.catchup.isNullOrBlank())) nav.push(Screen.Catchup)
-                                    else Toast.makeText(ctx, "Archive (Catch-up) is not available for this channel.", Toast.LENGTH_SHORT).show()
+                                    if (ch != null && Catchups.has(p, ch)) dialog = "archive"
+                                    else inform("Archive (Catch-up) is not available for this channel.")
                                 }
                                 "favorites" -> ch?.let { c ->
                                     val lists = Favs.lists(ctx)
@@ -1013,13 +1025,20 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     }
 
     when (dialog) {
+        "archive" -> item.channel?.let { channel ->
+            var day by remember(channel.url) { mutableIntStateOf(0) }
+            Popup("Arhiva", { dialog = null }, width = 800.dp) {
+                Box(Modifier.fillMaxWidth().height(320.dp)) { Archive(channel, day, { day = it }, nav) }
+            }
+        }
         "menu" -> Popup(item.title, onDismiss = { dialog = null }) {
             if (s.live && tracksOf(player, MC.TRACK_TYPE_TEXT).isNotEmpty()) OptionRow("Titlovi", R.drawable.lc_captions) { dialog = "subs" }
             // Više: the rarer things, so the bar fits in one row
             OptionRow(if (Sleep.until > 0) trf("Tajmer: %s min", ((Sleep.until - System.currentTimeMillis()) / 60_000 + 1).coerceAtLeast(1)) else tr("Tajmer za spavanje"), R.drawable.lc_moon) { dialog = "sleep" }
             OptionRow("Kvalitet i informacije", R.drawable.lc_info, value = if (videoH > 0) qualityLabel(videoH) else null) { dialog = "info" }
             if (s.live) item.channel?.let { c -> OptionRow("Pomak vremena", R.drawable.lc_clock, value = EpgShift.label(EpgShift.chMin(c.url))) { dialog = "epgshift" } }
-            OptionRow("Vanjski plejer", R.drawable.lc_external_link) { player.pause(); saveProgress(); dialog = "ext" }
+            OptionRow("Vanjski plejer", R.drawable.lc_external_link) { saveProgress(); dialog = "ext" }
+            if (s.live && player.isCurrentMediaItemLive && player.isCurrentMediaItemSeekable && duration > 0) OptionRow("Time Shift (Live TV)", R.drawable.lc_history) { dialog = "timeshift" }
             if (s.live) OptionRow("Arhiva", R.drawable.lc_history, sub = tr("emisije koje su prošle")) { dialog = null; nav.push(Screen.Catchup) }
             if (!s.live && subFile != null) OptionRow("Podesi vrijeme titla", R.drawable.lc_clock, sub = "ako titl kasni ili žuri · SYNC") { dialog = "subsync" }
             if (Tech.audioDelay) OptionRow("Pomak zvuka", R.drawable.lc_volume, sub = tr("ako zvuk kasni ili žuri"), value = AudioDelay.label(AudioDelay.of(item.url))) { dialog = "adelay" }
@@ -1027,13 +1046,33 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         }
         "fav" -> item.channel?.let { FavPicker(it) { dialog = null } }
         "epgshift" -> item.channel?.let { EpgShiftPopup(it) { dialog = null } }
-        "zoom" -> Popup("Zoom", onDismiss = { dialog = null }) {
-            FORMATS.forEachIndexed { i, label ->
-                OptionRow(tr(label), R.drawable.lc_maximize, selected = resize == i) {
-                    resize = i
-                    item.channel?.let { Prefs.put("fmt_v2_" + it.url.hashCode(), resize.toLong()) }
-                    dialog = null
+        "zoom" -> Popup("Format", onDismiss = { dialog = null }, width = 760.dp) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(0 to "Auto / Original", 3 to "Fit", 5 to "Zoom", 4 to "Stretch").forEach { (mode, label) ->
+                    val chosen = mode == resize
+                    Focusable(modifier = Modifier.weight(1f).height(54.dp), onClick = {
+                        resize = mode
+                        item.channel?.let { Prefs.put("fmt_v2_" + it.url.hashCode(), mode.toLong()) }
+                        dialog = null
+                        bar = true
+                    }, normal = Color(0xCC222222), borderColor = if (chosen) C.Red else C.Line, zoom = 1f) {
+                        T(if (chosen) "✓ " + tr(label) else tr(label), 15.sp, Color.White, modifier = Modifier.align(Alignment.Center))
+                    }
                 }
+            }
+        }
+        "timeshift" -> {
+            if (!player.isCurrentMediaItemLive || !player.isCurrentMediaItemSeekable || duration <= 0) {
+                LaunchedEffect(Unit) { dialog = "menu" }
+            } else Popup("Time Shift (Live TV)", { dialog = "menu" }) {
+                T(fmt(position.coerceAtLeast(0)) + " / " + fmt(duration) + " · LIVE", 15.sp, C.Text)
+                Box(Modifier.fillMaxWidth().height(4.dp).background(C.Line)) {
+                    Box(Modifier.fillMaxWidth((position.toFloat() / duration).coerceIn(0f, 1f)).height(4.dp).background(C.Red))
+                }
+                OptionRow(if (playing) "Pauza" else "Nastavi") { if (player.playWhenReady) player.pause() else player.play() }
+                OptionRow("Rewind") { player.seekTo((player.currentPosition - step).coerceAtLeast(0)) }
+                OptionRow("Fast Forward") { player.seekTo((player.currentPosition + step).coerceAtMost(duration)) }
+                OptionRow("Go to Live") { player.seekToDefaultPosition(); player.play() }
             }
         }
         "recent" -> {
