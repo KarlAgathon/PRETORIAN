@@ -301,27 +301,21 @@ class Xtream(private val p: Playlist) {
     fun vodCategories() = cats("get_vod_categories")
     fun seriesCategories() = cats("get_series_categories")
 
-    fun channels(categoryId: String): List<Channel> {
-        val a = array(api("get_live_streams", "&category_id=${Net.enc(categoryId)}"))
-        return (0 until a.length()).map { i ->
-            val o = a.getJSONObject(i)
-            val id = o.str("stream_id")
-            Channel(id, o.optInt("num", i + 1), o.str("name"), o.str("stream_icon").orNullIfBlank(), categoryId,
-                "$base/live/${p.user}/${p.pass}/$id.ts", o.str("epg_channel_id").orNullIfBlank(), p.id)
-        }
-    }
+    fun channels(categoryId: String): List<Channel> =
+        readChannels(array(api("get_live_streams", "&category_id=${Net.enc(categoryId)}")), categoryId)
 
-    /** every live channel of the account (for the sports guide) */
-    fun allChannels(): List<Channel> {
-        val a = array(api("get_live_streams"))
-        return (0 until a.length()).map { i ->
-            val o = a.getJSONObject(i)
+    /** Every live channel, using the same stream metadata as a single provider group. */
+    fun allChannels(): List<Channel> = readChannels(array(api("get_live_streams")))
+
+    internal fun readChannels(rows: JSONArray, categoryId: String? = null): List<Channel> =
+        (0 until rows.length()).map { i ->
+            val o = rows.getJSONObject(i)
             val id = o.str("stream_id")
-            Channel(id, o.optInt("num", i + 1), o.str("name"), o.str("stream_icon").orNullIfBlank(), o.str("category_id"),
-                "$base/live/${p.user}/${p.pass}/$id.ts", o.str("epg_channel_id").orNullIfBlank(), p.id,
+            Channel(id, o.optInt("num", i + 1), o.str("name"), o.str("stream_icon").orNullIfBlank(),
+                categoryId ?: o.str("category_id"), "$base/live/${p.user}/${p.pass}/$id.ts",
+                o.str("epg_channel_id").orNullIfBlank(), p.id,
                 if (o.optInt("tv_archive", 0) == 1) o.optInt("tv_archive_duration", 1).coerceAtLeast(1) else 0)
         }
-    }
 
     /** short list of every movie or series: id, category, name, image, rating, url (for the "new" badges) */
     fun catalog(kind: String): List<JSONObject> { val out = ArrayList<JSONObject>(); catalogEach(kind) { out += it }; return out }

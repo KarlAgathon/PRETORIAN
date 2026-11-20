@@ -67,6 +67,18 @@ class TvRedesignRegressionTest {
         assertEquals(lists.map { it.id }, rows.filterIsInstance<GRow.Header>().map { it.p.id })
     }
 
+    @Test fun xtreamArchiveAvailabilityIsTheSameInsideProviderGroup() {
+        val playlist = Playlist("test", "Test", SourceType.XTREAM, server = "https://example.test")
+        val api = Xtream(playlist)
+        val row = org.json.JSONObject().put("stream_id", "42").put("category_id", "news")
+            .put("tv_archive", 1).put("tv_archive_duration", 7)
+        val rows = org.json.JSONArray().put(row)
+        assertEquals(api.readChannels(rows).single(), api.readChannels(rows, "news").single())
+        assertEquals(7, api.readChannels(rows, "news").single().archive)
+        row.put("tv_archive", 0)
+        assertFalse(Catchups.has(playlist, api.readChannels(rows, "news").single()))
+    }
+
     @Test fun sportsEventsStayOutOfGeneralNotifications() {
         val before = Notes.unread()
         Notes.add("sport", "Goal", "test-goal")
