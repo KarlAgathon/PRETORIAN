@@ -143,10 +143,12 @@ fun PinSetupDialog(onDismiss: () -> Unit, onDone: () -> Unit) {
 const val ALL_GROUP = "__all__"
 
 /** Channels of a group: favourites, all channels, or a provider group with your changes. */
+private const val UNIFIED_FAVORITES = "__all_favorites__"
 const val RECENT_GROUP = "__recent__"
 
 suspend fun channelsOf(ctx: android.content.Context, ref: GroupRef): List<Channel> {
     if (ref.cat.id == RECENT_GROUP) return Recent.list().map { it.ch }
+    if (ref.cat.id == UNIFIED_FAVORITES) return Favs.lists(ctx).flatMap { Favs.channels(it.id) }.distinctBy { it.url }
     if (ref.pid == null) return Favs.channels(favListId(ref.cat.id))
     val p = Store.byId(ctx, ref.pid) ?: return emptyList()
     val ovr = Ovr(ctx, p.id)
@@ -173,9 +175,8 @@ internal fun groupFocusTarget(rows: List<GRow>, selected: GroupRef?): String? {
 
 suspend fun groupRows(ctx: android.content.Context): List<GRow> {
     val out = ArrayList<GRow>()
-    if (Look.age && !Look.dawn && Recent.list().isNotEmpty()) out.add(GRow.Group(GroupRef(null, Category(RECENT_GROUP, tr("Zadnje gledano")))))
-    Favs.lists(ctx).forEach { out.add(GRow.Group(GroupRef(null, Category(FAV_PREFIX + it.id, "★ " + it.name)))) }
-    if (!Lock.simple) out.add(GRow.NewFav())
+    out.add(GRow.Group(GroupRef(null, Category(RECENT_GROUP, tr("Zadnje gledano")))))
+    out.add(GRow.Group(GroupRef(null, Category(UNIFIED_FAVORITES, tr("Favoriti")))))
     val pls = Store.actives(ctx)
     pls.forEachIndexed { _, p ->
         // several playlists: all folded until you open one (its groups are read only then)
@@ -252,16 +253,16 @@ fun GroupColumn(
                                     shape = shape,
                                     onClick = { onOpen(g) },
                                     onFocus = { onFocusRow(r.id); onFocusGroup(g) },
-                                    onMenu = if (Lock.simple || g.cat.id == ALL_GROUP || g.cat.id == RECENT_GROUP) null else ({ onMenu(g) }),
+                                    onMenu = if (Lock.simple || g.cat.id == ALL_GROUP || g.cat.id in setOf(RECENT_GROUP, UNIFIED_FAVORITES)) null else ({ onMenu(g) }),
                                     focusRequester = if (containVerticalFocus) null else fr,
-                                    normal = if (Look.dawn) Color.Transparent else if (selected) C.Red.copy(alpha = 0.28f) else Color.Transparent,
-                                    focused = if (Look.dawn) Dawn.pill else null,
-                                    focusBorderColor = if (Look.dawn) Color.Transparent else null,
+                                    normal = if (Look.dawn) Color(0x66333333) else Color.Transparent,
+                                    focused = if (Look.dawn) Color(0x88404040) else null,
+                                    focusBorderColor = if (Look.dawn) Color.White else null,
                                     zoom = 1.0f,
                                 ) { gf ->
                                     Row(Modifier.fillMaxSize().padding(horizontal = if (Look.dawn) 20.dp else 12.dp), verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        if (Look.dawn) T(g.cat.name, 18.sp, if (gf) Dawn.onPill else Color(0xFFEFF2F6), if (gf) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, modifier = Modifier.weight(1f))
+                                        if (Look.dawn) T(if (g.cat.name.length > 11) g.cat.name.take(10) + "." else g.cat.name, 18.sp, Color.White, if (gf) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, modifier = Modifier.weight(1f))
                                         else {
                                         if (selected) Dot(C.Red, 7.dp)
                                         if (width > 100.dp) T(g.cat.name, if (classicStyle) 13.sp else Rows.font, if (selected) C.Text else C.Soft, if (selected) FontWeight.Bold else FontWeight.Normal, maxLines = 1, modifier = Modifier.weight(1f)) else Ico(R.drawable.lc_layers, 18.dp, if (selected) C.Text else C.Muted)
@@ -370,9 +371,9 @@ fun cleanDesc(s: String?): String? {
     return if (again > 0) t.substring(0, again).trim() else t
 }
 
-fun openGroup(ctx: android.content.Context, st: TvState, g: GroupRef) {
+fun openGroup(ctx: android.content.Context, st: TvState, g: GroupRef, onOpened: () -> Unit) {
     val locked = g.pid?.let { Ovr(ctx, it).isLocked("live", g.cat.id) } ?: false
-    st.gate.run("g:${g.key}", locked) { if (st.group?.key != g.key) TvMemory.channel = -1; st.group = g; TvMemory.group = g }
+    st.gate.run("g:${g.key}", locked) { if (st.group?.key != g.key) TvMemory.channel = -1; st.group = g; TvMemory.group = g; onOpened() }
 }
 
 @Composable
@@ -419,9 +420,9 @@ private fun TvList(nav: Nav) {
     // Back and ◀ go exactly one level out; at the groups they return to the menu (on TV).
     BackHandler(enabled = st.groupMenu == null && inChannels) { PreviewSel.ch = null; Preview.stop(); backToGroups() }
     LaunchedEffect(inChannels, st.group?.key) {
-        Dawn.crumb = if (inChannels) st.group?.cat?.name ?: "" else ""
+        Dawn.crumb = if (inChannels) st.group?.cat?.name ?: "" else tr("Grupe")
         if (!inChannels) Dawn.pos = ""
-        Dawn.hints = if (inChannels) listOf("▲▼" to "Izaberi kanal", "OK" to "Pregled", "OK" to "Cijeli ekran", "Back" to "Grupe")
+        Dawn.hints = if (inChannels) listOf("▲▼" to "Izaberi kanal", "OK" to "Gledaj", "Back" to "Grupe")
             else listOf("▲▼" to "Izaberi grupu", "OK" to "Otvori grupu", "Back" to "Meni")
     }
     DisposableEffect(Unit) { onDispose { Dawn.crumb = ""; Dawn.pos = ""; Dawn.hints = emptyList() } }
@@ -435,12 +436,12 @@ private fun TvList(nav: Nav) {
                 else if (e.key == Key.DirectionLeft) { nav.back(); true }
                 else if (e.key == Key.DirectionRight) {
                     val g = (rows as? Load.Ok)?.value?.filterIsInstance<GRow.Group>()?.firstOrNull { "g:" + it.ref.key == st.focusKey }?.ref
-                    if (g != null) { focusedCh = null; openGroup(ctx, st, g); enterTick++; inChannels = true; true } else false
+                    if (g != null) { focusedCh = null; openGroup(ctx, st, g) { enterTick++; inChannels = true }; true } else false
                 } else false
             }) {
             GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, 360.dp, "", null,
                 onFocusGroup = { },
-                onOpen = { focusedCh = null; openGroup(ctx, st, it); enterTick++; inChannels = true },
+                onOpen = { focusedCh = null; openGroup(ctx, st, it) { enterTick++; inChannels = true } },
                 onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
                 onHeader = { p -> TvFold.toggle(p.id); if (p.id in TvFold.open) Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
                 onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it },
@@ -462,7 +463,7 @@ private fun TvList(nav: Nav) {
                         onBackToGroups = { PreviewSel.ch = null; Preview.stop(); backToGroups() }, onChanged = { st.rev++ }, focusOnStart = true)
                 }
             }
-            Column(Modifier.weight(0.58f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (g?.pid == null) Spacer(Modifier.weight(0.58f)) else Column(Modifier.weight(0.58f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 DawnPreview(Modifier.fillMaxWidth().weight(1f, fill = false))
                 DawnNowNext(focusedCh ?: PreviewSel.ch, Modifier.fillMaxWidth())
                 Spacer(Modifier.weight(0.001f))
@@ -631,8 +632,8 @@ fun playChannels(nav: Nav, list: List<Channel>, index: Int) {
 private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GRow>>, enterTick: Int = 0, onFocusCh: (Channel) -> Unit = {}, onBackToGroups: () -> Unit, onChanged: () -> Unit, focusOnStart: Boolean = false) {
     val ctx = LocalContext.current
     var listRev by remember { mutableIntStateOf(0) }
-    val isFav = g.pid == null
-    val state by load(g.key, listRev, Favs.rev, keep = true) { channelsOf(ctx, g) }
+    val isFav = g.pid == null && g.cat.id != RECENT_GROUP
+    val state by load(g.key, listRev, Favs.rev, Recent.rev, keep = true) { channelsOf(ctx, g) }
     var menu by remember { mutableStateOf<Channel?>(null) }
     var menuUrl by remember { mutableStateOf<String?>(null) }
     val cWrap = remember { Wrap() }
@@ -647,7 +648,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
             is Load.Ok -> {
                 val list = s.value
                 if (list.isEmpty()) {
-                    Message(if (isFav) "Nema favorita" else "Grupa je prazna",
+                    Message(if (g.cat.id == RECENT_GROUP) "Nema nedavno gledanih kanala" else if (isFav) "Nema favorita" else "Grupa je prazna",
                         if (isFav) "Na kanalu drži OK › Dodaj u favorite" else "Kanale možeš prebaciti ovamo preko opcija kanala")
                 } else {
                     LazyColumn(
@@ -660,7 +661,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                     ) {
                         itemsIndexed(list, key = { _, ch -> "${ch.pid}|${ch.id}|${ch.url}" }) { i, ch ->
                             val ovr = remember(ch.pid, g.pid) { Ovr(ctx, ch.pid.ifBlank { g.pid ?: "" }) }
-                            val locked = ovr.isChLocked(ch)
+                            val locked = ovr.isChLocked(ch) || (g.cat.id != ch.group && ovr.isLocked("live", ch.group))
                             // Mark the channel actually playing (or in the confirmed mini-preview), not merely the focused row.
                             val active = PreviewSel.ch?.url == ch.url || TvMemory.preview?.url == ch.url ||
                                 (TvMemory.group?.key == g.key && TvMemory.channel == i)
@@ -671,17 +672,21 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                     gate.run("c:${ch.url}", locked) {
                                         ovr.countWatch(ch)
                                         TvMemory.channel = i; TvMemory.group = g
-                                        // First OK confirms this channel in the mini-player; second OK on the same channel opens fullscreen.
-                                        if (PreviewSel.ch?.url != ch.url) {
-                                            PreviewSel.ch = ch
-                                        } else {
-                                            TvMemory.restore = true
-                                            playChannels(nav, list, i)
-                                        }
+                                        TvMemory.restore = true
+                                        playChannels(nav, list, i)
                                     }
                                 },
-                                onMenu = { menu = ch; menuUrl = ch.url },
-                                onFocus = { onFocusCh(ch) },
+                                onMenu = {
+                                    if (g.pid == null) { menu = ch; menuUrl = ch.url }
+                                    else {
+                                        val lists = Favs.lists(ctx)
+                                        val containing = lists.filter { Favs.contains(it.id, ch) }
+                                        if (containing.isEmpty()) Favs.toggle(lists.first().id, ch)
+                                        else containing.forEach { Favs.toggle(it.id, ch) }
+                                        android.widget.Toast.makeText(ctx, if (containing.isEmpty()) "★ " + tr("Dodano u favorite") else "☆ " + tr("Uklonjeno iz favorita"), android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                onFocus = { onFocusCh(ch); if (g.pid != null && !locked) PreviewSel.ch = ch else PreviewSel.ch = null },
                                 focusRequester = cWrap.requester(i, if (ch.url == menuUrl) chFr else null),
                                 normal = if (Look.dawn) Color.Transparent else if (active) C.Green.copy(alpha = 0.10f) else C.Card,
                                 focused = if (Look.dawn) Dawn.pill else null,
@@ -696,10 +701,13 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                     T(ch.name, 16.sp, if (f) Dawn.onPill else Color(0xFFEFF2F6), if (f) FontWeight.SemiBold else FontWeight.Normal,
                                         maxLines = 1, modifier = Modifier.weight(1f))
                                     if (locked) Ico(R.drawable.lc_lock, 16.dp, C.Muted)
-                                    if (!isFav && Favs.inAny(ctx, ch)) T("★", 17.sp, C.Amber)
-                                    if (active) Dot(C.Green, 8.dp)
+                                    if (isFav) T("★", 17.sp, C.Amber)
+                                    if (g.pid != null) qualityOf(ch.name)?.let { T(it, 14.sp, Color.White) }
                                 }
                             }
+                        }
+                        if (g.cat.id == RECENT_GROUP) item {
+                            OptionRow("Clear History", R.drawable.lc_trash_2) { Recent.clear() }
                         }
                     }
                 }
@@ -716,7 +724,12 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                 menu?.let { ch ->
                     val groups = (rows as? Load.Ok)?.value?.mapNotNull { (it as? GRow.Group)?.ref }
                         ?.filter { it.pid != null && it.pid == ch.pid.ifBlank { g.pid } && it.cat.id != ALL_GROUP }?.map { it.cat } ?: emptyList()
-                    ChannelOptions(g, ch, list, groups, onDismiss = { menu = null }) { reload, close ->
+                    if (g.cat.id == UNIFIED_FAVORITES) Popup(ch.name, { menu = null }) {
+                        OptionRow("Remove from Favorites", R.drawable.lc_trash_2) {
+                            Favs.lists(ctx).filter { Favs.contains(it.id, ch) }.forEach { Favs.toggle(it.id, ch) }
+                            menu = null
+                        }
+                    } else ChannelOptions(g, ch, list, groups, onDismiss = { menu = null }) { reload, close ->
                         listRev++
                         if (close) menu = null
                         if (reload) onChanged()
@@ -1196,6 +1209,6 @@ fun EpgList(ch: Channel, limit: Int = 12, modifier: Modifier = Modifier, compact
 fun Bell(count: Int) {
     if (count <= 0) return
     Box(Modifier.size(18.dp).clip(CircleShape).background(C.Danger), contentAlignment = Alignment.Center) {
-        T(if (count > 99) "99" else "$count", 10.sp, Color.White, FontWeight.Bold)
+        T(if (count > 99) "99+" else "$count", 10.sp, Color.White, FontWeight.Bold)
     }
 }
