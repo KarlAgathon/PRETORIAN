@@ -919,8 +919,14 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                     if (bar && s.live) {
                         val ch = item.channel
                         @Suppress("UNUSED_VARIABLE") val favRev = Favs.rev
-                        ChannelOptionsBar(favOn = ch != null && Favs.inAny(ctx, ch), onAction = { action ->
+                        ChannelOptionsBar(playing = playing, favOn = ch != null && Favs.inAny(ctx, ch), onAction = { action ->
                             when (action) {
+                                "pause" -> if (player.playWhenReady) player.pause() else player.play()
+                                "more" -> { bar = false; dialog = "menu" }
+                                "archive" -> {
+                                    if (ch != null && (ch.archive > 0 || !ch.catchup.isNullOrBlank())) nav.push(Screen.Catchup)
+                                    else Toast.makeText(ctx, "Archive (Catch-up) is not available for this channel.", Toast.LENGTH_SHORT).show()
+                                }
                                 "favorites" -> ch?.let { c ->
                                     val lists = Favs.lists(ctx)
                                     val wasFavorite = Favs.inAny(ctx, c)
@@ -1008,6 +1014,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
 
     when (dialog) {
         "menu" -> Popup(item.title, onDismiss = { dialog = null }) {
+            if (s.live && tracksOf(player, MC.TRACK_TYPE_TEXT).isNotEmpty()) OptionRow("Titlovi", R.drawable.lc_captions) { dialog = "subs" }
             // Više: the rarer things, so the bar fits in one row
             OptionRow(if (Sleep.until > 0) trf("Tajmer: %s min", ((Sleep.until - System.currentTimeMillis()) / 60_000 + 1).coerceAtLeast(1)) else tr("Tajmer za spavanje"), R.drawable.lc_moon) { dialog = "sleep" }
             OptionRow("Kvalitet i informacije", R.drawable.lc_info, value = if (videoH > 0) qualityLabel(videoH) else null) { dialog = "info" }
@@ -1160,24 +1167,23 @@ private val FORMATS = listOf("Zadano / automatski", "4:3", "16:9", "Prilagodi š
 /** Buttons at the bottom of the player, in one row (no scrolling): Pause · ★ · [CC] · [Audio] · Format · Guide · Group · More.
  *  Subtitles only when the stream has subtitle tracks, Audio only with 2 or more tracks. */
 @Composable
-private fun ChannelOptionsBar(favOn: Boolean, onAction: (String) -> Unit) {
+private fun ChannelOptionsBar(playing: Boolean, favOn: Boolean, onAction: (String) -> Unit) {
     val first = remember { FocusRequester() }
     data class B(val id: String, val label: String, val icon: Int)
     val list = listOf(
-        B("favorites", "FAVORITES", R.drawable.lc_star),
-        B("subs", "SUBS", R.drawable.lc_captions),
-        B("zoom", "ZOOM", R.drawable.lc_maximize),
-        B("audio", "AUDIO", R.drawable.lc_volume),
-        B("video", "VIDEO", R.drawable.lc_monitor),
+        B("pause", if (playing) "Pauza" else "Nastavi", if (playing) R.drawable.lc_pause else R.drawable.lc_play),
+        B("favorites", "Favorit", R.drawable.lc_star),
         B("epg", "EPG", R.drawable.lc_calendar_clock),
-        B("recent", "HISTORY", R.drawable.lc_history),
+        B("zoom", "Format", R.drawable.lc_maximize),
+        B("archive", "Arhiva", R.drawable.lc_history),
+        B("more", "Više", R.drawable.lc_settings),
     )
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         list.forEachIndexed { i, b ->
             val favorite = b.id == "favorites"
             Focusable(modifier = Modifier.weight(1f).height(70.dp), onClick = { onAction(b.id) },
-                focusRequester = if (i == 0) first else null, normal = Color(0xFF202E39),
-                focused = Color(0xFF126FB5), focusBorderColor = Color.White, borderColor = Color(0xFF71818D),
+                focusRequester = if (i == 0) first else null, normal = Color(0xBF191919),
+                focused = Color(0xFFB00020), focusBorderColor = Color.White, borderColor = Color(0xFF71818D),
                 shape = Rnd(10.dp), zoom = 1.015f) { focused ->
                 Column(Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 7.dp),
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
