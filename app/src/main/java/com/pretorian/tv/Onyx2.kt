@@ -67,6 +67,7 @@ object NowCache {
     fun get(url: String): EpgItem? = synchronized(m) { m[url]?.takeIf { it.end > System.currentTimeMillis() } }
     fun put(url: String, e: EpgItem?) = synchronized(m) { if (e != null) m[url] = e else none[url] = System.currentTimeMillis() }
     fun empty(url: String) = synchronized(m) { (none[url] ?: 0L) > System.currentTimeMillis() - 10 * 60_000L }
+    fun clear() = synchronized(m) { m.clear(); none.clear() }
     fun drop(url: String) = synchronized(m) { m.remove(url); none.remove(url); Unit }
 }
 
@@ -74,6 +75,7 @@ object NowCache {
 fun nowOf(ch: Channel, wait: Long = 400): EpgItem? {
     val ctx = LocalContext.current
     val v by produceState(NowCache.get(ch.url), ch.url, EpgShift.rev) {
+        value = NowCache.get(ch.url)
         if (value != null || NowCache.empty(ch.url)) return@produceState
         delay(wait)   // while you scroll fast nothing is asked
         val p = Store.byId(ctx, ch.pid) ?: return@produceState
@@ -91,6 +93,7 @@ fun nextOf(ch: Channel, wait: Long = 450): List<EpgItem>? {
     val ctx = LocalContext.current
     val fresh = NextCache.m[ch.url]?.takeIf { it.first > System.currentTimeMillis() - 10 * 60_000L }?.second
     val v by produceState<List<EpgItem>?>(fresh, ch.url, EpgShift.rev) {
+        value = fresh
         if (fresh != null) return@produceState
         delay(wait)
         val p = Store.byId(ctx, ch.pid) ?: return@produceState

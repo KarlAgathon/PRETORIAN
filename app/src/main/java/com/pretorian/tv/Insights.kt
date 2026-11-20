@@ -845,6 +845,30 @@ object EpgShift {
     fun chMin(url: String) = Prefs.long(key(url), 0).toInt().coerceIn(-720, 720)
     fun chMs(url: String) = chMin(url) * 60_000L
     fun setCh(url: String, min: Int) { Prefs.put(key(url), min.toLong()); NowCache.drop(url); NextCache.m.remove(url); rev++ }
+    private fun groupKey(pid: String, group: String) = "epg_group_" + java.util.UUID.nameUUIDFromBytes(JSONArray().put(pid).put(group).toString().toByteArray())
+    fun groupMinutes(pid: String, group: String) = Prefs.long(groupKey(pid, group)).toInt().coerceIn(-720, 720)
+    fun setGroup(pid: String, group: String, minutes: Int) {
+        Prefs.put(groupKey(pid, group), minutes.coerceIn(-720, 720).toLong())
+        invalidateAll()
+    }
+    fun invalidateAll() {
+        NowCache.clear()
+        NextCache.m.clear()
+        rev++
+    }
+    private fun mappingKey(ch: Channel) = "epg_mapping_" + ch.pid + "_" + java.util.UUID.nameUUIDFromBytes(ch.url.toByteArray())
+    fun mapping(ch: Channel): Pair<String, String>? {
+        val stored = Prefs.str(mappingKey(ch))
+        if (stored.isEmpty()) return null
+        return runCatching { JSONArray(stored).let { it.getString(0) to it.getString(1) } }.getOrNull()
+    }
+    fun assign(ch: Channel, mapping: Pair<String, String>?) {
+        if (mapping == null) Prefs.remove(mappingKey(ch))
+        else Prefs.put(mappingKey(ch), JSONArray().put(mapping.first).put(mapping.second).toString())
+        NowCache.drop(ch.url)
+        NextCache.m.remove(ch.url)
+        rev++
+    }
     fun label(min: Int): String {
         if (min == 0) return tr("Bez pomaka")
         val a = Math.abs(min); val sign = if (min > 0) "+" else "−"

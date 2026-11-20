@@ -22,7 +22,7 @@ object Favs {
     private const val LISTS = "fav_lists"
 
     private fun chJson(c: Channel) = JSONObject().put("id", c.id).put("name", c.name).put("logo", c.logo ?: "").put("url", c.url)
-        .put("epg", c.epg ?: "").put("pid", c.pid)
+        .put("epg", c.epg ?: "").put("pid", c.pid).put("group", c.group).put("archive", c.archive).put("catchup", c.catchup ?: "")
 
     fun lists(ctx: Context): List<FavList> {
         var a = try { JSONArray(Prefs.str(LISTS, "[]")) } catch (e: Exception) { JSONArray() }
@@ -59,7 +59,7 @@ object Favs {
         val a = JSONArray(Prefs.str("favch_$id", "[]"))
         (0 until a.length()).map {
             val o = a.getJSONObject(it)
-            Channel(o.str("id"), it + 1, o.str("name"), o.str("logo").orNullIfBlank(), FAV_PREFIX + id, o.str("url"), o.str("epg").orNullIfBlank(), o.str("pid"))
+            Channel(o.str("id"), it + 1, o.str("name"), o.str("logo").orNullIfBlank(), o.str("group").ifBlank { FAV_PREFIX + id }, o.str("url"), o.str("epg").orNullIfBlank(), o.str("pid"), o.optInt("archive"), o.str("catchup").orNullIfBlank())
         }
     } catch (e: Exception) { emptyList() }
 

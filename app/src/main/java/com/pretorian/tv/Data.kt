@@ -685,8 +685,13 @@ object Repo {
     }
 
     suspend fun epg(p: Playlist, ch: Channel, limit: Int = 10): List<EpgItem> {
-        val sh = EpgShift.ms + EpgShift.chMs(ch.url)
+        val sh = EpgShift.ms + EpgShift.groupMinutes(p.id, ch.group) * 60_000L + EpgShift.chMs(ch.url)
         fun List<EpgItem>.shifted() = if (sh == 0L) this else map { it.copy(start = it.start + sh, end = it.end + sh) }
+        EpgShift.mapping(ch)?.let { (source, id) ->
+            val configured = source == GuideDb.srcOf(p) && EpgSources.providerOn(p.id) ||
+                EpgSources.srcs(p.id).any { GuideDb.srcOf(it.url) == source }
+            if (configured) return withContext(Dispatchers.IO) { GuideDb.items(source, id, limit) }.shifted()
+        }
         suspend fun own() = try { OwnGuide.of(ch.epg, ch.name, p.id).take(limit).shifted() } catch (e: Exception) { emptyList() }
         // order: the playlist's default EPG, then the provider's own guide, then the other active EPGs
         if (EpgSources.hasDefault(p.id)) own().let { if (it.isNotEmpty()) return it }

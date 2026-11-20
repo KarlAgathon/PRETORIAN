@@ -399,6 +399,14 @@ object GuideDb {
     }
     fun has(src: String) = at(src) != null
 
+    fun channelIds(source: String, query: String): List<String> {
+        if (query.isBlank()) return emptyList()
+        return CatalogDb.db()?.rawQuery(
+            "SELECT DISTINCT ch FROM progs WHERE src=? AND instr(ch,?)>0 ORDER BY ch LIMIT 30",
+            arrayOf(source, query.trim().lowercase())
+        )?.use { cursor -> buildList { while (cursor.moveToNext()) add(cursor.getString(0)) } }.orEmpty()
+    }
+
     fun items(src: String, ch: String?, limit: Int): List<EpgItem> {
         val id = ch?.lowercase()?.ifBlank { null } ?: return emptyList()
         val now = System.currentTimeMillis()

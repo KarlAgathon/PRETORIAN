@@ -392,6 +392,29 @@ private fun EpgSourcesBlock(pl: Playlist?) {
     val pls = remember { Store.playlists(ctx) }
     val all = remember(EpgSources.rev) { EpgSources.list() }
     val list = all.filter { pl == null || it.pid == null || it.pid == pl.id }
+    var groupPlaylist by remember { mutableStateOf<Playlist?>(null) }
+    var groupChoice by remember { mutableStateOf<Category?>(null) }
+    (pl?.let { listOf(it) } ?: pls).forEach { playlist ->
+        OptionRow("Group EPG time offset", R.drawable.lc_clock, sub = playlist.name) { groupPlaylist = playlist }
+    }
+    groupPlaylist?.let { playlist ->
+        val groups by load(playlist.id) { Repo.liveGroups(playlist) }
+        val group = groupChoice
+        if (group == null) Popup(playlist.name, { groupPlaylist = null }) {
+            (groups as? Load.Ok)?.value.orEmpty().forEach { category ->
+                OptionRow(category.name, value = EpgShift.label(EpgShift.groupMinutes(playlist.id, category.id))) { groupChoice = category }
+            }
+        } else {
+            var minutes by remember(group.id) { mutableIntStateOf(EpgShift.groupMinutes(playlist.id, group.id)) }
+            Popup(group.name, { groupChoice = null }) {
+                T(EpgShift.label(minutes), 18.sp, C.Text)
+                OptionRow("−15 min") { minutes = (minutes - 15).coerceAtLeast(-720) }
+                OptionRow("+15 min") { minutes = (minutes + 15).coerceAtMost(720) }
+                OptionRow("Reset") { minutes = 0 }
+                OptionRow("Save") { EpgShift.setGroup(playlist.id, group.id, minutes); groupChoice = null }
+            }
+        }
+    }
     T("XMLTV link (.xml ili .xml.gz) ili fajl. Redoslijed: zadani EPG, pa ostali uključeni, pa providerov.", 12.sp, C.Muted, maxLines = 1)
     // the provider's own guide: can be switched off too, but not edited or deleted
     (if (pl != null) listOf(pl) else pls).filter { it.type == SourceType.XTREAM }.forEach { p ->
@@ -1763,7 +1786,7 @@ private fun PlaylistsV2(nav: Nav, openSub: (String) -> Unit) {
                 SetSwitch("Raspored grupa sa servera", "osvježavanje preuzme redoslijed grupa i kanala sa servera (npr. IPTV Editor); sakrivene grupe ostaju sakrivene", ServerOrder.on) { Prefs.put("srv_order", it); arRev++ }
                 val shifts = (-3..3).toList()
                 SetDrop("Pomak TV programa (EPG)", "ako program kasni ili žuri", shifts.map { if (it == 0) tr("Bez pomaka") else (if (it > 0) "+" else "") + it + " h" },  // i18n-ignore
-                    shifts.indexOf(EpgShift.hours).coerceAtLeast(3)) { Prefs.put("epg_shift", shifts[it].toLong()); Repo.clear(); arRev++ }
+                    shifts.indexOf(EpgShift.hours).coerceAtLeast(0)) { Prefs.put("epg_shift", shifts[it].toLong()); EpgShift.invalidateAll(); Repo.clear(); arRev++ }
             }
         }
     }
@@ -2291,6 +2314,7 @@ private fun RemindersV2(nav: Nav) {
             SetSwitch("General notifications", null, Prefs.bool("general_notes", true)) { Prefs.put("general_notes", it); rev++ }
             SetSwitch("Sports notifications", "2 s", Prefs.bool("sports_popups", true)) { Prefs.put("sports_popups", it); if (!it) GoalNote.alerts.clear(); rev++ }
             SetSwitch("Do not disturb", null, Prefs.bool("sports_dnd")) { Prefs.put("sports_dnd", it); if (it) GoalNote.alerts.clear(); rev++ }
+            SetRow("Manage followed matches") { SportsMemory.view = "mine"; nav.push(Screen.Sports) }
             val all = Reminders.all().filter { it.start > System.currentTimeMillis() - 3600_000L }.sortedBy { it.start }
             SetSection(trf("Nadolazeći · %s", all.size))
             if (all.isEmpty()) T("Nema podsjetnika. U programu kanala ili Sportu: OK na emisiji › Podsjeti me.", 12.sp, C.Muted, maxLines = 2)
