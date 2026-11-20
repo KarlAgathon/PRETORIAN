@@ -1163,26 +1163,28 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         "subs" -> {
             if (s.live) {
                 val tracks = tracksOf(player, MC.TRACK_TYPE_TEXT)
-                val selected = tracks.firstOrNull { it.selected }?.label
-                val off = player.trackSelectionParameters.disabledTrackTypes.contains(MC.TRACK_TYPE_TEXT) || tracks.none { it.selected }
-                ProviderSubsPicker(item.url, selected, off,
-                    onDismiss = { dialog = "menu" },
-                    onOff = {
-                        subFile = null
-                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-                            .setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, true).build()
-                        dialog = null
-                    },
-                    onPick = { picked ->
-                        val track = tracksOf(player, MC.TRACK_TYPE_TEXT).firstOrNull { it.label == picked.title }
-                        if (track != null) {
+                if (tracks.isEmpty()) {
+                    LaunchedEffect(Unit) { dialog = "menu" }
+                } else {
+                    val off = player.trackSelectionParameters.disabledTrackTypes.contains(MC.TRACK_TYPE_TEXT) || tracks.none { it.selected }
+                    Popup("Titlovi", onDismiss = { dialog = "menu" }) {
+                        OptionRow("Isključeno", R.drawable.lc_x, selected = off) {
                             subFile = null
                             player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-                                .setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false)
-                                .setOverrideForType(TrackSelectionOverride(track.group.mediaTrackGroup, track.index)).build()
+                                .setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, true).build()
+                            dialog = null
                         }
-                        dialog = null
-                    })
+                        tracks.forEach { track ->
+                            OptionRow(track.label, R.drawable.lc_captions, selected = !off && track.selected) {
+                                subFile = null
+                                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                                    .setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false)
+                                    .setOverrideForType(TrackSelectionOverride(track.group.mediaTrackGroup, track.index)).build()
+                                dialog = null
+                            }
+                        }
+                    }
+                }
             } else {
                 val tracks = tracksOf(player, MC.TRACK_TYPE_TEXT)
                 SubtitlePicker(item.search ?: item.title, item.season, item.episode, embedded = tracks.map { it.label },
