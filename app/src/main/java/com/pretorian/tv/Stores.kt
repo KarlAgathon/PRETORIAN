@@ -102,7 +102,7 @@ object Watch {
         file = File(ctx.filesDir, "progress.json")
         val m = LinkedHashMap<String, Progress>()
         try {
-            val a = JSONArray(file.readText())
+            val a = JSONArray(android.util.AtomicFile(file).openRead().bufferedReader().use { it.readText() })
             for (i in 0 until a.length()) {
                 val o = a.getJSONObject(i)
                 val p = Progress(o.str("url"), o.str("title"), o.str("poster").orNullIfBlank(), o.optLong("pos"), o.optLong("dur"), o.optLong("ts"),
@@ -138,7 +138,7 @@ object Watch {
             a.put(JSONObject().put("url", p.url).put("title", p.title).put("poster", p.poster ?: "").put("pos", p.pos).put("dur", p.dur).put("ts", p.ts)
                 .put("series", p.series ?: "").put("season", p.season ?: -1).put("episode", p.episode ?: -1).put("next", p.next).put("done", p.done).put("pid", p.pid))
         }
-        val atomic = androidx.core.util.AtomicFile(file)
+        val atomic = android.util.AtomicFile(file)
         try {
             val stream = atomic.startWrite()
             try {
@@ -149,7 +149,7 @@ object Watch {
                 throw failure
             }
         } catch (failure: java.io.IOException) {
-            android.util.Log.w("Watch", "Could not save playback progress", failure)
+            android.util.Log.w("Watch", "Could not save playback progress", failure) // i18n-ignore
         }
     }
 
