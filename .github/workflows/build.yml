@@ -5,8 +5,10 @@ concurrency:
   cancel-in-progress: true
 on:
   push:
-    branches: ["**"]
+    branches: ["main", "master", "maintenance/**"]
     tags: ["v*"]
+  pull_request:
+    branches: ["main", "master"]
   workflow_dispatch:
 
 permissions:
@@ -25,10 +27,13 @@ jobs:
         with:
           gradle-version: "8.9"
       - name: Signing key (from secrets)
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
         env:
           KS: ${{ secrets.LEAD_KEYSTORE_B64 }}
+          KEY_PASSWORD: ${{ secrets.LEAD_KEY_PASSWORD }}
         run: |
           if [ -z "$KS" ]; then echo "::error::Secret LEAD_KEYSTORE_B64 is missing"; exit 1; fi
+          if [ -z "$KEY_PASSWORD" ]; then echo "::error::Signing password is missing"; exit 1; fi
           echo "$KS" | base64 -d > app/release.keystore
       - name: Translation check
         run: python3 tools/check_i18n.py
@@ -39,13 +44,13 @@ jobs:
           if [ -n "$big" ]; then echo "::error::Suspiciously large source files: $big"; exit 1; fi
           big=$(find app/src -name 'I18n*.kt' -size +1500k)
           if [ -n "$big" ]; then echo "::error::Suspiciously large translation files: $big"; exit 1; fi
-      # automatic tests first (titles, M3U lists, archive), then the app
+      # Automatic regression tests and release build must pass before review.
       - run: gradle testReleaseUnitTest assembleRelease --no-daemon
         env:
           LEAD_KEY_PASSWORD: ${{ secrets.LEAD_KEY_PASSWORD }}
           TMDB_KEY: ${{ secrets.TMDB_KEY }}
-      - name: Sports review Android lint
-        if: github.ref == 'refs/heads/feature/sports-redesign'
+      - name: Android lint
+        if: github.event_name == 'pull_request' || startsWith(github.ref, 'refs/heads/maintenance/')
         run: gradle lintRelease --no-daemon
         env:
           LEAD_KEY_PASSWORD: ${{ secrets.LEAD_KEY_PASSWORD }}
@@ -54,8 +59,9 @@ jobs:
         if: always()
         run: rm -f app/release.keystore
       - name: Rename APK
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
         run: cp app/build/outputs/apk/release/*.apk Pretorian.apk
-      - if: github.ref != 'refs/heads/feature/sports-redesign'
+      - if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
         uses: actions/upload-artifact@v4
         with:
           name: Pretorian-apk
@@ -63,6 +69,7 @@ jobs:
 
       # New versionName in app/build.gradle.kts on main/master -> automatic release v<versionName>
       - name: Read version
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
         id: v
         env:
           GH_TOKEN: ${{ github.token }}
@@ -93,18 +100,3 @@ jobs:
             Pretorian.apk
             update.json
 
-      # Beta channel: serialize pushes and update the existing prerelease instead of deleting its tag
-      - name: Publish beta
-        if: github.ref == 'refs/heads/beta'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          NOTES=$(jq -Rs . < RELEASE_NOTES.txt 2>/dev/null || echo '""')
-          echo "{\"versionCode\": ${{ steps.v.outputs.code }}, \"versionName\": \"${{ steps.v.outputs.name }}\", \"apk\": \"https://github.com/${{ github.repository }}/releases/download/beta/Pretorian.apk\", \"notes\": $NOTES}" > update.json
-          if gh release view beta --repo "${{ github.repository }}" > /dev/null 2>&1; then
-            gh release upload beta Pretorian.apk update.json --repo "${{ github.repository }}" --clobber
-            gh release edit beta --repo "${{ github.repository }}" --title "PRETORIAN ${{ steps.v.outputs.name }} (beta)" --notes-file RELEASE_NOTES.txt --prerelease
-          else
-            gh release create beta Pretorian.apk update.json --repo "${{ github.repository }}" --prerelease --latest=false \
-              --target "${{ github.sha }}" --title "PRETORIAN ${{ steps.v.outputs.name }} (beta)" --notes-file RELEASE_NOTES.txt
-          fi

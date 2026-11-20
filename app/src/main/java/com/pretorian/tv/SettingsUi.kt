@@ -32,7 +32,6 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -1369,7 +1368,7 @@ fun SettingsScreen2(nav: Nav) {
                     "reminders" -> RemindersV2(nav)
                     "saver" -> SaverV2()
                     "diagnostics" -> DiagnosticsV2()
-                    "backup" -> BackupV2(nav)
+                    "backup" -> BackupSettings()
                     "update" -> UpdateV2()
                     "about" -> AboutV2(onSub = { sub = it }, onSection = { section = it })
                     else -> SettingsHubPage(section, onOpen = { sub = it })
@@ -1704,7 +1703,7 @@ fun ColorDots(onPick: () -> Unit) {
     }
 }
 
-private fun csv(k: String, def: String) = Prefs.str(k, def).split(',').filter { it.isNotBlank() }
+internal fun csv(k: String, def: String) = Prefs.str(k, def).split(',').filter { it.isNotBlank() }
 private fun onOff(b: Boolean) = if (b) 0 else 1
 private val ON_OFF = listOf("Uključeno", "Isključeno")
 
@@ -2519,101 +2518,6 @@ private fun ProfilesV2() {
     }
 }
 
-/* ---------------------------------------------------------------- Backup */
-
-private val BACKUP_PARTS = listOf("Playliste i lozinke", "EPG izvori", "Grupe i kanali (redoslijed, sakriveno, imena)", "Profili i PIN-ovi", "Favoriti",
-    "Odgledano i „Nastavi gledanje”", "Podsjetnici", "Izgled (tema, boja, veličina)", "Jezik, titlovi i zvuk", "Sport (sportovi, takmičenja)", "AI ključevi")
-
-@Composable
-private fun BackupV2(nav: Nav) {
-    val ctx = LocalContext.current
-    var step by remember { mutableStateOf<String?>(null) }
-    var text by remember { mutableStateOf<String?>(null) }
-    var rev by remember { mutableIntStateOf(0) }
-    var reset by remember { mutableStateOf(false) }
-    val parts = csv("backup_parts", (0 until 10).joinToString(",")).mapNotNull { it.toIntOrNull() }.toSet()
-    fun restoreNow(pass: String?) {
-        try { Backup.restore(ctx, text ?: return, pass); Toast.makeText(ctx, tr("Sve je vraćeno. PRETORIAN se ponovo pokreće."), Toast.LENGTH_LONG).show()
-            (ctx as? android.app.Activity)?.recreate()
-        } catch (e: Exception) { Toast.makeText(ctx, e.message ?: tr("Vraćanje nije uspjelo"), Toast.LENGTH_LONG).show() }
-        step = null
-    }
-    val found = remember(rev) { try { Backup.found(ctx) } catch (_: Exception) { emptyList() } }
-    var done by remember { mutableStateOf<String?>(null) }
-    key(rev) {
-        SetPage("Backup i vraćanje") {
-            SetSection("Napravi kopiju")
-            val usbIn = Backup.usbDirs().isNotEmpty()
-            val usb = Prefs.str("backup_where", "0") == "2" && usbIn
-            // one OK: saved straight to the chosen place, no folder window
-            // a copy in Download / USB can be read by other apps: with a password it is locked (AES), and so are the copies before an update
-            var passDlg by remember { mutableStateOf(false) }
-            SetRow("Lozinka za kopije", if (Backup.pass.isBlank()) tr("nema: lozinke playlista su u fajlu čitljive") else tr("kopije u Download i na USB-u su zaključane"),
-                tr(if (Backup.pass.isBlank()) "Postavi" else "Promijeni"), valueColor = if (Backup.pass.isBlank()) C.Amber else C.Green) { passDlg = true }
-            if (passDlg) TextDialog("Lozinka za kopije", "Lozinka (prazno = bez lozinke)", onDismiss = { passDlg = false }) { v -> Prefs.put("backup_pass", v.trim()); passDlg = false; rev++ }
-            SetRow("Napravi kopiju sada", done, arrow = "›", valueColor = C.Green) {
-                done = try { trf("✓ Spremljeno u %s", Backup.saveNow(ctx, usb, parts)) } catch (e: Exception) { e.message ?: tr("Nije uspjelo") }
-                rev++
-            }
-            SetDrop("Gdje", if (usbIn) null else "USB se pojavi kad ga priključiš", if (usbIn) listOf("Download/PRETORIAN", "USB") else listOf("Download/PRETORIAN"),
-                if (usb) 1 else 0) { Prefs.put("backup_where", if (it == 1) "2" else "0"); rev++ }
-            if (usb && !FileAccess.hasAll(ctx)) Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                T("Za USB aplikacija treba dozvolu za fajlove.", 13.sp, C.Amber, maxLines = 1, modifier = Modifier.weight(1f))
-                Button("Dozvoli", R.drawable.lc_check) { FileAccess.allFilesIntent(ctx)?.let { i -> try { ctx.startActivity(i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {} } }
-            }
-            SetMulti("Šta uključiti", null, BACKUP_PARTS, parts,
-                note = tr("AI ključevi su po defaultu isključeni, zbog sigurnosti")) { s -> Prefs.put("backup_parts", s.sorted().joinToString(",")); rev++ }
-            SetDrop("Automatska kopija", "čuvaju se zadnje 3", listOf("Isključeno", "Sedmično", "Dnevno"),
-                if (!Prefs.bool("backup_auto", true)) 0 else if (Prefs.bool("backup_daily")) 2 else 1) {
-                Prefs.put("backup_auto", it > 0); Prefs.put("backup_daily", it == 2); rev++
-            }
-            SetSection("Vrati iz kopije")
-            if (found.isEmpty()) T("Još nema nijedne kopije.", 13.sp, C.Muted)
-            found.take(12).forEach { f ->
-                SetRow(java.text.SimpleDateFormat("EEE, dd.MM.yy · HH:mm", java.util.Locale(Look.lang)).format(java.util.Date(f.at)),
-                    trf("%s · %s KB", tr(f.where), (f.size / 1024).coerceAtLeast(1)), tr("Vrati")) {
-                    text = try { f.read() } catch (_: Exception) { null }
-                    if (text == null || Backup.summary(text!!) == null) Toast.makeText(ctx, tr("Fajl nije PRETORIAN backup"), Toast.LENGTH_LONG).show() else step = "preview"
-                }
-            }
-            SetRow("Drugi fajl…", ".json s USB-a ili diska", tr("Izaberi")) { step = "pick" }
-            SetSection("Opasno")
-            SetRow("Vrati aplikaciju na početak", "briše sve: playliste, profile, postavke", tr("Resetuj"), valueColor = C.Danger) { reset = true }
-        }
-    }
-    when (step) {
-        "browse" -> FileBrowser("Izaberi folder", emptySet(), pickDir = true, onDismiss = { step = null }) { dir ->
-            try { java.io.File(dir, Backup.fileName()).writeText(Backup.export(ctx, Backup.pass.ifBlank { null }, parts)); Toast.makeText(ctx, trf("Spremljeno: %s", dir.path + "/" + Backup.fileName()), Toast.LENGTH_LONG).show() }
-            catch (e: Exception) { Toast.makeText(ctx, tr("U taj folder se ne može pisati. Izaberi drugi ili PRETORIAN folder."), Toast.LENGTH_LONG).show() }
-            step = null
-        }
-        "pick" -> FilePicker("Izaberi backup", setOf("json"), onDismiss = { step = null }) { bytes, _ ->
-            val t = String(bytes)
-            if (Backup.summary(t) == null) { Toast.makeText(ctx, tr("Fajl nije PRETORIAN backup"), Toast.LENGTH_LONG).show(); step = null } else { text = t; step = "preview" }
-        }
-        "preview" -> {
-            val sm = text?.let { Backup.summary(it) }
-            if (sm == null) step = null
-            else Popup("Vratiti sve iz backupa?", onDismiss = { step = null }) {
-                T(trf("Datum: %s · playlista: %s · lista favorita: %s", sm.date, sm.playlists, sm.favLists), 14.sp, C.Soft, maxLines = 2)
-                T("Trenutne postavke će biti zamijenjene.", 13.sp, C.Amber)
-                OptionRow("Vrati sve", R.drawable.lc_rotate_ccw, color = C.Danger) { if (sm.encrypted) step = "rpass" else restoreNow(null) }
-                OptionRow("Odustani", R.drawable.lc_x) { step = null }
-            }
-        }
-        "rpass" -> TextDialog("Lozinka backupa", "Lozinka", onDismiss = { step = null }) { v -> restoreNow(v) }
-        else -> {}
-    }
-    if (reset) Popup("Vratiti aplikaciju na početak?", { reset = false }) {
-        T("Briše sve: playliste, profile, favorite, gledano i postavke. Ne može se poništiti.", 14.sp, C.Amber, maxLines = 3)
-        OptionRow("Da, obriši sve", R.drawable.lc_trash_2, color = C.Danger) {
-            reset = false
-            try { (ctx.getSystemService(android.content.Context.ACTIVITY_SERVICE) as android.app.ActivityManager).clearApplicationUserData() } catch (_: Exception) {}
-        }
-        OptionRow("Odustani", R.drawable.lc_x) { reset = false }
-    }
-}
-
 /* ---------------------------------------------------------------- Način rada */
 
 @Composable
@@ -2639,9 +2543,9 @@ private fun ModeV2() {
 /* ---------------------------------------------------------------- Ažuriranje */
 
 @Composable
-private fun VerBox(modifier: Modifier, label: String, value: String, color: Color, icon: Int, stable: Boolean = false, onLong: (() -> Unit)? = null) {
+private fun VerBox(modifier: Modifier, label: String, value: String, color: Color, icon: Int, stable: Boolean = false) {
     Box(modifier.padding(top = 8.dp)) {
-        Focusable(onClick = {}, onMenu = onLong, shape = Rnd(16.dp), normal = color.copy(alpha = 0.14f), focused = color.copy(alpha = 0.3f), zoom = 1.01f,
+        Focusable(onClick = {}, shape = Rnd(16.dp), normal = color.copy(alpha = 0.14f), focused = color.copy(alpha = 0.3f), zoom = 1.01f,
             modifier = Modifier.fillMaxWidth().border(1.dp, color.copy(alpha = 0.55f), Rnd(16.dp))) { _ ->
             Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Box(Modifier.size(38.dp).clip(Rnd(12.dp)).background(color), contentAlignment = Alignment.Center) { Ico(icon, 18.dp, Color(0xFF0F172A)) }
@@ -2673,9 +2577,6 @@ private fun UpdateV2() {
     var backDone by remember { mutableStateOf(false) }
     var backErr by remember { mutableStateOf<String?>(null) }
     var showAll by remember { mutableStateOf<Release?>(null) }
-    var verMenu by remember { mutableStateOf(false) }
-    var tokenAsk by remember { mutableStateOf(0) }   // 0 no, 1 PIN, 2 key field
-    var promoting by remember { mutableStateOf(false) }
     val rels by load(rev / 1000) { Updater.releases() }
     val releases = (rels as? Load.Ok)?.value ?: emptyList()
     val u = Updater.available
@@ -2683,8 +2584,8 @@ private fun UpdateV2() {
         SetPage("Ažuriranje") {
             // ---- on top: the version you have (green) and, next to it, the new one (yellow)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                VerBox(Modifier.weight(1f), "Trenutna verzija", BuildInfo.VERSION + if (Updater.beta && Updater.stableName != BuildInfo.VERSION) " · Beta" else "", C.Green, R.drawable.lc_check,
-                    stable = Updater.stableName == BuildInfo.VERSION, onLong = { verMenu = true })
+                VerBox(Modifier.weight(1f), "Trenutna verzija", BuildInfo.VERSION, C.Green, R.drawable.lc_check,
+                    stable = Updater.stableName == BuildInfo.VERSION)
                 if (u != null) VerBox(Modifier.weight(1f), "Nova verzija", u.name + (releases.firstOrNull { it.name == u.name }?.date?.let { " · $it" } ?: ""), C.Amber, R.drawable.lc_download)
             }
             val pr = Updater.progress
@@ -2721,14 +2622,6 @@ private fun UpdateV2() {
                 }
             }
             Updater.status?.let { T(it, 12.sp, C.Amber, maxLines = 2) }
-            // ---- channel
-            SetSection("Verzija ažuriranja")
-            val betaBuild = BuildConfig.APPLICATION_ID.endsWith(".beta")  // i18n-ignore
-            SetDrop("Kanal", if (Updater.beta) "probne verzije odmah, prije svih" else "samo provjerene verzije",
-                if (betaBuild) listOf("Beta") else listOf("Stable", "Beta"),
-                if (betaBuild) 0 else if (Updater.beta) 1 else 0) {
-                Prefs.put("upd_channel", if (betaBuild || it == 1) "beta" else "stable"); Prefs.put("upd_skip", ""); scope.launch { Updater.check(ctx); rev++ }
-            }
             // ---- how often
             SetSection("Provjera")
             SetDrop("Provjeravaj", "nove verzije", listOf("Pri pokretanju", "Svaki sat", "Dnevno", "Mjesečno"),
@@ -2743,33 +2636,6 @@ private fun UpdateV2() {
                 if (p0 != null) "›" else "", onLong = { p0?.let { back = it } }) { p0?.let { back = it } }
             SetRow("Zadnja Stable", stable?.let { it.name + " · " + it.date + if (it.name == BuildInfo.VERSION) " · " + tr("instalirana") else "" } ?: "",
                 if (stable != null && stable.name != BuildInfo.VERSION) "›" else "") { stable?.takeIf { it.name != BuildInfo.VERSION }?.let { back = it } }
-        }
-    }
-    // long OK on the version: make it the Stable one for everybody (author only, with his GitHub key)
-    // the title shows the real state: Stable when this version is the Stable one, otherwise Beta
-    if (verMenu) Popup(BuildInfo.VERSION + if (Updater.stableName == BuildInfo.VERSION) " · Stable" else " · Beta", { verMenu = false }, width = 520.dp) {  // i18n-ignore
-        if (Updater.stableName == BuildInfo.VERSION) T("Ova verzija je već Stable.", 13.sp, C.Green)
-        else OptionRow(if (promoting) "Objavljujem…" else "Označi kao Stable · pošalji svima", R.drawable.lc_shield_check, color = C.Amber) {
-            if (promoting) return@OptionRow
-            if (!Updater.canPublish) { verMenu = false; tokenAsk = 1; return@OptionRow }
-            promoting = true
-            scope.launch {
-                val err = Updater.promote(); promoting = false; verMenu = false
-                if (err == null) { Updater.stableName = BuildInfo.VERSION; Prefs.put("upd_stable_name", BuildInfo.VERSION) }
-                Toast.makeText(ctx, err ?: tr("Poslano: GitHub pravi Stable izdanje (oko 5 min)"), Toast.LENGTH_LONG).show()
-            }
-        }
-        if (Updater.canPublish) OptionRow("Promijeni GitHub ključ", R.drawable.lc_key_round) { verMenu = false; tokenAsk = 1 }
-        OptionRow("Odustani", R.drawable.lc_x) { verMenu = false }
-    }
-    if (tokenAsk == 1) PinDialog(tr("GitHub ključ"), tr("Unesi PIN"), onDismiss = { tokenAsk = 0 }) { pin -> val e = Lock.check(pin); if (e == null) tokenAsk = 2; e }
-    if (tokenAsk == 2) {
-        var t by remember { mutableStateOf("") }
-        Popup(tr("GitHub ključ (samo za autora)"), { tokenAsk = 0 }, width = 640.dp) {
-            T("Ključ ostaje samo na ovom boxu i služi samo za „Označi kao Stable“.", 12.sp, C.Muted, maxLines = 2)
-            Field("github_pat_…", t, { t = it }, Modifier.fillMaxWidth())  // i18n-ignore
-            OptionRow("Spremi", R.drawable.lc_check, color = C.Green) { Prefs.put("gh_token", t.trim()); tokenAsk = 0; verMenu = true }
-            OptionRow("Obriši ključ", R.drawable.lc_x) { Prefs.put("gh_token", ""); tokenAsk = 0 }
         }
     }
     if (later && u != null) Popup("Podsjeti me", { later = false }, width = 460.dp) {
@@ -2819,8 +2685,8 @@ private fun AboutV2(onSub: (String) -> Unit, onSection: (String) -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     T("v" + BuildInfo.VERSION, 22.sp, C.Text, FontWeight.ExtraBold, maxLines = 1)  // i18n-ignore
                     val stable = Updater.stableName == BuildInfo.VERSION
-                    Box(Modifier.clip(Pill).background((if (stable) Color(0xFFFBBF24) else C.Muted).copy(alpha = 0.18f)).padding(horizontal = 8.dp, vertical = 2.dp)) {
-                        T(if (stable) "STABLE" else "Beta", 10.sp, if (stable) Color(0xFFFBBF24) else C.Soft, FontWeight.Bold, maxLines = 1)  // i18n-ignore
+                    if (stable) Box(Modifier.clip(Pill).background(Color(0xFFFBBF24).copy(alpha = 0.18f)).padding(horizontal = 8.dp, vertical = 2.dp)) {
+                        T("STABLE", 10.sp, Color(0xFFFBBF24), FontWeight.Bold, maxLines = 1)  // i18n-ignore
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

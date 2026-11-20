@@ -15,8 +15,8 @@ android {
         minSdk = 24
         targetSdk = 34
         // raise both numbers for every new version (needed for updates)
-        versionCode = 107
-        versionName = "1.0.65"
+        versionCode = 108
+        versionName = "1.0.66"
         // TMDB_KEY from GitHub Secrets: posters, cast, platform and coming episodes work for everyone without typing a key
         buildConfigField("String", "TMDB_KEY", "\"" + (System.getenv("TMDB_KEY") ?: "") + "\"")
     }
@@ -39,7 +39,6 @@ android {
         getByName("release") {
             isMinifyEnabled = false
             signingConfig = signingConfigs.findByName("lead")
-                ?: throw GradleException("Signing key missing: set the GitHub secrets LEAD_KEYSTORE_B64 and LEAD_KEY_PASSWORD")
         }
     }
     compileOptions {
@@ -63,9 +62,9 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.7.0")
     // QR code for "type on the phone" (Add playlist): ZXing core only, no camera code
     implementation("com.google.zxing:core:3.5.3")
-    implementation("com.google.zxing:core:3.5.3")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.14.1")
     implementation("androidx.media3:media3-exoplayer:1.5.0")
     implementation("androidx.media3:media3-exoplayer-hls:1.5.0")
     implementation("androidx.media3:media3-ui:1.5.0")

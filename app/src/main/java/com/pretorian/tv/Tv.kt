@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
@@ -165,6 +164,11 @@ sealed class GRow {
     data class NewFav(val dummy: Int = 0) : GRow()
     data class NewGroup(val pid: String) : GRow()
     val id get() = when (this) { is Group -> "g:" + ref.key; is Header -> "h:" + p.id; is NewFav -> "nf"; is NewGroup -> "ng:$pid" }
+}
+
+internal fun groupFocusTarget(rows: List<GRow>, selected: GroupRef?): String? {
+    val groups = rows.filterIsInstance<GRow.Group>()
+    return (groups.firstOrNull { it.ref.key == selected?.key } ?: groups.firstOrNull())?.id
 }
 
 suspend fun groupRows(ctx: android.content.Context): List<GRow> {
@@ -380,7 +384,7 @@ private fun TvList(nav: Nav) {
     WrapEffect(st.wrap, gState)
     val coming = remember { TvMemory.restore && TvMemory.group != null && TvMemory.channel >= 0 }
     // New Dawn opens TV on the groups (one level at a time); only the way back from the player lands in the channels
-    var inChannels by remember { mutableStateOf(coming || (st.group != null && !Look.dawn)) }
+    var inChannels by remember { mutableStateOf(coming) }
     var focusedCh by remember { mutableStateOf<Channel?>(null) }
     LaunchedEffect(Unit) {
         if (!coming) {
@@ -394,10 +398,7 @@ private fun TvList(nav: Nav) {
     val focusScope = rememberCoroutineScope()
     fun backToGroups() {
         val groupRows = (rows as? Load.Ok)?.value.orEmpty()
-        val target = st.group?.let { "g:" + it.key }
-            ?.takeIf { key -> groupRows.any { it.id == key } }
-            ?: groupRows.filterIsInstance<GRow.Group>().firstOrNull()?.let { "g:" + it.ref.key }
-            ?: return
+        val target = groupFocusTarget(groupRows, st.group) ?: return
         st.focusKey = target
         inChannels = false
         Chrome.rail = 2
@@ -410,268 +411,75 @@ private fun TvList(nav: Nav) {
             runCatching { st.focusFr.requestFocus() }
         }
     }
-    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
-    fun revealMainRail() {
-        Chrome.rail = if (Look.layout == 0) 2 else 1
-        focusScope.launch {
-            delay(80)
-            runCatching { focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Left) }
-        }
-    }
-    BackHandler(enabled = st.groupMenu == null && Look.layout == 0) {
-        if (inChannels) backToGroups() else revealMainRail()
-    }
-
     // Group focus only moves the highlight. The channel list changes only after OK (onOpen).
     var enterTick by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(focusedCh) { val c = focusedCh ?: return@LaunchedEffect; delay(500); Dusk.set(c.logo, c.name) }
-    if (Look.dawn) {
-        // New Dawn: groups alone › channels alone with preview, now/next and options › full screen.
-        // Back and ◀ go exactly one level out; at the groups they return to the menu (on TV).
-        BackHandler(enabled = st.groupMenu == null && inChannels) { PreviewSel.ch = null; Preview.stop(); backToGroups() }
-        LaunchedEffect(inChannels, st.group?.key) {
-            Dawn.crumb = if (inChannels) st.group?.cat?.name ?: "" else ""
-            if (!inChannels) Dawn.pos = ""
-            Dawn.hints = if (inChannels) listOf("▲▼" to "Izaberi kanal", "OK" to "Pregled", "OK" to "Cijeli ekran", "Back" to "Grupe")
-                else listOf("▲▼" to "Izaberi grupu", "OK" to "Otvori grupu", "Back" to "Meni")
-        }
-        DisposableEffect(Unit) { onDispose { Dawn.crumb = ""; Dawn.pos = ""; Dawn.hints = emptyList() } }
-        // first time on the groups: the focus goes to the last opened group (or the first one)
-        var placed by remember { mutableStateOf(false) }
-        LaunchedEffect(rows is Load.Ok, inChannels) { if (!inChannels && rows is Load.Ok && !placed) { placed = true; backToGroups() } }
-        if (!inChannels) Box(Modifier.fillMaxSize().padding(start = 34.dp, top = 6.dp, bottom = 8.dp)) {
-            Box(Modifier.width(360.dp).fillMaxHeight().dawnGlass().padding(vertical = 8.dp)
-                .onPreviewKeyEvent { e ->
-                    if (e.type != KeyEventType.KeyDown) false
-                    else if (e.key == Key.DirectionLeft) { nav.back(); true }
-                    else if (e.key == Key.DirectionRight) {
-                        val g = (rows as? Load.Ok)?.value?.filterIsInstance<GRow.Group>()?.firstOrNull { "g:" + it.ref.key == st.focusKey }?.ref
-                        if (g != null) { focusedCh = null; openGroup(ctx, st, g); enterTick++; inChannels = true; true } else false
-                    } else false
-                }) {
-                GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, 360.dp, "", null,
-                    onFocusGroup = { },
-                    onOpen = { focusedCh = null; openGroup(ctx, st, it); enterTick++; inChannels = true },
-                    onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
-                    onHeader = { p -> TvFold.toggle(p.id); if (p.id in TvFold.open) Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
-                    onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it },
-                    onFocusRow = { st.focusKey = it })
-            }
-        } else {
-            val g = st.group
-            val chs by load(g?.key, Favs.rev, keep = true) { g?.let { channelsOf(ctx, it) } ?: emptyList() }
-            var opts by remember { mutableStateOf<Channel?>(null) }
-            LaunchedEffect(focusedCh, chs) {
-                val list = (chs as? Load.Ok)?.value ?: return@LaunchedEffect
-                val i = focusedCh?.let { c -> list.indexOfFirst { it.url == c.url } } ?: -1
-                Dawn.pos = if (i >= 0) "${i + 1} / ${list.size}" else ""
-            }
-            Row(Modifier.fillMaxSize().padding(start = 34.dp, end = 38.dp, top = 6.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Box(Modifier.weight(0.42f).fillMaxHeight().dawnGlass().padding(vertical = 4.dp)) {
-                    if (g != null) key(g.key, st.rev) {
-                        ChannelList(g, nav, st.gate, rows, enterTick, onFocusCh = { focusedCh = it },
-                            onBackToGroups = { PreviewSel.ch = null; Preview.stop(); backToGroups() }, onChanged = { st.rev++ }, focusOnStart = true)
-                    }
-                }
-                Column(Modifier.weight(0.58f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    DawnPreview(Modifier.fillMaxWidth().weight(1f, fill = false))
-                    DawnNowNext(focusedCh ?: PreviewSel.ch, Modifier.fillMaxWidth())
-                    Spacer(Modifier.weight(0.001f))
-                    DawnOptions(focusedCh ?: PreviewSel.ch, onOptions = { opts = focusedCh ?: PreviewSel.ch }, modifier = Modifier.fillMaxWidth().height(68.dp))
-                }
-            }
-            opts?.let { ch ->
-                val list = (chs as? Load.Ok)?.value.orEmpty()
-                val groups = (rows as? Load.Ok)?.value?.mapNotNull { (it as? GRow.Group)?.ref }
-                    ?.filter { it.pid != null && it.pid == ch.pid.ifBlank { g?.pid } && it.cat.id != ALL_GROUP }?.map { it.cat } ?: emptyList()
-                if (g != null) ChannelOptions(g, ch, list, groups, onDismiss = { opts = null }) { reload, close ->
-                    if (close) opts = null
-                    if (reload) st.rev++
-                }
-            }
-        }
-    } else if (Look.layout == 0) {
-        // Classic TV: full-screen workspace; the app rail appears only on LEFT/BACK.
-        LaunchedEffect(inChannels) { Chrome.driven = true; Chrome.rail = if (inChannels) 0 else 2 }
-        DisposableEffect(Unit) { onDispose { Chrome.driven = false; Chrome.rail = if (Look.layout == 0) 2 else 3 } }
-        Row(Modifier.fillMaxSize().padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            // Reference layout: persistent category column on the left; preview and EPG workspace on the right.
-            val groupsWidth = 206.dp
-            if (!inChannels) Box(Modifier.width(groupsWidth).fillMaxHeight().clip(Rnd(12.dp)).background(C.Rail)
-                .onPreviewKeyEvent { e ->
-                    if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionRight) {
-                        val focusedGroup = (rows as? Load.Ok)?.value?.filterIsInstance<GRow.Group>()
-                            ?.firstOrNull { "g:" + it.ref.key == st.focusKey }?.ref
-                        if (focusedGroup != null) {
-                            openGroup(ctx, st, focusedGroup); focusedCh = null
-                            enterTick++; inChannels = true; Chrome.rail = 0
-                            true
-                        } else false
-                    } else false
-                }
-                .border(1.dp, C.Line, Rnd(12.dp))
-                .onPreviewKeyEvent { e ->
-                    if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { revealMainRail(); true } else false
-                }) {
-                GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, groupsWidth, "", null,
-                    onFocusGroup = { Chrome.rail = 2 },
-                    onOpen = { focusedCh = null; openGroup(ctx, st, it); enterTick++; inChannels = true; Chrome.rail = 0 },
-                    onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
-                    onHeader = { p ->
-                        TvFold.toggle(p.id)
-                        if (p.id in TvFold.open) Store.open(ctx, p.id)
-                        st.focusKey = "h:" + p.id; st.rev++; st.refocus++
-                    },
-                    onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it },
-                    onFocusRow = { st.focusKey = it; inChannels = false; Chrome.rail = 2 },
-                    containVerticalFocus = false, classicStyle = true)
-            }
-            if (!inChannels) Box(Modifier.width(1.dp).fillMaxHeight().background(C.Line))
-            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                val previewCh = PreviewSel.ch
-                Row(Modifier.fillMaxWidth().weight(0.32f).clipToBounds(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Box(Modifier.weight(0.43f).fillMaxHeight().clip(Rnd(12.dp)), contentAlignment = Alignment.Center) {
-                        if (previewCh != null) PreviewBox(previewCh, Modifier.fillMaxSize())
-                        else Box(Modifier.fillMaxSize().clip(Rnd(12.dp)).background(C.Rail), contentAlignment = Alignment.Center) {
-                            T(tr("Izaberi kanal za pregled"), 12.sp, C.Muted)
-                        }
-                    }
-                    Column(Modifier.weight(0.57f).fillMaxHeight().clip(Rnd(12.dp)).background(C.Rail)
-                        .border(1.dp, C.Line, Rnd(12.dp)).padding(horizontal = 14.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        if (previewCh == null) {
-                            T("TV · EPG", 13.sp, C.Muted, FontWeight.SemiBold)
-                            T(tr("Potvrdi kanal tipkom OK da pokreneš mini-player."), 12.sp, C.Soft)
-                        } else {
-                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                ChannelLogo(previewCh.logo, previewCh.name)
-                                Column(Modifier.weight(1f)) {
-                                    T(previewCh.name, 15.sp, C.Text, FontWeight.Bold, maxLines = 1)
-                                    T(tr("TV · EPG"), 10.sp, C.Muted, maxLines = 1)
-                                }
-                                qualityOf(previewCh.name)?.let { label -> Box(Modifier.width(44.dp).height(24.dp).clip(Rnd(8.dp)).background(C.Card), contentAlignment = Alignment.Center) { T(label, 10.sp, C.Soft, FontWeight.SemiBold, maxLines = 1) } }
-                            }
-                            EpgList(previewCh, limit = 3, modifier = Modifier.fillMaxWidth().weight(1f), compact = true)
-                        }
-                    }
-                }
-                Box(Modifier.fillMaxWidth().weight(0.68f).clip(Rnd(12.dp)).background(C.Rail)
-                    .border(1.dp, C.Line, Rnd(12.dp))
-                    .onPreviewKeyEvent { e ->
-                        if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { backToGroups(); true } else false
-                    }) {
-                    val g = st.group
-                    if (g == null) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Message("Izaberi grupu", "Pritisni OK na grupi za prikaz kanala")
-                    } else key(g.key, st.rev) {
-                        ChannelList(g, nav, st.gate, rows, enterTick,
-                            onFocusCh = { focusedCh = it; inChannels = true; Chrome.rail = 0 },
-                            onBackToGroups = { backToGroups() }, onChanged = { st.rev++ },
-                            fullWidthClassic = true)
-                    }
-                }
-            }
+    // New Dawn: groups alone › channels alone with preview, now/next and options › full screen.
+    // Back and ◀ go exactly one level out; at the groups they return to the menu (on TV).
+    BackHandler(enabled = st.groupMenu == null && inChannels) { PreviewSel.ch = null; Preview.stop(); backToGroups() }
+    LaunchedEffect(inChannels, st.group?.key) {
+        Dawn.crumb = if (inChannels) st.group?.cat?.name ?: "" else ""
+        if (!inChannels) Dawn.pos = ""
+        Dawn.hints = if (inChannels) listOf("▲▼" to "Izaberi kanal", "OK" to "Pregled", "OK" to "Cijeli ekran", "Back" to "Grupe")
+            else listOf("▲▼" to "Izaberi grupu", "OK" to "Otvori grupu", "Back" to "Meni")
+    }
+    DisposableEffect(Unit) { onDispose { Dawn.crumb = ""; Dawn.pos = ""; Dawn.hints = emptyList() } }
+    // first time on the groups: the focus goes to the last opened group (or the first one)
+    var placed by remember { mutableStateOf(false) }
+    LaunchedEffect(rows is Load.Ok, inChannels) { if (!inChannels && rows is Load.Ok && !placed) { placed = true; backToGroups() } }
+    if (!inChannels) Box(Modifier.fillMaxSize().padding(start = 34.dp, top = 6.dp, bottom = 8.dp)) {
+        Box(Modifier.width(360.dp).fillMaxHeight().dawnGlass().padding(vertical = 8.dp)
+            .onPreviewKeyEvent { e ->
+                if (e.type != KeyEventType.KeyDown) false
+                else if (e.key == Key.DirectionLeft) { nav.back(); true }
+                else if (e.key == Key.DirectionRight) {
+                    val g = (rows as? Load.Ok)?.value?.filterIsInstance<GRow.Group>()?.firstOrNull { "g:" + it.ref.key == st.focusKey }?.ref
+                    if (g != null) { focusedCh = null; openGroup(ctx, st, g); enterTick++; inChannels = true; true } else false
+                } else false
+            }) {
+            GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, 360.dp, "", null,
+                onFocusGroup = { },
+                onOpen = { focusedCh = null; openGroup(ctx, st, it); enterTick++; inChannels = true },
+                onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
+                onHeader = { p -> TvFold.toggle(p.id); if (p.id in TvFold.open) Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
+                onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it },
+                onFocusRow = { st.focusKey = it })
         }
     } else {
-        Column(Modifier.fillMaxSize()) {
-            Row(Modifier.weight(1f).fillMaxWidth()) {
-                GroupColumn(rows, st.group, st.focusKey, st.focusFr, st.wrap, gState, 260.dp, "Kategorije", null,
-                    onFocusGroup = { }, onOpen = { openGroup(ctx, st, it); enterTick++ }, onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
-                    onHeader = { p -> TvFold.toggle(p.id); if (p.id in TvFold.open) Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
-                    onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it }, onFocusRow = { st.focusKey = it; inChannels = false }, containVerticalFocus = false)
-                Box(Modifier.width(1.dp).fillMaxHeight().background(C.Line))
-                Box(Modifier.weight(1f).fillMaxHeight()) {
-                    val g = st.group
-                    if (g == null) Message("Izaberi grupu", "Drži OK na grupi za opcije")
-                    else Row(Modifier.fillMaxSize()) {
-                        Box(Modifier.weight(1f).fillMaxHeight().onPreviewKeyEvent { e -> if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { backToGroups(); true } else false }) {
-                            key(g.key, st.rev) { ChannelList(g, nav, st.gate, rows, enterTick, onFocusCh = { focusedCh = it; inChannels = true }, onBackToGroups = { backToGroups() }, onChanged = { st.rev++ }) }
-                        }
-                        EpgPanel(focusedCh, Modifier.width(330.dp))
-                    }
+        val g = st.group
+        val chs by load(g?.key, Favs.rev, keep = true) { g?.let { channelsOf(ctx, it) } ?: emptyList() }
+        var opts by remember { mutableStateOf<Channel?>(null) }
+        LaunchedEffect(focusedCh, chs) {
+            val list = (chs as? Load.Ok)?.value ?: return@LaunchedEffect
+            val i = focusedCh?.let { c -> list.indexOfFirst { it.url == c.url } } ?: -1
+            Dawn.pos = if (i >= 0) "${i + 1} / ${list.size}" else ""
+        }
+        Row(Modifier.fillMaxSize().padding(start = 34.dp, end = 38.dp, top = 6.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Box(Modifier.weight(0.42f).fillMaxHeight().dawnGlass().padding(vertical = 4.dp)) {
+                if (g != null) key(g.key, st.rev) {
+                    ChannelList(g, nav, st.gate, rows, enterTick, onFocusCh = { focusedCh = it },
+                        onBackToGroups = { PreviewSel.ch = null; Preview.stop(); backToGroups() }, onChanged = { st.rev++ }, focusOnStart = true)
                 }
+            }
+            Column(Modifier.weight(0.58f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                DawnPreview(Modifier.fillMaxWidth().weight(1f, fill = false))
+                DawnNowNext(focusedCh ?: PreviewSel.ch, Modifier.fillMaxWidth())
+                Spacer(Modifier.weight(0.001f))
+                DawnOptions(focusedCh ?: PreviewSel.ch, onOptions = { opts = focusedCh ?: PreviewSel.ch }, modifier = Modifier.fillMaxWidth().height(68.dp))
+            }
+        }
+        opts?.let { ch ->
+            val list = (chs as? Load.Ok)?.value.orEmpty()
+            val groups = (rows as? Load.Ok)?.value?.mapNotNull { (it as? GRow.Group)?.ref }
+                ?.filter { it.pid != null && it.pid == ch.pid.ifBlank { g?.pid } && it.cat.id != ALL_GROUP }?.map { it.cat } ?: emptyList()
+            if (g != null) ChannelOptions(g, ch, list, groups, onDismiss = { opts = null }) { reload, close ->
+                if (close) opts = null
+                if (reload) st.rev++
             }
         }
     }
     TvDialogs(st, rows)
-}
-
-/** "Recently watched": the last 10 channels at the bottom of TV. OK plays it; Back returns to its group. */
-@Composable
-fun RecentStrip(nav: Nav) {
-    val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val list = remember(Recent.rev) { Recent.list() }
-    if (list.isEmpty()) return
-    var menu by remember { mutableStateOf<Recent.Item?>(null) }
-    var askClear by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth().padding(start = if (Look.age) 0.dp else 40.dp, end = if (Look.age) 0.dp else 40.dp, top = 8.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(Modifier.fillMaxWidth()) {
-            Kicker("Zadnje gledano", modifier = Modifier.weight(1f))
-            Kicker(trf("%s kanala", list.size))
-        }
-        // right from the last card goes to "Obriši historiju", right again back to the first channel; never jumps up to the bell
-        val rState = androidx.compose.foundation.lazy.rememberLazyListState()
-        val firstFr = remember { FocusRequester() }
-        val clearFr = remember { FocusRequester() }
-        val lastFr = remember { FocusRequester() }
-        fun toFirst() = scope.launch { rState.scrollToItem(0); delay(30); firstFr.tryFocus() }
-        LazyRow(state = rState, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            itemsIndexed(list, key = { _, it -> it.ch.url }) { i, r ->
-                Focusable(focusRequester = if (i == 0) firstFr else if (i == list.lastIndex) lastFr else null, onClick = {
-                    scope.launch {
-                        val g = GroupRef(r.pid, Category(r.catId, r.catName))
-                        val chs = try { channelsOf(ctx, g) } catch (e: Exception) { emptyList() }
-                        val i = chs.indexOfFirst { it.url == r.ch.url }
-                        // Back from full screen goes to TV, into the channel's own group, on that channel
-                        if (i >= 0) {
-                            TvMemory.group = g; TvMemory.channel = i; TvMemory.restore = true; TvMemory.preview = chs[i]
-                            nav.root(Screen.Tv); playChannels(nav, chs, i)
-                        } else playChannels(nav, listOf(r.ch), 0)
-                    }
-                }, onMenu = { menu = r }, shape = Rnd(14.dp), normal = C.Rail, focused = C.Red, zoom = 1.04f,
-                    modifier = Modifier.width(186.dp).height(50.dp).border(1.dp, C.Line, Rnd(14.dp)).onPreviewKeyEvent { e ->
-                        if (e.type != KeyEventType.KeyDown) false
-                        else if (i == list.lastIndex && e.key == Key.DirectionRight) { scope.launch { rState.scrollToItem(list.size); delay(30); clearFr.tryFocus() }; true }
-                        else if (i == 0 && e.key == Key.DirectionLeft) { scope.launch { rState.scrollToItem(list.lastIndex); delay(30); lastFr.tryFocus() }; true }   // ◀ on the first: to the last channel
-                        else false
-                    }) { f ->
-                    Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        ChannelLogo(r.ch, 32.dp, onLight = f)
-                        Column(Modifier.weight(1f)) {
-                            T(r.ch.name, 13.sp, if (f) C.OnRed else C.Text, FontWeight.Bold)
-                            T(nowOf(r.ch, 800)?.title ?: r.catName, 11.sp, if (f) C.OnRed.copy(alpha = 0.6f) else C.Muted)
-                        }
-                    }
-                }
-            }
-            item(key = "clear") {
-                Focusable(focusRequester = clearFr, onClick = { askClear = true }, shape = Rnd(14.dp), normal = C.Rail, focused = C.Danger, zoom = 1.04f,
-                    modifier = Modifier.height(50.dp).border(1.dp, C.Line, Rnd(14.dp)).onPreviewKeyEvent { e ->
-                        if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionRight) { toFirst(); true } else false
-                    }) { f ->
-                    Row(Modifier.fillMaxHeight().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Ico(R.drawable.lc_trash_2, 16.dp, if (f) Color.White else C.Danger)
-                        T("Obriši historiju", 13.sp, if (f) Color.White else C.Text, FontWeight.SemiBold)
-                    }
-                }
-            }
-        }
-    }
-    menu?.let { r ->
-        Popup(r.ch.name, onDismiss = { menu = null }) {
-            OptionRow("Ukloni iz Zadnje gledano", R.drawable.lc_x) { Recent.remove(r.ch.url); menu = null }
-        }
-    }
-    if (askClear) Popup("Obrisati historiju?", onDismiss = { askClear = false }) {
-        T("Svi kanali nestaju iz Zadnje gledano. Traka se ponovo puni kad gledaš kanale.", 14.sp, C.Soft, maxLines = 3)
-        OptionRow("Obriši historiju", R.drawable.lc_trash_2, color = C.Danger) { Recent.clear(); askClear = false }
-        OptionRow("Odustani", R.drawable.lc_x) { askClear = false }
-    }
 }
 
 /** Rename, move, hide, lock or delete a group. Used by TV, movies, series and the group manager.
@@ -820,7 +628,7 @@ fun playChannels(nav: Nav, list: List<Channel>, index: Int) {
 }
 
 @Composable
-private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GRow>>, enterTick: Int = 0, onFocusCh: (Channel) -> Unit = {}, onBackToGroups: () -> Unit, onChanged: () -> Unit, fullWidthClassic: Boolean = false, focusOnStart: Boolean = false) {
+private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GRow>>, enterTick: Int = 0, onFocusCh: (Channel) -> Unit = {}, onBackToGroups: () -> Unit, onChanged: () -> Unit, focusOnStart: Boolean = false) {
     val ctx = LocalContext.current
     var listRev by remember { mutableIntStateOf(0) }
     val isFav = g.pid == null
@@ -832,22 +640,12 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
     val chFr = remember { FocusRequester() }
     WrapEffect(cWrap, cState)
 
-    Column(Modifier.fillMaxSize().padding(start = if (Look.layout == 0 || Look.dawn) 6.dp else 20.dp, end = if (Look.layout == 0 || Look.dawn) 6.dp else 20.dp, top = if (fullWidthClassic) 4.dp else if (Look.layout == 0) 12.dp else if (Look.dawn) 6.dp else 22.dp)) {
-        if (!fullWidthClassic && !Look.dawn) {
-            T(g.cat.name, if (Look.layout == 0) Rows.font else 20.sp, C.Text, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.fillMaxWidth())
-            T("OK gledaj · drži OK = opcije · ◀ grupe", 12.sp, C.Muted, maxLines = 1, modifier = Modifier.padding(bottom = 10.dp))
-        }
+    Column(Modifier.fillMaxSize().padding(start = 6.dp, end = 6.dp, top = 6.dp)) {
         when (val s = state) {
             is Load.Loading -> Loading("Učitavam kanale…")
             is Load.Err -> Message("Kanali se nisu učitali", s.message)
             is Load.Ok -> {
                 val list = s.value
-                if (fullWidthClassic) {
-                    Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 14.dp, top = 7.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        T(g.cat.name.uppercase(), 14.sp, C.Text, FontWeight.Bold, maxLines = 1, modifier = Modifier.weight(1f))
-                        T(trf("%s KANALA", list.size), 11.sp, C.Muted, FontWeight.SemiBold)
-                    }
-                }
                 if (list.isEmpty()) {
                     Message(if (isFav) "Nema favorita" else "Grupa je prazna",
                         if (isFav) "Na kanalu drži OK › Dodaj u favorite" else "Kanale možeš prebaciti ovamo preko opcija kanala")
@@ -867,7 +665,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                             val active = PreviewSel.ch?.url == ch.url || TvMemory.preview?.url == ch.url ||
                                 (TvMemory.group?.key == g.key && TvMemory.channel == i)
                             Focusable(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = if (Look.layout == 0 || Look.dawn) 4.dp else 0.dp).height(if (fullWidthClassic) 46.dp else if (Look.dawn) 50.dp else if (Look.layout == 0) 58.dp else Rows.channel).wrapKeys(i, list.size, cWrap)
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp).height(50.dp).wrapKeys(i, list.size, cWrap)
                                     .then(if (active) Modifier.border(1.dp, C.Green.copy(alpha = 0.48f), Rnd(12.dp)) else Modifier),
                                 onClick = {
                                     gate.run("c:${ch.url}", locked) {
@@ -890,29 +688,13 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                 focusBorderColor = if (Look.dawn) Color.Transparent else null,
                                 zoom = if (Look.dawn) 1.0f else 1.01f,
                             ) { f ->
-                                Row(Modifier.fillMaxSize().clipToBounds().padding(horizontal = if (fullWidthClassic) 14.dp else 10.dp), verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(if (fullWidthClassic) 12.dp else 10.dp)) {
-                                    T(if (Look.dawn) "%03d".format(ch.num) else "${ch.num}", if (fullWidthClassic) 13.sp else if (Look.layout == 0) 11.sp else if (Look.dawn) 15.sp else 13.sp, if (Look.dawn) (if (f) Dawn.onPill else Color(0xFFD5DBE3)) else C.Muted,
-                                        modifier = Modifier.width(if (fullWidthClassic) 34.dp else if (Look.layout == 0) 26.dp else 34.dp))
+                                Row(Modifier.fillMaxSize().clipToBounds().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    T("%03d".format(ch.num), 15.sp, if (f) Dawn.onPill else Color(0xFFD5DBE3),
+                                        modifier = Modifier.width(34.dp))
                                     ChannelLogo(ch.logo, ch.name)
-                                    if (fullWidthClassic) {
-                                        T(ch.name, 14.sp, if (f) C.Text else C.Soft, if (f) FontWeight.SemiBold else FontWeight.Medium,
-                                            maxLines = 1, modifier = Modifier.weight(0.32f))
-                                        ChannelEpgCells(ch, Modifier.weight(0.68f))
-                                    } else {
-                                        if (Look.layout == 0) {
-                                            T(ch.name, Rows.font, if (f) C.Text else C.Soft, if (f) FontWeight.SemiBold else FontWeight.Normal,
-                                                maxLines = 1, modifier = Modifier.weight(0.34f))
-                                            ChannelEpgLine(ch, Modifier.weight(0.66f))
-                                        } else if (Look.dawn) {
-                                            T(ch.name, 16.sp, if (f) Dawn.onPill else Color(0xFFEFF2F6), if (f) FontWeight.SemiBold else FontWeight.Normal,
-                                                maxLines = 1, modifier = Modifier.weight(1f))
-                                        } else {
-                                            T(ch.name, Rows.font, if (f) C.Text else C.Soft, if (f) FontWeight.SemiBold else FontWeight.Normal,
-                                                maxLines = 1, modifier = Modifier.weight(1f))
-                                        }
-                                    }
-                                    if (!Look.dawn) qualityOf(ch.name)?.let { Chip(it, C.Card, C.Soft) }
+                                    T(ch.name, 16.sp, if (f) Dawn.onPill else Color(0xFFEFF2F6), if (f) FontWeight.SemiBold else FontWeight.Normal,
+                                        maxLines = 1, modifier = Modifier.weight(1f))
                                     if (locked) Ico(R.drawable.lc_lock, 16.dp, C.Muted)
                                     if (!isFav && Favs.inAny(ctx, ch)) T("★", 17.sp, C.Amber)
                                     if (active) Dot(C.Green, 8.dp)
@@ -1360,64 +1142,6 @@ fun PreviewBox(ch: Channel?, modifier: Modifier) {
     }
 }
 
-/** Compact now-playing EPG text shown inside a channel row. */
-@Composable
-private fun ChannelEpgLine(ch: Channel, modifier: Modifier = Modifier) {
-    val ctx = LocalContext.current
-    val state by load(ch.url, EpgShift.rev) { Store.byId(ctx, ch.pid)?.let { Repo.epg(it, ch, 2) } ?: emptyList() }
-    val now = System.currentTimeMillis()
-    val current = (state as? Load.Ok)?.value?.firstOrNull { it.start <= now && it.end > now }
-    if (current != null) {
-        Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            T(current.times(), 12.sp, C.Muted, maxLines = 1)
-            T(current.title, 13.sp, C.Soft, maxLines = 1, modifier = Modifier.weight(1f))
-        }
-    } else if (state is Load.Loading) {
-        T("EPG …", 9.sp, C.Muted, maxLines = 1, modifier = modifier)
-    }
-}
-
-/** Three aligned programme cells in the full-width Classic channel list. */
-@Composable
-private fun ChannelEpgCells(ch: Channel, modifier: Modifier = Modifier) {
-    val ctx = LocalContext.current
-    val state by load(ch.url, EpgShift.rev) {
-        Store.byId(ctx, ch.pid)?.let { Repo.epg(it, ch, 3) } ?: emptyList()
-    }
-    when (val result = state) {
-        is Load.Loading -> Box(modifier.fillMaxHeight().clip(Rnd(8.dp)).background(C.Card), contentAlignment = Alignment.Center) {
-            T("Učitavam EPG…", 11.sp, C.Muted)
-        }
-        is Load.Err -> Box(modifier.fillMaxHeight().clip(Rnd(8.dp)).background(C.Card), contentAlignment = Alignment.Center) {
-            T("EPG nije dostupan", 11.sp, C.Muted)
-        }
-        is Load.Ok -> {
-            val now = System.currentTimeMillis()
-            val current = result.value.firstOrNull { it.start <= now && it.end > now }
-            val upcoming = result.value.filter { it.start > now }.take(2)
-            val entries = if (current != null) listOf(current) + upcoming else result.value.take(3)
-            if (entries.isEmpty()) {
-                Box(modifier.fillMaxHeight().clip(Rnd(8.dp)).background(C.Card).padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) {
-                    T("Nema EPG vodiča", 12.sp, C.Muted)
-                }
-            } else {
-                Row(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    entries.forEachIndexed { index, item ->
-                        val cellWeight = if (current != null && entries.size > 1) {
-                            if (index == 0) 0.28f else 0.72f / (entries.size - 1)
-                        } else 1f / entries.size.coerceAtLeast(1)
-                        Column(Modifier.weight(cellWeight).fillMaxHeight().clip(Rnd(8.dp)).background(if (index == 0 && current != null) C.CardFocus else C.Card)
-                            .padding(horizontal = 10.dp, vertical = 6.dp), verticalArrangement = Arrangement.Center) {
-                            T(item.times(), 10.sp, if (index == 0 && current != null) C.RedText else C.Muted, FontWeight.SemiBold, maxLines = 1)
-                            T(item.title, 13.sp, C.Text, FontWeight.Medium, maxLines = 1)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
 @Composable
 fun EpgList(ch: Channel, limit: Int = 12, modifier: Modifier = Modifier, compact: Boolean = false) {
     val ctx = LocalContext.current
@@ -1464,24 +1188,6 @@ fun EpgList(ch: Channel, limit: Int = 12, modifier: Modifier = Modifier, compact
             }
         }
         }
-    }
-}
-
-/** Right side while browsing channels: live preview + programme guide of the focused channel. */
-@Composable
-fun EpgPanel(ch: Channel?, modifier: Modifier) {
-    var shown by remember { mutableStateOf<Channel?>(null) }
-    LaunchedEffect(ch?.url) { delay(150); shown = ch }
-    Column(modifier.fillMaxHeight().background(C.Rail).padding(horizontal = 18.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        val c = shown
-        PreviewSel.ch?.let { PreviewBox(it, Modifier.fillMaxWidth()) }
-        if (c == null) { T("Stani na kanal da vidiš program", 14.sp, C.Muted); return@Column }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            ChannelLogo(c.logo, c.name)
-            T(c.name, 17.sp, C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
-            qualityOf(c.name)?.let { Chip(it, C.Card, C.Soft) }
-        }
-        EpgList(c)
     }
 }
 

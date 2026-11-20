@@ -29,13 +29,6 @@ data class Release(val tag: String, val name: String, val notes: String, val apk
 /** Checks GitHub for a newer PRETORIAN and installs it with one click (same way as LEAD Launcher). */
 object Updater {
     private const val JSON_URL = "https://github.com/KarlAgathon/PRETORIAN/releases/latest/download/update.json"
-    /** Beta: test versions, published as the release "beta" (only for whoever chose the Beta channel) */
-    private const val BETA_URL = "https://github.com/KarlAgathon/PRETORIAN/releases/download/beta/update.json"
-    /** "stable" or "beta" */
-    private val betaBuild get() = BuildConfig.APPLICATION_ID.endsWith(".beta")  // i18n-ignore
-    // A beta APK must never switch to the Stable feed: Android treats Stable and Beta as
-    // different packages, so offering the Stable APK here produces a failed install.
-    val beta get() = betaBuild || Prefs.str("upd_channel", "stable") == "beta"  // i18n-ignore
     /** the APK's signature against the installed PRETORIAN: true ok, false foreign or broken, null not checked yet */
     var signature by mutableStateOf<Boolean?>(null)
     /** download paused by the user: the part already loaded stays and goes on from there */
@@ -119,42 +112,13 @@ object Updater {
 
     /** the newest Stable version (for the gold STABLE shield) */
     var stableName by mutableStateOf(Prefs.str("upd_stable_name"))
-    /** Settings › Update › long OK on the version: the author's own GitHub key (only on his box) */
-    val canPublish get() = Prefs.str("gh_token").isNotBlank()
-
-    /** Makes the Beta version on this box the Stable one for everybody: main moves to the beta commit, GitHub builds the release. */
-    suspend fun promote(): String? = withContext(Dispatchers.IO) {
-        val tok = Prefs.str("gh_token").trim(); if (tok.isBlank()) return@withContext tr("GitHub ključ nije upisan")
-        fun call(method: String, path: String, body: String? = null): Pair<Int, String> {
-            val c = URL("https://api.github.com/repos/KarlAgathon/PRETORIAN$path").openConnection() as HttpURLConnection  // i18n-ignore
-            c.requestMethod = method   // Android's HttpURLConnection knows PATCH
-            c.setRequestProperty("Authorization", "Bearer $tok"); c.setRequestProperty("Accept", "application/vnd.github+json")  // i18n-ignore
-            c.connectTimeout = 15_000; c.readTimeout = 20_000
-            if (body != null) { c.doOutput = true; c.setRequestProperty("Content-Type", "application/json"); c.outputStream.use { it.write(body.toByteArray()) } }  // i18n-ignore
-            val code = c.responseCode
-            val text = try { (if (code < 400) c.inputStream else c.errorStream)?.bufferedReader()?.readText() ?: "" } catch (e: Exception) { "" }
-            c.disconnect(); return code to text
-        }
-        try {
-            val (c1, t1) = call("GET", "/git/ref/heads/beta")
-            if (c1 != 200) return@withContext trf("GitHub: %s", c1)
-            val sha = JSONObject(t1).getJSONObject("object").getString("sha")
-            val (c2, t2) = call("PATCH", "/git/refs/heads/main", JSONObject().put("sha", sha).put("force", false).toString())
-            if (c2 !in 200..299) return@withContext trf("GitHub: %s", c2) + " " + (try { JSONObject(t2).optString("message") } catch (e: Exception) { "" })
-            UpdLog.add(trf("Označeno kao Stable: %s · GitHub pravi izdanje", BuildInfo.VERSION))
-            null
-        } catch (e: Exception) { e.message ?: tr("nije uspjelo") }
-    }
-
     suspend fun check(ctx: Context): UpdateInfo? = withContext(Dispatchers.IO) {
         Prefs.put("upd_checked_at", System.currentTimeMillis())
         try {
             fun read(u: String) = JSONObject(String(Http.bytes(u, 100_000))).let { o -> UpdateInfo(o.optLong("versionCode"), o.str("versionName"), o.str("apk"), o.str("notes")) }
             val stable = read(JSON_URL)
             stableName = stable.name; Prefs.put("upd_stable_name", stable.name)
-            // Keep package feeds separate. Beta APKs have applicationId .beta and must
-            // only ever receive another .beta APK; never silently fall back to Stable.
-            val info = if (beta) read(BETA_URL) else stable
+            val info = stable
             Prefs.put("upd_last", System.currentTimeMillis())
             val newer = if (info.code > installedCode(ctx) && info.apk.startsWith(APK_PREFIX) && Prefs.str("upd_skip") != info.name) info else null
             available = newer
@@ -183,7 +147,10 @@ object Updater {
         cancel = false
         paused = false; pauseReq = false
         try {
-            if (Prefs.str("upd_pre", "").split(',').contains("backup")) withContext(Dispatchers.IO) { backupBefore(ctx, "prije-${info.name}") }  // i18n-ignore
+            if (Prefs.str("upd_pre", "").split(',').contains("backup")) {
+                val saved = withContext(Dispatchers.IO) { backupBefore(ctx, "prije-${info.name}") } // i18n-ignore
+                if (!saved) throw IOException(tr("Backup nije spremljen"))
+            }
             UpdLog.add(trf("Instalacija %s pokrenuta", info.name))
             val wasReady = ready(ctx, info)
             val file = if (wasReady) readyFile(ctx) else withContext(Dispatchers.IO) { download(ctx, info) }
@@ -388,18 +355,25 @@ class UpdateResultReceiver : BroadcastReceiver() {
 
 /** Files in the public Download/PRETORIAN folder: they stay there even when PRETORIAN is uninstalled. */
 object PublicFiles {
-    fun save(ctx: Context, name: String, bytes: ByteArray) {
+    fun save(ctx: Context, name: String, bytes: ByteArray) = bytes.inputStream().use { save(ctx, name, it) }
+
+    fun save(ctx: Context, name: String, input: java.io.InputStream) {
         if (Build.VERSION.SDK_INT >= 29) {
             val cv = android.content.ContentValues().apply {
                 put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, name)
                 put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS + "/PRETORIAN")
             }
             val uri = ctx.contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv) ?: throw IOException("Download")
-            ctx.contentResolver.openOutputStream(uri)?.use { it.write(bytes) } ?: throw IOException("Download")
+            try {
+                ctx.contentResolver.openOutputStream(uri)?.use { input.copyTo(it) } ?: throw IOException("Download")
+            } catch (failure: Exception) {
+                ctx.contentResolver.delete(uri, null, null)
+                throw failure
+            }
         } else {
             @Suppress("DEPRECATION")
             val dir = File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "PRETORIAN")
-            dir.mkdirs(); File(dir, name).writeBytes(bytes)
+            dir.mkdirs(); File(dir, name).outputStream().use { input.copyTo(it) }
         }
     }
 }
@@ -415,7 +389,7 @@ object Rollback {
             val c = URL(r.apk).openConnection() as HttpURLConnection
             c.instanceFollowRedirects = true; c.connectTimeout = 15_000; c.readTimeout = 60_000
             c.inputStream.use { ins -> f.outputStream().use { ins.copyTo(it) } }
-            PublicFiles.save(ctx, "Pretorian-${r.name}.apk", f.readBytes())
+            f.inputStream().use { PublicFiles.save(ctx, "Pretorian-${r.name}.apk", it) }
             PublicFiles.save(ctx, "vrati.json", JSONObject().put("version", r.name).put("apk", "Pretorian-${r.name}.apk").put("backup", "backup-za-${r.name}.json").toString().toByteArray())
             f.delete()
             null

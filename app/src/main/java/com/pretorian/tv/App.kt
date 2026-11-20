@@ -1,16 +1,11 @@
 package com.pretorian.tv
 
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.type
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
-import androidx.compose.animation.animateContentSize
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -23,13 +18,11 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -48,15 +41,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -135,7 +123,7 @@ class MainActivity : ComponentActivity() {
         super.onRestart()
         val away = System.currentTimeMillis() - stoppedAt
         val fromExternal = ExtPlayer.launchedAt > 0 && ExtPlayer.launchedAt >= stoppedAt - 10_000
-        if (stoppedAt > 0 && away > 15_000 && !fromExternal && Profiles.askAtStart && Profiles.awayLong(away)) Profiles.picker = true
+        if (stoppedAt > 0 && !fromExternal && Profiles.askAtStart && Profiles.awayLong(away)) Profiles.picker = true
         // every start of the app opens Home (not after the external player or a short trip to the system)
         if (stoppedAt > 0 && away > 15_000 && !fromExternal) AppHome.tick++
     }
@@ -318,7 +306,7 @@ fun PretorianApp() {
                 ProfilePicker()
             } else if (top is Screen.Player) {
                 PlayerScreen(top, nav)
-            } else if (Lock.simple && Look.age) {
+            } else if (Lock.simple) {
                 Box(Modifier.fillMaxSize().background(C.BgBrush)) {
                     DuskBackground()
                     key(version, top) {
@@ -339,20 +327,6 @@ fun PretorianApp() {
                     }
                 }
                 AdvancedGate(nav)
-            } else if (Lock.simple) {
-                Box(Modifier.fillMaxSize().background(C.BgBrush)) {
-                    key(version, top) {
-                        when (top) {
-                            Screen.Tv -> TvScreen(nav)
-                            Screen.Movies -> MoviesScreen(nav)
-                            Screen.Series -> SeriesScreen(nav)
-                            Screen.Sports -> SportMixScreen(nav)
-                            is Screen.MovieDetail -> MovieDetailScreen(top.vod, nav)
-                            is Screen.SeriesDetail -> SeriesDetailScreen(top.item, nav)
-                            else -> SimpleHome(nav)
-                        }
-                    }
-                }
             } else {
                 val content: @Composable () -> Unit = {
                         // Settings are not rebuilt when something is saved there: you stay on the page and row you were on
@@ -374,32 +348,10 @@ fun PretorianApp() {
                         }
                 }
                 // New Dawn: one level at a time, the menu only on Home
-                if (Look.dawn) DawnShell(top, nav) {
+                DawnShell(top, nav) {
                     val noActive = remember(version, top) { Store.playlists(ctx).isNotEmpty() && Store.actives(ctx).isEmpty() } &&
                         (top == Screen.Home || top == Screen.Tv || top == Screen.Movies || top == Screen.Series)
                     if (noActive) NoPlaylist(nav) else content()
-                }
-                // holding ▲ anywhere (outside the player) goes straight to the top bar, on the screen you are on
-                else if (Look.age) Box(Modifier.fillMaxSize().background(C.BgBrush).onPreviewKeyEvent { ev ->
-                    if (ev.key == androidx.compose.ui.input.key.Key.DirectionUp && ev.type == androidx.compose.ui.input.key.KeyEventType.KeyDown &&
-                        ev.nativeKeyEvent.repeatCount >= 6) { try { TopNav.fr.requestFocus() } catch (_: Exception) {}; true } else false
-                }) {
-                    DuskBackground()
-                    // every playlist switched off: Home, TV, Movies and Series say so, with a button to switch one on
-                    val noActive = remember(version, top) { Store.playlists(ctx).isNotEmpty() && Store.actives(ctx).isEmpty() } &&
-                        (top == Screen.Home || top == Screen.Tv || top == Screen.Movies || top == Screen.Series)
-                    if (top == Screen.Home && !noActive) key(version) { OnyxHome(nav) }
-                    else if (top == Screen.AddPlaylist && Store.playlists(ctx).isEmpty() && Welcome.tab < 0) content()
-                    else Column(Modifier.fillMaxSize()) {
-                        OnyxTopBar(top, nav)
-                        Box(Modifier.weight(1f).fillMaxWidth()) { if (noActive) NoPlaylist(nav) else content() }
-                    }
-                } else Row(Modifier.fillMaxSize().background(C.BgBrush)) {
-                    Rail(top, nav)
-                    Column(Modifier.weight(1f).fillMaxHeight()) {
-                        Box(Modifier.weight(1f).fillMaxWidth()) { content() }
-                        if (Look.wave && !Chrome.driven) HintBar()
-                    }
                 }
             }
             ReminderPopup(nav)
@@ -443,76 +395,6 @@ private fun ReminderPopup(nav: Nav) {
             kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) { delay(5 * 60_000L); if (Reminders.showing == null) Reminders.showing = r }
         }
         OptionRow("Zatvori", R.drawable.lc_x) { Reminders.showing = null }
-    }
-}
-
-private data class RailItem(val screen: Screen, val icon: Int, val label: String, val badge: Int = 0)
-
-@Composable
-fun Rail(current: Screen, nav: Nav) {
-    val mode = Chrome.rail
-    if (mode == 0) return
-    val items = listOf(
-        RailItem(Screen.Home, R.drawable.lc_house, "Početna", Notes.unread("update").coerceAtMost(0)),
-        RailItem(Screen.Tv, R.drawable.lc_tv, "TV", Notes.unread("reminder")),
-        RailItem(Screen.Movies, R.drawable.lc_film, "Filmovi", NewContent.count("vod")),
-        RailItem(Screen.Series, R.drawable.lc_monitor, "Serije", NewContent.count("series")),
-        RailItem(Screen.Catchup, R.drawable.lc_history, "Catch-up"),
-        RailItem(Screen.Sports, R.drawable.lc_trophy, "Sport"),
-        RailItem(Screen.Search, R.drawable.lc_search, "Pretraga"),
-    )
-    val section = when (current) {
-        is Screen.MovieDetail -> Screen.Movies
-        is Screen.SeriesDetail -> Screen.Series
-        Screen.AddPlaylist -> Screen.Settings
-        else -> current
-    }
-    // one look everywhere: icon with the name under it
-    val width = if (mode == 2) 220.dp else 96.dp
-    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
-    // the menu can vanish while it holds the focus (a channel starts): never leave "in the menu" behind, it blocks every focus request
-    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { Chrome.inRail = false } }
-    // a section opens only on OK; moving through the menu changes nothing (the last one you clicked stays open)
-    Column(
-        Modifier.width(width).fillMaxHeight().background(C.Rail).padding(vertical = 14.dp)
-            .onFocusChanged { Chrome.inRail = it.hasFocus },
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        ProfileButton(if (mode == 1) 36.dp else 42.dp)
-        Spacer(Modifier.height(6.dp))
-        fun go(s: Screen) {
-            Chrome.inRail = false
-            if (section == s) focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Right) else nav.root(s)
-        }
-        items.forEach { RailButton(it.icon, it.label, section == it.screen, 3, it.badge) { go(it.screen) } }
-        Spacer(Modifier.weight(1f))
-        RailButton(R.drawable.lc_settings, "Postavke", section == Screen.Settings, 3, if (Updater.available != null) 1 else 0) { go(Screen.Settings) }
-    }
-}
-
-@Composable
-private fun RailButton(icon: Int, label: String, selected: Boolean, mode: Int, badge: Int, onFocus: () -> Unit = {}, onClick: () -> Unit) {
-    Box {
-        Focusable(
-            modifier = if (mode == 2) Modifier.width(186.dp).height(46.dp) else Modifier.width(if (mode == 1) 56.dp else 76.dp).height(if (mode == 1) 46.dp else 52.dp),
-            onClick = onClick,
-            onFocus = { if (Chrome.driven) Chrome.rail = 3; onFocus() },
-            shape = Rnd(16.dp),
-            normal = if (selected) C.Red else Color.Transparent,
-            focused = if (selected) C.Red else C.CardHi,
-            zoom = 1.06f,
-        ) { f ->
-            val c = if (selected) C.OnRed else if (f) C.Text else C.Muted
-            if (mode == 2) Row(Modifier.align(Alignment.CenterStart).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Ico(icon, 22.dp, c); T(label, 15.sp, c, if (selected) FontWeight.SemiBold else FontWeight.Medium)
-            } else Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Ico(icon, 20.dp, c)
-                if (mode == 3) T(label, 10.sp, c, if (selected) FontWeight.SemiBold else FontWeight.Normal)
-            }
-        }
-        if (badge > 0) Box(Modifier.align(Alignment.TopEnd).offset(x = (-4).dp, y = 2.dp)) { Bell(badge) }
     }
 }
 
@@ -682,144 +564,6 @@ fun fmtTime(ms: Long): String {
     return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, (s % 3600) / 60, s % 60) else "%d:%02d".format(s / 60, s % 60)
 }
 
-/** Big menu tile; size and style come from Settings › Appearance. Style 3 is the modern one. */
-@Composable
-fun HomeTile(label: String, icon: Int, fr: FocusRequester? = null, sizeOverride: Dp? = null, badge: Int = 0, onClick: () -> Unit) {
-    val size = sizeOverride ?: when (Look.tileSize) { 0 -> 180.dp; 2 -> 280.dp; else -> 230.dp }
-    val style = Look.tileStyle
-    val shape = Rnd(size * 0.13f)
-    if (style == 4) { FluentTile(label, icon, fr, size, badge, onClick); return }
-    Box {
-        Focusable(
-            modifier = Modifier.size(size * 1.12f, size).then(if (style == 1 || style == 2) Modifier.border(1.5.dp, C.Line, shape) else Modifier),
-            onClick = onClick,
-            focusRequester = fr,
-            shape = shape,
-            normal = when (style) { 1 -> C.Card; 2 -> Color.Transparent; 3 -> C.Card; else -> C.Tile },
-            focused = when (style) { 1, 2 -> C.CardFocus; 3 -> C.CardHi; else -> C.Red },
-            zoom = 1.06f,
-        ) { f ->
-            Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(size * 0.08f)) {
-                if (style == 3) {
-                    // modern: a soft gradient square with a white icon, like One UI / Windows 11
-                    Box(Modifier.size(size * 0.42f).clip(Rnd(size * 0.12f))
-                        .background(Brush.linearGradient(listOf(lerp(C.Red, Color.White, 0.18f), lerp(C.Red, Color.Black, 0.28f)))),
-                        contentAlignment = Alignment.Center) {
-                        Ico(icon, size * 0.21f, Color.White)
-                    }
-                    T(label, (size.value * 0.105f).sp, if (f) C.Text else C.Soft, FontWeight.SemiBold)
-                } else {
-                    val onAccent = f && style == 0
-                    Box(Modifier.size(size * 0.38f).clip(CircleShape).background(if (onAccent) C.OnRed.copy(alpha = 0.18f) else C.Red.copy(alpha = 0.16f)),
-                        contentAlignment = Alignment.Center) {
-                        Ico(icon, size * 0.2f, if (onAccent) C.OnRed else C.RedText)
-                    }
-                    T(label, (size.value * 0.12f).sp, if (onAccent) C.OnRed else C.Text, FontWeight.Bold)
-                }
-            }
-        }
-        if (badge > 0) Box(Modifier.align(Alignment.TopEnd).padding(8.dp)) { Bell(badge) }
-    }
-}
-
-/** filled icon and colours for the main tiles (Fluent style) */
-private fun fluentOf(icon: Int): Triple<Int, Color, Color> = when (icon) {
-    R.drawable.lc_tv -> Triple(R.drawable.ic_fill_tv, Color(0xFF2563EB), Color(0xFF06B6D4))
-    R.drawable.lc_film -> Triple(R.drawable.ic_fill_movie, Color(0xFFDB2777), Color(0xFFF97316))
-    R.drawable.lc_monitor -> Triple(R.drawable.ic_fill_series, Color(0xFF7C3AED), Color(0xFF4F46E5))
-    R.drawable.lc_trophy -> Triple(R.drawable.ic_fill_trophy, Color(0xFF059669), Color(0xFF84CC16))
-    else -> Triple(icon, Color(0xFF475569), Color(0xFF1E293B))
-}
-
-/** Windows 11 / iOS like: colour gradient, big filled icon, name bottom left */
-@Composable
-private fun FluentTile(label: String, icon: Int, fr: FocusRequester?, size: Dp, badge: Int, onClick: () -> Unit) {
-    val (ic, c1, c2) = fluentOf(icon)
-    val shape = Rnd(size * 0.14f)
-    Box {
-        Focusable(modifier = Modifier.size(size * 1.12f, size), onClick = onClick, focusRequester = fr, shape = shape,
-            normal = Color.Transparent, focused = Color.Transparent, zoom = 1.07f) { f ->
-            Box(Modifier.fillMaxSize().clip(shape)
-                .background(Brush.linearGradient(listOf(c1, c2)), alpha = if (f) 1f else 0.7f)
-                .then(if (f) Modifier.border(3.dp, Color.White, shape) else Modifier.border(1.dp, Color.White.copy(alpha = 0.14f), shape))) {
-                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.18f), Color.Transparent, Color.Black.copy(alpha = 0.30f)))))
-                Box(Modifier.align(Alignment.TopEnd).padding(top = size * 0.09f, end = size * 0.09f)) {
-                    androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(ic), null, Modifier.size(size * 0.48f), tint = Color.White)
-                }
-                T(label, (size.value * 0.13f).sp, Color.White, FontWeight.Bold,
-                    modifier = Modifier.align(Alignment.BottomStart).padding(start = size * 0.1f, bottom = size * 0.08f, end = 8.dp))
-            }
-        }
-        if (badge > 0) Box(Modifier.align(Alignment.TopStart).padding(8.dp)) { Bell(badge) }
-    }
-}
-
-/** big modern tile for the simple home: colour gradient, filled icon that fills the tile, label below left */
-@Composable
-private fun BigTile(label: String, sub: String, icon: Int, c1: Color, c2: Color, fr: FocusRequester?, onClick: () -> Unit) {
-    val shape = Rnd(30.dp)
-    Focusable(modifier = Modifier.size(300.dp, 250.dp), onClick = onClick, focusRequester = fr, shape = shape,
-        normal = Color.Transparent, focused = Color.Transparent, zoom = 1.07f) { f ->
-        Box(Modifier.fillMaxSize().clip(shape)
-            .background(Brush.linearGradient(listOf(c1, c2)), alpha = if (f) 1f else 0.72f)
-            .then(if (f) Modifier.border(3.dp, Color.White, shape) else Modifier)) {
-            // soft light from the top
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.16f), Color.Transparent, Color.Black.copy(alpha = 0.35f)))))
-            Box(Modifier.align(Alignment.TopEnd).padding(top = 22.dp, end = 22.dp)) {
-                androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(icon), null, Modifier.size(128.dp), tint = Color.White)
-            }
-            Column(Modifier.align(Alignment.BottomStart).padding(start = 24.dp, bottom = 20.dp, end = 16.dp)) {
-                T(label, 32.sp, Color.White, FontWeight.Bold)
-                T(sub, 14.sp, Color.White.copy(alpha = 0.85f), FontWeight.Medium)
-            }
-        }
-    }
-}
-
-/** Simple mode: only TV, Movies, Series, and a small "Advanced mode" button behind the PIN. */
-@Composable
-fun SimpleHome(nav: Nav) {
-    val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val first = remember { FocusRequester() }
-    var warn by remember { mutableStateOf(false) }
-    var pin by remember { mutableStateOf(false) }
-    Box(Modifier.fillMaxSize()) {
-    HomeBackdrop()
-    Column(Modifier.fillMaxSize().padding(top = 26.dp, bottom = 18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 40.dp), verticalAlignment = Alignment.CenterVertically) {
-            HomeLogo()
-            Spacer(Modifier.weight(1f))
-            ProfileButton(46.dp)
-        }
-        NeonRow(homeTiles(nav, push = true), first, Modifier.weight(1f), maxTile = 280.dp)
-        Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 12.dp)) {
-            Button("Napredni mod", R.drawable.lc_lock) { warn = true }
-            Updater.available?.let { u ->
-                val pr = Updater.progress
-                val label = when { pr in 0..100 -> trf("Preuzimam… %s%%", pr); pr == 101 -> tr("Instaliram…"); else -> trf("Ažuriraj na %s", u.name) }
-                Button(label, R.drawable.lc_download, primary = true) { if (pr < 0) scope.launch { Updater.install(ctx, u) } }
-            }
-        }
-        Updater.status?.let { T(it, 13.sp, C.Danger, maxLines = 2, modifier = Modifier.padding(bottom = 8.dp)) }
-        HomeStatusBar(Modifier.padding(horizontal = 40.dp))
-    }
-    }
-    if (warn) Popup("Aktivirati napredni mod?", onDismiss = { warn = false }) {
-        T("Pažnja: aktivirate napredni mod i dodatne opcije. Nastavite s pažnjom, jer možete izazvati nepoželjne posljedice i pokvariti podešavanja programa.",
-            16.sp, C.Soft, maxLines = 5)
-        OptionRow("Ostani u jednostavnom modu", R.drawable.lc_check) { warn = false }
-        OptionRow("Nastavi i unesi PIN", R.drawable.lc_key_round, color = C.Amber) { warn = false; pin = true }
-    }
-    if (pin) PinDialog("PIN za napredni mod", onDismiss = { pin = false }) { entered ->
-        val err = Lock.check(entered)
-        if (err == null) { pin = false; Lock.switchSimple(false); nav.root(Screen.Home) }
-        err
-    }
-    LaunchedEffect(Unit) { first.tryFocus() }
-}
-
-/** Series you follow: a note when a new episode appears. */
 /** "Window at start": the new version asks once when PRETORIAN opens. */
 object UpdateAsk { var show by mutableStateOf(false) }
 
@@ -870,55 +614,5 @@ object Follow {
             }
         }
         Prefs.put("follow", o.toString()); rev++
-    }
-}
-
-/** New Age: the menu as a bar on top. */
-@Composable
-private fun TopBar(current: Screen, nav: Nav) {
-    val items = listOf(
-        RailItem(Screen.Home, R.drawable.lc_house, "Početna"),
-        RailItem(Screen.Tv, R.drawable.lc_tv, "TV", Notes.unread("reminder")),
-        RailItem(Screen.Movies, R.drawable.lc_film, "Filmovi", NewContent.count("vod")),
-        RailItem(Screen.Series, R.drawable.lc_monitor, "Serije", NewContent.count("series")),
-        RailItem(Screen.Sports, R.drawable.lc_trophy, "Sport"),
-        RailItem(Screen.Search, R.drawable.lc_search, "Pretraga"),
-        RailItem(Screen.Settings, R.drawable.lc_settings, "Postavke", if (Updater.available != null) 1 else 0),
-    )
-    val section = when (current) { is Screen.MovieDetail -> Screen.Movies; is Screen.SeriesDetail -> Screen.Series; Screen.AddPlaylist -> Screen.Settings; else -> current }
-    Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp).clip(Rnd(22.dp)).background(C.Rail).border(1.dp, C.Line, Rnd(22.dp))
-        .padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        ProfileButton(32.dp)
-        T("PRETORIAN", 15.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 6.dp, end = 10.dp))
-        items.forEach { it ->
-            val sel = section == it.screen
-            Box {
-                Focusable(modifier = Modifier.height(40.dp), onClick = { nav.root(it.screen) }, shape = Rnd(14.dp),
-                    normal = if (sel) C.Red.copy(alpha = 0.22f) else androidx.compose.ui.graphics.Color.Transparent, focused = C.CardHi, zoom = 1.04f) { f ->
-                    Row(Modifier.align(Alignment.Center).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                        Ico(it.icon, 17.dp, if (sel) C.RedText else if (f) C.Text else C.Soft)
-                        T(it.label, 13.sp, if (sel || f) C.Text else C.Soft, if (sel) FontWeight.SemiBold else FontWeight.Medium)
-                    }
-                }
-                if (it.badge > 0) Box(Modifier.align(Alignment.TopEnd)) { Bell(it.badge) }
-            }
-        }
-        Spacer(Modifier.weight(1f))
-        Clock()
-    }
-}
-
-/** Remote help at the bottom (New Wave / New Age). */
-@Composable
-fun HintBar() {
-    Row(Modifier.fillMaxWidth().background(C.Rail).padding(horizontal = 24.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(22.dp)) {
-        listOf("◀ ▲ ▼ ▶" to "Kretanje", "OK" to "Izaberi", tr("Drži OK") to "Opcije", tr("Nazad") to "Natrag").forEach { (k, v) ->
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Box(Modifier.clip(Rnd(6.dp)).background(C.CardHi).padding(horizontal = 7.dp, vertical = 2.dp)) { T(k, 11.sp, C.Text, FontWeight.Bold) }
-                T(v, 11.sp, C.Muted)
-            }
-        }
     }
 }

@@ -122,6 +122,7 @@ object Profiles {
 
     /** personal settings of the profile that is open now (prefs + watched progress) */
     fun snapshot(c: Context): JSONObject {
+        Watch.flush()
         val p = JSONObject()
         sp(c).all.forEach { (k, v) ->
             if (isShared(k)) return@forEach
@@ -139,6 +140,7 @@ object Profiles {
     }
 
     private fun apply(c: Context, snap: JSONObject?) {
+        Watch.flush()
         val ed = sp(c).edit()
         sp(c).all.keys.filter { !isShared(it) }.forEach { ed.remove(it) }
         File(c.filesDir, "progress.json").delete()
@@ -166,13 +168,6 @@ object Profiles {
         }
         return o
     }
-    /** after a restore: writes the other profiles' files and loads the current one */
-    fun restoreSnapshots(c: Context, o: JSONObject) {
-        val cur = current(c).id
-        o.keys().forEach { id -> if (id != cur) File(dir(c), "$id.json").writeText(o.getJSONObject(id).toString()) }
-        o.optJSONObject(cur)?.let { apply(c, it) }
-    }
-
     /** deletes the profile you are in: moves to [target] first, then removes it */
     fun deleteCurrentAndSwitch(c: Context, target: Profile) {
         val cur = current(c)

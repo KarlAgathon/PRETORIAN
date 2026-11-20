@@ -25,7 +25,7 @@ object Backup {
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences("pretorian", Context.MODE_PRIVATE)
     /** stay on this device: sign-in, chosen external player and file manager */
-    private val DEVICE_ONLY = setOf("ext_player", "file_app", "profile_skip_ask", "backup_pass")
+    private val DEVICE_ONLY = setOf("ext_player", "file_app", "profile_skip_ask", "backup_pass", "gh_token")
     /** Settings › Backup › Password for copies: copies in Download / on USB are encrypted with it (empty = readable file) */
     val pass get() = Prefs.str("backup_pass")
 
@@ -45,12 +45,16 @@ object Backup {
         else -> -1
     }
 
+    internal fun portable(k: String) = k !in DEVICE_ONLY && !k.startsWith("gd_") && !k.startsWith("sync_")
+
+    internal fun included(k: String, parts: Set<Int>?) =
+        portable(k) && (parts == null || part(k) < 0 || part(k) in parts)
+
     private fun payload(ctx: Context, parts: Set<Int>? = null): JSONObject {
+        Watch.flush()
         val p = JSONObject()
         prefs(ctx).all.forEach { (k, v) ->
-            if (k.startsWith("gd_") || k.startsWith("sync_") || k in DEVICE_ONLY) return@forEach
-            val pt = part(k)
-            if (parts != null && pt >= 0 && pt !in parts) return@forEach
+            if (!included(k, parts)) return@forEach
             val o = JSONObject()
             when (v) {
                 is String -> o.put("t", "s").put("v", v)
@@ -64,8 +68,16 @@ object Backup {
         }
         val files = JSONObject()
         if (parts == null || 5 in parts) listOf("progress.json").forEach { n -> File(ctx.filesDir, n).takeIf { it.exists() }?.let { files.put(n, it.readText()) } }
-        val out = JSONObject().put("prefs", p).put("files", files)
-        if (parts == null || 3 in parts) out.put("profiles", Profiles.allSnapshots(ctx))
+        val out = JSONObject().put("prefs", p).put("files", files).put("full", parts == null) // i18n-ignore
+        if (parts != null) out.put("parts", org.json.JSONArray(parts.toList()))
+        if (parts == null || 3 in parts) out.put("profiles", Profiles.allSnapshots(ctx).also { profiles ->
+            for (id in profiles.keys()) {
+                val snapshot = profiles.getJSONObject(id)
+                val settings = snapshot.getJSONObject("prefs")
+                settings.keys().asSequence().filter { !included(it, parts) }.toList().forEach { settings.remove(it) }
+                if (parts != null && 5 !in parts) snapshot.remove("files")
+            }
+        })
         return out
     }
 
@@ -101,6 +113,7 @@ object Backup {
 
     /** restores everything; throws with a message when the password is wrong or the file is broken */
     fun restore(ctx: Context, text: String, password: String?) {
+        Watch.flush()
         val o = JSONObject(text)
         if (o.optInt("pretorian_backup") != 1) throw IllegalArgumentException(tr("Fajl nije PRETORIAN backup"))
         val data = if (o.has("enc")) {
@@ -112,20 +125,86 @@ object Backup {
             } catch (e: Exception) { throw IllegalArgumentException(tr("Pogrešna lozinka")) }
         } else o.getJSONObject("data")
         val p = data.getJSONObject("prefs")
-        val keepHere = prefs(ctx).all.filterKeys { it.startsWith("gd_") || it.startsWith("sync_") || it in DEVICE_ONLY }
-        val ed = prefs(ctx).edit().clear()
-        keepHere.forEach { (k, v) -> when (v) { is String -> ed.putString(k, v); is Boolean -> ed.putBoolean(k, v); is Int -> ed.putInt(k, v); is Long -> ed.putLong(k, v); is Float -> ed.putFloat(k, v) } }
+        val full = data.optBoolean("full", false) // i18n-ignore
+        val selection = data.optJSONArray("parts")?.let { array ->
+            (0 until array.length()).map { array.getInt(it) }.toSet()
+        }
+        require(!full || selection == null)
+        val store = prefs(ctx)
+        val original = store.all
+        val ed = store.edit()
+        if (full) original.keys.filter(::portable).forEach { ed.remove(it) }
         p.keys().forEach { k ->
-            if (k.startsWith("gd_") || k.startsWith("sync_")) return@forEach
+            if (!included(k, selection)) return@forEach
             val v = p.getJSONObject(k)
-            when (v.str("t")) {
-                "s" -> ed.putString(k, v.str("v")); "b" -> ed.putBoolean(k, v.optBoolean("v"))
-                "i" -> ed.putInt(k, v.optInt("v")); "l" -> ed.putLong(k, v.optLong("v")); "f" -> ed.putFloat(k, v.optDouble("v").toFloat())
+            when (v.getString("t")) {
+                "s" -> ed.putString(k, v.getString("v")); "b" -> ed.putBoolean(k, v.getBoolean("v"))
+                "i" -> ed.putInt(k, v.getInt("v")); "l" -> ed.putLong(k, v.getLong("v")); "f" -> ed.putFloat(k, v.getDouble("v").toFloat())
+                else -> throw IllegalArgumentException(tr("Fajl nije PRETORIAN backup"))
             }
         }
-        ed.commit()
-        data.optJSONObject("files")?.let { f -> f.keys().forEach { n -> if (n.matches(Regex("[a-z_]+\\.json"))) File(ctx.filesDir, n).writeText(f.str(n)) } }
-        data.optJSONObject("profiles")?.let { Profiles.restoreSnapshots(ctx, it) }
+        val writes = mutableMapOf<File, String>()
+        data.optJSONObject("files")?.let { files ->
+            if (files.has("progress.json") && (selection == null || 5 in selection)) {
+                val contents = files.getString("progress.json")
+                org.json.JSONArray(contents)
+                writes[File(ctx.filesDir, "progress.json")] = contents
+            }
+        }
+        val profiles = data.optJSONObject("profiles")
+        if (profiles != null && (selection == null || 3 in selection)) {
+            for (id in profiles.keys()) {
+                require(id.matches(Regex("[a-zA-Z0-9_-]+")))
+                val file = File(File(ctx.filesDir, "profiles"), "$id.json")
+                val snapshot = profiles.getJSONObject(id)
+                val merged = if (!full && file.exists()) JSONObject(file.readText()) else JSONObject()
+                val settings = merged.optJSONObject("prefs") ?: JSONObject()
+                val incoming = snapshot.getJSONObject("prefs")
+                for (k in incoming.keys()) {
+                    if (included(k, selection) && !Profiles.isShared(k)) settings.put(k, incoming.getJSONObject(k))
+                }
+                settings.keys().asSequence().filterNot(::portable).toList().forEach { settings.remove(it) }
+                merged.put("prefs", settings)
+                if (selection == null || 5 in selection) snapshot.optJSONObject("files")?.let { merged.put("files", it) }
+                writes[file] = merged.toString()
+            }
+        }
+        // The live profile is already represented by the top-level preferences and progress.
+        val previous = writes.keys.associateWith { if (it.exists()) it.readBytes() else null }
+        val changed = mutableListOf<File>()
+        try {
+            writes.forEach { (file, contents) ->
+                file.parentFile?.mkdirs()
+                changed.add(file)
+                file.writeText(contents)
+            }
+            if (!ed.commit()) {
+                // SharedPreferences updates its in-memory map even when writing to disk fails.
+                val rollback = store.edit()
+                (p.keys().asSequence().toSet() + if (full) original.keys else emptySet())
+                    .filter { included(it, selection) }.forEach { k ->
+                        when (val value = original[k]) {
+                            null -> rollback.remove(k)
+                            is String -> rollback.putString(k, value)
+                            is Boolean -> rollback.putBoolean(k, value)
+                            is Int -> rollback.putInt(k, value)
+                            is Long -> rollback.putLong(k, value)
+                            is Float -> rollback.putFloat(k, value)
+                            is Set<*> -> rollback.putStringSet(k, value.filterIsInstance<String>().toSet())
+                            else -> error("Unsupported preference type")
+                        }
+                    }
+                rollback.commit()
+                throw java.io.IOException(tr("Fajl nije PRETORIAN backup"))
+            }
+        } catch (failure: Exception) {
+            changed.asReversed().forEach { file ->
+                runCatching { previous[file]?.let { file.writeBytes(it) } ?: file.delete() }
+                    .onFailure { failure.addSuppressed(it) }
+            }
+            throw failure
+        }
+        Watch.reloadAfterRestore()
     }
 
     fun fileName() = "PRETORIAN-backup-" + SimpleDateFormat("yyyy-MM-dd_HH-mm", Locale.US).format(Date()) + ".json"

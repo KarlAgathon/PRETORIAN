@@ -33,7 +33,6 @@ object Look {
     var resBadge by mutableIntStateOf(1)       // resolution in the player corner: 0 off, 1 on start, 2 always
     var bigText by mutableStateOf(false)      // larger text everywhere (for parents, far sofas)
     var layout by mutableIntStateOf(2)         // 0 classic, 1 New Wave, 2 New Age, 3 New Dawn
-    var tvDesign by mutableIntStateOf(1)       // New Era is the only available TV layout
     val wave get() = layout == 1 || layout == 2
     /** the modern screens (posters, detail pages, search, settings) are used inside New Dawn */
     val age get() = layout == 2 || layout == 3
@@ -83,7 +82,6 @@ object Look {
         groupFrame = p.getBoolean("look_groupframe", true)
         resBadge = p.getInt("look_resbadge", 1)
         layout = 3   // New Dawn is the only layout (1.0.63)
-        tvDesign = 1 // New Era is the only supported TV layout; migrate older selections
         p.edit().putInt("look_tvdesign", 1).apply()
         bigText = false   // replaced by the size slider, which grows everything together
         // 0.3: the new modern home tiles become the default once
@@ -104,7 +102,7 @@ object Look {
             .putInt("look_overlay", overlay).putBoolean("look_preview", preview).putInt("look_previewmode", previewMode)
             .putInt("look_menuopacity", menuOpacity).putInt("look_rowsize", rowSize).putString("app_lang", lang)
             .putString("look_iconset", iconSet).putInt("look_iconstyle", iconStyle).putInt("look_corner", corner)
-            .putBoolean("look_groupframe", groupFrame).putInt("look_resbadge", resBadge).putInt("look_layout", layout).putInt("look_tvdesign", tvDesign).putBoolean("look_bigtext", bigText).putInt("look_scale", uiScale).apply()
+            .putBoolean("look_groupframe", groupFrame).putInt("look_resbadge", resBadge).putInt("look_layout", layout).putInt("look_tvdesign", 1).putBoolean("look_bigtext", bigText).putInt("look_scale", uiScale).apply()
     }
 }
 
