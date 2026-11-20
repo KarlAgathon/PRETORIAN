@@ -39,7 +39,6 @@ android {
         getByName("release") {
             isMinifyEnabled = false
             signingConfig = signingConfigs.findByName("lead")
-                ?: throw GradleException("Signing key missing: set the GitHub secrets LEAD_KEYSTORE_B64 and LEAD_KEY_PASSWORD")
         }
     }
     compileOptions {
@@ -62,7 +61,6 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("io.coil-kt:coil-compose:2.7.0")
     // QR code for "type on the phone" (Add playlist): ZXing core only, no camera code
-    implementation("com.google.zxing:core:3.5.3")
     implementation("com.google.zxing:core:3.5.3")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     testImplementation("junit:junit:4.13.2")

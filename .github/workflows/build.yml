@@ -27,6 +27,7 @@ jobs:
         with:
           gradle-version: "8.9"
       - name: Signing key (from secrets)
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
         env:
           KS: ${{ secrets.LEAD_KEYSTORE_B64 }}
         run: |
@@ -46,7 +47,7 @@ jobs:
         env:
           LEAD_KEY_PASSWORD: ${{ secrets.LEAD_KEY_PASSWORD }}
           TMDB_KEY: ${{ secrets.TMDB_KEY }}
-      - name: Sports review Android lint
+      - name: Android lint
         if: github.event_name == 'pull_request' || startsWith(github.ref, 'refs/heads/maintenance/')
         run: gradle lintRelease --no-daemon
         env:
@@ -56,8 +57,9 @@ jobs:
         if: always()
         run: rm -f app/release.keystore
       - name: Rename APK
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
         run: cp app/build/outputs/apk/release/*.apk Pretorian.apk
-      - if: github.event_name != 'pull_request'
+      - if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
         uses: actions/upload-artifact@v4
         with:
           name: Pretorian-apk
@@ -65,6 +67,7 @@ jobs:
 
       # New versionName in app/build.gradle.kts on main/master -> automatic release v<versionName>
       - name: Read version
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
         id: v
         env:
           GH_TOKEN: ${{ github.token }}
