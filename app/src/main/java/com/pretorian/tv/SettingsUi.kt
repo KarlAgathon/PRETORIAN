@@ -1273,12 +1273,12 @@ fun SettingsScreen2(nav: Nav) {
         return
     }
     val sections = SECTIONS2.filter { SetMode.advanced || it.id in BASIC }
-    var path by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(arrayListOf("overview")) }
+    var path by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(listOf("overview")) }
     val page = path.last()
     val savedPages = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
     var search by remember { mutableStateOf(false) }
     fun open(id: String) {
-        if (page != id) path = ArrayList(path + id)
+        if (page != id) path = path + id
     }
     LaunchedEffect(SettingsNav.section) {
         SettingsNav.section?.let { target ->
@@ -1293,7 +1293,7 @@ fun SettingsScreen2(nav: Nav) {
     }
     BackHandler(path.size > 1 && !search) {
         savedPages.removeState(page)
-        path = ArrayList(path.dropLast(1))
+        path = path.dropLast(1)
     }
     savedPages.SaveableStateProvider(page) {
         var selected by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
