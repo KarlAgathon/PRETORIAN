@@ -68,6 +68,7 @@ object TvMemory {
     var group: GroupRef? = null
     var channel = -1
     var returnUrl: String? = null
+    var playbackOrder: Map<String, Int>? = null
     var viewportGroup: String? = null
     var firstVisibleChannel = 0
     var channelScrollOffset = 0
@@ -410,6 +411,10 @@ private fun TvList(nav: Nav) {
     WrapEffect(st.wrap, gState)
     val coming = remember { TvMemory.restore && TvMemory.group != null && TvMemory.channel >= 0 }
     // New Dawn opens TV on the groups (one level at a time); only the way back from the player lands in the channels
+    val returnOrder = remember {
+        TvMemory.playbackOrder.takeIf { coming && TvMemory.viewportGroup == st.group?.key }
+            .also { TvMemory.playbackOrder = null }
+    }
     var inChannels by remember { mutableStateOf(coming) }
     var focusedCh by remember { mutableStateOf<Channel?>(null) }
     LaunchedEffect(Unit) {
@@ -501,7 +506,12 @@ private fun TvList(nav: Nav) {
             else -> 0
         }
         val chs by key(g?.key) {
-            load(st.rev, listRev, membershipRev, keep = true) { g?.let { channelsOf(ctx, it) } ?: emptyList() }
+            val order = remember { returnOrder.takeIf { coming && TvMemory.restore && TvMemory.viewportGroup == g?.key } }
+            load(st.rev, listRev, membershipRev, keep = true) {
+                val channels = g?.let { channelsOf(ctx, it) }.orEmpty()
+                if (order == null || listRev != 0) channels
+                else channels.sortedBy { order[it.url] ?: Int.MAX_VALUE }
+            }
         }
         var opts by remember { mutableStateOf<Channel?>(null) }
         LaunchedEffect(focusedCh, chs) {
@@ -723,6 +733,9 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                 onClick = {
                                     gate.run("c:${ch.url}", locked) {
                                         ovr.countWatch(ch)
+                                        TvMemory.playbackOrder = if (g.pid != null && Look.mostWatched) {
+                                            list.indices.associateBy { list[it].url }
+                                        } else null
                                         TvMemory.viewportGroup = g.key
                                         TvMemory.firstVisibleChannel = cState.firstVisibleItemIndex
                                         TvMemory.channelScrollOffset = cState.firstVisibleItemScrollOffset
