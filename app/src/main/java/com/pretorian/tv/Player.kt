@@ -274,7 +274,6 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     var digits by remember { mutableStateOf("") }              // channel number typed on the remote
     var digitTick by remember { mutableIntStateOf(0) }
     var prevIndex by remember { mutableIntStateOf(-1) }
-    var saver by remember { mutableStateOf(false) }   // screen saver after a long pause
     var buffering by remember { mutableStateOf(true) }
     var favAsk by remember { mutableStateOf<Channel?>(null) }
     var okLong by remember { mutableStateOf(false) }
@@ -524,7 +523,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         var last = -1L; var lastFrames = -1; var lastBuf = -1L; var stuck = 0L; var why = ""
         while (true) {
             delay(500)
-            if (!Recover.on || error != null || resume != null || !player.playWhenReady || saver || !readyOnce[0]) { stuck = 0; last = -1; lastFrames = -1; continue }
+            if (!Recover.on || error != null || resume != null || !player.playWhenReady || !readyOnce[0]) { stuck = 0; last = -1; lastFrames = -1; continue }
             val pos = player.currentPosition
             val counters = player.videoDecoderCounters?.also { it.ensureUpdated() }
             val frames = counters?.renderedOutputBufferCount ?: -1
@@ -580,16 +579,6 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         Modifier.fillMaxSize().background(Color.Black)
             .focusRequester(focus)
             .onPreviewKeyEvent { e ->
-                // screen saver: OK goes on watching at once, any other button only closes it
-                if (saver) {
-                    if (e.type == KeyEventType.KeyDown) {
-                        saver = false
-                        if (e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter || e.key == Key.MediaPlay || e.key == Key.MediaPlayPause) player.play()
-                        // a live channel never stays frozen behind the saver: start it again
-                        if (s.live && !player.isPlaying) { player.playWhenReady = true; retryToken++ }
-                    }
-                    return@onPreviewKeyEvent true
-                }
                 // live TV: short OK pauses / plays, holding OK asks to add the channel to favourites
                 val okKey = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter
                 if (s.live && okKey && dialog == null && side == null && resume == null && !bar && error == null && digits.isEmpty() && favAsk == null) {
@@ -828,19 +817,6 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 skipPill = pill
             }
         }
-        // paused and no remote for the chosen time (every key press starts the count again)
-        // only a film or an episode that YOU paused: never a live channel, never a stream that stalls or reconnects
-        LaunchedEffect(playing, buffering, saver) {
-            if (saver) { if (playing) saver = false; return@LaunchedEffect }
-            if (s.live || playing || buffering || !Saver.on || player.playWhenReady) return@LaunchedEffect
-            val pausedAt = System.currentTimeMillis()
-            while (true) {
-                delay(1000)
-                if (player.playWhenReady || s.live) break
-                // counted from the pause or the last key, whichever is later
-                if (System.currentTimeMillis() - maxOf(pausedAt, Saver.lastKey) > Saver.delayMs) { saver = true; break }
-            }
-        }
         // "Skip intro" / "Next episode in 10 s" in the lower right corner
         skipPill?.let { k ->
             Box(Modifier.fillMaxSize().padding(end = 40.dp, bottom = 90.dp), contentAlignment = Alignment.BottomEnd) {
@@ -863,16 +839,13 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             }
         }
         // the stream sends no picture and no backup was found: say it plainly (a new try runs every 20 s)
-        if (frozenMsg && error == null && !saver) Box(Modifier.fillMaxSize().padding(bottom = 70.dp), contentAlignment = Alignment.BottomCenter) {
+        if (frozenMsg && error == null) Box(Modifier.fillMaxSize().padding(bottom = 70.dp), contentAlignment = Alignment.BottomCenter) {
             Row(Modifier.clip(Pill).background(Color(0xCC000000)).padding(horizontal = 18.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 androidx.compose.material3.CircularProgressIndicator(Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
                 T("Kanal trenutno ne šalje sliku · pokušavam ponovo…", 15.sp, Color.White, FontWeight.SemiBold)
             }
         }
-        if (saver) ModernScreenSaver(if (s.live) null else Paused(if (item.season != null) "Serija" else "Film", item.search?.let { cleanTitle(it).first } ?: item.title,
-            listOfNotNull(item.season?.let { trf("Sezona %s", it) }, item.episode?.let { trf("Epizoda %s", it) }, item.subtitle).joinToString(" · ").ifBlank { null },
-            item.logo, null, position, duration))
 
         error?.let { msg ->
             Column(Modifier.align(Alignment.Center).clip(Rnd(20.dp)).background(Color(0xE6151A23)).padding(28.dp),

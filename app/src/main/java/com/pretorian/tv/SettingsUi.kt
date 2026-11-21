@@ -1228,7 +1228,6 @@ private val SETTINGS_LINKS = mapOf(
     ),
     "notifications" to listOf(
         SettingsLink("reminders", "Podsjetnici", "Emisije, utakmice i obavještenja", R.drawable.lc_bell),
-        SettingsLink("saver", "Čuvar ekrana", "Sat, datum i prikaz pauze", R.drawable.lc_moon),
     ),
     "system" to listOf(
         SettingsLink("diagnostics", "Dijagnostika", "Protok, brzina, stabilnost i zapisi", R.drawable.lc_gauge2),
@@ -1366,7 +1365,6 @@ fun SettingsScreen2(nav: Nav) {
                     "language" -> LanguageV2()
                     "sports" -> SportV2()
                     "reminders" -> RemindersV2(nav)
-                    "saver" -> SaverV2()
                     "diagnostics" -> DiagnosticsV2()
                     "backup" -> BackupSettings()
                     "update" -> UpdateV2()

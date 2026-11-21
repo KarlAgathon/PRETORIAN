@@ -99,18 +99,6 @@ class MainActivity : ComponentActivity() {
         if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) try { coil.Coil.imageLoader(this).memoryCache?.clear() } catch (_: Exception) {}
     }
 
-    private var swallowUp = -1
-
-    // any key wakes the screen saver (and is used up for that)
-    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
-        val ok = event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == android.view.KeyEvent.KEYCODE_ENTER
-        if (event.action == android.view.KeyEvent.ACTION_DOWN && Saver.touch(ok)) { swallowUp = event.keyCode; return true }
-        // the release of the key that woke the screen saver is used up too (it must not press a button below)
-        if (event.action == android.view.KeyEvent.ACTION_UP && event.keyCode == swallowUp) { swallowUp = -1; return true }
-        if (Saver.showing || Saver.preview) return true
-        return super.dispatchKeyEvent(event)
-    }
-
     override fun onResume() {
         super.onResume()
         // give the system confirm screen a moment to send its answer first
@@ -276,12 +264,6 @@ fun PretorianApp() {
     LaunchedEffect(Reminders.rev) { ReminderReceiver.schedule(ctx) }
     // a playlist switched on or off: the same films / episodes are looked for in the switched-on ones
     LaunchedEffect(version) { delay(3_000); try { Watch.findAlternatives(ctx) } catch (_: Exception) {} }
-    // OK on the menus' screen saver: the latest "Continue watching" title plays right away
-    LaunchedEffect(Saver.resume) {
-        if (Saver.resume == 0) return@LaunchedEffect
-        val pr = Watch.continueList(ctx).firstOrNull()?.takeIf { Watch.blocked(ctx, it) == null }?.let { Watch.playable(ctx, it) } ?: return@LaunchedEffect
-        nav.push(Screen.Player(listOf(PlayItem(pr.title, pr.url, pr.poster, null, null, pr.series, pr.season, pr.episode)), 0, live = false))
-    }
     // the install confirm screen is opened from here, by the visible app (not from the background)
     LaunchedEffect(Updater.confirm) {
         val c = Updater.confirm ?: return@LaunchedEffect
@@ -362,7 +344,6 @@ fun PretorianApp() {
             UpdateAskDialog(nav)
             CrashGuardDialog(nav)
             GoalNoteOverlay()
-            MenuSaver(inPlayer = top is Screen.Player, onHome = top is Screen.Home)
         }
     }
     }

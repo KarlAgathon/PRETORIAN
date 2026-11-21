@@ -1,0 +1,75 @@
+name: Publish Stable
+
+# Manual only. Builds the signed APK from the chosen ref, runs the tests and publishes it as the public Stable
+# release with update.json. Requires typing "Publish Stable" (Prime Directive §10.3).
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag or commit to publish"
+        required: true
+      confirm:
+        description: 'Type exactly: Publish Stable'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: github.event.inputs.confirm == 'Publish Stable'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.inputs.ref }}
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+      - name: Signing key
+        env:
+          KS: ${{ secrets.LEAD_KEYSTORE_B64 }}
+          KEY_PASSWORD: ${{ secrets.LEAD_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KS" ] || [ -z "$KEY_PASSWORD" ]; then echo "::error::Signing secrets missing"; exit 1; fi
+          echo "$KS" | base64 -d > app/release.keystore
+      - run: python3 tools/check_i18n.py
+      - run: gradle testReleaseUnitTest assembleRelease --no-daemon
+        env:
+          LEAD_KEY_PASSWORD: ${{ secrets.LEAD_KEY_PASSWORD }}
+          TMDB_KEY: ${{ secrets.TMDB_KEY }}
+      - name: Remove signing key
+        if: always()
+        run: rm -f app/release.keystore
+      - name: Version, checksum and update.json
+        id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          CODE=$(grep -oP 'versionCode = \K[0-9]+' app/build.gradle.kts)
+          NAME=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          LIVE=$(curl -sL "https://github.com/${{ github.repository }}/releases/latest/download/update.json" | jq -r '.versionCode // 0' || echo 0)
+          if [ "$CODE" -le "$LIVE" ]; then echo "::error::versionCode $CODE must be higher than the live Stable $LIVE"; exit 1; fi
+          if gh release view "v$NAME" --repo "${{ github.repository }}" >/dev/null 2>&1; then echo "::error::v$NAME already exists"; exit 1; fi
+          cp app/build/outputs/apk/release/*.apk Pretorian.apk
+          SHA=$(sha256sum Pretorian.apk | cut -d' ' -f1)
+          NOTES=$(jq -Rs . < RELEASE_NOTES.txt)
+          echo "{\"versionCode\": $CODE, \"versionName\": \"$NAME\", \"apk\": \"https://github.com/${{ github.repository }}/releases/latest/download/Pretorian.apk\", \"sha256\": \"$SHA\", \"notes\": $NOTES}" > update.json
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "### Stable $NAME ($CODE)  SHA-256 \`$SHA\`" >> "$GITHUB_STEP_SUMMARY"
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.v.outputs.name }}
+          name: Media Center ${{ steps.v.outputs.name }}
+          target_commitish: ${{ github.sha }}
+          make_latest: "true"
+          body_path: RELEASE_NOTES.txt
+          files: |
+            Pretorian.apk
+            update.json

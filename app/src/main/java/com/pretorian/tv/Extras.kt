@@ -152,21 +152,6 @@ fun ExpiryChip() {
     }
 }
 
-/** Screen saver of the player: a long pause dims the picture and shows the clock. */
-@Composable
-fun ScreenSaver(title: String) {
-    var now by remember { mutableStateOf(Date()) }
-    LaunchedEffect(Unit) { while (true) { now = Date(); delay(10_000) } }
-    Box(Modifier.fillMaxSize().background(Color(0xF2000000)), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            T(SimpleDateFormat("HH:mm", Locale.getDefault()).format(now), 110.sp, Color.White, FontWeight.ExtraLight)  // i18n-ignore
-            T(SimpleDateFormat("EEEE, d. MMMM", Locale(Look.lang)).format(now).uppercase(), 15.sp, Color(0xFFC8CBD4))  // i18n-ignore
-            Spacer(Modifier.height(24.dp))
-            T(trf("⏸  %s · pauzirano", title), 14.sp, Color(0xFF9AA0AA))
-            T("bilo koja tipka – nastavi", 12.sp, Color(0xFF6B7080))
-        }
-    }
-}
 
 
 /** The new version asks once when PRETORIAN starts ("window at start"). */

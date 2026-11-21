@@ -37,7 +37,6 @@ object Lean {
     val search get() = Prefs.bool("lean_search", true)     // search list is built when Search is first opened
     val posters get() = Prefs.bool("lean_posters", true)   // posters in a smaller resolution
     val trim get() = Prefs.bool("lean_trim", true)         // memory freed when leaving the player
-    val saver get() = Prefs.bool("lean_saver", true)       // screen saver clock changes once a minute, no seconds
     val scan get() = Prefs.bool("lean_scan", true)         // new films / series checked once a day
     val ALL = listOf(
         Triple("lean_images", "Manje slika odjednom", "slike se drže u memoriji samo dok su na ekranu"),
@@ -45,7 +44,6 @@ object Lean {
         Triple("lean_search", "Pretraga kad je otvoriš", "lista se pravi tek pri prvom otvaranju"),
         Triple("lean_posters", "Plakati u manjoj rezoluciji", "na TV-u se razlika skoro ne vidi"),
         Triple("lean_trim", "Očisti memoriju poslije plejera", "velike liste i slike se oslobode"),
-        Triple("lean_saver", "Čuvar ekrana bez sekundi", "sat se mijenja jednom u minuti"),
         Triple("lean_scan", "Nove filmove i serije provjeri jednom dnevno", "umjesto svakih 12 sati"),
     )
 }
