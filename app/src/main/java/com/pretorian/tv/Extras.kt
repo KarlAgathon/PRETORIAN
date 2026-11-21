@@ -182,14 +182,14 @@ fun CrashGuardDialog(nav: Nav) {
     LaunchedEffect(Unit) { if (quick) { try { ctx.cacheDir.deleteRecursively() } catch (_: Exception) {}; Perf.set(1); Repo.clear() } }
     LaunchedEffect(Unit) { kotlinx.coroutines.delay(30_000); CrashGuard.clearQuick(); kotlinx.coroutines.delay(90_000); CrashGuard.clear() }   // quiet minutes: all fine again
     if (!open) return
-    Popup("PRETORIAN se ruši", onDismiss = { open = false; CrashGuard.clear(); CrashGuard.clearQuick() }, width = 600.dp) {
+    Popup("Aplikacija se ruši", onDismiss = { open = false; CrashGuard.clear(); CrashGuard.clearQuick() }, width = 600.dp) {
         T(if (quick) trf("Verzija %s se 5 puta srušila odmah pri pokretanju. Siguran start je već urađen. Vratiti zadnju Stable verziju?", BuildInfo.VERSION)
           else trf("Verzija %s se srušila više puta zaredom. Šta želiš?", BuildInfo.VERSION), 14.sp, C.Soft, maxLines = 4)
         OptionRow("Siguran start", R.drawable.lc_shield_check, sub = tr("briše keš i uključuje Lite"), color = C.Green) {
             try { ctx.cacheDir.deleteRecursively() } catch (_: Exception) {}
             Perf.set(1); Repo.clear(); CrashGuard.clear(); open = false
         }
-        OptionRow("Vrati prethodnu stabilnu verziju", R.drawable.lc_rotate_ccw, sub = tr("backup i stara verzija u Download/PRETORIAN")) {
+        OptionRow("Vrati prethodnu stabilnu verziju", R.drawable.lc_rotate_ccw, sub = tr("backup i stara verzija u Download/MediaCenter")) {
             CrashGuard.clear(); open = false; SettingsNav.section = "update"; nav.root(Screen.Settings)
         }
         OptionRow("Pokušaj ponovo", R.drawable.lc_x) { CrashGuard.clear(); open = false }

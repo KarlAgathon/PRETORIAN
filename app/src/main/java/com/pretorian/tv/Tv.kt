@@ -163,7 +163,9 @@ sealed class GRow {
     data class Header(val p: Playlist, val open: Boolean) : GRow()
     data class NewFav(val dummy: Int = 0) : GRow()
     data class NewGroup(val pid: String) : GRow()
-    val id get() = when (this) { is Group -> "g:" + ref.key; is Header -> "h:" + p.id; is NewFav -> "nf"; is NewGroup -> "ng:$pid" }
+    /** Sport: live matches and sports channels, the first row of TV (Sport has no entry of its own in the main menu) */
+    data class Sport(val dummy: Int = 0) : GRow()
+    val id get() = when (this) { is Group -> "g:" + ref.key; is Header -> "h:" + p.id; is NewFav -> "nf"; is NewGroup -> "ng:$pid"; is Sport -> "sport" }
 }
 
 internal fun groupFocusTarget(rows: List<GRow>, selected: GroupRef?): String? {
@@ -173,6 +175,7 @@ internal fun groupFocusTarget(rows: List<GRow>, selected: GroupRef?): String? {
 
 suspend fun groupRows(ctx: android.content.Context): List<GRow> {
     val out = ArrayList<GRow>()
+    out.add(GRow.Sport())
     if (Look.age && !Look.dawn && Recent.list().isNotEmpty()) out.add(GRow.Group(GroupRef(null, Category(RECENT_GROUP, tr("Zadnje gledano")))))
     Favs.lists(ctx).forEach { out.add(GRow.Group(GroupRef(null, Category(FAV_PREFIX + it.id, "★ " + it.name)))) }
     out.add(GRow.NewFav())
@@ -211,6 +214,7 @@ fun GroupColumn(
     state: androidx.compose.foundation.lazy.LazyListState, width: androidx.compose.ui.unit.Dp,
     title: String, sub: String?, onFocusGroup: (GroupRef) -> Unit, onOpen: (GroupRef) -> Unit, onMenu: (GroupRef) -> Unit,
     onHeader: (Playlist) -> Unit, onNewFav: () -> Unit, onNewGroup: (String) -> Unit, onFocusRow: (String) -> Unit,
+    onSport: () -> Unit = {},
     extra: (@Composable () -> Unit)? = null, containVerticalFocus: Boolean = false, classicStyle: Boolean = false, fillWidth: Boolean = false,
 ) {
     val ctx = LocalContext.current
@@ -284,6 +288,15 @@ fun GroupColumn(
                                 Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Ico(R.drawable.lc_plus, 15.dp, C.Muted); T("Nova lista favorita", 13.sp, C.Muted)
+                                }
+                            }
+                            is GRow.Sport -> Focusable(modifier = rowModifier.height(48.dp), onClick = onSport, onFocus = { onFocusRow(r.id) },
+                                focusRequester = if (containVerticalFocus) null else fr, shape = Rnd(12.dp), normal = Color.Transparent,
+                                focused = Dawn.pill, focusBorderColor = Color.Transparent, zoom = 1f) { f ->
+                                Row(Modifier.fillMaxSize().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    Ico(R.drawable.lc_trophy, 18.dp, if (f) Dawn.onPill else C.Text)
+                                    T("Sport", 18.sp, if (f) Dawn.onPill else C.Text, if (f) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, modifier = Modifier.weight(1f))
                                 }
                             }
                             is GRow.NewGroup -> Focusable(modifier = rowModifier, onClick = { onNewGroup(r.pid) }, onFocus = { onFocusRow(r.id) }, focusRequester = if (containVerticalFocus) null else fr,
@@ -444,7 +457,7 @@ private fun TvList(nav: Nav) {
                 onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
                 onHeader = { p -> TvFold.toggle(p.id); if (p.id in TvFold.open) Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
                 onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it },
-                onFocusRow = { st.focusKey = it })
+                onFocusRow = { st.focusKey = it }, onSport = { nav.push(Screen.Sports) })
         }
     } else {
         val g = st.group

@@ -211,7 +211,7 @@ object Net {
         val cm = NewContent.appCtx?.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
         cm?.getNetworkCapabilities(cm.activeNetwork)?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN) == true
     } catch (e: Throwable) { false }
-    private const val UA_DEFAULT = "Mozilla/5.0 (Linux; Android 10; TV) AppleWebKit/537.36 PRETORIAN/0.1"  // i18n-ignore
+    private const val UA_DEFAULT = "Mozilla/5.0 (Linux; Android 10; Android TV) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"  // i18n-ignore
     /** Settings › General › Network: own User-Agent for providers that only let certain apps in (empty = PRETORIAN's) */
     val UA get() = Prefs.str("net_ua").trim().ifBlank { UA_DEFAULT }
     /** udp://@239.1.1.1:1234 → http://proxy/udp/239.1.1.1:1234 (udpxy on the router), when a proxy is set */

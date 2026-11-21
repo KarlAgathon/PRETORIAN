@@ -83,7 +83,7 @@ object DeviceInfo {
             }
             out += tr("Mreža") to kind
         } catch (_: Exception) {}
-        out += tr("Način rada aplikacije") to (if (Perf.lite) "Lite" else "Full") + " · PRETORIAN ${BuildInfo.VERSION}"  // i18n-ignore
+        out += tr("Način rada aplikacije") to (if (Perf.lite) "Lite" else "Full") + " · Media Center ${BuildInfo.VERSION}"  // i18n-ignore
         return out
     }
 }

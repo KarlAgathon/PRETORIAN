@@ -161,7 +161,7 @@ object Updater {
             if (sig == false) {
                 file.delete(); Prefs.put("upd_file", ""); progress = -1
                 UpdLog.add(tr("Potpis ne odgovara: instalacija zaustavljena, fajl obrisan"))
-                status = tr("Potpis ne odgovara – fajl nije od PRETORIAN-a ili je oštećen"); return
+                status = tr("Potpis ne odgovara – fajl nije od ove aplikacije ili je oštećen"); return
             }
             UpdLog.add(if (sig == true) tr("Potpis provjeren ✓") else tr("Potpis se ne može provjeriti na ovom Androidu"))
             Prefs.put("upd_file", info.name)
@@ -361,7 +361,7 @@ object PublicFiles {
         if (Build.VERSION.SDK_INT >= 29) {
             val cv = android.content.ContentValues().apply {
                 put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, name)
-                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS + "/PRETORIAN")
+                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS + "/MediaCenter")
             }
             val uri = ctx.contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv) ?: throw IOException("Download")
             try {
@@ -372,7 +372,7 @@ object PublicFiles {
             }
         } else {
             @Suppress("DEPRECATION")
-            val dir = File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "PRETORIAN")
+            val dir = File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "MediaCenter")
             dir.mkdirs(); File(dir, name).outputStream().use { input.copyTo(it) }
         }
     }
@@ -389,8 +389,8 @@ object Rollback {
             val c = URL(r.apk).openConnection() as HttpURLConnection
             c.instanceFollowRedirects = true; c.connectTimeout = 15_000; c.readTimeout = 60_000
             c.inputStream.use { ins -> f.outputStream().use { ins.copyTo(it) } }
-            f.inputStream().use { PublicFiles.save(ctx, "Pretorian-${r.name}.apk", it) }
-            PublicFiles.save(ctx, "vrati.json", JSONObject().put("version", r.name).put("apk", "Pretorian-${r.name}.apk").put("backup", "backup-za-${r.name}.json").toString().toByteArray())
+            f.inputStream().use { PublicFiles.save(ctx, "MediaCenter-${r.name}.apk", it) }
+            PublicFiles.save(ctx, "vrati.json", JSONObject().put("version", r.name).put("apk", "MediaCenter-${r.name}.apk").put("backup", "backup-za-${r.name}.json").toString().toByteArray())
             f.delete()
             null
         } catch (e: Exception) { e.message ?: tr("nije uspjelo") } finally { busy = false }

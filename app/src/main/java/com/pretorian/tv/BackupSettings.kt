@@ -21,7 +21,7 @@ internal fun BackupSettings() {
     var reset by remember { mutableStateOf(false) }
     val parts = csv("backup_parts", (0 until 10).joinToString(",")).mapNotNull { it.toIntOrNull() }.toSet()
     fun restoreNow(pass: String?) {
-        try { Backup.restore(ctx, text ?: return, pass); Toast.makeText(ctx, tr("Sve je vraćeno. PRETORIAN se ponovo pokreće."), Toast.LENGTH_LONG).show()
+        try { Backup.restore(ctx, text ?: return, pass); Toast.makeText(ctx, tr("Sve je vraćeno. Aplikacija se ponovo pokreće."), Toast.LENGTH_LONG).show()
             (ctx as? android.app.Activity)?.recreate()
         } catch (e: Exception) { Toast.makeText(ctx, e.message ?: tr("Vraćanje nije uspjelo"), Toast.LENGTH_LONG).show() }
         step = null
@@ -43,7 +43,7 @@ internal fun BackupSettings() {
                 done = try { trf("✓ Spremljeno u %s", Backup.saveNow(ctx, usb, parts)) } catch (e: Exception) { e.message ?: tr("Nije uspjelo") }
                 rev++
             }
-            SetDrop("Gdje", if (usbIn) null else "USB se pojavi kad ga priključiš", if (usbIn) listOf("Download/PRETORIAN", "USB") else listOf("Download/PRETORIAN"),
+            SetDrop("Gdje", if (usbIn) null else "USB se pojavi kad ga priključiš", if (usbIn) listOf("Download/MediaCenter", "USB") else listOf("Download/MediaCenter"),
                 if (usb) 1 else 0) { Prefs.put("backup_where", if (it == 1) "2" else "0"); rev++ }
             if (usb && !FileAccess.hasAll(ctx)) Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 T("Za USB aplikacija treba dozvolu za fajlove.", 13.sp, C.Amber, maxLines = 1, modifier = Modifier.weight(1f))
@@ -61,7 +61,7 @@ internal fun BackupSettings() {
                 SetRow(java.text.SimpleDateFormat("EEE, dd.MM.yy · HH:mm", java.util.Locale(Look.lang)).format(java.util.Date(f.at)),
                     trf("%s · %s KB", tr(f.where), (f.size / 1024).coerceAtLeast(1)), tr("Vrati")) {
                     text = try { f.read() } catch (_: Exception) { null }
-                    if (text == null || Backup.summary(text!!) == null) Toast.makeText(ctx, tr("Fajl nije PRETORIAN backup"), Toast.LENGTH_LONG).show() else step = "preview"
+                    if (text == null || Backup.summary(text!!) == null) Toast.makeText(ctx, tr("Fajl nije backup ove aplikacije"), Toast.LENGTH_LONG).show() else step = "preview"
                 }
             }
             SetRow("Drugi fajl…", ".json s USB-a ili diska", tr("Izaberi")) { step = "pick" }
@@ -72,7 +72,7 @@ internal fun BackupSettings() {
     when (step) {
         "pick" -> FilePicker("Izaberi backup", setOf("json"), onDismiss = { step = null }) { bytes, _ ->
             val t = String(bytes)
-            if (Backup.summary(t) == null) { Toast.makeText(ctx, tr("Fajl nije PRETORIAN backup"), Toast.LENGTH_LONG).show(); step = null } else { text = t; step = "preview" }
+            if (Backup.summary(t) == null) { Toast.makeText(ctx, tr("Fajl nije backup ove aplikacije"), Toast.LENGTH_LONG).show(); step = null } else { text = t; step = "preview" }
         }
         "preview" -> {
             val sm = text?.let { Backup.summary(it) }

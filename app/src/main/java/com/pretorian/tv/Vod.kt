@@ -839,7 +839,7 @@ fun MovieDetailScreen(v: Vod, nav: Nav) {
     if (ext) ExternalPicker(v.url, m?.title ?: v.name, Watch.get(ctx, v.url)?.pos ?: 0, onDismiss = { ext = false })
     if (extFailed) Popup("Eksterni player se zatvorio", onDismiss = { extFailed = false }) {
         T("Izgleda da player nije mogao pustiti film.", 14.sp, C.Soft, maxLines = 2)
-        OptionRow("Pusti u PRETORIAN plejeru", R.drawable.lc_play, color = C.Green) {
+        OptionRow("Pusti u ugrađenom plejeru", R.drawable.lc_play, color = C.Green) {
             extFailed = false
             nav.push(Screen.Player(listOf(choice.apply(PlayItem(m?.title ?: v.name, v.url, v.poster, null, null, v.name))), 0, live = false))
         }

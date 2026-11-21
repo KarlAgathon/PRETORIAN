@@ -58,7 +58,7 @@ object Http {
             .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS).readTimeout(60, java.util.concurrent.TimeUnit.SECONDS).build()
     }
     private fun viaDoh(url: String, headers: Map<String, String>, body: String?): okhttp3.Response {
-        val b = okhttp3.Request.Builder().url(url).header("User-Agent", "PRETORIAN v${BuildInfo.VERSION}").header("Accept", "application/json")
+        val b = okhttp3.Request.Builder().url(url).header("User-Agent", "MediaCenter/${BuildInfo.VERSION}").header("Accept", "application/json")
         headers.forEach { (k, v) -> b.header(k, v) }
         if (body != null) b.post(body.toRequestBody("application/json".toMediaTypeOrNull()))
         return client.newCall(b.build()).execute()
@@ -76,7 +76,7 @@ object Http {
     private fun requestPlain(url: String, headers: Map<String, String>, body: String?): String {
         val c = URL(url).openConnection() as HttpURLConnection
         c.connectTimeout = 15_000; c.readTimeout = 30_000
-        c.setRequestProperty("User-Agent", "PRETORIAN v${BuildInfo.VERSION}")
+        c.setRequestProperty("User-Agent", "MediaCenter/${BuildInfo.VERSION}")
         c.setRequestProperty("Accept", "application/json")
         headers.forEach { (k, v) -> c.setRequestProperty(k, v) }
         try {
@@ -105,7 +105,7 @@ object Http {
         repeat(6) {
             val c = URL(cur).openConnection() as HttpURLConnection
             c.connectTimeout = 15_000; c.readTimeout = 60_000; c.instanceFollowRedirects = false
-            c.setRequestProperty("User-Agent", ua ?: "PRETORIAN v${BuildInfo.VERSION}")
+            c.setRequestProperty("User-Agent", ua ?: "MediaCenter/${BuildInfo.VERSION}")
             try {
                 val code = c.responseCode
                 if (code in 300..399) { cur = URL(URL(cur), c.getHeaderField("Location") ?: throw IOException("redirect")).toString(); return@repeat }

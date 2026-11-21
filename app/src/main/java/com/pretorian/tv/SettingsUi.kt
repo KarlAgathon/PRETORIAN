@@ -542,15 +542,6 @@ fun SettingsScreen(nav: Nav) {
         Column(Modifier.width(railW).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 8.dp, top = 6.dp, bottom = 16.dp)
             .onFocusChanged { if (classic && it.hasFocus) Chrome.rail = 2 },
             verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            if (!slim) {
-                Row(Modifier.fillMaxWidth().padding(start = 8.dp, top = 2.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                    Ico(R.drawable.lc_shield_check, 25.dp, Silver.TextSoft)
-                    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-                        T("PRETORIAN", 16.sp, C.Text, FontWeight.ExtraBold, maxLines = 1)
-                        T("POSTAVKE", 9.sp, Silver.TextSoft, FontWeight.Bold, maxLines = 1)
-                    }
-                }
-            }
             // search in all settings
             Focusable(modifier = Modifier.fillMaxWidth().height(40.dp).padding(bottom = 4.dp), onClick = { search = true }, shape = Pill,
                 normal = Color.White.copy(alpha = 0.06f), focused = C.Red, zoom = 1f) { f ->
@@ -1194,7 +1185,7 @@ private fun PlayerV2(openSub: (String) -> Unit) {
                 var langEdit by remember { mutableStateOf<String?>(null) }
                 SetRow("Jezici titlova po redu", "prvi koji postoji se uključi", langList(Prefs.subLangs)) { langEdit = "sub" }
                 SetRow("Jezici zvuka po redu", "prvi koji postoji se uključi", langList(Prefs.audioLangs)) { langEdit = "audio" }
-                val fm = listOf("" to tr("Pitaj svaki put"), "builtin" to tr("PRETORIAN (ugrađeni)")) + FileAccess.pickers(ctx).map { it.pkg to it.label }
+                val fm = listOf("" to tr("Pitaj svaki put"), "builtin" to tr("Ugrađeni")) + FileAccess.pickers(ctx).map { it.pkg to it.label }
                 SetDrop("File manager", "za titlove i backup s USB-a", fm.map { it.second }, fm.indexOfFirst { it.first == FileAccess.app }.coerceAtLeast(0)) { FileAccess.app = fm[it].first; rev++ }
                 when (langEdit) {
                     "sub" -> LangOrderPicker("Jezici titla", Prefs.subLangs.split(',').filter { it.isNotBlank() }, onDismiss = { langEdit = null; SetFocus.tick++ }) { Prefs.subLangs = it.joinToString(","); langEdit = null; rev++ }
@@ -1366,7 +1357,7 @@ private fun RemindersV2(nav: Nav) {
             SetSwitch("Zvuk obavijesti", null, Prefs.bool("rem_sound", true), new = true) { Prefs.put("rem_sound", it) }
             SetSwitch("Utakmice koje pratiš", "same dobiju podsjetnik prije početka", Prefs.str("sport_team_remind", "1") != "0") { Prefs.put("sport_team_remind", if (it) "1" else "0"); rev++ }
             SetSection("Ostalo")
-            SetDrop("Kad je aplikacija zatvorena", "ne radi na svim uređajima", listOf("Otvori PRETORIAN", "Ništa"), if (Reminders.wake) 0 else 1, new = true) { Reminders.wake = it == 0; rev++ }
+            SetDrop("Kad je aplikacija zatvorena", "ne radi na svim uređajima", listOf("Otvori aplikaciju", "Ništa"), if (Reminders.wake) 0 else 1, new = true) { Reminders.wake = it == 0; rev++ }
             SetDrop("Stari podsjetnici", null, listOf("Obriši nakon 1 dan", "Obriši nakon 7 dana", "Obriši odmah"),
                 listOf(24, 168, 1).indexOf(Prefs.str("rem_keep", "24").toIntOrNull() ?: 24).coerceAtLeast(0), new = true) { Prefs.put("rem_keep", listOf(24, 168, 1)[it].toString()); rev++ }
         }
@@ -1439,7 +1430,7 @@ private fun GeneralV2() {
             SetSection("Pokretanje")
             SetDrop("Kad se aplikacija otvori, prvo vidiš", "Nazad s tog ekrana vodi na Početnu",
                 listOf("Početna", "TV", "Filmovi", "Serije", "Sports Center", "Zadnji kanal"), General.start) { Prefs.put("start_screen", it.toLong()); rev++ }
-            SetSwitch("Pokreni s boxom", "PRETORIAN se otvori kad se box upali", General.boot) { Prefs.put("gen_boot", it); rev++ }
+            SetSwitch("Pokreni s boxom", "Aplikacija se otvori kad se box upali", General.boot) { Prefs.put("gen_boot", it); rev++ }
             SetSection("Izlaz")
             SetSwitch("Potvrdi izlaz", "Nazad na Početnoj prvo pita", General.confirmExit) { Prefs.put("gen_exit", it); rev++ }
             SetSection("Rad u pozadini")
@@ -1601,7 +1592,7 @@ private fun UpdateV2() {
                     Button("Pauza", R.drawable.lc_pause) { Updater.pause() }
                     Button("Otkaži", R.drawable.lc_x) { Updater.cancel = true }
                 }
-            } else if (pr == 101) T("Instaliram… Ne klikaj ponovo, Android sam završava i PRETORIAN se ponovo pokrene.", 12.sp, C.Text, maxLines = 2)
+            } else if (pr == 101) T("Instaliram… Ne klikaj ponovo, Android sam završava i aplikacija se ponovo pokrene.", 12.sp, C.Text, maxLines = 2)
             Updater.signature?.let { ok ->
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Ico(if (ok) R.drawable.lc_shield_check else R.drawable.lc_x, 14.dp, if (ok) C.Green else C.Danger)
@@ -1635,8 +1626,8 @@ private fun UpdateV2() {
     back?.let { r ->
         Popup(trf("Vrati na %s", r.name), { back = null; backDone = false; backErr = null }) {
             if (!backDone) {
-                T("Android ne dozvoljava da se aplikacija sama vrati na stariju verziju. Zato PRETORIAN radi ovo:", 14.sp, C.Text, maxLines = 3)
-                listOf("Sprema tvoje postavke u Download/PRETORIAN", "Skida stariju verziju (APK) u isti folder", "Deinstalira se",
+                T("Android ne dozvoljava da se aplikacija sama vrati na stariju verziju. Zato aplikacija radi ovo:", 14.sp, C.Text, maxLines = 3)
+                listOf("Sprema tvoje postavke u Download/MediaCenter", "Skida stariju verziju (APK) u isti folder", "Deinstalira se",
                     "Instaliraš stari APK (LEAD Launcher ili adb)", "Pri pokretanju vratiš postavke iz backupa").forEachIndexed { k, l -> T("${k + 1}. " + tr(l), 13.sp, C.Soft, maxLines = 2) }
                 backErr?.let { T(trf("Nije uspjelo: %s", it), 12.sp, C.Danger, maxLines = 2) }
                 OptionRow(if (Rollback.busy) "Pripremam…" else "OK, pripremi i deinstaliraj", R.drawable.lc_download, color = C.Amber) {
@@ -1644,8 +1635,8 @@ private fun UpdateV2() {
                 }
                 OptionRow("Odustani", R.drawable.lc_x) { back = null }
             } else {
-                T(trf("Spremljeno u Download/PRETORIAN: Pretorian-%s.apk i backup.", r.name), 14.sp, C.Green, maxLines = 3)
-                OptionRow("Deinstaliraj PRETORIAN sada", R.drawable.lc_trash_2, color = C.Danger) { Rollback.uninstall(ctx) }
+                T(trf("Spremljeno u Download/MediaCenter: MediaCenter-%s.apk i backup.", r.name), 14.sp, C.Green, maxLines = 3)
+                OptionRow("Deinstaliraj aplikaciju sada", R.drawable.lc_trash_2, color = C.Danger) { Rollback.uninstall(ctx) }
                 OptionRow("Kasnije", R.drawable.lc_x) { back = null; backDone = false }
             }
         }
@@ -1659,155 +1650,56 @@ private fun AboutV2(onSub: (String) -> Unit, onSection: (String) -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var dlg by remember { mutableStateOf<String?>(null) }
-    var cacheMb by remember { mutableStateOf(0L) }
     val crash = remember { try { java.io.File(ctx.filesDir, "last_crash.txt").takeIf { it.exists() }?.readText() } catch (e: Exception) { null } }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        // ---- hero: logo, name, version, badges and the help QR
-        Row(Modifier.fillMaxWidth().clip(Rnd(20.dp)).background(C.CardHi).border(1.dp, C.Line, Rnd(20.dp)).padding(18.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-            // only the logo (no "About / PRETORIAN" next to it): its frame follows the theme so it is always clearly visible
-            LogoTile(96.dp)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                // compact: "v1.0.7" plus STABLE / Beta, so nothing is cut on any screen
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    T("v" + BuildInfo.VERSION, 22.sp, C.Text, FontWeight.ExtraBold, maxLines = 1)  // i18n-ignore
-                    val stable = Updater.stableName == BuildInfo.VERSION
-                    if (stable) Box(Modifier.clip(Pill).background(Color(0xFFFBBF24).copy(alpha = 0.18f)).padding(horizontal = 8.dp, vertical = 2.dp)) {
-                        T("STABLE", 10.sp, Color(0xFFFBBF24), FontWeight.Bold, maxLines = 1)  // i18n-ignore
-                    }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    val u = Updater.available
-                    Box(Modifier.clip(Pill).background((if (u != null) C.Amber else C.Green).copy(alpha = 0.16f)).padding(horizontal = 9.dp, vertical = 3.dp)) {
-                        T(if (u != null) trf("Dostupna %s", u.name) else tr("✓ Najnovija verzija"), 11.sp, if (u != null) C.Amber else C.Green, FontWeight.Bold, maxLines = 1)
-                    }
-                    listOf(if (Perf.lite) "Lite" else "Full").forEach { b ->  // i18n-ignore
-                        Box(Modifier.clip(Pill).background(Color.White.copy(alpha = 0.08f)).padding(horizontal = 9.dp, vertical = 3.dp)) { T(b, 11.sp, C.Text, FontWeight.Bold) }
-                    }
-                }
-            }
-            // the score of this box, clear at the top: green Full, yellow / red Lite; OK shows where the points come from
-            val sc = Perf.score
-            val scColor = if (sc >= 70) C.Green else if (sc >= 50) C.Amber else C.Danger
-            Focusable(onClick = { dlg = "score" }, shape = Rnd(16.dp), normal = scColor.copy(alpha = 0.12f), focused = scColor.copy(alpha = 0.3f), zoom = 1.03f,
-                modifier = Modifier.width(184.dp).border(1.dp, scColor.copy(alpha = 0.6f), Rnd(16.dp))) { f ->
-                Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp).then(if (f) Modifier else Modifier), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    FitText(tr("Ocjena boxa").uppercase(), 10.sp, scColor, FontWeight.Bold, spacing = 1.5f)
-                    Row(verticalAlignment = Alignment.Bottom) {
-                        T(sc.toString(), 38.sp, C.Text, FontWeight.ExtraBold)
-                        T("/100", 16.sp, C.Muted, FontWeight.Bold, modifier = Modifier.padding(bottom = 6.dp, start = 2.dp))  // i18n-ignore
-                    }
-                    ThinBar(sc / 100f, scColor, Modifier.fillMaxWidth(), 6.dp)
-                    Row { FitText("● " + (if (Perf.lite) "Lite" else "Full") + " " + tr("mod"), 11.sp, scColor, FontWeight.Bold, Modifier.weight(1f)); T("OK ›", 11.sp, C.Muted) }  // i18n-ignore
-                }
-            }
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                val qr = remember { qrBitmap("https://github.com/KarlAgathon/PRETORIAN/issues", 240) }  // i18n-ignore
-                if (qr != null) androidx.compose.foundation.Image(qr, null, Modifier.size(80.dp).clip(Rnd(8.dp)))
-                T("Pomoć na telefonu", 10.sp, C.Muted)
-            }
-        }
-        val dev = remember { DeviceInfo.head(ctx) }
-        val lastCheck = Prefs.long("upd_checked_at", 0L)
-        CardGrid(3, listOf(
-            { m -> InfoCard("O uređaju", android.os.Build.MODEL, tr("procesor, RAM, ekran, mreža"), R.drawable.lc_monitor, Silver.TextSoft, m, onClick = { onSub("device") }) },
-            { m -> InfoCard("Šta je novo", trf("Verzija %s", BuildInfo.VERSION), tr("promjene u ovoj verziji"), R.drawable.lc_star, Color(0xFFF59E0B), m, onClick = { WhatsNew.show = true }) },
-            { m -> InfoCard("Autor", "Svi3e", tr("PRETORIAN tim"), R.drawable.lc_user, Silver.TextSoft, m, onClick = { dlg = "author" }) },  // i18n-ignore
-            { m -> InfoCard("Kontakt", "t3smo@aol.com", tr("prijedlozi i greške"), R.drawable.lc_file_text, Silver.TextSoft, m, onClick = { dlg = "contact" }) },  // i18n-ignore
-            { m -> InfoCard("Izvještaj o grešci", if (crash == null) tr("Nema grešaka") else tr("Ima zapis"), tr("pogledaj ili izvezi zapis"), R.drawable.lc_file, Color(0xFFEF4444), m,
-                titleColor = if (crash == null) C.Text else C.Amber, onClick = { dlg = "crash" }) },
-            { m -> InfoCard("Privatnost", tr("Šta se čuva i gdje"), tr("sve ostaje na uređaju"), R.drawable.lc_shield_check, Color(0xFF22C55E), m, onClick = { dlg = "priv" }) },
-            { m -> InfoCard("Licence", tr("Otvoreni kod"), "Media3, Coil, OkHttp, zxing", R.drawable.lc_list, C.Muted, m, onClick = { dlg = "lic" }) },  // i18n-ignore
-            { m -> InfoCard("Ažuriranje", tr("Provjeri sada"), if (lastCheck > 0) tr("zadnja provjera") + ": " + java.text.SimpleDateFormat("dd.MM. HH:mm", java.util.Locale.US).format(java.util.Date(lastCheck)) else null,  // i18n-ignore
-                R.drawable.lc_refresh_cw, Silver.TextSoft, m, onClick = { onSection("update") }) },
-            { m -> InfoCard("Pomoć", tr("Kratko uputstvo"), tr("prvi koraci, daljinski, prečice"), R.drawable.lc_info, Color(0xFF9CA3AF), m, onClick = { dlg = "help" }) },
-        ))
+    SetPage("O aplikaciji", "Media Center " + BuildInfo.VERSION) {
+        val u = Updater.available
+        SetRow("Verzija", if (u != null) trf("Dostupna %s", u.name) else tr("✓ Najnovija verzija"), BuildInfo.VERSION,
+            valueColor = if (u != null) C.Amber else C.Green) { onSection("update") }
+        SetRow("Šta je novo", trf("Verzija %s", BuildInfo.VERSION)) { WhatsNew.show = true }
+        SetRow("O uređaju", tr("procesor, RAM, ekran, mreža"), android.os.Build.MODEL) { onSub("device") }
+        SetRow("Ocjena uređaja", tr(if (Perf.lite) "Lite" else "Full"), "${Perf.score}/100") { dlg = "score" }  // i18n-ignore
+        SetRow("Izvještaj o greškama", tr("pogledaj ili izvezi zapis"), if (crash == null) tr("Nema grešaka") else tr("Ima zapis"),
+            valueColor = if (crash == null) null else C.Amber) { dlg = "crash" }
+        SetRow("Privatnost", tr("sve ostaje na uređaju")) { dlg = "priv" }
+        SetRow("Licence", tr("Otvoreni kod")) { dlg = "lic" }
+        SetRow("Pomoć", tr("prvi koraci, daljinski, prečice")) { dlg = "help" }
     }
     when (dlg) {
-        "dev" -> Popup("O uređaju", { dlg = null }, width = 640.dp) {
-            val rows = remember { DeviceInfo.read(ctx) }
-            rows.forEach { (k, v) ->
-                Row(Modifier.fillMaxWidth().clip(Rnd(10.dp)).background(C.Rail).padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    T(k, 13.sp, C.Muted, modifier = Modifier.width(170.dp))
-                    T(v, 13.sp, C.Text, FontWeight.SemiBold, maxLines = 2, modifier = Modifier.weight(1f))
-                }
-            }
-        }
         "score" -> Popup(trf("Ocjena boxa %s/100", Perf.score), { dlg = null }, width = 600.dp) {
             Perf.parts.forEach { (k, v) ->
                 Row(Modifier.fillMaxWidth().clip(Rnd(10.dp)).background(C.Rail).padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     T(k, 13.sp, C.Muted, modifier = Modifier.weight(1f)); T(v, 13.sp, C.Text, FontWeight.Bold)
                 }
             }
-            T(if (Perf.weak) "Ispod 70 bodova ili manje od 3 GB RAM-a: Lite štedi memoriju i radi glađe." else "70 bodova i više: Full, puni izgled.", 13.sp, C.Soft, maxLines = 2)
-            T("Mod možeš promijeniti u Izgled › Mod programa.", 12.sp, C.Muted)
             T("Ocjena se izmjeri jednom i ostaje ista.", 12.sp, C.Muted)
             OptionRow("Izmjeri ponovo", R.drawable.lc_refresh_cw) { Perf.remeasure(ctx); dlg = null; scope.launch { delay(50); dlg = "score" } }
-        }
-        "author" -> Popup("Autor", { dlg = null }) {
-            T("Svi3e", 22.sp, C.Text, FontWeight.ExtraBold)  // i18n-ignore
-            T("PRETORIAN je napravljen za porodični TV: brz, jednostavan i bez reklama.", 14.sp, C.Soft, maxLines = 4)
-            T("github.com/KarlAgathon/PRETORIAN", 13.sp, C.Muted)  // i18n-ignore
-        }
-        "contact" -> Popup("Kontakt", { dlg = null }) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                val qr = remember { qrBitmap("mailto:t3smo@aol.com?subject=PRETORIAN%20" + BuildInfo.VERSION, 240) }  // i18n-ignore
-                if (qr != null) androidx.compose.foundation.Image(qr, null, Modifier.size(110.dp).clip(Rnd(8.dp)))
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    T("t3smo@aol.com", 18.sp, C.Text, FontWeight.Bold)  // i18n-ignore
-                    T("Skeniraj telefonom i napiši e-mail. Navedi model uređaja i verziju.", 13.sp, C.Soft, maxLines = 3)
-                }
-            }
         }
         "help" -> Popup("Kratko uputstvo", { dlg = null }, width = 640.dp) {
             listOf("OK otvara, dugi OK otvara meni (označi, dodaj na listu, sakrij).",
                 "Nazad uvijek ide jedan korak nazad i ostaje u istoj sekciji.",
                 "U plejeru: ▲ ▼ mijenja kanal, ◀ ▶ premotava, OK pauza.",
                 "Brojevi na daljinskom biraju kanal; 0 vraća na prethodni.",
-                "Postavke › Jednostavni mod: samo TV, Filmovi i Serije, izlaz s PIN-om.",
                 "Zadani PIN je 0000 – promijeni ga u Postavkama.").forEach { T("• " + tr(it), 14.sp, C.Soft, maxLines = 3) }
         }
-        "lic" -> Popup("Licence", { dlg = null }) {
-            listOf("Jetpack Compose · Apache 2.0", "Media3 / ExoPlayer · Apache 2.0", "Coil · Apache 2.0", "OkHttp · Apache 2.0", "Lucide ikone · ISC", "Inter font · OFL",
-                "TMDB · This product uses the TMDB API but is not endorsed or certified by TMDB.", "PRETORIAN · MIT · github.com/KarlAgathon/PRETORIAN").forEach { T(it, 13.sp, C.Soft, maxLines = 2) }  // i18n-ignore
+        "lic" -> Popup("Licence", { dlg = null }, width = 720.dp) {
+            listOf("Media Center · MIT", "Jetpack Compose · Apache 2.0", "Media3 / ExoPlayer · Apache 2.0", "Coil · Apache 2.0", "OkHttp · Apache 2.0", "ZXing · Apache 2.0",
+                "Lucide ikone · ISC", "Inter font · SIL Open Font License 1.1",
+                "FFmpeg audio dekoder (Jellyfin media3-ffmpeg-decoder) · GPL-3.0. Izvorni kod: github.com/KarlAgathon/PRETORIAN",
+                "TMDB · This product uses the TMDB API but is not endorsed or certified by TMDB.").forEach { T(it, 13.sp, C.Soft, maxLines = 3) }  // i18n-ignore
         }
         "priv" -> Popup("Privatnost", { dlg = null }) {
-            T("Playliste, lozinke, PIN, favoriti i gledano čuvaju se samo na ovom uređaju. Na internet idu samo zahtjevi prema tvom provideru, slike filmova (TMDB) i, ako je uključiš, AI pretraga.", 13.sp, C.Soft, maxLines = 8)
+            T("Playliste, lozinke, PIN, favoriti i gledano čuvaju se samo na ovom uređaju. Na internet idu samo zahtjevi prema tvom provideru, slike i opisi filmova (TMDB) i provjera nove verzije.", 13.sp, C.Soft, maxLines = 8)
         }
         "crash" -> Popup("Izvještaj o greškama", { dlg = null }, width = 760.dp) {
             T((crash ?: tr("Nema grešaka")).take(1500), 11.sp, C.Soft, maxLines = 24)
-            OptionRow("Izvezi log za podršku", R.drawable.lc_download, sub = "na USB ili u folder") { dlg = "log" }
-            // all crashes and freezes (last 10) from a laptop, without touching the box
             T("Sa laptopa (zadnjih 10 padova i zamrzavanja):", 12.sp, C.Muted)
             T("adb pull " + CrashLog.ADB_DIR, 13.sp, C.Text, FontWeight.Bold, maxLines = 2)  // i18n-ignore
             if (crash != null) OptionRow("Obriši izvještaj", R.drawable.lc_trash_2) { java.io.File(ctx.filesDir, "last_crash.txt").delete(); dlg = null }
-        }
-        "log" -> FileBrowser("Izaberi folder", emptySet(), pickDir = true, onDismiss = { dlg = null }) { dir ->
-            try {
-                val log = Runtime.getRuntime().exec(arrayOf("logcat", "-d", "-t", "3000")).inputStream.bufferedReader().readText()
-                val f = java.io.File(dir, "pretorian_log_" + System.currentTimeMillis() / 1000 + ".txt")
-                f.writeText("PRETORIAN " + BuildInfo.VERSION + " · " + android.os.Build.MODEL + " · Android " + android.os.Build.VERSION.RELEASE + "\n\n" + (crash ?: "") + "\n\n" + log)
-                Toast.makeText(ctx, trf("Spremljeno: %s", f.path), Toast.LENGTH_LONG).show()
-            } catch (e: Exception) { Toast.makeText(ctx, tr("U taj folder se ne može pisati. Izaberi drugi ili PRETORIAN folder."), Toast.LENGTH_LONG).show() }
-            dlg = null
-        }
-        "cache" -> Popup("Keš memorija", { dlg = null }) {
-            OptionRow("Očisti keš", R.drawable.lc_trash_2, sub = "slike i privremeni podaci se ponovo učitaju") {
-                scope.launch(kotlinx.coroutines.Dispatchers.IO) { ctx.cacheDir.listFiles()?.forEach { it.deleteRecursively() } }
-                cacheMb = 0; dlg = null; Toast.makeText(ctx, tr("Keš je očišćen"), Toast.LENGTH_SHORT).show()
-            }
         }
         else -> {}
     }
 }
 
-/** A QR code as a picture (black on white). */
-fun qrBitmap(text: String, px: Int): androidx.compose.ui.graphics.ImageBitmap? = try {
-    val m = com.google.zxing.qrcode.QRCodeWriter().encode(text, com.google.zxing.BarcodeFormat.QR_CODE, px, px, mapOf(com.google.zxing.EncodeHintType.MARGIN to 1))
-    val b = android.graphics.Bitmap.createBitmap(px, px, android.graphics.Bitmap.Config.RGB_565)
-    for (x in 0 until px) for (y in 0 until px) b.setPixel(x, y, if (m.get(x, y)) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
-    b.asImageBitmap()
-} catch (e: Exception) { null }
 
 
 /** the playlist whose menu opens on the "Edit playlists" page */
@@ -1816,24 +1708,6 @@ object PlMenu { var open: String? = null }
 object PlEdit { var id: String? = null }
 
 
-/** The PRETORIAN logo on a frame that suits the theme: glass in Liquid, a gold edge in Sand, a white card in Paper… */
-@Composable
-fun LogoTile(size: androidx.compose.ui.unit.Dp) {
-    val shape = Rnd(size * 0.22f)
-    val red = Color(0xFFE5141B)
-    val (bg, edge, glow) = when (Look.theme) {
-        "liquid" -> Triple<androidx.compose.ui.graphics.Brush, Color, Color>(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0x47FFFFFF), Color(0x14FFFFFF))), Color(0x73FFFFFF), red.copy(alpha = 0.35f))
-        "classic" -> Triple(androidx.compose.ui.graphics.SolidColor(Color(0xFF1C2735)), Color(0xFFE2E8F0), Color.Transparent)
-        "pijesak" -> Triple(androidx.compose.ui.graphics.SolidColor(Color(0xFF1D140B)), Color(0xFFE0B25C), Color(0x4DE0B25C))
-        "papir" -> Triple(androidx.compose.ui.graphics.SolidColor(Color.White), Color(0xFFD5D9DF), Color(0x22000000))
-        "reddawn" -> Triple(androidx.compose.ui.graphics.SolidColor(Color(0xFF111113)), Color(0xFF3F3F46), red.copy(alpha = 0.45f))
-        else -> Triple(androidx.compose.ui.graphics.SolidColor(Color(0xFF0A0A0C)), Color(0x1FFFFFFF), red.copy(alpha = 0.5f))
-    }
-    Box(Modifier.size(size).shadow(if (glow.alpha > 0f) 18.dp else 0.dp, shape, ambientColor = glow, spotColor = glow).clip(shape).background(bg).border(1.5.dp, edge, shape),
-        contentAlignment = Alignment.Center) {
-        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.logo_mark), contentDescription = "PRETORIAN", modifier = Modifier.size(size * 0.8f))  // i18n-ignore
-    }
-}
 
 /** 30 s, 5 min, 3 h, daily — for the background check intervals */
 fun everyStr(sec: Int): String = when {

@@ -28,7 +28,7 @@ object CrashLog {
         val rt = Runtime.getRuntime()
         val am = c.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
         val mi = android.app.ActivityManager.MemoryInfo(); am.getMemoryInfo(mi)
-        return "PRETORIAN ${BuildInfo.VERSION} · ${android.os.Build.MODEL} · Android ${android.os.Build.VERSION.RELEASE}\n" +  // i18n-ignore
+        return "Media Center ${BuildInfo.VERSION} · ${android.os.Build.MODEL} · Android ${android.os.Build.VERSION.RELEASE}\n" +  // i18n-ignore
             "time ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())} · screen ${screen}\n" +  // i18n-ignore
             "app heap ${(rt.totalMemory() - rt.freeMemory()) / 1_048_576} / ${rt.maxMemory() / 1_048_576} MB · box free ${mi.availMem / 1_048_576} MB · low ${mi.lowMemory}\n"  // i18n-ignore
     }

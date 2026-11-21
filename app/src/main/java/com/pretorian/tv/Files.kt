@@ -57,7 +57,7 @@ object FileAccess {
         out.add(tr("Memorija boxa") to ext)
         File("/storage").listFiles()?.filter { it.isDirectory && it.name != "emulated" && it.name != "self" }?.forEach { out.add("USB · ${it.name}" to it) }
         File("/mnt/media_rw").listFiles()?.filter { it.isDirectory }?.forEach { d -> if (out.none { it.second.name == d.name }) out.add("USB · ${d.name}" to d) }
-        ctx.getExternalFilesDir(null)?.let { out.add(tr("PRETORIAN folder") to it) }
+        ctx.getExternalFilesDir(null)?.let { out.add(tr("Folder aplikacije") to it) }
         return out
     }
 
@@ -90,7 +90,7 @@ fun FileBrowser(title: String, exts: Set<String>, pickDir: Boolean = false, onDi
     androidx.compose.runtime.key(rev, dir) {
         Popup(title, onDismiss, width = 720.dp) {
             if (!FileAccess.hasAll(ctx)) {
-                T("PRETORIAN treba dozvolu da vidi fajlove na boxu i USB-u.", 14.sp, C.Soft, maxLines = 2)
+                T("Aplikacija treba dozvolu da vidi fajlove na boxu i USB-u.", 14.sp, C.Soft, maxLines = 2)
                 OptionRow("Dozvoli pristup fajlovima", R.drawable.lc_shield_check, color = C.Amber) {
                     try {
                         if (Build.VERSION.SDK_INT >= 30) {
@@ -165,7 +165,7 @@ fun FilePicker(title: String, exts: Set<String>, onDismiss: () -> Unit, onBytes:
             val apps = remember { FileAccess.pickers(ctx).filter { !it.pkg.contains("documentsui") } }
             Popup("Izaberi file manager", onDismiss) {
                 Segmented(listOf("Samo jednom", "Uvijek"), always) { always = it }
-                OptionRow("PRETORIAN (ugrađeni)", R.drawable.lc_folder_open, sub = "Za daljinski: USB, Download, memorija boxa") {
+                OptionRow("Ugrađeni", R.drawable.lc_folder_open, sub = "Za daljinski: USB, Download, memorija boxa") {
                     if (always == 1) FileAccess.app = "builtin"
                     mode = "builtin"
                 }

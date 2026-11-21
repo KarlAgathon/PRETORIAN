@@ -421,9 +421,9 @@ fun DiagnosticsV2() {
     if (logExport) FileBrowser(tr("Izaberi folder"), emptySet(), pickDir = true, onDismiss = { logExport = false }) { dir ->
         try {
             val f = java.io.File(dir, "pretorian_update_log_" + System.currentTimeMillis() / 1000 + ".txt")
-            f.writeText("PRETORIAN " + BuildInfo.VERSION + " · " + Build.MODEL + " · Android " + Build.VERSION.RELEASE + "\n\n" + UpdLog.lines().joinToString("\n"))  // i18n-ignore
+            f.writeText("Media Center " + BuildInfo.VERSION + " · " + Build.MODEL + " · Android " + Build.VERSION.RELEASE + "\n\n" + UpdLog.lines().joinToString("\n"))  // i18n-ignore
             Toast.makeText(ctx, trf("Spremljeno: %s", f.path), Toast.LENGTH_LONG).show()
-        } catch (e: Exception) { Toast.makeText(ctx, tr("U taj folder se ne može pisati. Izaberi drugi ili PRETORIAN folder."), Toast.LENGTH_LONG).show() }
+        } catch (e: Exception) { Toast.makeText(ctx, tr("U taj folder se ne može pisati. Izaberi drugi ili folder aplikacije."), Toast.LENGTH_LONG).show() }
         logExport = false
     }
     if (confirmAll) Popup("Resetuj sve brojače?", { confirmAll = false }) {
@@ -618,7 +618,7 @@ private fun deviceCards(ctx: Context): List<DevCard> {
         val st = android.os.StatFs(android.os.Environment.getDataDirectory().path)
         val appData = ctx.filesDir.parentFile?.walkTopDown()?.filter { it.isFile }?.sumOf { it.length() } ?: 0L
         out += DevCard(tr("Prostor"), gb(st.totalBytes), trf("slobodno %s", gb(st.availableBytes)), R.drawable.lc_hard_drive, 0xFFF59E0B, 1f - st.availableBytes.toFloat() / st.totalBytes,
-            listOf(tr("Ukupno") to gb(st.totalBytes), tr("Slobodno") to gb(st.availableBytes), tr("PRETORIAN podaci") to (appData / 1_048_576).toString() + " MB"))  // i18n-ignore
+            listOf(tr("Ukupno") to gb(st.totalBytes), tr("Slobodno") to gb(st.availableBytes), tr("Podaci aplikacije") to (appData / 1_048_576).toString() + " MB"))  // i18n-ignore
     } catch (_: Exception) {}
     try {
         val d = (ctx.getSystemService(Context.DISPLAY_SERVICE) as android.hardware.display.DisplayManager).getDisplay(android.view.Display.DEFAULT_DISPLAY)
@@ -661,7 +661,7 @@ private fun deviceCards(ctx: Context): List<DevCard> {
     val patch = Build.VERSION.SECURITY_PATCH
     val patchNice = try { SimpleDateFormat("d. MMMM yyyy", Locale(Look.lang)).format(SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(patch)!!) } catch (e: Exception) { patch }  // i18n-ignore
     out += DevCard(tr("Sigurnosna zakrpa"), patchNice, null, R.drawable.lc_shield_check, 0xFFEF4444, null, listOf(tr("Sigurnosna zakrpa") to patch))
-    out += DevCard(tr("Način rada"), (if (Perf.lite) "Lite" else "Full") + " · " + trf("ocjena %s/100", Perf.score), "PRETORIAN " + BuildInfo.VERSION, R.drawable.lc_sparkle, 0xFF9CA3AF, Perf.score / 100f,  // i18n-ignore
+    out += DevCard(tr("Način rada"), (if (Perf.lite) "Lite" else "Full") + " · " + trf("ocjena %s/100", Perf.score), "Media Center " + BuildInfo.VERSION, R.drawable.lc_sparkle, 0xFF9CA3AF, Perf.score / 100f,  // i18n-ignore
         listOf(tr("Način rada") to (if (Perf.lite) "Lite" else "Full"), tr("Ocjena uređaja") to listOf(Perf.score, "/100").joinToString(""),  // i18n-ignore
             tr("Preporuka") to tr(if (Perf.weak) "Lite (ispod 70 bodova ili manje od 3 GB RAM-a)" else "Full"), tr("Verzija") to BuildInfo.VERSION))
     return out

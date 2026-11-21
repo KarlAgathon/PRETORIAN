@@ -369,8 +369,8 @@ fun WelcomeScreen(nav: Nav) {
                 }
             }
             Column(Modifier.align(Alignment.Center).fillMaxWidth().padding(horizontal = 60.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.logo_mark), null, Modifier.size(64.dp))
-                T(trf("Dobrodošli u %s", "PRETORIAN"), 30.sp, C.Text, FontWeight.ExtraBold)
+                androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.mc_mark), null, Modifier.size(64.dp))
+                T(trf("Dobrodošli u %s", "Media Center"), 30.sp, C.Text, FontWeight.ExtraBold)
                 T("Dodaj svoju playlistu i za minut gledaš.", 15.sp, C.Soft)
                 Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -416,7 +416,7 @@ fun WelcomeScreen(nav: Nav) {
         }
         "json" -> FilePicker("Izaberi backup", setOf("json"), onDismiss = { pick = null }) { bytes, _ ->
             pick = null
-            try { Backup.restore(ctx, String(bytes), null); Toast.makeText(ctx, tr("Sve je vraćeno. PRETORIAN se ponovo pokreće."), Toast.LENGTH_LONG).show()
+            try { Backup.restore(ctx, String(bytes), null); Toast.makeText(ctx, tr("Sve je vraćeno. Aplikacija se ponovo pokreće."), Toast.LENGTH_LONG).show()
                 (ctx as? android.app.Activity)?.recreate() }
             catch (e: Exception) { Toast.makeText(ctx, e.message ?: tr("Vraćanje nije uspjelo"), Toast.LENGTH_LONG).show() }
         }

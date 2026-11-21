@@ -81,7 +81,7 @@ object Backup {
 
     fun export(ctx: Context, password: String?, parts: Set<Int>? = null): String {
         val data = payload(ctx, parts)
-        val out = JSONObject().put("pretorian_backup", 1).put("app", BuildInfo.VERSION)
+        val out = JSONObject().put("mediacenter_backup", 1).put("app", BuildInfo.VERSION)
             .put("date", SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date()))
             .put("playlists", Store.playlists(ctx).size).put("favLists", Favs.lists(ctx).size)
         if (password.isNullOrBlank()) out.put("data", data)
@@ -99,7 +99,7 @@ object Backup {
     /** null when the text is not a PRETORIAN backup */
     fun summary(text: String): Summary? = try {
         val o = JSONObject(text)
-        if (o.optInt("pretorian_backup") != 1) null
+        if (o.optInt("mediacenter_backup") != 1) null
         else Summary(o.str("date"), o.optInt("playlists"), o.optInt("favLists"), o.has("enc"))
     } catch (e: Exception) { null }
 
@@ -107,7 +107,7 @@ object Backup {
     fun restore(ctx: Context, text: String, password: String?) {
         Watch.flush()
         val o = JSONObject(text)
-        if (o.optInt("pretorian_backup") != 1) throw IllegalArgumentException(tr("Fajl nije PRETORIAN backup"))
+        if (o.optInt("mediacenter_backup") != 1) throw IllegalArgumentException(tr("Fajl nije backup ove aplikacije"))
         val data = if (o.has("enc")) {
             if (password.isNullOrBlank()) throw IllegalArgumentException(tr("Backup je zaštićen lozinkom"))
             try {
@@ -132,7 +132,7 @@ object Backup {
             when (v.getString("t")) {
                 "s" -> ed.putString(k, v.getString("v")); "b" -> ed.putBoolean(k, v.getBoolean("v"))
                 "i" -> ed.putInt(k, v.getInt("v")); "l" -> ed.putLong(k, v.getLong("v")); "f" -> ed.putFloat(k, v.getDouble("v").toFloat())
-                else -> throw IllegalArgumentException(tr("Fajl nije PRETORIAN backup"))
+                else -> throw IllegalArgumentException(tr("Fajl nije backup ove aplikacije"))
             }
         }
         val writes = mutableMapOf<File, String>()
@@ -168,7 +168,7 @@ object Backup {
                         }
                     }
                 rollback.commit()
-                throw java.io.IOException(tr("Fajl nije PRETORIAN backup"))
+                throw java.io.IOException(tr("Fajl nije backup ove aplikacije"))
             }
         } catch (failure: Exception) {
             changed.asReversed().forEach { file ->
@@ -180,7 +180,7 @@ object Backup {
         Watch.reloadAfterRestore()
     }
 
-    fun fileName() = "PRETORIAN-backup-" + SimpleDateFormat("yyyy-MM-dd_HH-mm", Locale.US).format(Date()) + ".json"
+    fun fileName() = "MediaCenter-backup-" + SimpleDateFormat("yyyy-MM-dd_HH-mm", Locale.US).format(Date()) + ".json"
 
     /** weekly automatic backup inside the box (last 3 kept) */
     fun auto(ctx: Context) {
@@ -215,21 +215,21 @@ object Backup {
             val uri = android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI
             ctx.contentResolver.query(uri, arrayOf(android.provider.MediaStore.MediaColumns._ID, android.provider.MediaStore.MediaColumns.DISPLAY_NAME,
                 android.provider.MediaStore.MediaColumns.DATE_MODIFIED, android.provider.MediaStore.MediaColumns.SIZE),
-                android.provider.MediaStore.MediaColumns.DISPLAY_NAME + " LIKE ?", arrayOf("PRETORIAN-backup%"), null)?.use { c ->
+                android.provider.MediaStore.MediaColumns.DISPLAY_NAME + " LIKE ?", arrayOf("MediaCenter-backup%"), null)?.use { c ->
                 while (c.moveToNext()) {
                     val id = c.getLong(0); val name = c.getString(1) ?: continue
                     if (!seen.add("dl:$name")) continue
                     val u = android.content.ContentUris.withAppendedId(uri, id)
-                    out += Found("Download/PRETORIAN", c.getLong(2) * 1000, c.getLong(3)) { ctx.contentResolver.openInputStream(u)!!.use { String(it.readBytes()) } }
+                    out += Found("Download/MediaCenter", c.getLong(2) * 1000, c.getLong(3)) { ctx.contentResolver.openInputStream(u)!!.use { String(it.readBytes()) } }
                 }
             }
         } catch (_: Exception) {}
         @Suppress("DEPRECATION")
-        val dl = File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "PRETORIAN")
-        dl.listFiles()?.filter { it.name.startsWith("PRETORIAN-backup") && seen.add("dl:" + it.name) }?.forEach { f -> out += Found("Download/PRETORIAN", f.lastModified(), f.length()) { f.readText() } }
+        val dl = File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "MediaCenter")
+        dl.listFiles()?.filter { it.name.startsWith("MediaCenter-backup") && seen.add("dl:" + it.name) }?.forEach { f -> out += Found("Download/MediaCenter", f.lastModified(), f.length()) { f.readText() } }
         usbDirs().forEach { d ->
-            listOf(d, File(d, "PRETORIAN")).forEach { dir ->
-                dir.listFiles()?.filter { it.name.startsWith("PRETORIAN-backup") && it.name.endsWith(".json") }?.forEach { f -> out += Found("USB", f.lastModified(), f.length()) { f.readText() } }
+            listOf(d, File(d, "MediaCenter")).forEach { dir ->
+                dir.listFiles()?.filter { it.name.startsWith("MediaCenter-backup") && it.name.endsWith(".json") }?.forEach { f -> out += Found("USB", f.lastModified(), f.length()) { f.readText() } }
             }
         }
         autoList(ctx).forEach { f -> out += Found("Automatski", f.lastModified(), f.length()) { f.readText() } }
@@ -241,12 +241,12 @@ object Backup {
         val name = fileName(); val text = export(ctx, pass.ifBlank { null }, parts)
         if (usb) {
             val d = usbDirs().firstOrNull() ?: throw java.io.IOException(tr("USB nije priključen"))
-            val dir = File(d, "PRETORIAN").apply { mkdirs() }
+            val dir = File(d, "MediaCenter").apply { mkdirs() }
             File(dir, name).writeText(text)
-            return "USB/PRETORIAN"
+            return "USB/MediaCenter"
         }
         PublicFiles.save(ctx, name, text.toByteArray())
-        return "Download/PRETORIAN"
+        return "Download/MediaCenter"
     }
 }
 

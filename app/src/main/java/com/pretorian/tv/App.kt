@@ -180,7 +180,7 @@ fun PretorianApp() {
     // Settings › General › Confirm exit: Back on Home asks first
     var askExit by remember { mutableStateOf(false) }
     BackHandler(enabled = stack.size <= 1 && General.confirmExit) { askExit = true }
-    if (askExit) Popup(tr("Izaći iz PRETORIAN-a?"), { askExit = false }) {
+    if (askExit) Popup(tr("Izaći iz aplikacije?"), { askExit = false }) {
         OptionRow("Izađi", R.drawable.lc_x, color = C.Danger) { askExit = false; (ctx as? android.app.Activity)?.finish() }
         OptionRow("Ostani", R.drawable.lc_check) { askExit = false }
     }

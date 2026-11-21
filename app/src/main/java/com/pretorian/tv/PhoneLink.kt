@@ -92,12 +92,12 @@ object PhoneLink {
 <label>${esc(tr("EPG link (nije obavezno)"))}<input name="epg" inputmode="url" autocapitalize="off" autocomplete="off"></label>
 <button>${esc(tr("Pošalji na TV"))}</button></form>
 <script>function sw(){var t=document.querySelector('input[name=type]:checked').value;document.getElementById('x').style.display=t=='1'?'none':'';document.getElementById('m').style.display=t=='1'?'':'none';document.getElementById('u').style.display=t=='2'?'none':'';document.getElementById('p').style.display=t=='2'?'none':''}</script>"""
-        return """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PRETORIAN</title>
+        return """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Media Center</title>
 <style>body{font-family:system-ui,sans-serif;background:#0b1020;color:#f2f3f5;margin:0;padding:20px}h1{font-size:20px;letter-spacing:3px}
 label{display:block;margin:14px 0 4px;color:#9aa1ad;font-size:14px}input{width:100%;box-sizing:border-box;padding:14px;margin-top:6px;border-radius:12px;border:1px solid #2a3350;background:#141b30;color:#fff;font-size:17px}
 .seg{display:flex;gap:8px}.seg label{flex:1;margin:0;background:#141b30;border:1px solid #2a3350;border-radius:12px;padding:12px;text-align:center;color:#fff}.seg input{width:auto;margin:0 6px 0 0}
 button{width:100%;margin-top:22px;padding:16px;border:0;border-radius:14px;background:#2563eb;color:#fff;font-size:18px;font-weight:600}p{font-size:16px;line-height:1.5}</style></head>
-<body><h1>PRETORIAN</h1>${if (msg != null) "<p>${esc(msg)}</p>" else ""}$form</body></html>""" // i18n-ignore
+<body><h1>Media Center</h1>${if (msg != null) "<p>${esc(msg)}</p>" else ""}$form</body></html>""" // i18n-ignore
     }
 
     /** black-on-white QR code of [text], [size] pixels */
