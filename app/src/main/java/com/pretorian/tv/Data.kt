@@ -211,6 +211,11 @@ object Net {
         val cm = NewContent.appCtx?.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
         cm?.getNetworkCapabilities(cm.activeNetwork)?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN) == true
     } catch (e: Throwable) { false }
+    /** the box has a network with internet right now (true when it cannot be told) */
+    fun online(): Boolean = try {
+        val cm = NewContent.appCtx?.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+        if (cm == null) true else cm.getNetworkCapabilities(cm.activeNetwork)?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+    } catch (e: Throwable) { true }
     private const val UA_DEFAULT = "Mozilla/5.0 (Linux; Android 10; Android TV) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"  // i18n-ignore
     /** Settings › General › Network: own User-Agent for providers that only let certain apps in (empty = PRETORIAN's) */
     val UA get() = Prefs.str("net_ua").trim().ifBlank { UA_DEFAULT }

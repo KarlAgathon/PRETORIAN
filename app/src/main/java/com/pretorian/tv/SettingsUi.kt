@@ -492,6 +492,37 @@ private val SETTINGS_LINKS = mapOf(
     ),
 )
 
+/** Search › Settings: every settings page by its name, what it holds and the words people use for it. */
+data class SettingHit(val id: String, val title: String, val path: String)
+object SettingsSearchIndex {
+    private val WORDS = mapOf(
+        "playlists" to "playlista, Xtream, M3U, Stalker, dodaj, osvježi, provajder, server",
+        "epg" to "EPG, vodič, program, pomak, vrijeme",
+        "groups" to "grupe, kanali, redoslijed, sakrij, zaključaj",
+        "player" to "plejer, titl, titlovi, zvuk, audio, dekoder, bafer, AFR, pomak zvuka, eksterni plejer, trailer",
+        "general" to "start, pokretanje, box, pozadina, mreža, User-Agent, udpxy",
+        "reminders" to "podsjetnik, emisija, utakmica, obavijest",
+        "sports" to "sport, tim, liga, država, rezultati",
+        "language" to "jezik, prevod, meni",
+        "look" to "izgled, tekst, veličina, Lite, Full, performanse",
+        "pin" to "PIN, šifra, zaključavanje",
+        "parental" to "roditeljska kontrola, djeca, odrasli, kategorije, vrijeme gledanja",
+        "backup" to "backup, vraćanje, USB, fajl, lozinka",
+        "update" to "ažuriranje, nova verzija",
+        "about" to "o aplikaciji, verzija, licence, privatnost, pomoć",
+        "diagnostics" to "dijagnostika, zapis, greške, stream log",
+    )
+    fun find(query: String): List<SettingHit> {
+        val words = query.lowercase().split(' ').filter { it.isNotBlank() }
+        if (words.isEmpty()) return emptyList()
+        return SETTINGS_LINKS.flatMap { (sec, links) ->
+            val group = SECTIONS2.firstOrNull { it.id == sec }?.title ?: ""
+            links.map { l -> Triple(l, group, listOf(l.title, l.sub, WORDS[l.id] ?: "").joinToString(", ")) }
+        }.filter { (_, _, text) -> val t = text.lowercase(); val tt = tr(text).lowercase(); words.all { w -> t.contains(w) || tt.contains(w) } }
+            .map { (l, group, _) -> SettingHit(l.id, tr(l.title), tr("Postavke") + " › " + tr(group)) }
+    }
+}
+
 /** Settings screen of the new look: sections on the left, the page on the right, sub-pages open inside. */
 @Composable
 fun SettingsScreen(nav: Nav) {

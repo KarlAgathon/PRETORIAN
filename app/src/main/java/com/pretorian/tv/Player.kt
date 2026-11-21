@@ -210,20 +210,14 @@ private inline fun <reified T : Throwable> causeOf(e: Throwable): Boolean {
 }
 
 /** A clear message for a stream that does not play, in the app language. */
+/** What the viewer reads when a stream fails: one short, calm sentence (the technical reason stays in the stream log). */
 private fun errorText(e: PlaybackException, live: Boolean): String {
     val code = httpCode(e)
+    try { StreamLog.add("error " + (code?.let { "HTTP $it" } ?: e.errorCodeName.removePrefix("ERROR_CODE_"))) } catch (_: Exception) {}  // i18n-ignore
     return when {
-        code == 401 || code == 403 -> tr("Server odbija pristup: nalog istekao ili blokiran") + " (HTTP $code)" + (if (Net.vpnOn()) " · " + tr("možda je VPN adresa blokirana, probaj drugi VPN server") else "")
-        code == 429 || code == 458 || code == 509 || code == 456 -> tr("Previše konekcija: ugasi gledanje na drugom uređaju") + " (HTTP $code)"
-        code == 404 -> tr("Kanal više ne postoji kod providera") + " (HTTP 404)"
-        code != null && code >= 500 -> tr("Server trenutno ne radi") + " (HTTP $code)"
-        code != null -> tr("Server je odbio zahtjev") + " (HTTP $code)"
-        causeOf<java.net.UnknownHostException>(e) -> tr("Adresa servera nije pronađena (DNS): provjeri internet, VPN ili NextDNS / privatni DNS")
-        e.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT || causeOf<java.net.SocketTimeoutException>(e) ->
-            tr("Server ne odgovara (isteklo vrijeme)") + (if (Net.vpnOn()) " · " + tr("VPN je uključen") else "")
-        e.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ->
-            tr("Nema veze sa serverom") + (if (Net.vpnOn()) " · " + tr("VPN je uključen") else "")
-        else -> tr(if (live) "Kanal trenutno ne radi" else "Video se ne može pustiti") + " (${e.errorCodeName.removePrefix("ERROR_CODE_")})"
+        causeOf<java.net.UnknownHostException>(e) && !Net.online() -> tr("Nema interneta")
+        live -> tr("Kanal trenutno nije dostupan")
+        else -> tr("Video se trenutno ne može pustiti")
     }
 }
 
@@ -892,8 +886,15 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                     if (bar && s.live) {
                         val ch = item.channel
                         @Suppress("UNUSED_VARIABLE") val favRev = Favs.rev
-                        ChannelOptionsBar(favOn = ch != null && Favs.inAny(ctx, ch), onAction = { action ->
+                        ChannelOptionsBar(favOn = ch != null && Favs.inAny(ctx, ch), playing = playing, onAction = { action ->
                             when (action) {
+                                "pause" -> { if (player.isPlaying) player.pause() else player.play() }
+                                "archive" -> {
+                                    bar = false
+                                    if (ch != null && Tech.rewind && Catchups.has(p, ch)) liveShift(-1)
+                                    else Toast.makeText(ctx, tr("Ovaj kanal nema arhivu"), Toast.LENGTH_SHORT).show()
+                                }
+                                "more" -> { bar = false; dialog = "more" }
                                 "favorites" -> ch?.let { c ->
                                     val lists = Favs.lists(ctx)
                                     val wasFavorite = Favs.inAny(ctx, c)
@@ -904,9 +905,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                                 "subs" -> { bar = false; dialog = "subs" }
                                 "zoom" -> { bar = false; dialog = "zoom" }
                                 "audio" -> { bar = false; dialog = "audio" }
-                                "video" -> { bar = false; dialog = "video" }
                                 "epg" -> { bar = false; side = "epg" }
-                                "recent" -> { bar = false; dialog = "recent" }
                             }
                         })
                     } else if (bar) {
@@ -959,7 +958,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 Box(Modifier.weight(1f).focusRequester(fr).onPreviewKeyEvent { e ->
                     if (e.key == Key.Back || e.key == Key.Escape) { if (e.type == KeyEventType.KeyUp) side = null; true }
                     else if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { side = null; true } else false
-                }) { if (ch != null) EpgList(ch, 24) else T("Nema EPG podataka za ovaj kanal.", 14.sp, C.Soft) }
+                }) { if (ch != null) EpgList(ch, 24) }
                 LaunchedEffect(Unit) { delay(150); fr.tryFocus() }
             }
         }
@@ -991,9 +990,21 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             if (Tech.audioDelay) OptionRow("Pomak zvuka", R.drawable.lc_volume, sub = tr("ako zvuk kasni ili žuri"), value = AudioDelay.label(AudioDelay.of(item.url))) { dialog = "adelay" }
             if (tracksOf(player, MC.TRACK_TYPE_AUDIO).size > 1) OptionRow("Audio", R.drawable.lc_volume, value = tracksOf(player, MC.TRACK_TYPE_AUDIO).firstOrNull { it.selected }?.label ?: "—") { dialog = "audio" }
         }
+        // Live › More: Subtitles · Audio Track · Sleep Timer · Stream Information · External Player · Time Shift (only what this stream has)
+        "more" -> Popup(item.title, onDismiss = { dialog = null }) {
+            if (tracksOf(player, MC.TRACK_TYPE_TEXT).isNotEmpty()) OptionRow("Titlovi", R.drawable.lc_captions) { dialog = "subs" }
+            if (tracksOf(player, MC.TRACK_TYPE_AUDIO).size > 1) OptionRow("Audio", R.drawable.lc_volume, value = tracksOf(player, MC.TRACK_TYPE_AUDIO).firstOrNull { it.selected }?.label ?: "—") { dialog = "audio" }
+            OptionRow(if (Sleep.until > 0) trf("Tajmer: %s min", ((Sleep.until - System.currentTimeMillis()) / 60_000 + 1).coerceAtLeast(1)) else tr("Tajmer za spavanje"), R.drawable.lc_moon) { dialog = "sleep" }
+            OptionRow("Informacije o streamu", R.drawable.lc_info, value = if (videoH > 0) qualityLabel(videoH) else null) { dialog = "info" }
+            OptionRow("Vanjski plejer", R.drawable.lc_external_link) { player.pause(); saveProgress(); dialog = "ext" }
+            val c = item.channel
+            if (c != null && Tech.rewind && Catchups.has(p, c)) OptionRow("Premotavanje uživo", R.drawable.lc_rotate_ccw, sub = tr("5 minuta nazad kroz arhivu")) { dialog = null; liveShift(-1) }
+            if (c != null) OptionRow("Pomak vremena", R.drawable.lc_clock, value = EpgShift.label(EpgShift.chMin(c.url))) { dialog = "epgshift" }
+            if (Tech.audioDelay) OptionRow("Pomak zvuka", R.drawable.lc_volume, sub = tr("ako zvuk kasni ili žuri"), value = AudioDelay.label(AudioDelay.of(item.url))) { dialog = "adelay" }
+        }
         "fav" -> item.channel?.let { FavPicker(it) { dialog = null } }
         "epgshift" -> item.channel?.let { EpgShiftPopup(it) { dialog = null } }
-        "zoom" -> Popup("Zoom", onDismiss = { dialog = null }) {
+        "zoom" -> Popup("Format", onDismiss = { dialog = null }) {
             FORMATS.forEachIndexed { i, label ->
                 OptionRow(tr(label), R.drawable.lc_maximize, selected = resize == i) {
                     resize = i
@@ -1130,37 +1141,33 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
 
 private val FORMATS = listOf("Zadano / automatski", "4:3", "16:9", "Prilagodi širinu", "Rastegni", "Zoom")
 
-/** Buttons at the bottom of the player, in one row (no scrolling): Pause · ★ · [CC] · [Audio] · Format · Guide · Group · More.
- *  Subtitles only when the stream has subtitle tracks, Audio only with 2 or more tracks. */
+/** Live TV: exactly six actions in one row (approved): Pause · Favorite · EPG · Format · Archive · More. */
 @Composable
-private fun ChannelOptionsBar(favOn: Boolean, onAction: (String) -> Unit) {
+private fun ChannelOptionsBar(favOn: Boolean, playing: Boolean, onAction: (String) -> Unit) {
     val first = remember { FocusRequester() }
     data class B(val id: String, val label: String, val icon: Int)
     val list = listOf(
-        B("favorites", "FAVORITES", R.drawable.lc_star),
-        B("subs", "SUBS", R.drawable.lc_captions),
-        B("zoom", "ZOOM", R.drawable.lc_maximize),
-        B("audio", "AUDIO", R.drawable.lc_volume),
-        B("video", "VIDEO", R.drawable.lc_monitor),
+        B("pause", if (playing) "Pauza" else "Pusti", if (playing) R.drawable.lc_pause else R.drawable.lc_play),
+        B("favorites", "Favorit", R.drawable.lc_star),
         B("epg", "EPG", R.drawable.lc_calendar_clock),
-        B("recent", "HISTORY", R.drawable.lc_history),
+        B("zoom", "Format", R.drawable.lc_maximize),
+        B("archive", "Arhiva", R.drawable.lc_history),
+        B("more", "Više", R.drawable.lc_layout_grid),
     )
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         list.forEachIndexed { i, b ->
             val favorite = b.id == "favorites"
-            Focusable(modifier = Modifier.weight(1f).height(70.dp), onClick = { onAction(b.id) },
-                focusRequester = if (i == 0) first else null, normal = Color(0xFF202E39),
-                focused = Color(0xFF126FB5), focusBorderColor = Color.White, borderColor = Color(0xFF71818D),
-                shape = Rnd(10.dp), zoom = 1.015f) { focused ->
+            Focusable(modifier = Modifier.weight(1f).height(66.dp), onClick = { onAction(b.id) },
+                focusRequester = if (i == 0) first else null, normal = Color(0x33FFFFFF),
+                focused = C.Red, focusBorderColor = Color.Transparent, shape = Rnd(12.dp), zoom = 1.0f) { focused ->
                 Column(Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 7.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Ico(b.icon, 23.dp, when {
-                        favorite && favOn -> Color(0xFFF4C542)
-                        favorite -> Color(0xFFB8C2CA)
-                        focused -> Color.White
-                        else -> Color(0xFFE2E8ED)
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically)) {
+                    Ico(b.icon, 22.dp, when {
+                        favorite && favOn -> C.Amber
+                        focused -> C.OnRed
+                        else -> C.Text
                     })
-                    T(b.label, 11.sp, Color.White, FontWeight.SemiBold, maxLines = 1)
+                    T(b.label, 12.sp, if (focused) C.OnRed else C.Text, FontWeight.SemiBold, maxLines = 1)
                 }
             }
         }

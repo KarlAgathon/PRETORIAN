@@ -283,7 +283,7 @@ fun DawnNowNext(ch: Channel?, modifier: Modifier) {
         Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             T(ch.name, 18.sp, Color.White, FontWeight.Bold)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                T(cur?.title ?: if (st is Load.Loading) tr("Učitavam program…") else tr("Nema EPG vodiča"), 14.sp, C.Soft, modifier = Modifier.weight(1f))
+                T(cur?.title ?: if (st is Load.Loading) tr("Učitavam program…") else "", 14.sp, C.Soft, modifier = Modifier.weight(1f))
                 if (cur != null) T(cur.times(), 14.sp, C.Soft)
             }
             if (cur != null) Box(Modifier.padding(top = 6.dp).fillMaxWidth().height(4.dp).clip(Rnd(2.dp)).background(Color(0x33FFFFFF))) {
@@ -362,17 +362,17 @@ private fun DawnTracks(type: Int, onDismiss: () -> Unit) {
 /** New Dawn search results: filters with counts on the left (All, TV channels, Movies, Series, Sport), one clear list on the right. */
 @Composable
 fun DawnSearchResults(
-    query: String, tv: List<Hit>, movies: List<Hit>, shows: List<Hit>, sport: List<SportEvent>, first: FocusRequester,
-    onHit: (Hit) -> Unit, onMenu: (Hit) -> Unit, onSport: (SportEvent) -> Unit, modifier: Modifier,
+    query: String, tv: List<Hit>, movies: List<Hit>, shows: List<Hit>, sport: List<SportEvent>, settings: List<SettingHit>, first: FocusRequester,
+    onHit: (Hit) -> Unit, onMenu: (Hit) -> Unit, onSport: (SportEvent) -> Unit, onSetting: (SettingHit) -> Unit, modifier: Modifier,
 ) {
-    var filt by remember { mutableStateOf(SearchMem.open ?: "all") }
+    // one category at a time, never a mixed "all" list (approved decision): the last one is remembered
+    var filt by remember { mutableStateOf(SearchMem.open?.takeIf { it in listOf("tv", "vod", "series", "sport", "settings") } ?: "tv") }
     LaunchedEffect(filt) { SearchMem.open = filt }
     val filters = listOf(
-        Triple("all", "Svi rezultati", tv.size + movies.size + shows.size + sport.size),
-        Triple("tv", "TV kanali", tv.size), Triple("vod", "Filmovi", movies.size),
-        Triple("series", "Serije", shows.size), Triple("sport", "Sport", sport.size),
+        Triple("tv", "TV", tv.size), Triple("vod", "Filmovi", movies.size),
+        Triple("series", "Serije", shows.size), Triple("sport", "Sport", sport.size), Triple("settings", "Postavke", settings.size),
     )
-    val icons = mapOf("all" to R.drawable.lc_search, "tv" to R.drawable.lc_tv, "vod" to R.drawable.lc_film, "series" to R.drawable.lc_layers, "sport" to R.drawable.lc_trophy)
+    val icons = mapOf("tv" to R.drawable.lc_tv, "vod" to R.drawable.lc_film, "series" to R.drawable.lc_layers, "sport" to R.drawable.lc_trophy, "settings" to R.drawable.lc_settings)
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Column(Modifier.width(270.dp).fillMaxHeight().dawnGlass().padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             filters.forEach { (id, label, n) ->
@@ -389,14 +389,14 @@ fun DawnSearchResults(
         Column(Modifier.weight(1f).fillMaxHeight()) {
             T(trf("Rezultati za: „%s“", query), 16.sp, C.Soft, FontWeight.SemiBold, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
             val rows: List<Any> = when (filt) {
-                "tv" -> tv; "vod" -> movies; "series" -> shows; "sport" -> sport
-                else -> buildList { addAll(shows.take(20)); addAll(movies.take(20)); addAll(tv.take(20)); addAll(sport.take(10)) }
+                "vod" -> movies; "series" -> shows; "sport" -> sport; "settings" -> settings
+                else -> tv
             }
             if (rows.isEmpty()) { T("Ništa nije pronađeno", 15.sp, C.Soft); return@Column }
             androidx.compose.foundation.lazy.LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(rows.size) { i ->
                     val r = rows[i]
-                    Focusable(onClick = { if (r is Hit) onHit(r) else if (r is SportEvent) onSport(r) }, onMenu = { if (r is Hit) onMenu(r) },
+                    Focusable(onClick = { if (r is Hit) onHit(r) else if (r is SportEvent) onSport(r) else if (r is SettingHit) onSetting(r) }, onMenu = { if (r is Hit) onMenu(r) },
                         focusRequester = if (i == 0) first else null, shape = Rnd(12.dp), normal = Color(0x59141416), focused = Dawn.pill,
                         focusBorderColor = Color.Transparent, zoom = 1f, modifier = Modifier.fillMaxWidth().height(76.dp)) { f ->
                         val main = if (f) Dawn.onPill else Color.White
@@ -408,6 +408,7 @@ fun DawnSearchResults(
                                 is Hit.Ch -> Triple(r.ch.name, nowOf(r.ch, 600)?.title ?: (tr("Kanal") + " ${r.ch.num}"), "TV")
                                 is Hit.Prog -> Triple(r.e.title, r.ch.name + " · " + r.e.times(), "TV")
                                 is SportEvent -> Triple(if (r.home != null && r.away != null) r.home.name + " – " + r.away.name else r.title, r.league, "Sport")
+                                is SettingHit -> Triple(r.title, r.path, tr("Postavke"))
                                 else -> Triple("", "", "")
                             }
                             val img = when (r) { is Hit.Show -> r.s.cover; is Hit.Movie -> r.v.poster; else -> null }
@@ -416,6 +417,7 @@ fun DawnSearchResults(
                                     img != null -> OnyxImage(img, title, Modifier.fillMaxSize(), maxW = 220)
                                     r is Hit.Ch -> ChannelLogo(r.ch, 40.dp)
                                     r is Hit.Prog -> ChannelLogo(r.ch, 40.dp)
+                                    r is SettingHit -> Ico(R.drawable.lc_settings, 26.dp, main)
                                     else -> Ico(R.drawable.lc_trophy, 26.dp, main)
                                 }
                             }

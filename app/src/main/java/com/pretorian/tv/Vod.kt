@@ -280,11 +280,11 @@ private fun VodClassic(nav: Nav, series: Boolean) {
     val rowsState by load(p.id, series, rev, NewContent.rev, Watch.rev, MyList.rev, keep = true) {
         val out = ArrayList<VRow>()
         if (pls.size > 1) out.add(VRow.Header(p, true))
-        // on top: what arrived lately; the number goes down as you open them
-        val nw = NewContent.items(p.id, kind)
-        if (nw.isNotEmpty()) out.add(VRow.Group(Category(G_NEW, tr("Nedavno dodano")), nw.size))
+        // Continue Watching is always the first section when something is started (approved), then what arrived lately
         val cont = Watch.continueList(ctx).filter { (it.series != null) == series && (Watch.owner(ctx, it) == p.id || Watch.altPid(it.url) == p.id) }
         if (cont.isNotEmpty()) out.add(VRow.Group(Category(G_CONTINUE, tr("Nastavi gledati")), cont.size))
+        val nw = NewContent.items(p.id, kind)
+        if (nw.isNotEmpty()) out.add(VRow.Group(Category(G_NEW, tr("Nedavno dodano")), nw.size))
         val my = MyList.items(kind).size
         if (Look.age && my > 0) out.add(VRow.Group(Category(G_MYLIST, tr("Moja lista")), my))   // shown only when something is on it
         // New Dawn: every category with how many titles it has (from the catalog on the box)

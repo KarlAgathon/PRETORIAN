@@ -1162,12 +1162,9 @@ fun EpgList(ch: Channel, limit: Int = 12, modifier: Modifier = Modifier, compact
     val remRev = Reminders.rev
     when (val s = st) {
         is Load.Loading -> T("Učitavam program…", 13.sp, C.Muted)
-        is Load.Err -> T("Program nije dostupan", 13.sp, C.Muted)
+        // no guide for this channel: nothing is shown (approved: missing EPG is never a warning)
+        is Load.Err -> {}
         is Load.Ok -> if (s.value.isEmpty()) {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                T("Nema EPG podataka za ovaj kanal.", 14.sp, C.Soft)
-                T(if (EpgSources.noneOn(ctx)) "Nijedan EPG nije uključen" else if (!EpgSources.any) "Dodaj EPG izvor: Postavke › Playliste › EPG izvori" else "Ni tvoji EPG izvori nemaju ovaj kanal.", 12.sp, C.Muted, maxLines = 2)
-            }
         } else {
             val nextStart = s.value.firstOrNull { it.start > System.currentTimeMillis() }?.start
             LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 8.dp)) {
