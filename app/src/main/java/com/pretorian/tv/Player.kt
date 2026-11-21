@@ -303,6 +303,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     remember { Chrome.inRail = false; 0 }
     var sideGroup by remember { mutableStateOf<GroupRef?>(null) }
     var resume by remember { mutableStateOf<Progress?>(null) }
+    var barAction by remember(index) { mutableStateOf("pause") }
     var guideFromBar by remember { mutableStateOf(false) }
     var bar by remember { mutableStateOf(false) }   // button bar at the bottom
     var subFile by remember { mutableStateOf(s.items.getOrNull(index)?.subFile) }
@@ -675,7 +676,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                     Key.DirectionUp, Key.ChannelUp -> if (s.live && (e.key == Key.ChannelUp || Prefs.bool("zap_updown", true))) { index = (index - 1 + n) % n; true } else { showInfo = true; true }
                     // ▼ opens the channel options (the bar); CH− changes the channel
                     Key.DirectionDown, Key.ChannelDown -> if (s.live && e.key == Key.ChannelDown) { index = (index + 1) % n; true }
-                        else { bar = true; showInfo = true; true }
+                        else { barAction = "pause"; bar = true; showInfo = true; true }
                     // live with archive: ◀◀ goes 5 minutes back through the provider's archive, ▶▶ forward (back to live at the end)
                     Key.MediaRewind -> if (!s.live) { player.seekTo((player.currentPosition - step).coerceAtLeast(0)); showInfo = true; true }
                         else { liveShift(-1); true }
@@ -977,7 +978,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                     if (bar && s.live) {
                         val ch = item.channel
                         @Suppress("UNUSED_VARIABLE") val favRev = Favs.rev
-                        ChannelOptionsBar(playing = playing, favOn = ch != null && Favs.inAny(ctx, ch), onAction = { action ->
+                        ChannelOptionsBar(initialAction = barAction, playing = playing, favOn = ch != null && Favs.inAny(ctx, ch), onAction = { action ->
+                            barAction = action
                             when (action) {
                                 "pause" -> if (player.playWhenReady) player.pause() else player.play()
                                 "more" -> { dialog = "menu" }
@@ -1317,8 +1319,8 @@ private val FORMATS = listOf("Zadano / automatski", "4:3", "16:9", "Prilagodi š
 /** Buttons at the bottom of the player, in one row (no scrolling): Pause · ★ · [CC] · [Audio] · Format · Guide · Group · More.
  *  Subtitles only when the stream has subtitle tracks, Audio only with 2 or more tracks. */
 @Composable
-private fun ChannelOptionsBar(playing: Boolean, favOn: Boolean, onAction: (String) -> Unit) {
-    val first = remember { FocusRequester() }
+private fun ChannelOptionsBar(initialAction: String, playing: Boolean, favOn: Boolean, onAction: (String) -> Unit) {
+    val focusTarget = remember { FocusRequester() }
     data class B(val id: String, val label: String, val icon: Int)
     val list = listOf(
         B("pause", if (playing) "Pauza" else "Nastavi", if (playing) R.drawable.lc_pause else R.drawable.lc_play),
@@ -1329,17 +1331,17 @@ private fun ChannelOptionsBar(playing: Boolean, favOn: Boolean, onAction: (Strin
         B("more", "Više", R.drawable.lc_settings),
     )
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        list.forEachIndexed { i, b ->
+        list.forEach { b ->
             val favorite = b.id == "favorites"
             Focusable(modifier = Modifier.weight(1f).height(70.dp), onClick = { onAction(b.id) },
-                focusRequester = if (i == 0) first else null, normal = Color(0xBF191919),
+                focusRequester = if (b.id == initialAction) focusTarget else null, normal = Color(0xBF191919),
                 focused = Color(0xFFB00020), focusBorderColor = Color.White, borderColor = Color(0xFF71818D),
                 shape = Rnd(10.dp), zoom = 1.015f) { focused ->
                 Column(Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 7.dp),
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Ico(b.icon, 23.dp, when {
                         favorite && favOn -> Color(0xFFF4C542)
-                        favorite -> Color(0xFFB8C2CA)
+                        favorite -> Color.White
                         focused -> Color.White
                         else -> Color(0xFFE2E8ED)
                     })
@@ -1348,7 +1350,7 @@ private fun ChannelOptionsBar(playing: Boolean, favOn: Boolean, onAction: (Strin
             }
         }
     }
-    LaunchedEffect(Unit) { delay(80); first.tryFocus() }
+    LaunchedEffect(Unit) { delay(80); focusTarget.tryFocus() }
 }
 @Composable
 private fun VodPlayerBar(live: Boolean, playing: Boolean, hasChannel: Boolean, favOn: Boolean, hasSubs: Boolean, subsOn: Boolean, audioCount: Int, format: String,
