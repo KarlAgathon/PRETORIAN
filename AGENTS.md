@@ -1,4 +1,11 @@
 
+
+> **Governing documents (since 2026-11-22):** `docs/MEDIA_CENTER_PRIME_DIRECTIVE_v1.2.md` (highest authority) and
+> `docs/CLAUDE_MEDIA_CENTER_UI_UX_APPROVED_DECISIONS_2026-11-21.md`. Public name: **Media Center**; PRETORIAN is the internal
+> codename only. Design: Monochrome Silver, one menu at a time. Release: every build is Private Beta; only the owner's explicit
+> "Publish Stable" for a named build may run `.github/workflows/stable.yml`. Pushing to main publishes nothing.
+> Where this file conflicts with the Prime Directive, the Prime Directive wins.
+
 # CODEX – PRETORIAN DEVELOPMENT INSTRUCTIONS
 
 Before starting any task, read AI_RULES.md.
