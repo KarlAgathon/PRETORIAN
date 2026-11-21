@@ -155,7 +155,7 @@ fun PretorianApp() {
     // Diagnostics › Long run: how long the start took, up to the first screen
     LaunchedEffect(Unit) { if (Monitor.startMs == 0L) Monitor.startMs = android.os.SystemClock.uptimeMillis() - android.os.Process.getStartUptimeMillis() }
     val stack = remember {
-        mutableStateListOf<Screen>(if (Store.playlists(ctx).isEmpty()) Screen.AddPlaylist else Screen.Home)
+        mutableStateListOf<Screen>(if (!Onboard.done(ctx)) Screen.AddPlaylist else Screen.Home)
     }
     var version by remember { mutableIntStateOf(0) }
     LaunchedEffect(Look.layout) { Chrome.rail = if (Look.layout == 0) 2 else 3 }

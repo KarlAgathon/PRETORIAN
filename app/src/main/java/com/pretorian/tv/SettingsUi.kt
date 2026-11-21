@@ -275,7 +275,9 @@ fun AddPlaylistScreen(nav: Nav) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val old = remember { EditPlaylist.target }
-    if (Look.age && old == null && Store.playlists(ctx).isEmpty() && Welcome.tab < 0) { WelcomeScreen(nav); return }
+    if (old == null && Store.playlists(ctx).isEmpty() && Welcome.tab < 0) { OnboardingScreen(nav); return }
+    // first setup: Back from the form goes one step back to "How would you like to begin?"
+    androidx.activity.compose.BackHandler(enabled = old == null && Store.playlists(ctx).isEmpty() && Welcome.tab >= 0) { Welcome.tab = -1 }
     var tab by remember { mutableIntStateOf(when { old?.type == SourceType.M3U -> 1; old?.type == SourceType.STALKER -> 2; old == null && Welcome.tab in 1..2 -> Welcome.tab; else -> 0 }) }
     var mac by remember { mutableStateOf(old?.mac ?: Stalker.suggestMac(ctx)) }
     var serial by remember { mutableStateOf(old?.serial ?: "") }
