@@ -158,7 +158,8 @@ object Updater {
             // the file must carry the same signature as the installed PRETORIAN
             val sig = withContext(Dispatchers.IO) { signatureOk(ctx, file) }
             signature = sig
-            if (sig == false) {
+            // Android 9+: "could not check" counts as a failure; older Android checks the signature itself when installing
+            if (sig == false || (sig == null && android.os.Build.VERSION.SDK_INT >= 28)) {
                 file.delete(); Prefs.put("upd_file", ""); progress = -1
                 UpdLog.add(tr("Potpis ne odgovara: instalacija zaustavljena, fajl obrisan"))
                 status = tr("Potpis ne odgovara – fajl nije od ove aplikacije ili je oštećen"); return
@@ -226,7 +227,12 @@ object Updater {
             if (have > 0) c.setRequestProperty("Range", "bytes=$have-")
             try {
                 val code = c.responseCode
-                if (code in 300..399) { cur = URL(URL(cur), c.getHeaderField("Location") ?: throw IOException("redirect")).toString(); return@repeat }
+                if (code in 300..399) {
+                    cur = URL(URL(cur), c.getHeaderField("Location") ?: throw IOException("redirect")).toString()
+                    // updates only over https, never redirected to plain http
+                    if (!cur.startsWith("https://")) throw IOException("insecure redirect")  // i18n-ignore
+                    return@repeat
+                }
                 if (code == 416) return   // already complete
                 if (code !in 200..299) throw IOException("HTTP $code")
                 val append = code == 206 && have > 0

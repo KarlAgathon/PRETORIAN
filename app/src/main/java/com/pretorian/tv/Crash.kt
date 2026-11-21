@@ -37,7 +37,7 @@ object CrashLog {
     fun archive(c: Context, kind: String, text: String) {
         try {
             val d = dir(c) ?: return; d.mkdirs()
-            File(d, kind + "_" + java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date()) + ".txt").writeText(text)  // i18n-ignore
+            File(d, kind + "_" + java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date()) + ".txt").writeText(Redact.text(text))  // i18n-ignore
             d.listFiles()?.sortedByDescending { it.lastModified() }?.drop(10)?.forEach { it.delete() }
         } catch (_: Throwable) {}
     }
@@ -45,7 +45,7 @@ object CrashLog {
     fun saveLogAfterCrash(c: Context) {
         Thread {
             try {
-                val log = Runtime.getRuntime().exec(arrayOf("logcat", "-d", "-t", "2500")).inputStream.bufferedReader().readText()  // i18n-ignore
+                val log = Runtime.getRuntime().exec(arrayOf("logcat", "-d", "-t", "800")).inputStream.bufferedReader().readText()  // i18n-ignore
                 archive(c, "log", log)
             } catch (_: Throwable) {}
         }.start()
@@ -64,7 +64,7 @@ object CrashLog {
             try {
                 val sw = java.io.StringWriter(); e.printStackTrace(java.io.PrintWriter(sw))
                 val txt = header(app) + sw.toString().take(12000)
-                file(app).writeText(txt)
+                file(app).writeText(Redact.text(txt))
                 archive(app, "crash", txt)
             } catch (_: Throwable) {}
             try { CrashGuard.record() } catch (_: Throwable) {}
@@ -89,7 +89,7 @@ object CrashLog {
                     if (!reported) try {
                         val st = android.os.Looper.getMainLooper().thread.stackTrace.joinToString("\n") { "  at $it" }
                         val txt = header(app) + "ZAMRZNUTO (ANR) > 6 s\n" + st.take(8000)  // i18n-ignore
-                        file(app).writeText(txt); archive(app, "freeze", txt)
+                        file(app).writeText(Redact.text(txt)); archive(app, "freeze", txt)
                         reported = true
                     } catch (_: Throwable) {}
                 } else reported = false

@@ -118,13 +118,28 @@ const val FAV_GROUP = "__fav__"
 object Store {
     private fun prefs(c: Context) = c.getSharedPreferences("pretorian", Context.MODE_PRIVATE)
 
+    // decrypted once per change of the stored text (the Keystore is not asked on every call)
+    @Volatile private var cacheRaw: String? = null
+    @Volatile private var cacheList: List<Playlist> = emptyList()
+
     fun playlists(c: Context): List<Playlist> = try {
-        val a = JSONArray(prefs(c).getString("playlists", "[]") ?: "[]")
-        (0 until a.length()).map { Playlist.from(a.getJSONObject(it)) }
+        val raw = prefs(c).getString("playlists", "[]") ?: "[]"
+        if (raw == cacheRaw) cacheList else {
+            val a = JSONArray(raw)
+            val l = (0 until a.length()).map { Playlist.from(a.getJSONObject(it)).let { p ->
+                if (Secret.isSealed(p.user) || Secret.isSealed(p.pass) || Secret.isSealed(p.url))
+                    p.copy(user = Secret.open(p.user), pass = Secret.open(p.pass), url = Secret.open(p.url)) else p
+            } }
+            cacheRaw = raw; cacheList = l; l
+        }
     } catch (e: Exception) { emptyList() }
 
+    /** playlists as plain JSON (for an encrypted backup) */
+    fun playlistsJson(c: Context): String { val a = JSONArray(); playlists(c).forEach { a.put(it.toJson()) }; return a.toString() }
+
     fun savePlaylists(c: Context, list: List<Playlist>) {
-        val a = JSONArray(); list.forEach { a.put(it.toJson()) }
+        // usernames, passwords and links are sealed with the Keystore key before they are written
+        val a = JSONArray(); list.forEach { a.put(it.copy(user = Secret.seal(it.user), pass = Secret.seal(it.pass), url = Secret.seal(it.url)).toJson()) }
         prefs(c).edit().putString("playlists", a.toString()).apply()
     }
 

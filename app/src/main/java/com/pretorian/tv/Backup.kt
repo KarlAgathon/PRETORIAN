@@ -50,11 +50,22 @@ object Backup {
     internal fun included(k: String, parts: Set<Int>?) =
         portable(k) && (parts == null || part(k) < 0 || part(k) in parts)
 
-    private fun payload(ctx: Context, parts: Set<Int>? = null): JSONObject {
+    /** playlists for a backup: plain inside an encrypted file; without a password the logins and links stay out */
+    private fun playlistsFor(ctx: Context, encrypted: Boolean): String {
+        val a = org.json.JSONArray(Store.playlistsJson(ctx))
+        if (!encrypted) for (i in 0 until a.length()) a.getJSONObject(i).apply { put("user", ""); put("pass", ""); if (optString("url").contains('?') || optString("url").contains('@')) put("url", "") }
+        return a.toString()
+    }
+
+    private fun payload(ctx: Context, parts: Set<Int>? = null, encrypted: Boolean = true): JSONObject {
         Watch.flush()
         val p = JSONObject()
-        prefs(ctx).all.forEach { (k, v) ->
+        prefs(ctx).all.forEach { (k0, v0) ->
+            val k = k0
             if (!included(k, parts)) return@forEach
+            // keys and logins of other services never go into a file without a password
+            if (!encrypted && part(k) == 10) return@forEach
+            val v = if (k == "playlists" && v0 is String && v0.trimStart().startsWith("[")) playlistsFor(ctx, encrypted) else v0
             val o = JSONObject()
             when (v) {
                 is String -> o.put("t", "s").put("v", v)
@@ -73,14 +84,16 @@ object Backup {
         return out
     }
 
-    private fun key(password: String, salt: ByteArray): SecretKeySpec {
-        val f = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1")
-        val k = f.generateSecret(PBEKeySpec(password.toCharArray(), salt, 20_000, 256)).encoded
+    /** v2 (Media Center): PBKDF2-HMAC-SHA256 with 120 000 rounds; v1 files (SHA-1, 20 000) can still be read */
+    private const val V2_ROUNDS = 120_000
+    private fun key(password: String, salt: ByteArray, v2: Boolean = true): SecretKeySpec {
+        val f = SecretKeyFactory.getInstance(if (v2) "PBKDF2WithHmacSHA256" else "PBKDF2WithHmacSHA1")
+        val k = f.generateSecret(PBEKeySpec(password.toCharArray(), salt, if (v2) V2_ROUNDS else 20_000, 256)).encoded
         return SecretKeySpec(k, "AES")
     }
 
     fun export(ctx: Context, password: String?, parts: Set<Int>? = null): String {
-        val data = payload(ctx, parts)
+        val data = payload(ctx, parts, encrypted = !password.isNullOrBlank())
         val out = JSONObject().put("mediacenter_backup", 1).put("app", BuildInfo.VERSION)
             .put("date", SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date()))
             .put("playlists", Store.playlists(ctx).size).put("favLists", Favs.lists(ctx).size)
@@ -90,7 +103,7 @@ object Backup {
             val iv = ByteArray(12).also { SecureRandom().nextBytes(it) }
             val c = Cipher.getInstance("AES/GCM/NoPadding"); c.init(Cipher.ENCRYPT_MODE, key(password, salt), GCMParameterSpec(128, iv))
             val enc = c.doFinal(data.toString().toByteArray())
-            out.put("enc", Base64.encodeToString(enc, Base64.NO_WRAP)).put("salt", Base64.encodeToString(salt, Base64.NO_WRAP))
+            out.put("kdf", "pbkdf2-sha256").put("enc", Base64.encodeToString(enc, Base64.NO_WRAP)).put("salt", Base64.encodeToString(salt, Base64.NO_WRAP))
                 .put("iv", Base64.encodeToString(iv, Base64.NO_WRAP))
         }
         return out.toString()
@@ -112,7 +125,7 @@ object Backup {
             if (password.isNullOrBlank()) throw IllegalArgumentException(tr("Backup je zaštićen lozinkom"))
             try {
                 val c = Cipher.getInstance("AES/GCM/NoPadding")
-                c.init(Cipher.DECRYPT_MODE, key(password, Base64.decode(o.str("salt"), Base64.NO_WRAP)), GCMParameterSpec(128, Base64.decode(o.str("iv"), Base64.NO_WRAP)))
+                c.init(Cipher.DECRYPT_MODE, key(password, Base64.decode(o.str("salt"), Base64.NO_WRAP), v2 = o.optString("kdf") == "pbkdf2-sha256"), GCMParameterSpec(128, Base64.decode(o.str("iv"), Base64.NO_WRAP)))
                 JSONObject(String(c.doFinal(Base64.decode(o.str("enc"), Base64.NO_WRAP))))
             } catch (e: Exception) { throw IllegalArgumentException(tr("Pogrešna lozinka")) }
         } else o.getJSONObject("data")
