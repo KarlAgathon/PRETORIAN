@@ -64,7 +64,6 @@ class MainActivity : ComponentActivity() {
         Repo.diskDir = cacheDir
         CatalogDb.init(applicationContext)
         CatalogDb.backfill()
-        Profiles.onStart(this)
         SportsAI.dir = cacheDir
         AutoTranslate.dir = filesDir
         StandardView.onFirstStart(this)   // a new install starts with the built-in standard view
@@ -111,7 +110,6 @@ class MainActivity : ComponentActivity() {
         super.onRestart()
         val away = System.currentTimeMillis() - stoppedAt
         val fromExternal = ExtPlayer.launchedAt > 0 && ExtPlayer.launchedAt >= stoppedAt - 10_000
-        if (stoppedAt > 0 && !fromExternal && Profiles.askAtStart && Profiles.awayLong(away)) Profiles.picker = true
         // every start of the app opens Home (not after the external player or a short trip to the system)
         if (stoppedAt > 0 && away > 15_000 && !fromExternal) AppHome.tick++
     }
@@ -202,7 +200,7 @@ fun PretorianApp() {
     }
     // Settings › General › Last channel at start
     LaunchedEffect(Unit) {
-        if (General.start != 0 && !General.startedOnce && !Lock.simple) {
+        if (General.start != 0 && !General.startedOnce) {
             General.startedOnce = true
             delay(if (General.start == 5) 1500 else 50)
             // Settings › General › "When the app opens, you first see": Back from there goes to Home
@@ -215,7 +213,7 @@ fun PretorianApp() {
             }
         }
     }
-    LaunchedEffect(AppHome.tick) { if (AppHome.tick > 0 && Store.playlists(ctx).isNotEmpty()) { Preview.stop(); Dawn.homeOpen = false; stack.clear(); stack.add(Screen.Home) } }
+    LaunchedEffect(AppHome.tick) { if (AppHome.tick > 0 && Store.playlists(ctx).isNotEmpty()) { Preview.stop(); stack.clear(); stack.add(Screen.Home) } }
 
     // new version at start and every 6 hours; "new" movies and series once in 12 hours; weekly backup
     LaunchedEffect(Unit) {
@@ -284,37 +282,14 @@ fun PretorianApp() {
         CompositionLocalProvider(LocalLayoutDirection provides if (Look.lang == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr) {
             val top = stack.last()
             CrashLog.screen = top.toString().take(80)
-            if (Profiles.picker) {
-                ProfilePicker()
-            } else if (top is Screen.Player) {
+            if (top is Screen.Player) {
                 PlayerScreen(top, nav)
-            } else if (Lock.simple) {
-                Box(Modifier.fillMaxSize().background(C.BgBrush)) {
-                    DuskBackground()
-                    key(version, top) {
-                        // simple (parental) mode: three big tiles; TV, Movies and Series open without any top menu
-                        if (top == Screen.Home || top == Screen.Settings) OnyxSimpleHome(nav)
-                        else Column(Modifier.fillMaxSize().padding(top = 14.dp)) {
-                            Box(Modifier.weight(1f).fillMaxWidth()) {
-                                when (top) {
-                                    Screen.Tv -> TvScreen(nav)
-                                    Screen.Movies -> MoviesScreen(nav)
-                                    Screen.Series -> SeriesScreen(nav)
-                                    is Screen.MovieDetail -> MovieDetailScreen(top.vod, nav)
-                                    is Screen.SeriesDetail -> SeriesDetailScreen(top.item, nav)
-                                    else -> {}
-                                }
-                            }
-                        }
-                    }
-                }
-                AdvancedGate(nav)
             } else {
                 val content: @Composable () -> Unit = {
                         // Settings are not rebuilt when something is saved there: you stay on the page and row you were on
                         key(if (top == Screen.Settings) 0 else version, top) {
                             when (top) {
-                                Screen.Home -> HomeScreen(nav)
+                                Screen.Home -> {}
                                 Screen.Tv -> TvScreen(nav)
                                 Screen.Movies -> MoviesScreen(nav)
                                 Screen.Series -> SeriesScreen(nav)
@@ -337,7 +312,6 @@ fun PretorianApp() {
                 }
             }
             ReminderPopup(nav)
-            if (Profiles.panel) ProfilePanel(nav)
             CrashDialog()
             WhatsNewDialog()
             ImportDialog()
@@ -415,22 +389,6 @@ fun expiryText(exp: String): Pair<String, Int>? {
     }
 }
 
-@Composable
-fun UpdateBanner(nav: Nav) {
-    val u = Updater.available ?: return
-    val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
-    Row(Modifier.fillMaxWidth().padding(horizontal = 36.dp).clip(Rnd(16.dp)).background(C.CardFocus)
-        .border(1.dp, C.Red, Rnd(16.dp)).padding(horizontal = 18.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        Ico(R.drawable.lc_download, 22.dp, C.RedText)
-        T(trf("Stigla je nova verzija %s", u.name), 15.sp, C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
-        val pr = Updater.progress
-        if (pr in 0..100) T(trf("Preuzimam %s %%", pr), 14.sp, C.Soft)
-        else if (pr == 101) T("Instaliram…", 14.sp, C.Soft)
-        else Button("Ažuriraj", R.drawable.lc_download, primary = true) { scope.launch { Updater.install(ctx, u) } }
-    }
-}
 
 /** Where OK on a notification leads: the new episode itself, the new films or series, the match, the update. */
 fun openNote(nav: Nav, n: Note) {
@@ -445,100 +403,8 @@ fun openNote(nav: Nav, n: Note) {
     }
 }
 
-/** Notifications: reminders, new version, new movies and series. */
-@Composable
-fun NotesPopup(onDismiss: () -> Unit, nav: Nav) {
-    Popup("Obavještenja", onDismiss, width = 640.dp) {
-        if (Notes.list.isEmpty()) T("Nema obavještenja.", 14.sp, C.Muted)
-        Notes.list.take(30).forEach { n ->
-            val icon = when (n.kind) { "update" -> R.drawable.lc_download; "vod" -> R.drawable.lc_film; "series" -> R.drawable.lc_monitor; else -> R.drawable.lc_bell }
-            // a finished match is greyed out
-            val done = n.kind == "sport" && GoalNote.ended(GoalNote.idOf(n.id))
-            OptionRow(n.text, icon, sub = SimpleDateFormat("d. M. HH:mm", Locale.getDefault()).format(Date(n.time)), color = if (done) C.Muted else if (n.read) null else C.Amber) {
-                onDismiss(); openNote(nav, n)
-            }
-        }
-        if (Notes.list.isNotEmpty()) OptionRow("Obriši sva obavještenja", R.drawable.lc_trash_2) { Notes.clear(); onDismiss() }
-    }
-    LaunchedEffect(Unit) { delay(1500); Notes.readAll() }
-}
 
-@Composable
-fun HomeScreen(nav: Nav) {
-    val ctx = LocalContext.current
-    val pls = remember { Store.actives(ctx) }
-    val first = remember { FocusRequester() }
-    var notes by remember { mutableStateOf(false) }
-    Box(Modifier.fillMaxSize()) {
-        HomeBackdrop()
-        Column(Modifier.fillMaxSize().padding(top = 22.dp, bottom = 16.dp)) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 36.dp), verticalAlignment = Alignment.CenterVertically) {
-                HomeLogo()
-                Spacer(Modifier.weight(1f))
-                HomeTopPill(nav) { notes = true }
-            }
-            UpdateBanner(nav)
-            if (pls.isEmpty()) { Message("Nema playliste", "Dodaj playlistu u Postavkama"); return@Column }
-            val cont = remember(Watch.rev) { Watch.continueList(ctx) }
-            LaunchedEffect(Unit) { try { Watch.enrichMissingPosters(ctx) } catch (_: Exception) {} }
-            NeonRow(homeTiles(nav, push = false), first, Modifier.weight(1f))
-            if (cont.isNotEmpty()) ContinueRow(cont, nav, Modifier.padding(start = 36.dp, bottom = 12.dp))
-            HomeStatusBar(Modifier.padding(horizontal = 36.dp))
-        }
-    }
-    if (notes) NotesPopup({ notes = false }, nav)
-    LaunchedEffect(Unit) { first.tryFocus() }
-}
 
-/** "Continue watching": started movies and episodes, and the next episode of a series. */
-@Composable
-fun ContinueRow(list: List<Progress>, nav: Nav, modifier: Modifier = Modifier) {
-    val ctx = LocalContext.current
-    var menu by remember { mutableStateOf<Progress?>(null) }
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(9.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Ico(R.drawable.lc_history, 21.dp, C.RedText)
-            T(tr("Nastavi gledati").uppercase(), 19.sp, C.Text, FontWeight.Bold, maxLines = 1)
-        }
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(end = 36.dp)) {
-            items(list, key = { it.url }) { pr ->
-                Focusable(modifier = Modifier.width(326.dp).height(142.dp), onClick = {
-                    val why = Watch.blocked(ctx, pr)
-                    if (why != null) android.widget.Toast.makeText(ctx, why, android.widget.Toast.LENGTH_LONG).show()
-                    else Watch.playable(ctx, pr).let { q -> nav.push(Screen.Player(listOf(PlayItem(q.title, q.url, q.poster, null, null, q.series, q.season, q.episode)), 0, live = false)) }
-                }, onMenu = { menu = pr }, normal = C.Card, shape = Rnd(15.dp), zoom = 1.035f) { focused ->
-                    Row(Modifier.fillMaxSize().padding(8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Box(Modifier.width(88.dp).fillMaxHeight().clip(Rnd(9.dp)).background(C.Tile), contentAlignment = Alignment.Center) {
-                            if (!pr.poster.isNullOrBlank()) {
-                                AsyncImage(model = pr.poster, contentDescription = pr.title, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
-                            } else {
-                                Ico(if (pr.series != null) R.drawable.lc_monitor else R.drawable.lc_film, 34.dp, C.Muted)
-                            }
-                        }
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            T(pr.title, 15.sp, C.Text, FontWeight.Bold, maxLines = 2)
-                            T(tr(if (pr.series != null) "Serija" else "Film").uppercase(), 10.sp, C.Muted, FontWeight.Bold, maxLines = 1)
-                            if (pr.next) {
-                                T(trf("Sljedeća: S%sE%s", pr.season ?: 1, pr.episode ?: 1), 12.sp, C.Green, FontWeight.SemiBold)
-                            } else {
-                                T(trf("Stao si na %s od %s", fmtTime(pr.pos), fmtTime(pr.dur)), 11.sp, C.Muted, maxLines = 1)
-                                Box(Modifier.fillMaxWidth().height(5.dp).clip(Rnd(3.dp)).background(C.CardHi)) {
-                                    Box(Modifier.fillMaxWidth(pr.fraction).height(5.dp).background(if (focused) C.RedText else C.Red))
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    menu?.let { pr ->
-        Popup(pr.title, onDismiss = { menu = null }) {
-            OptionRow("Ukloni iz Nastavi gledati", R.drawable.lc_x) { Watch.remove(ctx, pr.url); menu = null }
-            OptionRow("Označi kao gledano", R.drawable.lc_circle_check) { Watch.setWatched(ctx, pr.url, pr.title, pr.poster, true); menu = null }
-        }
-    }
-}
 
 fun fmtTime(ms: Long): String {
     val s = ms / 1000
@@ -556,6 +422,12 @@ object Follow {
         val o = all()
         val on = if (o.has(s.id)) { o.remove(s.id); false } else { o.put(s.id, org.json.JSONObject().put("pid", pid).put("name", s.name).put("cover", s.cover ?: "").put("n", count)); true }
         Prefs.put("follow", o.toString()); rev++; return on
+    }
+    /** Home › long OK › Clear notifications: no series is marked as having a new episode any more */
+    fun clearFresh() {
+        val o = all(); var changed = false
+        o.keys().forEach { id -> o.optJSONObject(id)?.let { e -> if (e.optBoolean("fresh")) { e.put("fresh", false); changed = true } } }
+        if (changed) { Prefs.put("follow", o.toString()); rev++ }
     }
     /** The series page was opened: its "new episode" card on Home goes away. */
     fun seen(id: String) {

@@ -44,24 +44,20 @@ object Prefs {
     var seekStep: Int get() = str("seek_step", "10").toIntOrNull() ?: 10; set(v) = put("seek_step", v.toString())
 }
 
-/** Simple mode + PIN. The PIN is stored only as a salted SHA-256 hash. */
+/** Parental PIN. The PIN is stored only as a salted SHA-256 hash. */
 object Lock {
-    var simple by mutableStateOf(false)
     /** groups/channels unlocked with the PIN in this session */
     val unlocked = HashSet<String>()
     private var fails = 0
     private var blockedUntil = 0L
 
     fun load() {
-        simple = Prefs.bool("simple_mode")
         // until you choose your own, the PIN for everything is 0000
         if (!hasPin()) { setPin("0000"); Prefs.put("pin_default", true) }
     }
 
     /** true while the PIN is still the factory 0000 */
     fun isDefault() = Prefs.bool("pin_default")
-
-    fun switchSimple(on: Boolean) { simple = on; Prefs.put("simple_mode", on) }
 
     fun hasPin() = Prefs.str("pin_hash").isNotEmpty()
 

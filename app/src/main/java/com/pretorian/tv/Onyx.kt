@@ -254,24 +254,14 @@ fun PosterCard(title: String, image: String?, key: String, progress: Float?, mod
     }
 }
 
-/** 0.6.0/0.6.4: everyone gets the new look and the top menu once; afterwards they can change it. */
+/** First start of Media Center on this box: safe defaults (hardware decoder, adult/LGBT/trans categories hidden behind the PIN). */
 fun onyxMigrate(c: Context) {
     val p = c.getSharedPreferences("pretorian", Context.MODE_PRIVATE)
-    // brand new install: hide adult groups and start in simple mode (TV, Movies, Series); "Napredni mod" is one click away
-    if (p.getInt("look_v", 0) == 0 && !p.contains("look_theme")) p.edit().putBoolean("hide_adult_default", true).putBoolean("simple_mode", true)
-        // 1.0.38: a new box starts with the hardware decoder and with adult, XXX, LGBT and trans categories hidden (PIN opens them)
-        .putLong("tech_decoder", 1L).putBoolean("par_adult", true).putBoolean("par_lgbt", true).putBoolean("par_trans", true).apply()
-    if (p.getInt("look_v", 0) < 7) {   // 0.6.4: "Predvečerje" becomes the look for everyone once
-        Look.theme = "ponoc"; Look.layout = 3
-        p.edit().putInt("look_v", 7).putString("look_theme", "ponoc").putInt("look_layout", 3).apply()
-    }
-    if (p.getInt("look_v", 0) < 8) { Look.theme = "ponoc"; p.edit().putInt("look_v", 8).putString("tv_view", "list").putString("look_theme", "ponoc").apply() }   // 0.8.0: TV opens as the new channel list once
-    // 1.0.63: New Dawn is the only layout; every box gets midnight blue once (black and white stays)
-    if (p.getInt("look_v", 0) < 9) {
-        val t = if (p.getString("look_theme", "") == "bw") "bw" else "ponoc"
-        Look.theme = t; Look.layout = 3
-        p.edit().putInt("look_v", 9).putString("look_theme", t).putInt("look_layout", 3).apply()
-    }
+    if (p.contains("mc_v")) return
+    val e = p.edit().putInt("mc_v", 1).putString("tv_view", "list")
+    if (!p.contains("playlists")) e.putBoolean("hide_adult_default", true).putLong("tech_decoder", 1L)
+        .putBoolean("par_adult", true).putBoolean("par_lgbt", true).putBoolean("par_trans", true)
+    e.apply()
 }
 
 /** The last 10 TV channels you watched, newest first, with the group they were played from. */
@@ -319,7 +309,6 @@ fun ChannelLogo(c: Channel, size: androidx.compose.ui.unit.Dp, onLight: Boolean 
 /** The menu pill of the screen you are on: Up from the top of a screen comes here. */
 object TopNav { val fr = FocusRequester() }
 
-object OnyxState { var askAdvanced by mutableStateOf(false); var askPin by mutableStateOf(false) }
 
 /** Round trip for a row: ▶ on the last item goes to the first, ◀ on the first goes to the last. */
 class RowWrap(val n: Int) {
@@ -333,101 +322,6 @@ class RowWrap(val n: Int) {
         else false
     }
 }
-
-/** Remembers which big tile was opened last in simple mode. */
-object SimpleMemory { var last: Screen = Screen.Tv }
-
-/** Simple (parental) mode home: only TV, Movies and Series as three big tiles, and the mode switch below. */
-@Composable
-fun OnyxSimpleHome(nav: Nav) {
-    val show = Prefs.str("simple_items", "tv,vod,series").split(',')
-    val tiles = buildList {
-        if ("tv" in show) add(Triple(Screen.Tv, R.drawable.lc_tv, "TV"))
-        if ("vod" in show) add(Triple(Screen.Movies, R.drawable.lc_film, "Filmovi"))
-        if ("series" in show) add(Triple(Screen.Series, R.drawable.lc_monitor, "Serije"))
-    }
-    val frs = remember { tiles.associate { it.first to FocusRequester() } }
-    BackHandler(enabled = true) { }   // Back on the tiles does nothing: nobody leaves the app by accident
-    Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("PRETORIAN", style = TextStyle(fontFamily = Inter, fontSize = 15.sp, color = C.Soft, fontWeight = FontWeight.Light, letterSpacing = 5.sp))
-            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                val gap = 28.dp
-                val w = ((maxWidth - gap * (tiles.size - 1)) / tiles.size.coerceAtLeast(1)).coerceAtMost(260.dp)
-                val h = (w * 1.05f).coerceAtMost(maxHeight - 20.dp)
-                Row(horizontalArrangement = Arrangement.spacedBy(gap), verticalAlignment = Alignment.CenterVertically) {
-                    tiles.forEach { (scr, icon, label) ->
-                        Focusable(onClick = { SimpleMemory.last = scr; nav.root(scr) }, focusRequester = frs[scr], shape = Rnd(26.dp),
-                            normal = C.Rail, focused = C.Red, zoom = 1.06f, modifier = Modifier.width(w).height(h).border(1.dp, C.Line, Rnd(26.dp))) { f ->
-                            Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                                Ico(icon, (h * 0.32f), if (f) C.OnRed else C.Text)
-                                T(label, 28.sp, if (f) C.OnRed else C.Text, FontWeight.Bold)
-                            }
-                        }
-                    }
-                }
-            }
-            SimpleModePill(nav)
-        }
-    }
-    LaunchedEffect(Unit) { delay(50); (frs[SimpleMemory.last] ?: frs.values.firstOrNull())?.tryFocus() }
-}
-
-/** Simple mode: one pill; OK opens "Napredni mod" right under it (PIN if one is set). The pill moves up to make room. */
-@Composable
-fun SimpleModePill(nav: Nav) {
-    // the menu opens right under the button (same width, centred); the button moves up to make room. Back or ▲ closes it.
-    var open by remember { mutableStateOf(false) }
-    val fr = remember { FocusRequester() }
-    val btnFr = remember { FocusRequester() }
-    BackHandler(enabled = open) { open = false; try { btnFr.requestFocus() } catch (_: Exception) {} }
-    Column(Modifier.width(260.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Focusable(onClick = { open = !open }, focusRequester = btnFr, shape = Pill, normal = C.CardHi, focused = C.Red, zoom = 1.03f,
-            modifier = Modifier.fillMaxWidth().height(44.dp)) { f ->
-            Row(Modifier.align(Alignment.Center).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Ico(R.drawable.lc_lock, 16.dp, if (f) C.OnRed else C.Text)
-                T("Jednostavni mod", 15.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold)
-                Ico(R.drawable.lc_chevron_down, 14.dp, if (f) C.OnRed else C.Soft)
-            }
-        }
-        if (open) {
-            Focusable(onClick = {
-                open = false
-                if (Prefs.bool("pin_simple_exit", true) && Lock.hasPin()) OnyxState.askPin = true else { Lock.switchSimple(false); nav.root(Screen.Home) }
-            }, focusRequester = fr, shape = Pill, normal = C.Rail, focused = C.Red, zoom = 1.03f,
-                modifier = Modifier.fillMaxWidth().height(44.dp).border(1.dp, C.Line, Pill).onPreviewKeyEvent { e ->
-                    if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionUp) { open = false; try { btnFr.requestFocus() } catch (_: Exception) {}; true } else false
-                }) { f ->
-                Row(Modifier.align(Alignment.Center).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Ico(R.drawable.lc_key_round, 16.dp, if (f) C.OnRed else C.Amber)
-                    T("Napredni mod", 15.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold)
-                }
-            }
-            LaunchedEffect(Unit) { delay(40); fr.tryFocus() }
-        }
-    }
-}
-
-@Composable
-fun AdvancedGate(nav: Nav) {
-    var pin by remember { mutableStateOf(false) }
-    if (OnyxState.askAdvanced) Popup("Aktivirati napredni mod?", onDismiss = { OnyxState.askAdvanced = false }) {
-        T("Pažnja: aktivirate napredni mod i dodatne opcije. Nastavite s pažnjom, jer možete izazvati nepoželjne posljedice i pokvariti podešavanja programa.",
-            16.sp, C.Soft, maxLines = 5)
-        OptionRow("Ostani u jednostavnom modu", R.drawable.lc_check) { OnyxState.askAdvanced = false }
-        OptionRow(if (Prefs.bool("pin_simple_exit", true) && Lock.hasPin()) "Nastavi i unesi PIN" else "Nastavi", R.drawable.lc_key_round, color = C.Amber) {
-            OnyxState.askAdvanced = false
-            if (Prefs.bool("pin_simple_exit", true) && Lock.hasPin()) pin = true else { Lock.switchSimple(false); nav.root(Screen.Settings) }
-        }
-    }
-    LaunchedEffect(OnyxState.askPin) { if (OnyxState.askPin) { OnyxState.askPin = false; pin = true } }
-    if (pin) PinDialog("PIN za napredni mod", onDismiss = { pin = false }) { entered ->
-        val err = Lock.check(entered)
-        if (err == null) { pin = false; Lock.switchSimple(false); nav.root(Screen.Home) }
-        err
-    }
-}
-
 
 /** Settings › Home: which rows the home screen shows and in which order. */
 object HomeRows {

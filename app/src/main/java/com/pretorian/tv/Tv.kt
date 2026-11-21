@@ -175,7 +175,7 @@ suspend fun groupRows(ctx: android.content.Context): List<GRow> {
     val out = ArrayList<GRow>()
     if (Look.age && !Look.dawn && Recent.list().isNotEmpty()) out.add(GRow.Group(GroupRef(null, Category(RECENT_GROUP, tr("Zadnje gledano")))))
     Favs.lists(ctx).forEach { out.add(GRow.Group(GroupRef(null, Category(FAV_PREFIX + it.id, "★ " + it.name)))) }
-    if (!Lock.simple) out.add(GRow.NewFav())
+    out.add(GRow.NewFav())
     val pls = Store.actives(ctx)
     pls.forEachIndexed { _, p ->
         // several playlists: all folded until you open one (its groups are read only then)
@@ -185,7 +185,7 @@ suspend fun groupRows(ctx: android.content.Context): List<GRow> {
             val ovr = Ovr(ctx, p.id)
             out.add(GRow.Group(GroupRef(p.id, Category(ALL_GROUP, tr("Svi kanali")))))
             ovr.groups("live", Repo.liveGroups(p)).forEach { out.add(GRow.Group(GroupRef(p.id, it))) }
-            if (!Lock.simple) out.add(GRow.NewGroup(p.id))
+            out.add(GRow.NewGroup(p.id))
         }
     }
     return out
@@ -252,7 +252,7 @@ fun GroupColumn(
                                     shape = shape,
                                     onClick = { onOpen(g) },
                                     onFocus = { onFocusRow(r.id); onFocusGroup(g) },
-                                    onMenu = if (Lock.simple || g.cat.id == ALL_GROUP || g.cat.id == RECENT_GROUP) null else ({ onMenu(g) }),
+                                    onMenu = if (g.cat.id == ALL_GROUP || g.cat.id == RECENT_GROUP) null else ({ onMenu(g) }),
                                     focusRequester = if (containVerticalFocus) null else fr,
                                     normal = if (Look.dawn) Color.Transparent else if (selected) C.Red.copy(alpha = 0.28f) else Color.Transparent,
                                     focused = if (Look.dawn) Dawn.pill else null,
@@ -829,7 +829,6 @@ fun ChannelOptions(g: GroupRef, ch: Channel, list: List<Channel>, groups: List<C
                 Favs.toggle(lists[0].id, ch); Toast.makeText(ctx, tr("Dodano u favorite"), Toast.LENGTH_SHORT).show(); onChanged(false, true)
             } else mode = "fav"
         }
-        if (Lock.simple) return@Popup
         if (g.cat.id != ALL_GROUP && pos >= 0) {
             OptionRow("Uzmi i pomjeri", R.drawable.lc_hand_grab, sub = "▲ ▼ voziš kanal (drži za brže), OK spušta", color = C.Amber) { mode = "carry" }
             OptionRow("Na sam vrh", R.drawable.lc_chevrons_up) { placeAt(0); onChanged(true, true) }

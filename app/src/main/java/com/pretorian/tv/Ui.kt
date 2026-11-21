@@ -155,20 +155,10 @@ fun Focusable(
     )
 }
 
-/** An icon from the chosen icon set (Settings › Appearance › Icon set); [id] is the Lucide drawable. */
+/** A monochrome icon; [id] is a Lucide drawable. */
 @Composable
 fun Ico(id: Int, size: Dp = 22.dp, tint: Color = C.Text) {
-    val ctx = androidx.compose.ui.platform.LocalContext.current
-    val set = Look.iconSet; val style = Look.iconStyle
-    if (set.startsWith("dl_")) {
-        val bmp = remember(set, id) { IconSets.downloaded(ctx, set, id) }
-        if (bmp != null) {
-            Icon(androidx.compose.ui.graphics.painter.BitmapPainter(bmp), contentDescription = null, modifier = Modifier.size(size), tint = tint)
-            return
-        }
-    }
-    val res = remember(set, style, id) { IconSets.resolve(ctx, id, set, style) }
-    Icon(painterResource(res), contentDescription = null, modifier = Modifier.size(size), tint = tint)
+    Icon(painterResource(id), contentDescription = null, modifier = Modifier.size(size), tint = tint)
 }
 
 /** [template] in the app language with its %s filled in: trf("Sezona %s", 2). */

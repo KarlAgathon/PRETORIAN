@@ -34,7 +34,7 @@ object Backup {
         k == "playlists" || k.startsWith("pl_") -> 0
         k.startsWith("epg") -> 1
         k.startsWith("ovr_") -> 2
-        k.startsWith("profile") || k.startsWith("pin_") || k == "simple_mode" || k == "simple_items" -> 3
+        k.startsWith("profile") || k.startsWith("pin_") -> 3
         k.startsWith("fav") || k == "mylist" -> 4
         k == "recent_ch" -> 5
         k == "reminders" || k.startsWith("rem_") -> 6
@@ -70,14 +70,6 @@ object Backup {
         if (parts == null || 5 in parts) listOf("progress.json").forEach { n -> File(ctx.filesDir, n).takeIf { it.exists() }?.let { files.put(n, it.readText()) } }
         val out = JSONObject().put("prefs", p).put("files", files).put("full", parts == null) // i18n-ignore
         if (parts != null) out.put("parts", org.json.JSONArray(parts.toList()))
-        if (parts == null || 3 in parts) out.put("profiles", Profiles.allSnapshots(ctx).also { profiles ->
-            for (id in profiles.keys()) {
-                val snapshot = profiles.getJSONObject(id)
-                val settings = snapshot.getJSONObject("prefs")
-                settings.keys().asSequence().filter { !included(it, parts) }.toList().forEach { settings.remove(it) }
-                if (parts != null && 5 !in parts) snapshot.remove("files")
-            }
-        })
         return out
     }
 
@@ -151,25 +143,6 @@ object Backup {
                 writes[File(ctx.filesDir, "progress.json")] = contents
             }
         }
-        val profiles = data.optJSONObject("profiles")
-        if (profiles != null && (selection == null || 3 in selection)) {
-            for (id in profiles.keys()) {
-                require(id.matches(Regex("[a-zA-Z0-9_-]+")))
-                val file = File(File(ctx.filesDir, "profiles"), "$id.json")
-                val snapshot = profiles.getJSONObject(id)
-                val merged = if (!full && file.exists()) JSONObject(file.readText()) else JSONObject()
-                val settings = merged.optJSONObject("prefs") ?: JSONObject()
-                val incoming = snapshot.getJSONObject("prefs")
-                for (k in incoming.keys()) {
-                    if (included(k, selection) && !Profiles.isShared(k)) settings.put(k, incoming.getJSONObject(k))
-                }
-                settings.keys().asSequence().filterNot(::portable).toList().forEach { settings.remove(it) }
-                merged.put("prefs", settings)
-                if (selection == null || 5 in selection) snapshot.optJSONObject("files")?.let { merged.put("files", it) }
-                writes[file] = merged.toString()
-            }
-        }
-        // The live profile is already represented by the top-level preferences and progress.
         val previous = writes.keys.associateWith { if (it.exists()) it.readBytes() else null }
         val changed = mutableListOf<File>()
         try {
