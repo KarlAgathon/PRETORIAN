@@ -1261,146 +1261,99 @@ private val SETTINGS_LINKS = mapOf(
     ),
 )
 
-/** Settings screen of the new look: sections on the left, the page on the right, sub-pages open inside. */
+/** Settings shows one page at a time. Back returns to the row that opened it. */
 @Composable
 fun SettingsScreen2(nav: Nav) {
     val ctx = LocalContext.current
-    val list = SECTIONS2.filter { SetMode.advanced || it.id in BASIC }
-    var section by remember { mutableStateOf((SettingsNav.section?.also { SettingsNav.section = null } ?: SettingsNav.last ?: if (Updater.available != null) "update" else "profile")
-        .let { s -> if (list.any { it.id == s }) s else "profile" }) }
-    var sub by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(section) { SettingsNav.last = section; sub = null }
-    // a notification or a button elsewhere asks for a section while Settings is already open
-    LaunchedEffect(SettingsNav.section) { SettingsNav.section?.let { s -> if (list.any { it.id == s }) section = s; SettingsNav.section = null } }
-    var search by remember { mutableStateOf(false) }
-    val first = remember { FocusRequester() }
-    var listFocused by remember { mutableIntStateOf(0) }
-    // optional: Settings behind the PIN
     var unlocked by remember { mutableStateOf(!(Prefs.bool("pin_settings") && Lock.hasPin())) }
     if (!unlocked) {
-        PinDialog("Postavke", tr("Unesi PIN"), onDismiss = { nav.back() }) { pin -> val err = Lock.check(pin); if (err == null) unlocked = true; err }
+        PinDialog("Postavke", tr("Unesi PIN"), onDismiss = { nav.back() }) { pin ->
+            Lock.check(pin).also { if (it == null) unlocked = true }
+        }
         return
     }
-    var inPage by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-    // Settings uses the selected Modern Dark Blue accent without changing the user's app-wide preference.
+    val sections = SECTIONS2.filter { SetMode.advanced || it.id in BASIC }
+    var path by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(arrayListOf("overview")) }
+    val page = path.last()
+    val savedPages = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+    var search by remember { mutableStateOf(false) }
+    fun open(id: String) {
+        if (page != id) path = ArrayList(path + id)
+    }
+    LaunchedEffect(SettingsNav.section) {
+        SettingsNav.section?.let { target ->
+            SettingsNav.section = null
+            open(target)
+        }
+    }
     DisposableEffect(Unit) {
         val previousAccent = Look.accent
         Look.accent = 1
         onDispose { if (Look.accent == 1) Look.accent = previousAccent }
     }
-    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
-    // like Search: inside a section the list shrinks to a narrow rail of icons and the page gets the room
-    val railW by androidx.compose.animation.core.animateDpAsState(if (inPage) 74.dp else 270.dp, label = "rail")
-    val slim = inPage
-    val classic = Look.layout == 0 || Look.dawn
-    LaunchedEffect(classic, inPage) {
-        if (classic) {
-            Chrome.driven = true
-            Chrome.rail = if (inPage) 0 else 2
-        }
+    BackHandler(path.size > 1 && !search) {
+        savedPages.removeState(page)
+        path = ArrayList(path.dropLast(1))
     }
-    DisposableEffect(Unit) {
-        onDispose {
-            if (classic) {
-                Chrome.driven = false
-                Chrome.rail = 2
-            }
+    savedPages.SaveableStateProvider(page) {
+        var selected by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
+        val focus = remember { FocusRequester() }
+        fun select(id: String) {
+            selected = id
+            open(id)
         }
-    }
-    Row(Modifier.fillMaxSize()) {
-        Column(Modifier.width(railW).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 8.dp, top = 6.dp, bottom = 16.dp)
-            .onFocusChanged { if (classic && it.hasFocus) Chrome.rail = 2 },
-            verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            if (!slim) {
-                Row(Modifier.fillMaxWidth().padding(start = 8.dp, top = 2.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                    Ico(R.drawable.lc_shield_check, 25.dp, Color(0xFF19AFFF))
-                    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-                        T("PRETORIAN", 16.sp, C.Text, FontWeight.ExtraBold, maxLines = 1)
-                        T("POSTAVKE", 9.sp, Color(0xFF19AFFF), FontWeight.Bold, maxLines = 1)
+        Box(Modifier.fillMaxSize().padding(horizontal = 34.dp, vertical = 8.dp)
+            .focusRequester(focus).focusGroup()) {
+            when (page) {
+                "overview" -> SetPage("Postavke") {
+                    OptionRow("Playliste", R.drawable.lc_list,
+                        focusRequester = if (selected == null || selected == "playlists") focusRowRequester() else null) { select("playlists") }
+                    sections.forEach { section ->
+                        OptionRow(section.title, section.icon, sub = section.sub,
+                            focusRequester = if (selected == section.id) focusRowRequester() else null) { select(section.id) }
                     }
+                    OptionRow("Pretraži postavke", R.drawable.lc_search) { search = true }
                 }
-            }
-            // search in all settings
-            Focusable(modifier = Modifier.fillMaxWidth().height(40.dp).padding(bottom = 4.dp), onClick = { search = true }, shape = Pill,
-                normal = Color.White.copy(alpha = 0.06f), focused = C.Red, zoom = 1f) { f ->
-                Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Ico(R.drawable.lc_search, 14.dp, if (f) C.OnRed else C.Muted); if (!slim) T("Pretraži postavke", 13.sp, if (f) C.OnRed else C.Muted, maxLines = 1)
-                }
-            }
-            list.forEach { s ->
-                val sel = s.id == section
-                Focusable(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), onClick = { section = s.id; sub = null }, onFocus = { listFocused++ },
-                    focusRequester = if (sel) first else null, normal = if (sel) C.CardHi else Color.Transparent, focused = C.Red, zoom = 1f) { f ->
-                    Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Box(Modifier.size(26.dp).clip(Rnd(8.dp)).background(if (f) C.OnRed.copy(alpha = 0.08f) else C.Card), contentAlignment = Alignment.Center) {
-                            Ico(s.icon, 14.dp, if (f) C.OnRed else C.Text)
-                        }
-                        if (!slim) Column(Modifier.weight(1f)) {
-                            T(s.title, 14.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, maxLines = 1)
-                            T(if (s.id == "mode") (if (SetMode.advanced) "Napredno" else "Osnovno") else s.sub, 11.sp, if (f) C.OnRed.copy(alpha = 0.6f) else C.Muted, maxLines = 1)
-                        }
-                        if (!slim && s.id == "update" && Updater.available != null) Box(Modifier.size(16.dp).clip(CircleShape).background(C.Danger), contentAlignment = Alignment.Center) {
-                            T("1", 9.sp, Color.White, FontWeight.Bold)
-                        }
-                    }
-                }
+                "playlists" -> PlaylistsV2(nav, ::open)
+                "groups" -> GroupManager(nav)
+                "epg" -> { val epl = PlEdit.id?.let { id -> Store.playlists(ctx).firstOrNull { it.id == id } }
+                    SetPage(if (epl != null) trf("EPG · %s", epl.name) else tr("EPG izvori"), "OK: meni · desno: uključi/ugasi · ▲ ▼ redoslijed") { EpgSourcesBlock(epl) } }
+                "plists" -> PlaylistsListV2(nav)
+                "lookmore" -> LookPage()
+                "device" -> DeviceV2()
+                "profiles" -> ProfilesV2()
+                "simple" -> SimpleV2(nav)
+                "parental" -> ParentalV2()
+                "homepage" -> HomeV2()
+                "general" -> GeneralV2()
+                "player" -> PlayerV2(::open)
+                "look" -> LookV2(::open)
+                "language" -> LanguageV2()
+                "sports" -> SportV2()
+                "reminders" -> RemindersV2(nav)
+                "saver" -> SaverV2()
+                "diagnostics" -> DiagnosticsV2()
+                "backup" -> BackupSettings()
+                "update" -> UpdateV2()
+                "about" -> AboutV2(onSub = ::open, onSection = ::open)
+                else -> SettingsHubPage(page, selected, ::select)
             }
         }
-        // Back goes one step: sub-page → its page, page → the list of sections, list → out of Settings
-        BackHandler(enabled = true) {
-            when {
-                sub != null -> { SetFocus.pending = true; sub = null }
-                inPage -> { inPage = false; scope.launch { first.tryFocus() } }
-                else -> nav.back()
-            }
-        }
-        LaunchedEffect(listFocused) { inPage = false }
-        // into a section: Right lands on the item at the same height; Left from anywhere in the page goes back to this section on the left
-        val pageFr = remember { FocusRequester() }
-        Box(Modifier.weight(1f).fillMaxHeight().onFocusChanged { if (it.hasFocus) inPage = true }
-            .onKeyEvent { ev ->
-                if (ev.type == androidx.compose.ui.input.key.KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
-                    if (!focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Left)) scope.launch { inPage = false; first.tryFocus() }
-                    true
-                } else false
-            }
-            .focusProperties {
-                @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
-                exit = { d -> if (d == androidx.compose.ui.focus.FocusDirection.Left) { inPage = false; first } else FocusRequester.Default }
-            }
-            .focusRequester(pageFr).focusGroup()
-            .padding(start = 18.dp, end = 24.dp, top = 4.dp, bottom = 8.dp)) {
-            key(section, sub) {
-                when (sub) {
-                    "groups" -> GroupManager(nav)
-                    "epg" -> { val epl = PlEdit.id?.let { id -> Store.playlists(ctx).firstOrNull { it.id == id } }
-                        SetPage(if (epl != null) trf("EPG · %s", epl.name) else tr("EPG izvori"), "OK: meni · desno: uključi/ugasi · ▲ ▼ redoslijed") { EpgSourcesBlock(epl) } }
-                    "plists" -> PlaylistsListV2(nav)
-                    "lookmore" -> LookPage()
-                    "device" -> DeviceV2()
-                    "profiles" -> ProfilesV2()
-                    "simple" -> SimpleV2(nav)
-                    "parental" -> ParentalV2()
-                    "homepage" -> HomeV2()
-                    "general" -> GeneralV2()
-                    "player" -> PlayerV2 { sub = it }
-                    "look" -> LookV2 { sub = it }
-                    "language" -> LanguageV2()
-                    "sports" -> SportV2()
-                    "reminders" -> RemindersV2(nav)
-                    "saver" -> SaverV2()
-                    "diagnostics" -> DiagnosticsV2()
-                    "backup" -> BackupSettings()
-                    "update" -> UpdateV2()
-                    "about" -> AboutV2(onSub = { sub = it }, onSection = { section = it })
-                    else -> SettingsHubPage(section, onOpen = { sub = it })
-                }
-            }
+        LaunchedEffect(page) {
+            if (page != "overview" && page !in SETTINGS_LINKS) focus.tryFocus()
         }
     }
-    if (search) SettingsSearch(list.map { it.id }, onDismiss = { search = false }) { id -> search = false; section = id }
-    LaunchedEffect(Unit) { try { first.requestFocus() } catch (_: Exception) {} }
+    if (search) SettingsSearch(sections.map { it.id }, onDismiss = { search = false }) {
+        search = false
+        open(it)
+    }
+}
+
+@Composable
+private fun focusRowRequester(): FocusRequester {
+    val requester = remember { FocusRequester() }
+    LaunchedEffect(requester) { requester.tryFocus() }
+    return requester
 }
 
 /** Every option by name, with the section it lives in. */
@@ -1416,12 +1369,13 @@ private val SEARCH_INDEX = listOf(
 )
 
 @Composable
-private fun SettingsHubPage(section: String, onOpen: (String) -> Unit) {
+private fun SettingsHubPage(section: String, selected: String?, onOpen: (String) -> Unit) {
     val title = SECTIONS2.firstOrNull { it.id == section }?.title ?: "Postavke"
     val subtitle = SECTIONS2.firstOrNull { it.id == section }?.sub
     SetPage(title, subtitle) {
-        SETTINGS_LINKS[section].orEmpty().forEach { item ->
-            OptionRow(item.title, item.icon, sub = item.sub) { onOpen(item.id) }
+        SETTINGS_LINKS[section].orEmpty().forEachIndexed { index, item ->
+            OptionRow(item.title, item.icon, sub = item.sub,
+                focusRequester = if (selected == item.id || (selected == null && index == 0)) focusRowRequester() else null) { onOpen(item.id) }
         }
     }
 }
