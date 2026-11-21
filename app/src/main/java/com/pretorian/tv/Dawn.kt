@@ -368,6 +368,9 @@ fun DawnSearchResults(
     // one category at a time, never a mixed "all" list (approved decision): the last one is remembered
     var filt by remember { mutableStateOf(SearchMem.open?.takeIf { it in listOf("tv", "vod", "series", "sport", "settings") } ?: "tv") }
     LaunchedEffect(filt) { SearchMem.open = filt }
+    // the chosen category has nothing for this word: show the first one that has results (the list on the left still shows all counts)
+    val counts = listOf("tv" to tv.size, "vod" to movies.size, "series" to shows.size, "sport" to sport.size, "settings" to settings.size)
+    LaunchedEffect(query, counts) { if (counts.first { it.first == filt }.second == 0) counts.firstOrNull { it.second > 0 }?.let { filt = it.first } }
     val filters = listOf(
         Triple("tv", "TV", tv.size), Triple("vod", "Filmovi", movies.size),
         Triple("series", "Serije", shows.size), Triple("sport", "Sport", sport.size), Triple("settings", "Postavke", settings.size),
