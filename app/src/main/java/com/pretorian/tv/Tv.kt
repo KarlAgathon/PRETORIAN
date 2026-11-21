@@ -494,7 +494,15 @@ private fun TvList(nav: Nav) {
         }
     } else {
         val g = st.group
-        val chs by load(g?.key, Favs.rev, keep = true) { g?.let { channelsOf(ctx, it) } ?: emptyList() }
+        var listRev by remember(g?.key) { mutableIntStateOf(0) }
+        val membershipRev = when {
+            g?.cat?.id == RECENT_GROUP -> Recent.rev
+            g?.pid == null || g.cat.id == UNIFIED_FAVORITES -> Favs.rev
+            else -> 0
+        }
+        val chs by key(g?.key) {
+            load(st.rev, listRev, membershipRev, keep = true) { g?.let { channelsOf(ctx, it) } ?: emptyList() }
+        }
         var opts by remember { mutableStateOf<Channel?>(null) }
         LaunchedEffect(focusedCh, chs) {
             val list = (chs as? Load.Ok)?.value ?: return@LaunchedEffect
@@ -504,8 +512,8 @@ private fun TvList(nav: Nav) {
         Row(Modifier.fillMaxSize().padding(start = 34.dp, end = 38.dp, top = 6.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Box(Modifier.weight(0.42f).fillMaxHeight().dawnGlass().padding(vertical = 4.dp)) {
                 if (g != null) key(g.key, st.rev) {
-                    ChannelList(g, nav, st.gate, rows, enterTick, onFocusCh = { focusedCh = it },
-                        onBackToGroups = { PreviewSel.ch = null; Preview.stop(); backToGroups() }, onChanged = { st.rev++ }, focusOnStart = true)
+                    ChannelList(g, nav, st.gate, rows, chs, enterTick, onFocusCh = { focusedCh = it },
+                        onBackToGroups = { PreviewSel.ch = null; Preview.stop(); backToGroups() }, onChanged = { reloadGroups -> if (reloadGroups) st.rev++ else listRev++ }, focusOnStart = true)
                 }
             }
             if (g?.pid == null) Spacer(Modifier.weight(0.58f)) else Column(Modifier.weight(0.58f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -674,12 +682,10 @@ fun playChannels(nav: Nav, list: List<Channel>, index: Int) {
 }
 
 @Composable
-private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GRow>>, enterTick: Int = 0, onFocusCh: (Channel) -> Unit = {}, onBackToGroups: () -> Unit, onChanged: () -> Unit, focusOnStart: Boolean = false) {
+private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GRow>>, state: Load<List<Channel>>, enterTick: Int = 0, onFocusCh: (Channel) -> Unit = {}, onBackToGroups: () -> Unit, onChanged: (Boolean) -> Unit, focusOnStart: Boolean = false) {
     val ctx = LocalContext.current
-    var listRev by remember { mutableIntStateOf(0) }
     val isFav = g.pid == null && g.cat.id != RECENT_GROUP
     val restoreUrl = remember(g.key) { TvMemory.returnUrl.takeIf { TvMemory.restore } }
-    val state by load(g.key, listRev, Favs.rev, Recent.rev, keep = true) { channelsOf(ctx, g) }
     var menu by remember { mutableStateOf<Channel?>(null) }
     var menuUrl by remember { mutableStateOf<String?>(null) }
     val cWrap = remember { Wrap() }
@@ -780,9 +786,8 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                             menu = null
                         }
                     } else ChannelOptions(g, ch, list, groups, onDismiss = { menu = null }) { reload, close ->
-                        listRev++
                         if (close) menu = null
-                        if (reload) onChanged()
+                        onChanged(reload)
                     }
                 }
                 // after the options close, the focus stays on that channel
