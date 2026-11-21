@@ -209,7 +209,7 @@ private fun DawnCatchup(nav: Nav) {
                 zoom = 1f, modifier = Modifier.fillMaxWidth().height(40.dp).border(1.dp, Color(0x4DFFFFFF), Pill)) { f ->
                 Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Ico(R.drawable.lc_search, 16.dp, if (f) Dawn.onPill else Color.White)
-                    T(q.ifBlank { tr("Traži kanal") }, 14.sp, if (f) Dawn.onPill else Color(0xFFD5DBE3))
+                    T(q.ifBlank { tr("Traži kanal") }, 14.sp, if (f) Dawn.onPill else C.Soft)
                 }
             }
             when (val s = chans) {
@@ -225,7 +225,7 @@ private fun DawnCatchup(nav: Nav) {
                                 focusRequester = if (i == 0) first else null, shape = Rnd(10.dp), normal = if (sel) Color(0x26FFFFFF) else Color.Transparent,
                                 focused = Dawn.pill, focusBorderColor = Color.Transparent, zoom = 1f) { f ->
                                 Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    T("%03d".format(c.num), 14.sp, if (f) Dawn.onPill else Color(0xFFD5DBE3))
+                                    T("%03d".format(c.num), 14.sp, if (f) Dawn.onPill else C.Soft)
                                     ChannelLogo(c.logo, c.name)
                                     T(c.name, 15.sp, if (f) Dawn.onPill else Color.White, if (f) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
                                 }
@@ -266,7 +266,7 @@ private fun DawnArchive(c: Channel, day: Int, onDay: (Int) -> Unit, nav: Nav) {
             ChannelLogo(ch.logo, ch.name)
             Column(Modifier.weight(1f)) {
                 T(ch.name, 20.sp, Color.White, FontWeight.Bold)
-                T("Catch-up / Vraćanje programa", 13.sp, Color(0xFFC3CCD8))
+                T("Catch-up / Vraćanje programa", 13.sp, C.Soft)
             }
             Focusable(onClick = { fav = true }, shape = Rnd(10.dp), normal = Color.Transparent, focused = Dawn.pill, focusBorderColor = Color.Transparent, zoom = 1f,
                 modifier = Modifier.height(40.dp).border(1.dp, Color(0x4DFFFFFF), Rnd(10.dp))) { f ->
@@ -284,7 +284,7 @@ private fun DawnArchive(c: Channel, day: Int, onDay: (Int) -> Unit, nav: Nav) {
                 val sel = d == day
                 val label = if (d == 0) tr("Danas") else SimpleDateFormat("EEE", Locale(Look.lang)).format(Date(Sports.dayStart(-d)))
                 val date = SimpleDateFormat("d MMM", Locale(Look.lang)).format(Date(Sports.dayStart(-d)))
-                Focusable(onClick = { onDay(d) }, shape = Rnd(10.dp), normal = if (sel) Color(0xD9D5DBE3) else Color.Transparent, focused = Dawn.pill,
+                Focusable(onClick = { onDay(d) }, shape = Rnd(10.dp), normal = if (sel) Color(0xD9DADADE) else Color.Transparent, focused = Dawn.pill,
                     focusBorderColor = Color.Transparent, zoom = 1f, modifier = Modifier.width(120.dp).height(50.dp).border(1.dp, Color(0x4DFFFFFF), Rnd(10.dp))) { f ->
                     val fg = if (f || sel) Dawn.onPill else Color.White
                     Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -316,7 +316,7 @@ private fun DawnArchive(c: Channel, day: Int, onDay: (Int) -> Unit, nav: Nav) {
                                 Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                                     T(SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(e.start)), 14.sp, fg)
                                     T(e.title, 15.sp, fg, if (f) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
-                                    T(trf("%s min", ((e.end - e.start) / 60_000).toInt()), 12.sp, if (f) fg else Color(0xFFC3CCD8))
+                                    T(trf("%s min", ((e.end - e.start) / 60_000).toInt()), 12.sp, if (f) fg else C.Soft)
                                     Ico(if (f) R.drawable.lc_play else R.drawable.lc_history, 16.dp, fg)
                                 }
                             }
@@ -326,15 +326,15 @@ private fun DawnArchive(c: Channel, day: Int, onDay: (Int) -> Unit, nav: Nav) {
                         val e = pick ?: items.last()
                         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).dawnGlass(12.dp), contentAlignment = Alignment.Center) {
                             val pc = PreviewSel.ch
-                            if (pc != null) PreviewBox(pc, Modifier.fillMaxSize()) else Ico(R.drawable.lc_play, 46.dp, Color(0x99D5DBE3))
+                            if (pc != null) PreviewBox(pc, Modifier.fillMaxSize()) else Ico(R.drawable.lc_play, 46.dp, Color(0x99DADADE))
                         }
                         T(e.title, 19.sp, Color.White, FontWeight.Bold)
-                        T(e.times() + " · " + trf("%s min", ((e.end - e.start) / 60_000).toInt()), 13.sp, Color(0xFFC3CCD8))
-                        cleanDesc(e.desc)?.let { T(it, 13.sp, Color(0xFFD5DBE3), maxLines = 3) }
+                        T(e.times() + " · " + trf("%s min", ((e.end - e.start) / 60_000).toInt()), 13.sp, C.Soft)
+                        cleanDesc(e.desc)?.let { T(it, 13.sp, C.Soft, maxLines = 3) }
                         Spacer(Modifier.weight(1f))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             @Composable fun B(label: String, icon: Int, primary: Boolean, onClick: () -> Unit) {
-                                Focusable(onClick = onClick, shape = Rnd(10.dp), normal = if (primary) Color(0xD9D5DBE3) else Color.Transparent, focused = Dawn.pill,
+                                Focusable(onClick = onClick, shape = Rnd(10.dp), normal = if (primary) Color(0xD9DADADE) else Color.Transparent, focused = Dawn.pill,
                                     focusBorderColor = Color.Transparent, zoom = 1f, modifier = Modifier.weight(1f).height(44.dp).border(1.dp, Color(0x4DFFFFFF), Rnd(10.dp))) { f ->
                                     val fg = if (f || primary) Dawn.onPill else Color.White
                                     Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {

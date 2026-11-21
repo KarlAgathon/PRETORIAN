@@ -261,7 +261,7 @@ fun GroupColumn(
                                 ) { gf ->
                                     Row(Modifier.fillMaxSize().padding(horizontal = if (Look.dawn) 20.dp else 12.dp), verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        if (Look.dawn) T(g.cat.name, 18.sp, if (gf) Dawn.onPill else Color(0xFFEFF2F6), if (gf) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, modifier = Modifier.weight(1f))
+                                        if (Look.dawn) T(g.cat.name, 18.sp, if (gf) Dawn.onPill else C.Text, if (gf) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, modifier = Modifier.weight(1f))
                                         else {
                                         if (selected) Dot(C.Red, 7.dp)
                                         if (width > 100.dp) T(g.cat.name, if (classicStyle) 13.sp else Rows.font, if (selected) C.Text else C.Soft, if (selected) FontWeight.Bold else FontWeight.Normal, maxLines = 1, modifier = Modifier.weight(1f)) else Ico(R.drawable.lc_layers, 18.dp, if (selected) C.Text else C.Muted)
@@ -690,10 +690,10 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                             ) { f ->
                                 Row(Modifier.fillMaxSize().clipToBounds().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    T("%03d".format(ch.num), 15.sp, if (f) Dawn.onPill else Color(0xFFD5DBE3),
+                                    T("%03d".format(ch.num), 15.sp, if (f) Dawn.onPill else C.Soft,
                                         modifier = Modifier.width(34.dp))
                                     ChannelLogo(ch.logo, ch.name)
-                                    T(ch.name, 16.sp, if (f) Dawn.onPill else Color(0xFFEFF2F6), if (f) FontWeight.SemiBold else FontWeight.Normal,
+                                    T(ch.name, 16.sp, if (f) Dawn.onPill else C.Text, if (f) FontWeight.SemiBold else FontWeight.Normal,
                                         maxLines = 1, modifier = Modifier.weight(1f))
                                     if (locked) Ico(R.drawable.lc_lock, 16.dp, C.Muted)
                                     if (!isFav && Favs.inAny(ctx, ch)) T("★", 17.sp, C.Amber)
@@ -874,7 +874,7 @@ fun ChannelLogo(url: String?, name: String) {
     val clean = name.substringAfterLast('|').substringAfterLast(':').trim().ifBlank { name }
     val hue = (clean.hashCode() and 0x7fffffff) % 360
     Box(Modifier.width(w).height(h).clip(Rnd(8.dp))
-        .background(if (url != null && !failed) (if (C.IsLight) Color(0xFFE6E8EC) else Color(0xFF1C2230))
+        .background(if (url != null && !failed) (if (C.IsLight) C.Text else Color(0xFF1C2230))
                     else Color.hsv(hue.toFloat(), 0.45f, if (C.IsLight) 0.85f else 0.38f)),
         contentAlignment = Alignment.Center) {
         if (url != null && !failed) {

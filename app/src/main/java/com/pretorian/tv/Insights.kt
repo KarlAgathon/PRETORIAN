@@ -284,7 +284,7 @@ fun DiagnosticsV2() {
             // ---- watched (two columns wide) and uptime
             // every card full width, one under the other, so all the text can be read
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                InfoCard("Gledano", fmtDur(total), trf("ukupno · %s", tr(pw)), R.drawable.lc_play, Color(0xFF3B82F6), Modifier.fillMaxWidth(),
+                InfoCard("Gledano", fmtDur(total), trf("ukupno · %s", tr(pw)), R.drawable.lc_play, Silver.TextSoft, Modifier.fillMaxWidth(),
                     action = { SmallBtn(tr("↺ Reset")) { Stats.reset(listOf("tv", "ser", "mov", "eps", "films", "sea", "ch")); rev++ } }) {
                     Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(36.dp)) {
                         listOf(Stats.sum("eps", period).toString() to "epizoda", Stats.seasons(period).toString() to "sezona",
@@ -293,13 +293,13 @@ fun DiagnosticsV2() {
                         }
                     }
                     if (total > 0) Row(Modifier.fillMaxWidth().padding(top = 8.dp).height(6.dp).clip(Pill)) {
-                        listOf(tv to Color(0xFF22B8CF), ser to Color(0xFF8B5CF6), mov to Color(0xFFF59E0B)).filter { it.first > 0 }.forEach { (v, c) ->
+                        listOf(tv to Silver.TextSoft, ser to Silver.TextSoft, mov to Color(0xFFF59E0B)).filter { it.first > 0 }.forEach { (v, c) ->
                             Box(Modifier.weight(v.toFloat()).fillMaxHeight().background(c))
                         }
                     }
                     Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         fun pct(v: Long) = if (total > 0) (v * 100 / total).toString() + " %" else "0 %"
-                        T("● TV " + pct(tv), 11.sp, Color(0xFF22B8CF)); T("● " + tr("Serije") + " " + pct(ser), 11.sp, Color(0xFF8B5CF6))
+                        T("● TV " + pct(tv), 11.sp, Silver.TextSoft); T("● " + tr("Serije") + " " + pct(ser), 11.sp, Silver.TextSoft)
                         T("● " + tr("Filmovi") + " " + pct(mov), 11.sp, Color(0xFFF59E0B))
                         Spacer(Modifier.weight(1f))
                         Stats.topChannel(period)?.let { T(tr("Najviše") + ": " + it, 11.sp, C.Text, FontWeight.Bold) }
@@ -326,7 +326,7 @@ fun DiagnosticsV2() {
                         stats = listOf(Triple(if (since > 0) trf("Ukupno od %s", SimpleDateFormat("dd.MM. HH:mm", Locale.US).format(Date(since))) else tr("Ukupno od reseta"), fmtGb(aTv + aSer + aMov), C.Amber),  // i18n-ignore
                             Triple("TV", fmtGb(aTv), null), Triple("Serije", fmtGb(aSer), null), Triple("Filmovi", fmtGb(aMov), null)))
                 },
-                { m -> InfoCard("Brzina interneta", if (vpn) tr("VPN je uključen") else tr("bez VPN-a"), null, R.drawable.lc_gauge2, Color(0xFF06B6D4), m) {
+                { m -> InfoCard("Brzina interneta", if (vpn) tr("VPN je uključen") else tr("bez VPN-a"), null, R.drawable.lc_gauge2, Silver.TextSoft, m) {
                     // two rows, each with its own test: the VPN row only measures while a VPN is on
                     val norm = Prefs.str("speed_norm"); val vp = Prefs.str("speed_vpn")
                     run {
@@ -343,7 +343,7 @@ fun DiagnosticsV2() {
                     if (two) Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { content(Modifier.weight(1f)) } else Column { content(Modifier.fillMaxWidth()) }
                     }
                 } },
-                { m -> InfoCard("Ažuriranja", trf("%s ovaj mjesec", updM), null, R.drawable.lc_refresh_cw, Color(0xFF8B5CF6), m,
+                { m -> InfoCard("Ažuriranja", trf("%s ovaj mjesec", updM), null, R.drawable.lc_refresh_cw, Silver.TextSoft, m,
                     action = { SmallBtn(tr("↺ Reset")) { Stats.reset(listOf("upd")); rev++ } },
                     stats = listOf(Triple("Sedmica", updW.toString(), null), Triple("Godina", updY.toString(), null),
                         Triple("Zadnje", BuildInfo.VERSION + " · " + SimpleDateFormat("dd.MM.yy", Locale.US).format(Date(Prefs.long("stats_upd_at", System.currentTimeMillis()))), null))) },  // i18n-ignore
@@ -353,7 +353,7 @@ fun DiagnosticsV2() {
                     action = { SmallBtn(tr("↺ Reset")) { Stats.reset(listOf("rec", "stall")); rev++ } },
                     stats = listOf(Triple("Prekidi streama", recs.toString(), null),
                         Triple("Baferovanje", if (total > 0) String.format(Locale.US, "%.1f %%", stall * 100.0 / total) else "0 %", null))) },  // i18n-ignore
-                { m -> InfoCard("Keš i memorija", if (cacheMb < 0) "…" else "$cacheMb MB", tr("slike, EPG, liste"), R.drawable.lc_hard_drive, Color(0xFF64748B), m,
+                { m -> InfoCard("Keš i memorija", if (cacheMb < 0) "…" else "$cacheMb MB", tr("slike, EPG, liste"), R.drawable.lc_hard_drive, C.Muted, m,
                     action = { SmallBtn(tr("✕ Očisti")) {
                         scope.launch(Dispatchers.IO) { ctx.cacheDir.listFiles()?.forEach { it.deleteRecursively() } }
                         cacheMb = 0; Toast.makeText(ctx, tr("Keš je očišćen"), Toast.LENGTH_SHORT).show()
@@ -363,7 +363,7 @@ fun DiagnosticsV2() {
                     val crash = remember { java.io.File(ctx.filesDir, "last_crash.txt").takeIf { it.exists() } }
                     val days = crash?.let { ((System.currentTimeMillis() - it.lastModified()) / 86_400_000L).toInt() }
                     InfoCard("Stabilnost", if (days == null || days >= 7) tr("Odlično") else tr("Bilo je rušenja"),
-                        if (days == null) tr("bez rušenja") else trf("bez rušenja %s dana", days), R.drawable.lc_shield_check, Color(0xFFEC4899), m,
+                        if (days == null) tr("bez rušenja") else trf("bez rušenja %s dana", days), R.drawable.lc_shield_check, Silver.TextSoft, m,
                         titleColor = if (days == null || days >= 7) C.Green else C.Amber,
                         action = { SmallBtn(tr("↺ Reset")) { crash?.delete(); Prefs.put("crash_times", ""); rev++ } },
                         stats = listOf(Triple("Izvještaj o grešci", tr(if (crash == null) "nema" else "postoji"), null),
@@ -374,7 +374,7 @@ fun DiagnosticsV2() {
             key(UpdLog.rev) {
                 val log = UpdLog.lines()
                 InfoCard("Zapis ažuriranja", log.lastOrNull()?.substringAfter("  ") ?: tr("Još nema zapisa"), log.lastOrNull()?.substringBefore("  "),
-                    R.drawable.lc_file_text, Color(0xFF0EA5E9), Modifier.fillMaxWidth(),
+                    R.drawable.lc_file_text, Silver.TextSoft, Modifier.fillMaxWidth(),
                     action = { Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         SmallBtn(tr("Prikaži sve")) { logAll = true }
                         SmallBtn(tr("Izvezi")) { logExport = true }
@@ -561,7 +561,7 @@ fun DeviceV2() {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth().clip(Rnd(20.dp)).background(C.CardHi).border(1.dp, C.Line, Rnd(20.dp)).padding(18.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-            Box(Modifier.size(72.dp).clip(Rnd(18.dp)).background(Brush.linearGradient(listOf(Color(0xFF3B82F6), Color(0xFF8B5CF6)))), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(72.dp).clip(Rnd(18.dp)).background(Brush.linearGradient(listOf(Silver.TextSoft, Silver.TextSoft))), contentAlignment = Alignment.Center) {
                 Ico(R.drawable.lc_monitor, 34.dp, Color.White)
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -602,11 +602,11 @@ private fun deviceCards(ctx: Context): List<DevCard> {
     val soc = if (Build.VERSION.SDK_INT >= 31) listOf(Build.SOC_MANUFACTURER, Build.SOC_MODEL).filter { it.isNotBlank() && it != Build.UNKNOWN }.joinToString(" ") else ""
     val ghz = DeviceInfo.maxGhz()
     val abi = Build.SUPPORTED_ABIS.firstOrNull() ?: ""
-    out += DevCard(tr("Procesor"), soc.ifBlank { Build.HARDWARE }, listOfNotNull("$cores " + tr("jezgre"), ghz, abi).joinToString(" · "), R.drawable.lc_layers, 0xFF3B82F6, null,
+    out += DevCard(tr("Procesor"), soc.ifBlank { Build.HARDWARE }, listOfNotNull("$cores " + tr("jezgre"), ghz, abi).joinToString(" · "), R.drawable.lc_layers, 0xFFC9C9CE, null,
         listOfNotNull(tr("Čip") to soc.ifBlank { Build.HARDWARE }, tr("Jezgre") to cores.toString(), ghz?.let { tr("Najveći takt") to it },
             tr("Arhitektura") to Build.SUPPORTED_ABIS.joinToString(", "), tr("Platforma") to Build.BOARD))
     val gpu = DeviceInfo.gpu()
-    out += DevCard(tr("Grafika"), gpu?.substringBefore(" · ") ?: "—", gpu?.substringAfter(" · ", "")?.ifBlank { null }, R.drawable.lc_sparkles, 0xFF8B5CF6, null,
+    out += DevCard(tr("Grafika"), gpu?.substringBefore(" · ") ?: "—", gpu?.substringAfter(" · ", "")?.ifBlank { null }, R.drawable.lc_sparkles, 0xFFC9C9CE, null,
         listOfNotNull(tr("Grafički procesor") to (gpu?.substringBefore(" · ") ?: "—"), gpu?.substringAfter(" · ", "")?.ifBlank { null }?.let { "OpenGL" to it }))  // i18n-ignore
     val am = ctx.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
     val mi = android.app.ActivityManager.MemoryInfo().also { am.getMemoryInfo(it) }
@@ -626,7 +626,7 @@ private fun deviceCards(ctx: Context): List<DevCard> {
         val hdr = if (Build.VERSION.SDK_INT >= 24) d.hdrCapabilities?.supportedHdrTypes?.map { t -> when (t) { 1 -> "Dolby Vision"; 2 -> "HDR10"; 3 -> "HLG"; 4 -> "HDR10+"; else -> "HDR" } }?.distinct()?.joinToString(" · ") else null  // i18n-ignore
         val modes = d.supportedModes.map { listOf(it.physicalWidth, "×", it.physicalHeight, " ", it.refreshRate.toInt(), " Hz").joinToString("") }.distinct()  // i18n-ignore
         out += DevCard(tr("Ekran"), listOf(mode.physicalWidth, " × ", mode.physicalHeight, " · ", mode.refreshRate.toInt(), " Hz").joinToString(""), hdr?.ifBlank { null } ?: tr("bez HDR-a"),  // i18n-ignore
-            R.drawable.lc_monitor, 0xFFEC4899, null,
+            R.drawable.lc_monitor, 0xFFC9C9CE, null,
             listOf(tr("Rezolucija") to listOf(mode.physicalWidth, "×", mode.physicalHeight).joinToString(""), tr("Osvježavanje") to listOf(mode.refreshRate.toInt(), " Hz").joinToString(""),  // i18n-ignore
                 "HDR" to (hdr?.ifBlank { null } ?: tr("nema")), tr("Gustoća") to ctx.resources.displayMetrics.densityDpi.toString() + " dpi", tr("Podržani načini") to modes.take(8).joinToString(", ")))  // i18n-ignore
     } catch (_: Exception) {}
@@ -644,7 +644,7 @@ private fun deviceCards(ctx: Context): List<DevCard> {
         val ip = lp?.linkAddresses?.firstOrNull { it.address is java.net.Inet4Address }?.address?.hostAddress
         val down = caps?.linkDownstreamBandwidthKbps?.takeIf { it > 0 }?.let { if (it >= 1_000_000) listOf(it / 1_000_000, " Gbit/s").joinToString("") else listOf(it / 1000, " Mbit/s").joinToString("") }  // i18n-ignore
         val vpn = caps?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN) == true
-        out += DevCard(tr("Mreža"), kind, listOfNotNull(down, ip).joinToString(" · ").ifBlank { null }, R.drawable.lc_wifi, 0xFF06B6D4, null,
+        out += DevCard(tr("Mreža"), kind, listOfNotNull(down, ip).joinToString(" · ").ifBlank { null }, R.drawable.lc_wifi, 0xFFC9C9CE, null,
             listOfNotNull(tr("Veza") to kind, ip?.let { tr("IP adresa") to it }, down?.let { tr("Brzina veze") to it },
                 lp?.dnsServers?.takeIf { it.isNotEmpty() }?.let { "DNS" to it.mapNotNull { a -> a.hostAddress }.joinToString(", ") },  // i18n-ignore
                 "VPN" to tr(if (vpn) "aktivan" else "nije aktivan")))
@@ -656,7 +656,7 @@ private fun deviceCards(ctx: Context): List<DevCard> {
     // Settings › Player › Long-run check: memory and CPU over hours (and how long the start took)
     Monitor.summary().let { rows ->
         out += DevCard(tr("Dugi rad"), rows.firstOrNull { it.first == tr("Memorija sada") }?.second ?: rows.first().second, rows.getOrNull(1)?.let { it.first + ": " + it.second },
-            R.drawable.lc_gauge2, 0xFF38BDF8, null, rows)
+            R.drawable.lc_gauge2, 0xFFC9C9CE, null, rows)
     }
     val patch = Build.VERSION.SECURITY_PATCH
     val patchNice = try { SimpleDateFormat("d. MMMM yyyy", Locale(Look.lang)).format(SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(patch)!!) } catch (e: Exception) { patch }  // i18n-ignore

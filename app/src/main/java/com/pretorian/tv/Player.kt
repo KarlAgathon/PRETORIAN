@@ -722,15 +722,15 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         }
         if (digits.isNotEmpty()) {
             val m = items.firstOrNull { it.channel?.num == digits.toIntOrNull() }
-            Row(Modifier.align(Alignment.TopEnd).padding(top = 36.dp, end = 44.dp).clip(Rnd(18.dp)).background(Color(0xE60E101A))
+            Row(Modifier.align(Alignment.TopEnd).padding(top = 36.dp, end = 44.dp).clip(Rnd(18.dp)).background(Color(0xE6141416))
                 .border(1.dp, Color(0x1FFFFFFF), Rnd(18.dp)).padding(horizontal = 22.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 T(digits, 46.sp, Color.White, FontWeight.ExtraBold)
                 Box(Modifier.width(1.dp).height(46.dp).background(Color(0x26FFFFFF)))
                 if (m?.channel != null) {
                     ChannelLogo(m.channel, 42.dp)
-                    Column { T(m.title, 17.sp, Color.White, FontWeight.Bold); T("OK odmah", 12.sp, Color(0xFFC8CBD4)) }
-                } else T(trf("Nema kanala %s", digits), 16.sp, Color(0xFFC8CBD4))
+                    Column { T(m.title, 17.sp, Color.White, FontWeight.Bold); T("OK odmah", 12.sp, C.Soft) }
+                } else T(trf("Nema kanala %s", digits), 16.sp, C.Soft)
             }
         }
         // live stream dropped: trying again by itself
@@ -742,11 +742,11 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             }
         }
         if (!Recover.on && reconnect > 0 && error == null && s.live) {
-            Column(Modifier.align(Alignment.Center).clip(Rnd(22.dp)).background(Color(0xE60E101A)).border(1.dp, Color(0x1FFFFFFF), Rnd(22.dp)).padding(horizontal = 30.dp, vertical = 24.dp),
+            Column(Modifier.align(Alignment.Center).clip(Rnd(22.dp)).background(Color(0xE6141416)).border(1.dp, Color(0x1FFFFFFF), Rnd(22.dp)).padding(horizontal = 30.dp, vertical = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 T("Spajam ponovo…", 20.sp, Color.White, FontWeight.Bold)
-                T(trf("Veza s kanalom %s je prekinuta", item.title), 13.sp, Color(0xFFC8CBD4), maxLines = 2)
-                T(trf("Pokušaj %s od 3", reconnect), 13.sp, Color(0xFFC8CBD4))
+                T(trf("Veza s kanalom %s je prekinuta", item.title), 13.sp, C.Soft, maxLines = 2)
+                T(trf("Pokušaj %s od 3", reconnect), 13.sp, C.Soft)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     (1..3).forEach { k -> Box(Modifier.width(28.dp).height(4.dp).clip(Pill).background(if (k <= reconnect) Color.White else Color(0x33FFFFFF))) }
                 }
@@ -822,8 +822,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             Box(Modifier.fillMaxSize().padding(end = 40.dp, bottom = 90.dp), contentAlignment = Alignment.BottomEnd) {
                 Row(Modifier.clip(Pill).background(Color.White).padding(horizontal = 18.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    T(when (k) { "recap" -> tr("Preskoči prethodno"); "intro" -> tr("Preskoči uvod"); else -> trf("Sljedeća epizoda za %s s", creditsLeft10) }, 15.sp, Color(0xFF0B0F1A), FontWeight.Bold)
-                    T("OK", 11.sp, Color(0xFF64748B), FontWeight.Bold)  // i18n-ignore
+                    T(when (k) { "recap" -> tr("Preskoči prethodno"); "intro" -> tr("Preskoči uvod"); else -> trf("Sljedeća epizoda za %s s", creditsLeft10) }, 15.sp, Color(0xFF111113), FontWeight.Bold)
+                    T("OK", 11.sp, C.Muted, FontWeight.Bold)  // i18n-ignore
                 }
             }
         }
@@ -851,7 +851,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             Column(Modifier.align(Alignment.Center).clip(Rnd(20.dp)).background(Color(0xE6151A23)).padding(28.dp),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 T(msg, 18.sp, Color.White, FontWeight.SemiBold, maxLines = 3)
-                T(if (s.live) "OK pokušaj ponovo · ▲ ▼ drugi kanal · Nazad za izlaz" else "OK pokušaj ponovo · Meni › Eksterni player · Nazad za izlaz", 14.sp, Color(0xFFB6BCC6), maxLines = 2)
+                T(if (s.live) "OK pokušaj ponovo · ▲ ▼ drugi kanal · Nazad za izlaz" else "OK pokušaj ponovo · Meni › Eksterni player · Nazad za izlaz", 14.sp, C.Soft, maxLines = 2)
             }
         }
 
@@ -863,11 +863,11 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                         if (s.live) ChannelLogo(item.logo, item.title)
                         Column(Modifier.weight(1f)) {
-                            if (s.live) T("${item.subtitle ?: ""}  ·  ${index + 1}/$n", 14.sp, Color(0xFFB6BCC6))
+                            if (s.live) T("${item.subtitle ?: ""}  ·  ${index + 1}/$n", 14.sp, C.Soft)
                             T(item.title, 26.sp, Color.White, FontWeight.Bold)
                             if (!s.live && item.subtitle != null) T(item.subtitle, 15.sp, Color(0xFFD5DBE1))
                             nowNext.getOrNull(0)?.let { T(tr("Sada") + ": ${it.first}  ${it.second}", 15.sp, Color.White) }
-                            nowNext.getOrNull(1)?.let { T(tr("Zatim") + ": ${it.first}  ${it.second}", 13.sp, Color(0xFFB6BCC6)) }
+                            nowNext.getOrNull(1)?.let { T(tr("Zatim") + ": ${it.first}  ${it.second}", 13.sp, C.Soft) }
                         }
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             if (videoH > 0) Badge(qualityLabel(videoH), Color(0x33FFFFFF), Color.White)
@@ -883,7 +883,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                             Box(Modifier.weight(1f).height(5.dp).clip(Rnd(3.dp)).background(Color(0x40FFFFFF))) {
                                 Box(Modifier.fillMaxWidth((position.toFloat() / duration).coerceIn(0f, 1f)).height(5.dp).background(C.Red))
                             }
-                            T(fmt(duration), 13.sp, Color(0xFFB6BCC6))
+                            T(fmt(duration), 13.sp, C.Soft)
                         }
                     }
                     val v = player.videoFormat; val a = player.audioFormat
@@ -924,7 +924,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                             } })
                     }
                     else T(if (s.live) "▲ ▼ kanal · ◀ lista kanala · ▶ EPG · OK još jednom = dugmad"
-                      else trf("OK pauza · ◀ ▶ %s s · ▼ = dugmad (audio, titlovi, format slike)", Prefs.seekStep), 13.sp, Color(0xFFB6BCC6))
+                      else trf("OK pauza · ◀ ▶ %s s · ▼ = dugmad (audio, titlovi, format slike)", Prefs.seekStep), 13.sp, C.Soft)
                 }
             }
         }

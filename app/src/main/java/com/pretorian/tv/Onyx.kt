@@ -424,7 +424,7 @@ fun ModeBadges(simple: Boolean, onOpen: () -> Unit) {
         }
     }
     // which app mode: S = simple (TV, Movies, Series only), A = normal with all options
-    val mc = if (simple) Color(0xFF93C5FD) else Color(0xFFC4B5FD)
+    val mc = if (simple) Silver.TextSoft else Silver.TextSoft
     badge(mc) { T(if (simple) "S" else "A", 13.sp, mc, FontWeight.ExtraBold, modifier = Modifier.align(Alignment.Center)) }  // i18n-ignore
 }
 
@@ -477,7 +477,7 @@ private fun sportEmoji(s: String) = when (s) { "f1" -> "🏎"; "tennis" -> "🎾
 /** A shirt in the team's colours, with its crest on the chest (not in Lite: no picture). */
 @Composable
 private fun Shirt(t: Team, size: Dp) {
-    val main = t.color ?: Color(0xFF64748B)
+    val main = t.color ?: C.Muted
     val trim = t.color2?.takeIf { it != main } ?: if (main.luminance() > 0.6f) Color(0xFF1F2937) else Color.White
     Box(Modifier.size(size), contentAlignment = Alignment.Center) {
         androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {

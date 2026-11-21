@@ -150,8 +150,8 @@ object Sports {
 
     fun sportColor(s: String) = when (s) {
         "football" -> Color(0xFF22C55E); "basketball" -> Color(0xFFF97316); "volleyball" -> Color(0xFFEAB308)
-        "f1" -> Color(0xFFEF4444); "tennis" -> Color(0xFFA3E635); "handball" -> Color(0xFF38BDF8)
-        "motogp" -> Color(0xFFF43F5E); "hockey" -> Color(0xFF60A5FA); "waterpolo" -> Color(0xFF22D3EE); else -> Color(0xFF94A3B8)
+        "f1" -> Color(0xFFEF4444); "tennis" -> Color(0xFFA3E635); "handball" -> Silver.TextSoft
+        "motogp" -> Color(0xFFF43F5E); "hockey" -> Silver.TextSoft; "waterpolo" -> Silver.TextSoft; else -> C.Muted
     }
 
     /* ---------------------------------------------------------------- time */

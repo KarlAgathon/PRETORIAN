@@ -9,7 +9,7 @@ import androidx.compose.ui.unit.sp
 /** your own look of the programme guide (EPG grid, guide in the player, programmes in the TV list): colour, size, transparency, brightness */
 object EpgLook {
     val COLORS = listOf("Kao tema", "Plava", "Zelena", "Narandžasta", "Ljubičasta", "Siva")
-    private val tints = listOf(Color.Unspecified, Color(0xFF2563EB), Color(0xFF16A34A), Color(0xFFEA580C), Color(0xFF7C3AED), Color(0xFF64748B))
+    private val tints = listOf(Color.Unspecified, Silver.TextSoft, Color(0xFF16A34A), Color(0xFFEA580C), Silver.TextSoft, C.Muted)
     var color by mutableIntStateOf(Prefs.long("epg_color", 0).toInt().coerceIn(0, 5))
     var size by mutableIntStateOf(Prefs.long("epg_size", 100).toInt().coerceIn(80, 140))       // text %, 80 … 140
     var transp by mutableIntStateOf(Prefs.long("epg_transp", 0).toInt().coerceIn(0, 80))      // 0 = as the theme … 80 % see-through

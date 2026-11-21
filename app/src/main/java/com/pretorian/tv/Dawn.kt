@@ -78,7 +78,7 @@ private fun dc(c: Color): Color {
 fun DawnBackground() {
     Canvas(Modifier.fillMaxSize()) {
         val w = size.width; val h = size.height
-        drawRect(Brush.verticalGradient(listOf(dc(Color(0xFF16243A)), dc(Color(0xFF24364C)), dc(Color(0xFF0D1622))), startY = 0f, endY = h))
+        drawRect(Brush.verticalGradient(listOf(dc(Silver.Background), dc(Color(0xFF24364C)), dc(Color(0xFF0D1622))), startY = 0f, endY = h))
         val lx = w * 0.64f; val ly = h * 0.36f
         drawRect(Brush.radialGradient(listOf(dc(Color(0x38A5B9D0)), dc(Color(0x00A5B9D0))), center = Offset(lx, ly), radius = w * 0.42f))
         // house: roof slab and wall in the fog
@@ -94,9 +94,9 @@ fun DawnBackground() {
         drawRect(Brush.radialGradient(0f to dc(Color(0x8CFFD696)), 0.35f to dc(Color(0x2EFFC882)), 1f to dc(Color(0x00FFC882)), center = Offset(lx, ly), radius = w * 0.10f))
         // lantern: glass, roof, base
         drawPath(Path().apply { moveTo(lx - 14 * u, ly - 16 * u); lineTo(lx + 14 * u, ly - 16 * u); lineTo(lx + 10 * u, ly + 22 * u); lineTo(lx - 10 * u, ly + 22 * u); close() }, dc(Color(0xFFFFE2B0)))
-        drawPath(Path().apply { moveTo(lx - 20 * u, ly - 16 * u); lineTo(lx, ly - 30 * u); lineTo(lx + 20 * u, ly - 16 * u); close() }, dc(Color(0xFF1A222D)))
-        drawRect(dc(Color(0xFF1A222D)), topLeft = Offset(lx - 12 * u, ly + 22 * u), size = Size(24 * u, 6 * u))
-        drawRect(dc(Color(0xFF1A222D)), topLeft = Offset(lx - 1.5f * u, ly - 16 * u), size = Size(3 * u, 38 * u))
+        drawPath(Path().apply { moveTo(lx - 20 * u, ly - 16 * u); lineTo(lx, ly - 30 * u); lineTo(lx + 20 * u, ly - 16 * u); close() }, dc(Color(0xFF1C1C1E)))
+        drawRect(dc(Color(0xFF1C1C1E)), topLeft = Offset(lx - 12 * u, ly + 22 * u), size = Size(24 * u, 6 * u))
+        drawRect(dc(Color(0xFF1C1C1E)), topLeft = Offset(lx - 1.5f * u, ly - 16 * u), size = Size(3 * u, 38 * u))
         drawCircle(Brush.radialGradient(listOf(dc(Color(0xE6FFF0D2)), dc(Color(0x00FFF0D2))), center = Offset(lx, ly + 4 * u), radius = 22 * u), radius = 22 * u, center = Offset(lx, ly + 4 * u))
         // ground fog
         drawRect(Brush.verticalGradient(0f to dc(Color(0x00788799)), 0.5f to dc(Color(0x1A788799)), 1f to dc(Color(0x80080C14)), startY = h * 0.6f, endY = h),
@@ -265,7 +265,7 @@ fun DawnPreview(modifier: Modifier) {
     val playing = PreviewSel.ch
     Box(modifier.aspectRatio(16f / 9f).dawnGlass(14.dp), contentAlignment = Alignment.Center) {
         if (playing != null) PreviewBox(playing, Modifier.fillMaxSize())
-        else Ico(R.drawable.lc_play, 54.dp, Color(0x99D5DBE3))
+        else Ico(R.drawable.lc_play, 54.dp, Color(0x99DADADE))
     }
 }
 
@@ -283,20 +283,20 @@ fun DawnNowNext(ch: Channel?, modifier: Modifier) {
         Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             T(ch.name, 18.sp, Color.White, FontWeight.Bold)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                T(cur?.title ?: if (st is Load.Loading) tr("Učitavam program…") else tr("Nema EPG vodiča"), 14.sp, Color(0xFFC3CCD8), modifier = Modifier.weight(1f))
-                if (cur != null) T(cur.times(), 14.sp, Color(0xFFC3CCD8))
+                T(cur?.title ?: if (st is Load.Loading) tr("Učitavam program…") else tr("Nema EPG vodiča"), 14.sp, C.Soft, modifier = Modifier.weight(1f))
+                if (cur != null) T(cur.times(), 14.sp, C.Soft)
             }
             if (cur != null) Box(Modifier.padding(top = 6.dp).fillMaxWidth().height(4.dp).clip(Rnd(2.dp)).background(Color(0x33FFFFFF))) {
-                Box(Modifier.fillMaxWidth(cur.progress()).height(4.dp).background(Color(0xFFB9D0F0)))
+                Box(Modifier.fillMaxWidth(cur.progress()).height(4.dp).background(C.Progress))
             }
         }
         if (next != null) {
             Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0x1FFFFFFF)))
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                T("Slijedi:", 14.sp, Color(0xFFC3CCD8))
+                T("Slijedi:", 14.sp, C.Soft)
                 T(next.title, 14.sp, Color.White, FontWeight.Medium, modifier = Modifier.weight(1f))
-                T(next.times(), 14.sp, Color(0xFFC3CCD8))
+                T(next.times(), 14.sp, C.Soft)
             }
         }
     }
@@ -314,8 +314,8 @@ fun DawnOptions(ch: Channel?, onOptions: () -> Unit, modifier: Modifier) {
                 focused = Dawn.pill, focusBorderColor = Color.Transparent, zoom = 1.0f) { f ->
                 Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterVertically)) {
-                    Ico(icon, 24.dp, if (f) Dawn.onPill else Color(0xFFEFF2F6))
-                    T(label, 12.sp, if (f) Dawn.onPill else Color(0xFFD5DBE3), FontWeight.Medium)
+                    Ico(icon, 24.dp, if (f) Dawn.onPill else C.Text)
+                    T(label, 12.sp, if (f) Dawn.onPill else C.Soft, FontWeight.Medium)
                 }
             }
         }
@@ -379,15 +379,15 @@ fun DawnSearchResults(
                 Focusable(onClick = { filt = id }, onFocus = { filt = id }, shape = Rnd(12.dp), normal = if (filt == id) Color(0x26FFFFFF) else Color.Transparent,
                     focused = Dawn.pill, focusBorderColor = Color.Transparent, zoom = 1f, modifier = Modifier.fillMaxWidth().height(50.dp)) { f ->
                     Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        Ico(icons[id] ?: R.drawable.lc_search, 22.dp, if (f) Dawn.onPill else Color(0xFFEFF2F6))
-                        T(label, 16.sp, if (f) Dawn.onPill else Color(0xFFEFF2F6), if (f || filt == id) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
-                        T("($n)", 14.sp, if (f) Dawn.onPill else Color(0xFF9AA6B5))
+                        Ico(icons[id] ?: R.drawable.lc_search, 22.dp, if (f) Dawn.onPill else C.Text)
+                        T(label, 16.sp, if (f) Dawn.onPill else C.Text, if (f || filt == id) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
+                        T("($n)", 14.sp, if (f) Dawn.onPill else C.Muted)
                     }
                 }
             }
         }
         Column(Modifier.weight(1f).fillMaxHeight()) {
-            T(trf("Rezultati za: „%s“", query), 16.sp, Color(0xFFD5DBE3), FontWeight.SemiBold, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
+            T(trf("Rezultati za: „%s“", query), 16.sp, C.Soft, FontWeight.SemiBold, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
             val rows: List<Any> = when (filt) {
                 "tv" -> tv; "vod" -> movies; "series" -> shows; "sport" -> sport
                 else -> buildList { addAll(shows.take(20)); addAll(movies.take(20)); addAll(tv.take(20)); addAll(sport.take(10)) }
@@ -397,10 +397,10 @@ fun DawnSearchResults(
                 items(rows.size) { i ->
                     val r = rows[i]
                     Focusable(onClick = { if (r is Hit) onHit(r) else if (r is SportEvent) onSport(r) }, onMenu = { if (r is Hit) onMenu(r) },
-                        focusRequester = if (i == 0) first else null, shape = Rnd(12.dp), normal = Color(0x590E1724), focused = Dawn.pill,
+                        focusRequester = if (i == 0) first else null, shape = Rnd(12.dp), normal = Color(0x59141416), focused = Dawn.pill,
                         focusBorderColor = Color.Transparent, zoom = 1f, modifier = Modifier.fillMaxWidth().height(76.dp)) { f ->
                         val main = if (f) Dawn.onPill else Color.White
-                        val sub = if (f) Dawn.onPill.copy(alpha = 0.7f) else Color(0xFFC3CCD8)
+                        val sub = if (f) Dawn.onPill.copy(alpha = 0.7f) else C.Soft
                         Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                             val (title, line, type) = when (r) {
                                 is Hit.Show -> Triple(cleanTitle(r.s.name).first, tr("Serija"), "Serija")

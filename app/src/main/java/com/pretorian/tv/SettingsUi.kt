@@ -544,10 +544,10 @@ fun SettingsScreen(nav: Nav) {
             verticalArrangement = Arrangement.spacedBy(2.dp)) {
             if (!slim) {
                 Row(Modifier.fillMaxWidth().padding(start = 8.dp, top = 2.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                    Ico(R.drawable.lc_shield_check, 25.dp, Color(0xFF19AFFF))
+                    Ico(R.drawable.lc_shield_check, 25.dp, Silver.TextSoft)
                     Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
                         T("PRETORIAN", 16.sp, C.Text, FontWeight.ExtraBold, maxLines = 1)
-                        T("POSTAVKE", 9.sp, Color(0xFF19AFFF), FontWeight.Bold, maxLines = 1)
+                        T("POSTAVKE", 9.sp, Silver.TextSoft, FontWeight.Bold, maxLines = 1)
                     }
                 }
             }
@@ -830,7 +830,7 @@ fun SetSlider(title: String, sub: String?, value: Int, min: Int, max: Int, step:
     @Composable
     fun Bar(v: Int, f: Boolean, h: androidx.compose.ui.unit.Dp) {
         Box(Modifier.fillMaxWidth().height(h).clip(Pill).background(if (f) Color(0x33000000) else C.Line)) {
-            Box(Modifier.fillMaxWidth(((v - min).toFloat() / (max - min).coerceAtLeast(1)).coerceIn(0.02f, 1f)).fillMaxHeight().background(Color(0xFF2563EB)))
+            Box(Modifier.fillMaxWidth(((v - min).toFloat() / (max - min).coerceAtLeast(1)).coerceIn(0.02f, 1f)).fillMaxHeight().background(Silver.TextSoft))
         }
     }
     Focusable(modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).border(1.dp, C.Line, Rnd(12.dp)),
@@ -839,7 +839,7 @@ fun SetSlider(title: String, sub: String?, value: Int, min: Int, max: Int, step:
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 9.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 T(title, 15.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                T(fmt(cur), 15.sp, if (f) C.OnRed else Color(0xFF60A5FA), FontWeight.Bold)
+                T(fmt(cur), 15.sp, if (f) C.OnRed else Silver.TextSoft, FontWeight.Bold)
             }
             Bar(cur, f, 4.dp)
             if (sub != null) T(sub, 11.sp, if (f) C.OnRed.copy(alpha = 0.65f) else C.Muted, maxLines = 1)
@@ -1050,7 +1050,7 @@ private fun LanguageV2() {
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Flag(cur.flag, 52)
                 Column {
-                    Kicker("Aktivan jezik", Color(0xFF93C5FD))
+                    Kicker("Aktivan jezik", Silver.TextSoft)
                     T(cur.native, 22.sp, C.Text, FontWeight.ExtraBold)
                 }
             }
@@ -1293,22 +1293,14 @@ private fun SportV2() {
                 SetSection("Izgled")
                 SetDrop("Mala slika utakmice", null, listOf("Na OK", "Isključena"), if (Prefs.bool("sport_preview", true)) 0 else 1) { Prefs.put("sport_preview", it == 0); rev++ }
                 SetSection("Ko prenosi")
-                val srcKeys = listOf("sport_src_rights", "sport_src_espn", "sport_src_ai")
-                SetMulti("Izvori", "tvoji TV kanali uvijek", listOf("Prava po ligi", "ESPN", "AI"),
+                val srcKeys = listOf("sport_src_rights", "sport_src_espn")
+                SetMulti("Izvori", "tvoji TV kanali uvijek", listOf("Prava po ligi", "ESPN"),
                     srcKeys.indices.filter { Prefs.bool(srcKeys[it], true) }.toSet(), all = false) { s2 -> srcKeys.forEachIndexed { i, k -> Prefs.put(k, i in s2) }; changed() }
                 var afDlg by remember { mutableStateOf(false) }
                 SetRow("API-Football ključ", "brži rezultati uživo · besplatno 100 upita dnevno", if (ApiFootball.on) tr("upisan") else tr("nema"),
                     valueColor = if (ApiFootball.on) C.Green else null) { afDlg = true }
                 if (afDlg) TextDialog("API-Football ključ", "ključ s dashboard.api-football.com", ApiFootball.key, onDismiss = { afDlg = false; SetFocus.tick++ }) { v ->
                     ApiFootball.key = v; afDlg = false; SportCache.clear(); rev++ }
-                val pv = SportsAI.prov
-                SetRow("AI ključ", pv.site, pv.name + " · " + tr(if (SportsAI.key.isNotBlank()) "upisan" else "nema"),
-                    valueColor = if (SportsAI.key.isNotBlank()) C.Green else null) { keyDlg = true }
-                SetDrop("AI", tr(if (pv.free) "besplatno" else "plaća se po upitu"), SportsAI.PROVIDERS.map { it.name },
-                    SportsAI.PROVIDERS.indexOfFirst { it.id == SportsAI.provider }.coerceAtLeast(0)) { SportsAI.provider = SportsAI.PROVIDERS[it].id; status = null; rev++ }
-                if (SportsAI.ready) SetRow(status ?: tr("Provjeri ključ"), null, arrow = "↻") {
-                    status = tr("Provjeravam…"); scope.launch { status = SportsAI.test()?.let { trf("Ne radi: %s", it) } ?: tr("Radi ✓") }
-                }
             }
             // ---------------------------------------------------------- right: competitions
             val en = csv("sport_enabled", "football")
@@ -1345,7 +1337,6 @@ private fun SportV2() {
         }
     }
     if (teamDlg) FavTeamsDialog { teamDlg = false; Sports.lastCombined.clear(); rev++; SetFocus.tick++ }
-    if (keyDlg) TextDialog(trf("%s ključ", SportsAI.prov.name), trf("Ključ (%s)", SportsAI.prov.keyHint), SportsAI.key, onDismiss = { keyDlg = false; SetFocus.tick++ }) { v -> SportsAI.key = v; keyDlg = false; status = null; rev++ }
 }
 
 /* ---------------------------------------------------------------- Podsjetnici */
@@ -1603,9 +1594,9 @@ private fun UpdateV2() {
                 val leftS = if (Updater.speed > 0 && Updater.totalBytes > 0) ((Updater.totalBytes - Updater.doneBytes) / Updater.speed).toInt() else -1
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     T(listOf(tr("Preuzimanje"), " · ", mb(Updater.doneBytes), " / ", mb(Updater.totalBytes), " MB · ", pr, " %").joinToString(""), 12.sp, C.Text, modifier = Modifier.weight(1f))  // i18n-ignore
-                    T(mb(Updater.speed) + " MB/s" + if (leftS >= 0) " · " + trf("još %s s", leftS) else "", 12.sp, Color(0xFF4AA3FF))
+                    T(mb(Updater.speed) + " MB/s" + if (leftS >= 0) " · " + trf("još %s s", leftS) else "", 12.sp, Silver.TextSoft)
                 }
-                Box(Modifier.fillMaxWidth().height(6.dp).clip(Pill).background(C.Line)) { Box(Modifier.fillMaxWidth(pr / 100f).fillMaxHeight().background(Color(0xFF4AA3FF))) }
+                Box(Modifier.fillMaxWidth().height(6.dp).clip(Pill).background(C.Line)) { Box(Modifier.fillMaxWidth(pr / 100f).fillMaxHeight().background(Silver.TextSoft)) }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button("Pauza", R.drawable.lc_pause) { Updater.pause() }
                     Button("Otkaži", R.drawable.lc_x) { Updater.cancel = true }
@@ -1719,16 +1710,16 @@ private fun AboutV2(onSub: (String) -> Unit, onSection: (String) -> Unit) {
         val dev = remember { DeviceInfo.head(ctx) }
         val lastCheck = Prefs.long("upd_checked_at", 0L)
         CardGrid(3, listOf(
-            { m -> InfoCard("O uređaju", android.os.Build.MODEL, tr("procesor, RAM, ekran, mreža"), R.drawable.lc_monitor, Color(0xFF3B82F6), m, onClick = { onSub("device") }) },
+            { m -> InfoCard("O uređaju", android.os.Build.MODEL, tr("procesor, RAM, ekran, mreža"), R.drawable.lc_monitor, Silver.TextSoft, m, onClick = { onSub("device") }) },
             { m -> InfoCard("Šta je novo", trf("Verzija %s", BuildInfo.VERSION), tr("promjene u ovoj verziji"), R.drawable.lc_star, Color(0xFFF59E0B), m, onClick = { WhatsNew.show = true }) },
-            { m -> InfoCard("Autor", "Svi3e", tr("PRETORIAN tim"), R.drawable.lc_user, Color(0xFF8B5CF6), m, onClick = { dlg = "author" }) },  // i18n-ignore
-            { m -> InfoCard("Kontakt", "t3smo@aol.com", tr("prijedlozi i greške"), R.drawable.lc_file_text, Color(0xFF06B6D4), m, onClick = { dlg = "contact" }) },  // i18n-ignore
+            { m -> InfoCard("Autor", "Svi3e", tr("PRETORIAN tim"), R.drawable.lc_user, Silver.TextSoft, m, onClick = { dlg = "author" }) },  // i18n-ignore
+            { m -> InfoCard("Kontakt", "t3smo@aol.com", tr("prijedlozi i greške"), R.drawable.lc_file_text, Silver.TextSoft, m, onClick = { dlg = "contact" }) },  // i18n-ignore
             { m -> InfoCard("Izvještaj o grešci", if (crash == null) tr("Nema grešaka") else tr("Ima zapis"), tr("pogledaj ili izvezi zapis"), R.drawable.lc_file, Color(0xFFEF4444), m,
                 titleColor = if (crash == null) C.Text else C.Amber, onClick = { dlg = "crash" }) },
             { m -> InfoCard("Privatnost", tr("Šta se čuva i gdje"), tr("sve ostaje na uređaju"), R.drawable.lc_shield_check, Color(0xFF22C55E), m, onClick = { dlg = "priv" }) },
-            { m -> InfoCard("Licence", tr("Otvoreni kod"), "Media3, Coil, OkHttp, zxing", R.drawable.lc_list, Color(0xFF64748B), m, onClick = { dlg = "lic" }) },  // i18n-ignore
+            { m -> InfoCard("Licence", tr("Otvoreni kod"), "Media3, Coil, OkHttp, zxing", R.drawable.lc_list, C.Muted, m, onClick = { dlg = "lic" }) },  // i18n-ignore
             { m -> InfoCard("Ažuriranje", tr("Provjeri sada"), if (lastCheck > 0) tr("zadnja provjera") + ": " + java.text.SimpleDateFormat("dd.MM. HH:mm", java.util.Locale.US).format(java.util.Date(lastCheck)) else null,  // i18n-ignore
-                R.drawable.lc_refresh_cw, Color(0xFFEC4899), m, onClick = { onSection("update") }) },
+                R.drawable.lc_refresh_cw, Silver.TextSoft, m, onClick = { onSection("update") }) },
             { m -> InfoCard("Pomoć", tr("Kratko uputstvo"), tr("prvi koraci, daljinski, prečice"), R.drawable.lc_info, Color(0xFF9CA3AF), m, onClick = { dlg = "help" }) },
         ))
     }

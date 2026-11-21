@@ -27,8 +27,6 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
-      - name: Translation check
-        run: python3 tools/check_i18n.py
       - name: Source sanity check
         run: |
           big=$(find app/src -name '*.kt' ! -name 'I18n*.kt' -size +400k)
@@ -37,3 +35,6 @@ jobs:
         run: gradle testReleaseUnitTest assembleRelease --no-daemon
         env:
           TMDB_KEY: ${{ secrets.TMDB_KEY }}
+      - name: Translation check
+        if: always()
+        run: python3 tools/check_i18n.py

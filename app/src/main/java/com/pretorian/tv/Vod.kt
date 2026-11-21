@@ -252,8 +252,8 @@ private fun AgeRows(nav: Nav, p: Playlist, cats: List<Category>, series: Boolean
                                         if (pt.image != null) AsyncImage(model = pt.image, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                                         else T(cleanTitle(pt.name).first, 12.sp, C.Muted, maxLines = 4, modifier = Modifier.align(Alignment.Center).padding(8.dp))
                                         Row(Modifier.padding(6.dp)) {
-                                            if (pt.isNew) Badge(tr("NOVO"), Color(0xFFF59E0B), Color(0xFF0B0D12))
-                                            pt.rating?.toDoubleOrNull()?.takeIf { it > 0 }?.let { Badge("★ " + String.format("%.1f", it), Color(0xCC0B0D12), Color(0xFFF5C518)) }
+                                            if (pt.isNew) Badge(tr("NOVO"), Color(0xFFF59E0B), Color(0xFF0A0A0B))
+                                            pt.rating?.toDoubleOrNull()?.takeIf { it > 0 }?.let { Badge("★ " + String.format("%.1f", it), Color(0xCC0A0A0B), Color(0xFFF5C518)) }
                                         }
                                     }
                                     T(pt.name, 12.sp, if (f) C.Text else C.Soft, maxLines = 2, modifier = Modifier.padding(top = 5.dp))
@@ -508,11 +508,11 @@ private fun PosterGrid(title: String, items: List<Poster>, newList: Boolean, kin
                                 T(cleanTitle(it.name).first, 13.sp, C.Muted, maxLines = 4, modifier = Modifier.align(Alignment.Center).padding(10.dp))
                             }
                             Row(Modifier.padding(7.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                                if (it.isNew) Badge(tr("NOVO"), Color(0xFFF59E0B), Color(0xFF0B0D12))
+                                if (it.isNew) Badge(tr("NOVO"), Color(0xFFF59E0B), Color(0xFF0A0A0B))
                                 val r = it.rating?.toDoubleOrNull()
-                                if (r != null && r > 0) Badge(String.format("%.1f", r), Color(0xEEF5C518), Color(0xFF0B0D12))
+                                if (r != null && r > 0) Badge(String.format("%.1f", r), Color(0xEEF5C518), Color(0xFF0A0A0B))
                                 Spacer(Modifier.weight(1f))
-                                qualityOf(it.name)?.let { q -> Badge(q, Color(0xCC0B0D12), Color.White) }
+                                qualityOf(it.name)?.let { q -> Badge(q, Color(0xCC0A0A0B), Color.White) }
                             }
                             if (pr != null) WatchMark(pr, Modifier.align(Alignment.BottomEnd).padding(7.dp))
                             if (pr != null && pr.started) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(4.dp).background(Color(0x66000000))) {
@@ -614,7 +614,7 @@ fun WatchMark(pr: Progress?, modifier: Modifier = Modifier) {
         pr.started -> R.drawable.lc_history to Color(0xFFF59E0B)
         else -> R.drawable.lc_circle_slash to Color(0xFFEF4444)
     }
-    Box(modifier.size(24.dp).clip(CircleShape).background(Color(0xCC0B0D12)), contentAlignment = Alignment.Center) { Ico(icon, 16.dp, color) }
+    Box(modifier.size(24.dp).clip(CircleShape).background(Color(0xCC0A0A0B)), contentAlignment = Alignment.Center) { Ico(icon, 16.dp, color) }
 }
 
 @Composable
@@ -805,8 +805,8 @@ fun MovieDetailScreen(v: Vod, nav: Nav) {
                     qualityOf(v.name)?.let { Chip(it, C.Card, C.Text, C.Soft) }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    m?.imdbRating?.let { Chip("IMDb $it", Color(0xFFF5C518), Color(0xFF0B0D12)) }
-                    m?.tmdbRating?.let { Chip("TMDB ${(it * 10).toInt()}%", Color(0x2901B4E4), Color(0xFF67D4F5)) }
+                    m?.imdbRating?.let { Chip("IMDb $it", Color(0xFFF5C518), Color(0xFF0A0A0B)) }
+                    m?.tmdbRating?.let { Chip("TMDB ${(it * 10).toInt()}%", Color(0x29FFFFFF), Silver.TextSoft) }
                     if (m == null) (i?.rating ?: v.rating)?.toDoubleOrNull()?.takeIf { it > 0 }?.let { Chip("★ ${String.format("%.1f", it)}", C.Card, C.Amber) }
                 }
                 val plot = translated(m?.overview ?: i?.plot)
@@ -877,8 +877,8 @@ fun SeriesDetailScreen(s: SeriesItem, nav: Nav) {
                 T(showTitle, 32.sp, C.Text, FontWeight.Bold)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     m?.year?.let { Chip(it) }; translated(m?.genres)?.let { Chip(it.take(36)) }
-                    m?.imdbRating?.let { Chip("IMDb $it", Color(0xFFF5C518), Color(0xFF0B0D12)) }
-                    m?.tmdbRating?.let { Chip("TMDB ${(it * 10).toInt()}%", Color(0x2901B4E4), Color(0xFF67D4F5)) }
+                    m?.imdbRating?.let { Chip("IMDb $it", Color(0xFFF5C518), Color(0xFF0A0A0B)) }
+                    m?.tmdbRating?.let { Chip("TMDB ${(it * 10).toInt()}%", Color(0x29FFFFFF), Silver.TextSoft) }
                 }
                 translated(m?.overview ?: s.plot)?.let { T(it, 14.sp, C.Soft, maxLines = 3) }
                 when (val st = eps) {

@@ -42,7 +42,7 @@ import kotlinx.coroutines.launch
 private val LampGreen = Color(0xFF3DDC84)
 private val LampYellow = Color(0xFFFFC53D)
 private val LampRed = Color(0xFFFF5A5F)
-private val LampBlue = Color(0xFF4AA3FF)
+private val LampBlue = Silver.TextSoft
 private val LampGrey = Color(0xFF8A8F9E)
 private val LampAmber = Color(0xFFFFB02E)
 
@@ -361,7 +361,7 @@ fun OnyxSeriesDetail(s: SeriesItem, nav: Nav) {
                         Row(Modifier.dawnGlass(12.dp).padding(horizontal = 12.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             T("${seenAll * 100 / all.size} %", 15.sp, Color(0xFFFBBF24), FontWeight.Bold)
-                            T(tr("Odgledano") + " · $seenAll / ${all.size}", 13.sp, Color(0xFFD5DBE3))
+                            T(tr("Odgledano") + " · $seenAll / ${all.size}", 13.sp, C.Soft)
                         }
                     }
                 }
@@ -416,14 +416,14 @@ fun OnyxSeriesDetail(s: SeriesItem, nav: Nav) {
                             if (Look.dawn) {
                                 // New Dawn: a tile per season, coloured by how far you are: green done, yellow started, red not started, blue not out yet
                                 val started = seen > 0 || all.any { it.season == n && Watch.get(ctx, it.url)?.started == true }
-                                val tone = when { count == 0 -> Color(0xFF60A5FA); done -> Color(0xFF22C55E); started -> Color(0xFFFBBF24); else -> Color(0xFFF87171) }
+                                val tone = when { count == 0 -> Silver.TextSoft; done -> Color(0xFF22C55E); started -> Color(0xFFFBBF24); else -> Color(0xFFF87171) }
                                 val mark = when { count == 0 -> "🕒"; done -> "✓"; started -> "▶"; else -> "○" }  // i18n-ignore
                                 Focusable(onClick = { season = n }, onMenu = { if (count > 0) seasonMenu = n }, shape = Rnd(12.dp),
                                     normal = tone.copy(alpha = if (open) 0.38f else 0.16f), focused = Dawn.pill, focusBorderColor = Color.Transparent, zoom = 1.04f,
                                     modifier = Modifier.width(108.dp).height(54.dp).border(if (open) 2.dp else 1.dp, tone.copy(alpha = if (open) 1f else 0.7f), Rnd(12.dp))) { f ->
                                     Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                                         T("S$n  $mark", 16.sp, if (f) Dawn.onPill else Color.White, FontWeight.Bold)
-                                        T(if (count > 0) "$seen / $count" else tr("uskoro"), 12.sp, if (f) Dawn.onPill else Color(0xFFD5DBE3))
+                                        T(if (count > 0) "$seen / $count" else tr("uskoro"), 12.sp, if (f) Dawn.onPill else C.Soft)
                                     }
                                 }
                             } else

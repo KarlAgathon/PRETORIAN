@@ -744,7 +744,7 @@ private fun MatchCard(e: SportEvent, playing: Channel?, playingFr: FocusRequeste
                     modifier = Modifier.height(34.dp)) { f ->
                     Row(Modifier.align(Alignment.Center).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         T(if (ch in e.channels) "EPG" else tr("Moguće"), 10.sp, if (f) Color.Black else Color.LightGray)
-                        T(ch.name, 12.sp, if (f) Color.Black else if (playing?.url == ch.url) Color(0xFF0B0F1A) else Color.White, FontWeight.SemiBold, maxLines = 1)
+                        T(ch.name, 12.sp, if (f) Color.Black else if (playing?.url == ch.url) Color(0xFF111113) else Color.White, FontWeight.SemiBold, maxLines = 1)
                     }
                 }
             }
@@ -789,7 +789,7 @@ private fun DawnFollow(e: SportEvent, focus: FocusRequester? = null) {
                     Ico(R.drawable.lc_bell, 20.dp, if (f) Dawn.onPill else Color.White)
                     Column(Modifier.weight(1f)) {
                         T("Prati ovu utakmicu", 14.sp, if (f) Dawn.onPill else Color.White, FontWeight.SemiBold)
-                        T("Obavijesti uživo na Početnoj", 11.sp, if (f) Dawn.onPill.copy(alpha = 0.7f) else Color(0xFFC3CCD8))
+                        T("Obavijesti uživo na Početnoj", 11.sp, if (f) Dawn.onPill.copy(alpha = 0.7f) else C.Soft)
                     }
                     Box(Modifier.width(44.dp).height(24.dp).clip(Pill).background(if (on) Color.Gray else Color(0x4DFFFFFF)), contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart) {
                         Box(Modifier.padding(3.dp).size(18.dp).clip(CircleShape).background(Color.White))

@@ -64,7 +64,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-val AiColor = Color(0xFFA78BFA)
+val AiColor = Silver.TextSoft
 
 /** Rows scroll so the card you stand on starts at the left edge: no half cut card before it. */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
@@ -444,7 +444,7 @@ private fun DayTabs(day: Int, fr: FocusRequester, onDay: (Int) -> Unit) {
 /** Club crest from the feed, or a round badge in the club colour with its short name. */
 @Composable
 fun Crest(t: Team, size: Dp) {
-    Box(Modifier.size(size).clip(CircleShape).background(if (t.logo != null) Color(0xFFF1F3F6) else (t.color ?: Color(0xFF334155))),
+    Box(Modifier.size(size).clip(CircleShape).background(if (t.logo != null) C.Text else (t.color ?: Color(0xFF334155))),
         contentAlignment = Alignment.Center) {
         if (t.logo != null) AsyncImage(model = t.logo, contentDescription = null, contentScale = ContentScale.Fit,
             modifier = Modifier.fillMaxSize().padding(size * 0.12f))
@@ -570,7 +570,7 @@ private fun BroadcastRow(ev: SportEvent, onPlay: (List<Channel>, Int) -> Unit) {
             }
             item {
                 when {
-                    !SportsAI.ready -> if (own.isEmpty()) T("Dodaj AI ključ u Postavke › Sport i AI da vidiš sve TV prenose", 12.sp, C.Muted, maxLines = 1)
+                    !SportsAI.ready -> if (own.isEmpty()) T("Prenos nije pronađen u tvojoj listi", 12.sp, C.Muted, maxLines = 1)
                     busy -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         androidx.compose.material3.CircularProgressIndicator(color = AiColor, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
                         T("AI traži TV prenose…", 12.sp, C.Muted)
@@ -817,7 +817,7 @@ private fun EventPopup(ev: SportEvent, onDismiss: () -> Unit, onPlay: (List<Chan
                     }
                     T("TV stanice koje nisu na tvojoj listi", 12.sp, C.Muted, maxLines = 1)
                     when {
-                        !SportsAI.ready -> T("Dodaj AI ključ u Postavke › Sport i AI da vidiš sve TV prenose", 13.sp, C.Muted, maxLines = 3)
+                        !SportsAI.ready -> T("Prenos nije pronađen u tvojoj listi", 13.sp, C.Muted, maxLines = 3)
                         stations == null -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             androidx.compose.material3.CircularProgressIndicator(color = AiColor, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
                             T("AI traži TV prenose…", 13.sp, C.Muted)
