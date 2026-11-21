@@ -276,7 +276,7 @@ fun AddPlaylistScreen(nav: Nav) {
     val scope = rememberCoroutineScope()
     val old = remember { EditPlaylist.target }
     if (old == null && Store.playlists(ctx).isEmpty() && Welcome.tab < 0) { OnboardingScreen(nav); return }
-    // first setup: Back from the form goes one step back to "How would you like to begin?"
+    // first setup: Back from the form goes one step back to the source choice
     androidx.activity.compose.BackHandler(enabled = old == null && Store.playlists(ctx).isEmpty() && Welcome.tab >= 0) { Welcome.tab = -1 }
     var tab by remember { mutableIntStateOf(when { old?.type == SourceType.M3U -> 1; old?.type == SourceType.STALKER -> 2; old == null && Welcome.tab in 1..2 -> Welcome.tab; else -> 0 }) }
     var mac by remember { mutableStateOf(old?.mac ?: Stalker.suggestMac(ctx)) }
@@ -541,7 +541,6 @@ fun SettingsScreen(nav: Nav) {
     LaunchedEffect(section) { SettingsNav.last = section; if (keepSub) keepSub = false else sub = null }
     // a notification or a button elsewhere asks for a section while Settings is already open
     LaunchedEffect(SettingsNav.section) { SettingsNav.section?.let { s -> val t = target(s); keepSub = t.second != null && t.first != section; section = t.first; sub = t.second; SettingsNav.section = null } }
-    var search by remember { mutableStateOf(false) }
     val first = remember { FocusRequester() }
     var listFocused by remember { mutableIntStateOf(0) }
     // optional: Settings behind the PIN
@@ -575,13 +574,6 @@ fun SettingsScreen(nav: Nav) {
         Column(Modifier.width(railW).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 8.dp, top = 6.dp, bottom = 16.dp)
             .onFocusChanged { if (classic && it.hasFocus) Chrome.rail = 2 },
             verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            // search in all settings
-            Focusable(modifier = Modifier.fillMaxWidth().height(40.dp).padding(bottom = 4.dp), onClick = { search = true }, shape = Pill,
-                normal = Color.White.copy(alpha = 0.06f), focused = C.Red, zoom = 1f) { f ->
-                Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Ico(R.drawable.lc_search, 14.dp, if (f) C.OnRed else C.Muted); if (!slim) T("Pretraži postavke", 13.sp, if (f) C.OnRed else C.Muted, maxLines = 1)
-                }
-            }
             list.forEach { s ->
                 val sel = s.id == section
                 Focusable(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), onClick = { section = s.id; sub = null }, onFocus = { listFocused++ },
@@ -649,21 +641,9 @@ fun SettingsScreen(nav: Nav) {
             }
         }
     }
-    if (search) SettingsSearch(list.map { it.id }, onDismiss = { search = false }) { id -> search = false; section = id }
     LaunchedEffect(Unit) { try { first.requestFocus() } catch (_: Exception) {} }
 }
 
-/** Every option by name, with the section it lives in. */
-private val SEARCH_INDEX = listOf(
-    "people" to "Profil, ko gleda, profili, dječiji profil, PIN, roditeljska kontrola, sakrij kategorije, vrijeme gledanja, jednostavni mod",
-    "sources" to "Playliste, dodaj playlistu, Xtream, M3U, Stalker, EPG izvori, grupe i kanali, osvježi playlistu, redoslijed, sakrij kanale",
-    "home" to "Početna, redovi, nove epizode, nastavi gledati, novo dodano, nedavni kanali, početni ekran, start s boxom, zadnji kanal, potvrdi izlaz, rad u pozadini, User-Agent, UDP proxy",
-    "playback" to "Plejer, titl, titlovi, veličina titla, kašnjenje titla, sync, zvuk, jezik zvuka, Dolby, passthrough, oporavak, prekid streama, bafer, rezolucija, preskok, nastavi gdje si stao, sljedeća epizoda, trailer, eksterni plejer, file manager",
-    "appearance" to "Izgled, tema, boja, veličina, ikone, mod programa, Lite, Full, oblik ivica, jezik, meniji, opisi filmova, prevod",
-    "sport" to "Sports Center, sport, sportovi, takmičenja, država, reprezentacije, timovi, ko prenosi, AI pretraga, rezultati",
-    "notifications" to "Podsjetnici, obavijest, utakmica, emisija, zvuk obavijesti, čuvar ekrana, sat, datum, pauzirano",
-    "system" to "Dijagnostika, brzina interneta, VPN, protok, gledano, uptime, keš, zapis ažuriranja, zapis streama, backup, vraćanje, USB, fajl, Download, automatski backup, vrati na početak, ažuriranje, nova verzija, beta, stable, kanal, potpis, vrati prethodnu verziju, o aplikaciji, uređaj, kontakt, licence, privatnost, pomoć",
-)
 
 @Composable
 private fun SettingsHubPage(section: String, onOpen: (String) -> Unit) {
@@ -676,21 +656,6 @@ private fun SettingsHubPage(section: String, onOpen: (String) -> Unit) {
     }
 }
 
-@Composable
-private fun SettingsSearch(allowed: List<String>, onDismiss: () -> Unit, onOpen: (String) -> Unit) {
-    var q by remember { mutableStateOf<String?>(null) }
-    if (q == null) { TextDialog("Pretraži postavke", "npr. titl, bafer, PIN", onDismiss = onDismiss) { q = it.trim() }; return }
-    val words = q!!.lowercase().split(' ').filter { it.isNotBlank() }
-    val hits = SEARCH_INDEX.filter { (id, text) -> id in allowed && words.all { w -> tr(text).lowercase().contains(w) || text.lowercase().contains(w) } }
-    Popup(trf("Rezultati za „%s“", q!!), onDismiss, width = 640.dp) {
-        if (hits.isEmpty()) T("Ništa nije nađeno. Uključi Napredne opcije za sve postavke.", 14.sp, C.Muted, maxLines = 2)
-        hits.forEach { (id, text) ->
-            val name = SECTIONS2.firstOrNull { it.id == id }?.title ?: id
-            val found = tr(text).split(", ").filter { part -> words.any { part.lowercase().contains(it) } }.take(4).joinToString(" · ")
-            OptionRow(name, SECTIONS2.firstOrNull { it.id == id }?.icon, sub = found) { onOpen(id) }
-        }
-    }
-}
 
 /* ---------------------------------------------------------------- Početna */
 

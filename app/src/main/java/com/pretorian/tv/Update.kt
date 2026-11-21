@@ -395,8 +395,8 @@ object Rollback {
             val c = URL(r.apk).openConnection() as HttpURLConnection
             c.instanceFollowRedirects = true; c.connectTimeout = 15_000; c.readTimeout = 60_000
             c.inputStream.use { ins -> f.outputStream().use { ins.copyTo(it) } }
-            f.inputStream().use { PublicFiles.save(ctx, "MediaCenter-${r.name}.apk", it) }
-            PublicFiles.save(ctx, "vrati.json", JSONObject().put("version", r.name).put("apk", "MediaCenter-${r.name}.apk").put("backup", "backup-za-${r.name}.json").toString().toByteArray())
+            f.inputStream().use { PublicFiles.save(ctx, "MediaCenter-${r.name}.apk", it) }  // i18n-ignore
+            PublicFiles.save(ctx, "vrati.json", JSONObject().put("version", r.name).put("apk", "MediaCenter-${r.name}.apk").put("backup", "backup-za-${r.name}.json").toString().toByteArray())  // i18n-ignore
             f.delete()
             null
         } catch (e: Exception) { e.message ?: tr("nije uspjelo") } finally { busy = false }

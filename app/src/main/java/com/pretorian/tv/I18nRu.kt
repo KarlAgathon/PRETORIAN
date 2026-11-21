@@ -2406,4 +2406,72 @@ Učitavam EPG…|Загружаю EPG…
 EPG nije dostupan|EPG недоступен
 Nema EPG vodiča|Нет телегида
 Pritisni OK na grupi za prikaz kanala|Нажми OK на группе, чтобы увидеть каналы
+Izaći iz aplikacije?|Выйти из приложения?
+Fajl nije backup ove aplikacije|Файл не является резервной копией этого приложения
+Sve je vraćeno. Aplikacija se ponovo pokreće.|Всё восстановлено. Приложение перезапускается.
+Nema interneta|Нет интернета
+Aplikacija se ruši|Приложение падает
+backup i stara verzija u Download/MediaCenter|резервная копия и старая версия в Download/MediaCenter
+Folder aplikacije|Папка приложения
+Aplikacija treba dozvolu da vidi fajlove na boxu i USB-u.|Приложению нужно разрешение видеть файлы на приставке и USB.
+U taj folder se ne može pisati. Izaberi drugi ili folder aplikacije.|В эту папку нельзя записать. Выбери другую или папку приложения.
+Podaci aplikacije|Данные приложения
+PRVO POKRETANJE|ПЕРВАЯ НАСТРОЙКА
+Dobrodošli u vaš media centar.|Добро пожаловать в ваш медиацентр.
+Nova era zabave počinje ovdje.|Новая эра развлечений начинается здесь.
+Složeno iznutra. Jednostavno spolja.|Сложно внутри. Просто снаружи.
+Pravna napomena|Правовое уведомление
+Napravljeno za zabavu. Namijenjeno zakonitoj upotrebi.|Создано для развлечения. Предназначено для законного использования.
+Razumijem i nastavljam|Понимаю и продолжаю
+Kako želite početi?|С чего хотите начать?
+Dodajte svoj izvor sada ili prvo istražite aplikaciju.|Добавьте источник сейчас или сначала изучите приложение.
+Preskoči za sada|Пропустить пока
+Playlistu možeš dodati kasnije u Postavke › Playliste.|Плейлист можно добавить позже в Настройки › Плейлисты.
+Kanal trenutno nije dostupan|Канал недоступен
+Video se trenutno ne može pustiti|Видео сейчас нельзя воспроизвести
+Ovaj kanal nema arhivu|У этого канала нет архива
+Informacije o streamu|Информация о потоке
+Premotavanje uživo|Перемотка эфира
+5 minuta nazad kroz arhivu|5 минут назад через архив
+Playliste i provajderi|Плейлисты и провайдеры
+Dodaj, uredi, osvježi, EPG|Добавить, изменить, обновить, EPG
+Plejer i reprodukcija|Плеер и воспроизведение
+Zvuk, titlovi, stream, performanse|Звук, субтитры, поток, производительность
+Jezik i veličina teksta|Язык и размер текста
+Privatnost i roditeljska kontrola|Конфиденциальность и родительский контроль
+PIN i skrivene kategorije|PIN и скрытые категории
+Spasi ili vrati postavke|Сохранить или восстановить настройки
+O aplikaciji i ažuriranja|О приложении и обновления
+Verzija, ažuriranje, licence|Версия, обновление, лицензии
+Otvori aplikaciju|Открыть приложение
+Aplikacija se otvori kad se box upali|Приложение открывается при включении приставки
+Instaliram… Ne klikaj ponovo, Android sam završava i aplikacija se ponovo pokrene.|Устанавливаю… Не нажимай снова, Android закончит сам, и приложение перезапустится.
+Android ne dozvoljava da se aplikacija sama vrati na stariju verziju. Zato aplikacija radi ovo:|Android не позволяет приложению самому вернуться к старой версии. Поэтому приложение делает так:
+Spremljeno u Download/MediaCenter: MediaCenter-%s.apk i backup.|Сохранено в Download/MediaCenter: MediaCenter-%s.apk и резервная копия.
+Deinstaliraj aplikaciju sada|Удалить приложение сейчас
+Playliste, lozinke, PIN, favoriti i gledano čuvaju se samo na ovom uređaju. Na internet idu samo zahtjevi prema tvom provideru, slike i opisi filmova (TMDB) i provjera nove verzije.|Плейлисты, пароли, PIN, избранное и история хранятся только на этом устройстве. В интернет уходят только запросы к провайдеру, картинки и описания фильмов (TMDB) и проверка обновлений.
+Jedan izgled za sve. Ovdje biraš samo veličinu teksta i način rada.|Один вид для всех. Здесь выбираются только размер текста и режим работы.
+Veličina teksta|Размер текста
+za gledanje s daljeg kauča · 90 – 120 %|для просмотра издалека · 90 – 120 %
+Lite štedi memoriju i procesor na slabijim uređajima. Izgled i funkcije ostaju isti.|Lite экономит память и процессор на слабых устройствах. Вид и функции те же.
+Potpis ne odgovara – fajl nije od ove aplikacije ili je oštećen|Подпись не совпадает – файл не от этого приложения или повреждён
+Pusti u ugrađenom plejeru|Воспроизвести во встроенном плеере
+Ovaj softver je media plejer namijenjen zakonitoj upotrebi.|Это программное обеспечение — медиаплеер для законных целей.
+Programer ne pruža, ne hostuje, ne prodaje, ne distribuira niti podržava neovlaštene streamove, sadržaj zaštićen autorskim pravima distribuiran bez dozvole ili nezakonite streaming usluge.|Разработчик не предоставляет, не размещает, не продаёт, не распространяет и не поддерживает неавторизованные потоки, защищённый контент без разрешения или незаконные стриминговые сервисы.
+Korisnici su odgovorni da sadržaj, playliste i streaming usluge kojima pristupaju budu zakonito odobreni za njihovu upotrebu.|Пользователи отвечают за то, чтобы контент, плейлисты и стриминговые сервисы были законно разрешены для их использования.
+Koristite ovaj media centar samo sa sadržajem i uslugama kojima imate zakonito pravo pristupa.|Используйте этот медиацентр только с контентом и сервисами, к которым у вас есть законный доступ.
+Server · korisničko ime · lozinka|Сервер · имя пользователя · пароль
+Link playliste · EPG po želji|Ссылка плейлиста · EPG по желанию
+Adresa portala · MAC adresa|Адрес портала · MAC-адрес
+Dodavanje, aktivacija i osvježavanje|Добавление, включение и обновление
+Programski vodič i pomak vremena|Телегид и сдвиг времени
+Redoslijed, skrivanje i zaključavanje|Порядок, скрытие и блокировка
+Pokretanje i mreža|Запуск и сеть
+Start s boxom, rad u pozadini, mreža|Запуск с приставкой, фоновая работа, сеть
+Država, timovi i obavještenja|Страна, команды и уведомления
+Veličina teksta i performanse|Размер текста и производительность
+Promijeni PIN i gdje se traži|Сменить PIN и где он запрашивается
+Skrivene kategorije i vrijeme gledanja|Скрытые категории и время просмотра
+Zapis streamova i grešaka|Журнал потоков и ошибок
+Sprema tvoje postavke u Download/MediaCenter|Сохраняет настройки в Download/MediaCenter
 """.trimIndent()

@@ -553,3 +553,34 @@ EEE, d MMM
 %03d
 PRETORIAN TV
 privacy
+Download/MediaCenter
+settings
+Media Center 
+FFmpeg audio dekoder (Jellyfin media3-ffmpeg-decoder) · GPL-3.0. Izvorni kod: github.com/KarlAgathon/PRETORIAN
+playlista, Xtream, M3U, Stalker, dodaj, osvježi, provajder, server
+EPG, vodič, program, pomak, vrijeme
+grupe, kanali, redoslijed, sakrij, zaključaj
+plejer, titl, titlovi, zvuk, audio, dekoder, bafer, AFR, pomak zvuka, eksterni plejer, trailer
+start, pokretanje, box, pozadina, mreža, User-Agent, udpxy
+podsjetnik, emisija, utakmica, obavijest
+sport, tim, liga, država, rezultati
+jezik, prevod, meni
+izgled, tekst, veličina, Lite, Full, performanse
+PIN, šifra, zaključavanje
+roditeljska kontrola, djeca, odrasli, kategorije, vrijeme gledanja
+backup, vraćanje, USB, fajl, lozinka
+ažuriranje, nova verzija
+o aplikaciji, verzija, licence, privatnost, pomoć
+dijagnostika, zapis, greške, stream log
+Format
+mediacenter_backup
+MediaCenter-backup-
+MediaCenter-backup%
+MediaCenter
+MediaCenter-backup
+USB/MediaCenter
+/mnt/media_rw
+Media Center · MIT
+Media3 / ExoPlayer · Apache 2.0
+/MediaCenter
+Media Center
