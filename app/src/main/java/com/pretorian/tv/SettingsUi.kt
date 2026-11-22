@@ -581,8 +581,9 @@ fun SettingsScreen(nav: Nav) {
     val scope = rememberCoroutineScope()
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     // like Search: inside a section the list shrinks to a narrow rail of icons and the page gets the room
-    val railW by androidx.compose.animation.core.animateDpAsState(if (inPage) 74.dp else 270.dp, label = "rail")
-    val slim = inPage
+    // the section names always stay readable (approved): the rail only gets a little narrower inside a page
+    val railW by androidx.compose.animation.core.animateDpAsState(if (inPage) 236.dp else 270.dp, label = "rail")
+    val slim = false
     val classic = Look.layout == 0 || Look.dawn
     LaunchedEffect(classic, inPage) {
         if (classic) {
@@ -650,7 +651,7 @@ fun SettingsScreen(nav: Nav) {
                     "groups" -> GroupManager(nav)
                     "epg" -> { val epl = PlEdit.id?.let { id -> Store.playlists(ctx).firstOrNull { it.id == id } }
                         SetPage(if (epl != null) trf("EPG · %s", epl.name) else tr("EPG izvori"), "OK: meni · desno: uključi/ugasi · ▲ ▼ redoslijed") { EpgSourcesBlock(epl) } }
-                    "plists" -> PlaylistsListV2(nav)
+                    "plists", "playlists" -> PlaylistsListV2(nav)
                     "device" -> DeviceV2()
                     "pin" -> PinV2()
                     "parental" -> ParentalV2()

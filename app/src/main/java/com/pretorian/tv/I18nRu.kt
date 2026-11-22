@@ -2582,4 +2582,6 @@ Online titlovi|Онлайн субтитры
 Titlovi se biraju u plejeru|Субтитры выбираются в плеере
 1 sezona|1 сезон
 Filteri|Фильтры
+Izabrano|Выбрано
+Drži OK za opis epizode|Удерживайте OK для описания серии
 """.trimIndent()

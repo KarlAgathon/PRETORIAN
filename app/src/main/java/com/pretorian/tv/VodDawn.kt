@@ -241,11 +241,15 @@ private fun VodGalleryBody(title: String, icon: Int, items: Load<List<VItem>>, m
         androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().padding(start = 26.dp, end = 26.dp, top = 16.dp, bottom = 14.dp)) {
         // the poster row has its own fixed height, so the text and buttons above can never run over it;
         // the gap is chosen so a whole number of posters fills the row (no poster cut at the right edge)
-        val rowH = (maxHeight * 0.44f).coerceIn(150.dp, 250.dp)
-        val posterH = rowH - 16.dp
-        val posterW = posterH * 2f / 3f
-        val n = ((maxWidth + 12.dp) / (posterW + 12.dp)).toInt().coerceAtLeast(1)
-        val gap = if (n > 1) ((maxWidth - posterW * n - 8.dp) / (n - 1)).coerceAtLeast(8.dp) else 12.dp
+        // approved: bigger posters, about five at once, the row centred with the same space left and right
+        val gap = 20.dp
+        var posterW = (maxWidth - gap * 4) / 5
+        var posterH = posterW * 1.5f
+        val maxH = maxHeight * 0.5f
+        if (posterH > maxH) { posterH = maxH; posterW = posterH / 1.5f }
+        val n = ((maxWidth + gap) / (posterW + gap)).toInt().coerceIn(1, 5)
+        val side = ((maxWidth - posterW * n - gap * (n - 1)) / 2).coerceAtLeast(0.dp)
+        val rowH = posterH + 16.dp
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
           Column(Modifier.fillMaxWidth().weight(1f).clip(Rnd(0.dp)), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -261,13 +265,13 @@ private fun VodGalleryBody(title: String, icon: Int, items: Load<List<VItem>>, m
                 HeroBtn(if (shown.series) "Otvori" else "Gledaj", R.drawable.lc_play, primary = true) {
                     if (shown.series) shown.open(nav) else { VodMemory.returning = true; nav.push(Screen.Player(listOf(PlayItem(cleanTitle(shown.name).first, shown.url, shown.image, null, null, shown.name)), 0, live = false)) }
                 }
-                HeroBtn("Trailer", R.drawable.lc_film) { openTrailer(ctx, shown.name, meta?.trailerKey) }
+                HeroBtn("Trailer", R.drawable.ic_trailer_red, colored = true) { openTrailer(ctx, shown.name, meta?.trailerKey) }
                 val on = remember(MyList.rev, shown.id) { MyList.has(shown.kind, shown.id) }
                 HeroBtn(if (on) "Ukloni s moje liste" else "Dodaj na moju listu", if (on) R.drawable.lc_bookmark_filled else R.drawable.lc_bookmark) { myListToggle(ctx, shown) }
             }
           }
             LazyRow(state = st, modifier = Modifier.fillMaxWidth().height(rowH), horizontalArrangement = Arrangement.spacedBy(gap),
-                verticalAlignment = Alignment.CenterVertically, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)) {
+                verticalAlignment = Alignment.CenterVertically, contentPadding = PaddingValues(horizontal = side, vertical = 8.dp)) {
                 itemsIndexed(list, key = { _, it -> it.id + it.url }) { i, it ->
                     Focusable(onClick = { mem[key] = i; it.open(nav) }, onFocus = { mem[key] = i; focused = it },
                         focusRequester = if (i == start) fr else null, shape = Rnd(12.dp), normal = Color.Transparent, focused = Color.Transparent,
@@ -284,12 +288,13 @@ private fun VodGalleryBody(title: String, icon: Int, items: Load<List<VItem>>, m
 }
 
 @Composable
-private fun HeroBtn(label: String, icon: Int, primary: Boolean = false, onClick: () -> Unit) {
+private fun HeroBtn(label: String, icon: Int, primary: Boolean = false, colored: Boolean = false, onClick: () -> Unit) {
     Focusable(onClick = onClick, shape = Rnd(12.dp), normal = if (primary) Color(0xE6F2F2F4) else Color(0x14FFFFFF), focused = Dawn.pill,
         focusBorderColor = Color.Transparent, zoom = 1f, modifier = Modifier.height(48.dp).border(1.dp, if (primary) Color.Transparent else Color(0x99FFFFFF), Rnd(12.dp))) { f ->
         val fg = if (f || primary) Dawn.onPill else Color.White
         Row(Modifier.align(Alignment.Center).padding(horizontal = 22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Ico(icon, 18.dp, fg); T(label, 16.sp, fg, FontWeight.SemiBold)
+            if (colored) androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(icon), null, Modifier.size(22.dp)) else Ico(icon, 18.dp, fg)
+            T(label, 16.sp, fg, FontWeight.SemiBold)
         }
     }
 }
