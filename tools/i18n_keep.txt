@@ -584,3 +584,13 @@ Media Center · MIT
 Media3 / ExoPlayer · Apache 2.0
 /MediaCenter
 Media Center
+d MMM yyyy
+EEE d. MMM
+EEE d. MMM HH:mm
+EEE d. MMM · 
+d. MMM
+%sd
+%s kb/s
+Kodek
+FPS
+Bitrate

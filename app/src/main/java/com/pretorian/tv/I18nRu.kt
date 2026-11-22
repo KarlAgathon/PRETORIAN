@@ -2474,4 +2474,37 @@ Promijeni PIN i gdje se traži|Сменить PIN и где он запраши�
 Skrivene kategorije i vrijeme gledanja|Скрытые категории и время просмотра
 Zapis streamova i grešaka|Журнал потоков и ошибок
 Sprema tvoje postavke u Download/MediaCenter|Сохраняет настройки в Download/MediaCenter
+Traži kanale u %s…|Искать каналы в %s…
+Ova emisija više nije u arhivi|Этой передачи больше нет в архиве
+Ova emisija više nije u arhivi.|Этой передачи больше нет в архиве.
+Nastavi (%s)|Продолжить (%s)
+Nema započetih emisija|Нет начатых передач
+Ovdje se pojave emisije iz arhive koje nisi dogledao.|Здесь появляются передачи из архива, которые вы не досмотрели.
+Arhiva istekla|Архив истёк
+Arhiva: %s dana|Архив: %s дн.
+Izaberi drugi dan gore|Выберите другой день вверху
+Pretraži Catch-up…|Поиск в Catch-up…
+Traži kanal ili emisiju|Найдите канал или передачу
+Na primjer naziv kanala ili emisije iz arhive.|Например, название канала или передачи из архива.
+Drži OK za brisanje jedne|Удерживайте OK, чтобы удалить один
+Emisija|Передача
+Tražim u arhivi…|Ищу в архиве…
+Probaj drugi naziv.|Попробуйте другое название.
+Tražim još u arhivi…|Продолжаю искать в архиве…
+Pretraži Catch-up|Поиск в Catch-up
+Obriši historiju pretrage?|Очистить историю поиска?
+Obriši historiju pretrage|Очистить историю поиска
+Pomak uživo|Сдвиг эфира
+Dostupno u cijelom ekranu|Доступно в полноэкранном режиме
+Podaci još nisu dostupni.|Данные пока недоступны.
+Nije dostupno za ovaj kanal|Недоступно для этого канала
+Nije dostupno|Недоступно
+Nedavno gledano|Недавно просмотренные
+GRUPE PROVAJDERA|ГРУППЫ ПРОВАЙДЕРА
+Na kanalu drži OK da ga dodaš u favorite|Удерживайте OK на канале, чтобы добавить его в избранное
+Obriši nedavno gledano|Очистить недавно просмотренные
+Traži grupe…|Искать группы…
+Traži sačuvane emisije…|Искать сохранённые передачи…
+Traži emisije…|Искать передачи…
+Pritisni OK još jednom za cijeli ekran|Нажмите OK ещё раз для полного экрана
 """.trimIndent()

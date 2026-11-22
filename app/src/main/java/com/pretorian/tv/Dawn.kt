@@ -24,6 +24,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -225,7 +226,7 @@ private fun DawnMenu(nav: Nav) {
                     Ico(it.icon, if (big) 27.dp else 23.dp, c)
                     T(it.label, if (big) 19.sp else 17.sp, c, if (f) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
                     if (it.badge > 0) Box(Modifier.clip(Pill).background(if (f) Dawn.onPill else C.Text).padding(horizontal = 8.dp, vertical = 1.dp)) {
-                        T(if (it.badge > 99) "99+" else it.badge.toString(), 13.sp, if (f) Dawn.pill else Silver.OnFocus, FontWeight.Bold)  // i18n-ignore
+                        T(if (it.badge > 99) "99+" else it.badge.toString(), 13.sp, if (f) Dawn.pill else Silver.OnFocus, FontWeight.Bold)
                     }
                 }
             }
@@ -346,7 +347,7 @@ fun DawnOptions(ch: Channel?, nav: Nav, modifier: Modifier) {
     var epg by remember { mutableStateOf<Channel?>(null) }
     var fmt by remember { mutableStateOf<Channel?>(null) }
     var more by remember { mutableStateOf(false) }
-    var sub by remember { mutableStateOf("") }
+    var sub by remember { mutableIntStateOf(0) }
     @Suppress("UNUSED_VARIABLE") val fr = Favs.rev
     var paused by remember { mutableStateOf(false) }
     fun toast(t: String) = android.widget.Toast.makeText(ctx, tr(t), android.widget.Toast.LENGTH_SHORT).show()
@@ -386,31 +387,31 @@ fun DawnOptions(ch: Channel?, nav: Nav, modifier: Modifier) {
     } }
     // More: exactly six entries (approved), each says honestly when this channel cannot do it
     if (more) Popup(ch?.name ?: tr("Više"), { more = false }) {
-        OptionRow("Titlovi", R.drawable.lc_captions) { if (live()) { more = false; sub = "text" } }
-        OptionRow("Audio", R.drawable.lc_volume) { if (live()) { more = false; sub = "audio" } }
-        OptionRow(if (Sleep.until > 0) trf("Tajmer: %s min", ((Sleep.until - System.currentTimeMillis()) / 60_000 + 1).coerceAtLeast(1)) else tr("Tajmer za spavanje"), R.drawable.lc_moon) { more = false; sub = "sleep" }
-        OptionRow("Informacije o streamu", R.drawable.lc_info) { if (live()) { more = false; sub = "info" } }
-        OptionRow("Vanjski plejer", R.drawable.lc_external_link) { if (ch != null) { more = false; sub = "ext" } }
+        OptionRow("Titlovi", R.drawable.lc_captions) { if (live()) { more = false; sub = 1 } }
+        OptionRow("Audio", R.drawable.lc_volume) { if (live()) { more = false; sub = 2 } }
+        OptionRow(if (Sleep.until > 0) trf("Tajmer: %s min", ((Sleep.until - System.currentTimeMillis()) / 60_000 + 1).coerceAtLeast(1)) else tr("Tajmer za spavanje"), R.drawable.lc_moon) { more = false; sub = 3 }
+        OptionRow("Informacije o streamu", R.drawable.lc_info) { if (live()) { more = false; sub = 4 } }
+        OptionRow("Vanjski plejer", R.drawable.lc_external_link) { if (ch != null) { more = false; sub = 5 } }
         OptionRow("Pomak uživo", R.drawable.lc_rotate_ccw, sub = tr("Dostupno u cijelom ekranu")) { toast("Pritisni OK još jednom za cijeli ekran") }
     }
     when (sub) {
-        "text" -> DawnTracks(androidx.media3.common.C.TRACK_TYPE_TEXT) { sub = "" }
-        "audio" -> DawnTracks(androidx.media3.common.C.TRACK_TYPE_AUDIO) { sub = "" }
-        "sleep" -> Popup("Tajmer za spavanje", { sub = "" }) {
-            OptionRow("Isključen", if (Sleep.until <= 0) R.drawable.lc_check else R.drawable.lc_moon) { Sleep.until = 0; sub = "" }
-            listOf(15, 30, 60, 90).forEach { m -> OptionRow(trf("%s min", m), R.drawable.lc_moon) { Sleep.until = System.currentTimeMillis() + m * 60_000L; sub = "" } }
+        1 -> DawnTracks(androidx.media3.common.C.TRACK_TYPE_TEXT) { sub = 0 }
+        2 -> DawnTracks(androidx.media3.common.C.TRACK_TYPE_AUDIO) { sub = 0 }
+        3 -> Popup("Tajmer za spavanje", { sub = 0 }) {
+            OptionRow("Isključen", if (Sleep.until <= 0) R.drawable.lc_check else R.drawable.lc_moon) { Sleep.until = 0; sub = 0 }
+            listOf(15, 30, 60, 90).forEach { m -> OptionRow(trf("%s min", m), R.drawable.lc_moon) { Sleep.until = System.currentTimeMillis() + m * 60_000L; sub = 0 } }
         }
-        "info" -> Popup("Informacije o streamu", { sub = "" }) {
+        4 -> Popup("Informacije o streamu", { sub = 0 }) {
             val f = Preview.player?.videoFormat
             if (f == null) T("Podaci još nisu dostupni.", 14.sp, C.Soft)
             else {
                 OptionRow("Rezolucija", R.drawable.lc_info, value = "${f.width}×${f.height}") {}
-                if (f.frameRate > 0) OptionRow("FPS", R.drawable.lc_info, value = "%.0f".format(f.frameRate)) {}
+                if (f.frameRate > 0) OptionRow("FPS", R.drawable.lc_info, value = kotlin.math.round(f.frameRate).toInt().toString()) {}
                 f.sampleMimeType?.let { OptionRow("Kodek", R.drawable.lc_info, value = it.substringAfter('/')) {} }
-                if (f.bitrate > 0) OptionRow("Bitrate", R.drawable.lc_info, value = "${f.bitrate / 1000} kb/s") {}
+                if (f.bitrate > 0) OptionRow("Bitrate", R.drawable.lc_info, value = trf("%s kb/s", f.bitrate / 1000)) {}
             }
         }
-        "ext" -> ch?.let { c -> ExternalPicker(c.url, c.name, 0L, onDismiss = { sub = "" }) }
+        5 -> ch?.let { c -> ExternalPicker(c.url, c.name, 0L, onDismiss = { sub = 0 }) }
     }
 }
 
