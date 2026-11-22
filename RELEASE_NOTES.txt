@@ -1,3 +1,21 @@
+Media Center 2.1.0
+
+• First-time setup: language is one row with a drop-down list; choosing a language applies it at once
+• Main menu: Sport is its own entry again (TV, Movies, Series, Sport, Catch-up, Search, Settings)
+• Top bar: active playlist, expiry date and days left (green, orange from 7 days, red from 2 days)
+• TV groups: Favourites first, Recently watched (last 10 channels) when there is history, then the provider's groups
+• Hold OK on a channel to add or remove it from Favourites at once, no menu
+• Recently watched: one button clears the list
+• Channel screen: six icons under the preview (Pause, Favourite, EPG, Format, Archive, More); Archive opens the channel's catch-up
+• More has exactly six entries: Subtitles, Audio, Sleep timer, Stream information, External player, Time shift; what a channel cannot do says so
+• Full screen: the six controls are icons only
+• Catch-up rebuilt, one level at a time: Continue watching, Groups, Search
+  – Continue watching with progress; OK: Continue, Start from the beginning, Remove
+  – Groups and channels with archive only, each with its own search
+  – Archive by day with programme search; OK opens a small box: Watch from the beginning, or Continue / Start from the beginning
+  – One search for channels and archived shows, with the last 10 searches
+• Background: a bench next to the street lamp
+
 Media Center 2.0.1
 
 • First-time setup: the language panel scrolls on small screens, Continue is always reachable
