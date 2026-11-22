@@ -294,23 +294,24 @@ private fun DawnCatchup(nav: Nav) {
     }
 }
 
-private class CuItem(val title: String, val icon: Int? = null, val ch: Channel? = null, val sub: String? = null, val trailing: String? = null,
-                     val progress: Float? = null, val dim: Boolean = false, val onLong: (() -> Unit)? = null, val onClick: () -> Unit)
+internal class CuItem(val title: String, val icon: Int? = null, val ch: Channel? = null, val sub: String? = null, val trailing: String? = null,
+                     val progress: Float? = null, val dim: Boolean = false, val onLong: (() -> Unit)? = null, val divider: Boolean = false, val onClick: () -> Unit)
 
 @Composable
-private fun CuPanel(wide: Boolean = false, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+internal fun CuPanel(wide: Boolean = false, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
     Column((if (wide) Modifier.fillMaxWidth() else Modifier.width(560.dp)).fillMaxHeight().dawnGlass().padding(10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
 }
 
 /** A list of one level; the focus comes back to the row you left (and the list scrolls to it). */
 @Composable
-private fun CuList(mem: HashMap<String, Int>, key: String, items: List<CuItem>, modifier: Modifier = Modifier) {
+internal fun CuList(mem: HashMap<String, Int>, key: String, items: List<CuItem>, modifier: Modifier = Modifier) {
     val start = (mem[key] ?: 0).coerceIn(0, (items.size - 1).coerceAtLeast(0))
     val st = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = (start - 3).coerceAtLeast(0))
     val fr = remember { FocusRequester() }
     LazyColumn(modifier, state = st, verticalArrangement = Arrangement.spacedBy(3.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
         itemsIndexed(items) { i, it ->
+            if (it.divider) Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).height(1.dp).background(Color(0x33FFFFFF)))
             Focusable(onClick = it.onClick, onMenu = it.onLong, onFocus = { mem[key] = i }, focusRequester = if (i == start) fr else null,
                 shape = Rnd(12.dp), normal = Color.Transparent, focused = Dawn.pill, focusBorderColor = Color.Transparent, zoom = 1f,
                 modifier = Modifier.fillMaxWidth().height(if (it.sub != null || it.progress != null) 62.dp else 50.dp)) { f ->
@@ -337,7 +338,7 @@ private fun CuList(mem: HashMap<String, Int>, key: String, items: List<CuItem>, 
 
 /** "Search …" line at the top of a level: OK opens the keyboard, long OK clears it. */
 @Composable
-private fun CuSearchField(hint: String, q: String, onQ: (String) -> Unit) {
+internal fun CuSearchField(hint: String, q: String, onQ: (String) -> Unit) {
     var ask by remember { mutableStateOf(false) }
     Focusable(onClick = { ask = true }, onMenu = { onQ("") }, shape = Pill, normal = Color.Transparent, focused = Dawn.pill, focusBorderColor = Color.Transparent,
         zoom = 1f, modifier = Modifier.fillMaxWidth().height(42.dp).border(1.dp, Color(0x4DFFFFFF), Pill)) { f ->

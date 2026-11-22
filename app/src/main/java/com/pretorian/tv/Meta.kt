@@ -138,6 +138,51 @@ object Tmdb {
         return JSONObject(Http.request(url, if (bearer) mapOf("Authorization" to "Bearer $key") else emptyMap()))
     }
 
+    /** One title of a TMDB list (now playing, a network's series, recommendations). */
+    data class Hit(val id: Int, val title: String, val original: String, val year: String?)
+
+    /** A TMDB list, [pages] pages of 20; kept on the box for 12 hours so opening a category is fast and costs no request. */
+    suspend fun list(path: String, query: String, pages: Int, tv: Boolean): List<Hit> = withContext(Dispatchers.IO) {
+        if (!enabled()) return@withContext emptyList()
+        val ck = "tmdbl_" + (path + "?" + query).hashCode()
+        val saved = Prefs.str(ck)
+        if (saved.isNotBlank()) try {
+            val o = JSONObject(saved)
+            if (System.currentTimeMillis() - o.optLong("at") < 12 * 3600_000L) {
+                val a = o.getJSONArray("h")
+                return@withContext (0 until a.length()).map { val x = a.getJSONObject(it); Hit(x.optInt("id"), x.str("t"), x.str("o"), x.str("y").orNullIfBlank()) }
+            }
+        } catch (_: Exception) {}
+        val out = ArrayList<Hit>()
+        for (pg in 1..pages) {
+            val r = try { get(path, "$query&page=$pg") } catch (e: Exception) { if (pg == 1) throw e else break }
+            val a = r.optJSONArray("results") ?: break
+            for (i in 0 until a.length()) {
+                val x = a.getJSONObject(i)
+                out += Hit(x.optInt("id"), x.str(if (tv) "name" else "title"), x.str(if (tv) "original_name" else "original_title"),
+                    x.str(if (tv) "first_air_date" else "release_date").take(4).orNullIfBlank())
+            }
+            if (pg >= r.optInt("total_pages", 1)) break
+        }
+        val a = JSONArray(); out.forEach { a.put(JSONObject().put("id", it.id).put("t", it.title).put("o", it.original).put("y", it.year ?: "")) }
+        Prefs.put(ck, JSONObject().put("at", System.currentTimeMillis()).put("h", a).toString())
+        out
+    }
+
+    /** films in cinemas now (this country, else the US list) */
+    suspend fun nowPlaying(): List<Hit> {
+        val cc = java.util.Locale.getDefault().country.ifBlank { "DE" }
+        return list("/movie/now_playing", "language=en-US&region=$cc", 3, tv = false).ifEmpty { list("/movie/now_playing", "language=en-US&region=US", 3, tv = false) }
+    }
+    /** series made by one network (its originals), most popular first */
+    suspend fun network(ids: String): List<Hit> = list("/discover/tv", "language=en-US&sort_by=popularity.desc&with_networks=$ids", 5, tv = true)
+    /** films like this one */
+    suspend fun similar(rawTitle: String): List<Hit> {
+        val m = find(rawTitle, tv = false) ?: return emptyList()
+        if (m.tmdbId <= 0) return emptyList()
+        return list("/movie/${m.tmdbId}/recommendations", "language=en-US", 2, tv = false).ifEmpty { list("/movie/${m.tmdbId}/similar", "language=en-US", 1, tv = false) }
+    }
+
     /** test the key; returns null when OK */
     suspend fun test(): String? = withContext(Dispatchers.IO) {
         try { get("/configuration", ""); null } catch (e: Exception) { e.message ?: "Greška" }

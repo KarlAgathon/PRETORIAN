@@ -78,6 +78,9 @@ object VodMemory {
     val catOf = HashMap<String, String>()
     /** New Dawn: the search typed in Movies / Series, kept while you open a title and come back */
     val query = HashMap<String, String>()
+    /** one-menu-at-a-time browser: the open levels and the focused row of each, per Movies / Series */
+    val stack = HashMap<String, androidx.compose.runtime.snapshots.SnapshotStateList<Any>>()
+    val levels = HashMap<String, HashMap<String, Int>>()
 }
 
 private const val G_CONTINUE = "__continue__"
@@ -94,6 +97,7 @@ private sealed class VRow {
 
 @Composable
 private fun VodBrowser(nav: Nav, series: Boolean) {
+    if (Look.dawn) { DawnVod(nav, series); return }
     if (Look.wave && !Look.age) { WaveBrowser(nav, series); return }
     VodClassic(nav, series)
 }
