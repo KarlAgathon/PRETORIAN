@@ -337,7 +337,7 @@ fun ImportDialog() {
                     T(p.label, 16.sp, C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
                     val right = when (p.state) {
                         0 -> tr("čeka")
-                        3 -> tr("nije uspjelo")
+                        3 -> tr("Nije dostupno")
                         2 -> "✓ " + "%,d".format(p.n).replace(',', '.')
                         else -> "%,d".format(p.n).replace(',', '.') + (if (p.pct >= 0) " · ${(p.pct * 100).toInt()}%" else "")
                     }
@@ -351,7 +351,7 @@ fun ImportDialog() {
         val all = Import.overall()
         val el = System.currentTimeMillis() - Import.started
         val status = when {
-            Import.finished -> tr("Gotovo ✓")
+            Import.finished -> tr("Biblioteka je spremna")
             all > 0.05f && el > 5000 -> {
                 val left = ((el / all) * (1 - all) / 1000).toInt()
                 trf("Ukupno %s%%", (all * 100).toInt()) + " · " + (if (left < 60) trf("još oko %s s", maxOf(5, left / 5 * 5)) else trf("još oko %s min", (left + 59) / 60))
@@ -359,7 +359,8 @@ fun ImportDialog() {
             else -> trf("Ukupno %s%%", (all * 100).toInt())
         }
         T(status, 15.sp, if (Import.finished) C.Green else C.Text, FontWeight.Bold)
-        Button(if (Import.finished) "U redu" else "Nastavi u pozadini", R.drawable.lc_check, primary = true) { Import.show = false; if (Import.finished) Import.name = null }
+        if (Import.finished) T(Import.parts.filter { it.state == 2 }.joinToString(" · ") { tr(it.label) + " " + "%,d".format(it.n).replace(',', '.') }, 14.sp, C.Soft, maxLines = 2)
+        Button(if (Import.finished) "Uđi u Media Center" else "Nastavi u pozadini", R.drawable.lc_check, primary = true) { Import.show = false; if (Import.finished) Import.name = null }
     }
 }
 

@@ -2569,4 +2569,13 @@ Veza sa serverom odbijena. Provjeri adresu i port.|Соединение откл
 Pogrešno korisničko ime ili lozinka.|Неверное имя пользователя или пароль.
 Sigurna veza nije uspjela. Probaj adresu s http://|Защищённое соединение не удалось. Попробуй адрес с http://
 Adresa ne postoji na serveru. Provjeri link.|Адрес не существует на сервере. Проверь ссылку.
+Plejer, titlovi, zvuk, stream|Плеер, субтитры, звук, поток
+Jezik, veličina teksta, Lite / Full|Язык, размер текста, Lite / Full
+Pokretanje s boxom, rad u pozadini, mreža|Запуск с приставкой, фоновая работа, сеть
+Uređaj, backup, ažuriranje, dijagnostika|Устройство, резервная копия, обновление, диагностика
+uređaj, box, memorija, RAM, mreža, IP, keš, ocjena|устройство, приставка, память, RAM, сеть, IP, кэш, оценка
+Uređaj i mreža|Устройство и сеть
+Model, memorija, mreža, ocjena uređaja|Модель, память, сеть, оценка устройства
+Biblioteka je spremna|Библиотека готова
+Uđi u Media Center|Войти в Media Center
 """.trimIndent()

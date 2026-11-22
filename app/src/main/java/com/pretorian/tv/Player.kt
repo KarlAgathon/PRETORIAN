@@ -353,7 +353,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         if (file != null) b.setSubtitleConfigurations(listOf(
             MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(File(file)))
                 .setMimeType(MimeTypes.APPLICATION_SUBRIP)
-                .setLanguage(File(file).nameWithoutExtension.substringAfterLast('_'))
+                .setLanguage(File(file).nameWithoutExtension.let { n -> n.substringAfterLast('.').takeIf { it.length in 2..3 && it != n } ?: n.substringAfterLast('_') })
                 .setSelectionFlags(MC.SELECTION_FLAG_DEFAULT).build()))
         val tb = player.trackSelectionParameters.buildUpon()
         if (item.audioLang != null) tb.setPreferredAudioLanguages(item.audioLang)

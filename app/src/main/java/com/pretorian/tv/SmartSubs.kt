@@ -57,6 +57,27 @@ object SmartSubs {
         return st
     }
     fun forget() { cache.clear(); rev++ }
+
+    /** downloaded files, so a version is fetched only once (also the V1 fetched in the background on the film page) */
+    private val files = java.util.concurrent.ConcurrentHashMap<String, String>()
+    fun fileOf(r: SubResult): java.io.File? = files[r.provider + "|" + r.ref]?.let { java.io.File(it) }?.takeIf { it.exists() }
+
+    /** downloads one version and names it neatly: "Title (V1).en.srt" — never the release or file name of the source */
+    suspend fun get(ctx: android.content.Context, r: SubResult, title: String, version: Int): java.io.File {
+        fileOf(r)?.let { return it }
+        val f = Subs.download(ctx, r)
+        val clean = cleanTitle(title).first.replace(Regex("[^\\p{L}\\p{N} ]"), "").trim().take(40).ifBlank { "Subtitle" }  // i18n-ignore
+        val nice = java.io.File(f.parentFile, "$clean (V$version).${r.lang}.srt")
+        val out = if (nice.exists() || f.renameTo(nice)) nice else f
+        files[r.provider + "|" + r.ref] = out.path
+        return out
+    }
+
+    /** film page: finds the online subtitles and downloads V1 in the background, so the player has it at once */
+    suspend fun prefetch(ctx: android.content.Context, search: String, season: Int?, episode: Int?) {
+        val st = prepare(search, season, episode)
+        if (st is State.Found) try { get(ctx, st.list.first(), search, 1) } catch (_: Exception) {}
+    }
 }
 
 /** Subtitle look: size Small/Medium/Large and one of six fonts the box has. */
@@ -123,7 +144,7 @@ fun SubsPanel(item: PlayItem, tracks: List<TrackItem>, current: String?, online:
                         busy = id
                         scope.launch {
                             try {
-                                val f = Subs.download(ctx, res)
+                                val f = SmartSubs.get(ctx, res, search, i + 1)
                                 Prefs.put("subpick_" + item.url.hashCode(), id); chosen.value = id
                                 onFile(f.path)
                             } catch (e: Exception) { Toast.makeText(ctx, tr("Titl se nije mogao preuzeti, probaj drugu verziju"), Toast.LENGTH_SHORT).show() }

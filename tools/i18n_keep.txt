@@ -621,3 +621,6 @@ Zoom
 PROVIDER
 CATCH-UP TV
 dd.MM.yyyy · HH:mm
+sportscenter
+notify
+%,d

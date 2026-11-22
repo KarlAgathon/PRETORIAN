@@ -472,13 +472,16 @@ object SetMode {
     @Suppress("UNUSED_PARAMETER") fun set(on: Boolean) {}
 }
 
+// eight categories in this order (approved), one menu at a time
 private val SECTIONS2 = listOf(
-    Section("sources", R.drawable.lc_list, "Playliste i provajderi", "Dodaj, uredi, osvježi, EPG"),
-    Section("playback", R.drawable.lc_play, "Plejer i reprodukcija", "Zvuk, titlovi, stream, performanse"),
-    Section("appearance", R.drawable.lc_languages, "Izgled i jezik", "Jezik i veličina teksta"),
-    Section("privacy", R.drawable.lc_shield_check, "Privatnost i roditeljska kontrola", "PIN i skrivene kategorije"),
-    Section("backup", R.drawable.lc_archive, "Backup i vraćanje", "Spasi ili vrati postavke"),
-    Section("about", R.drawable.lc_info, "O aplikaciji i ažuriranja", "Verzija, ažuriranje, licence"),
+    Section("sources", R.drawable.lc_list, "Playliste", "Dodaj, uredi, osvježi, EPG"),
+    Section("playback", R.drawable.lc_play, "Reprodukcija", "Plejer, titlovi, zvuk, stream"),
+    Section("appearance", R.drawable.lc_languages, "Izgled i jezik", "Jezik, veličina teksta, Lite / Full"),
+    Section("home", R.drawable.lc_house, "Početna i navigacija", "Pokretanje s boxom, rad u pozadini, mreža"),
+    Section("privacy", R.drawable.lc_shield_check, "Roditeljska kontrola", "PIN i skrivene kategorije"),
+    Section("sportscenter", R.drawable.lc_trophy, "Sportski centar", "Država, timovi i obavještenja"),
+    Section("notify", R.drawable.lc_bell, "Obavještenja i podsjetnici", "Emisije i utakmice"),
+    Section("system", R.drawable.lc_settings, "Sistem i održavanje", "Uređaj, backup, ažuriranje, dijagnostika"),
 )
 private val BASIC = SECTIONS2.map { it.id }.toSet()
 
@@ -491,25 +494,30 @@ private val SETTINGS_LINKS = mapOf(
     ),
     "playback" to listOf(
         SettingsLink("player", "Plejer", "Titlovi, zvuk, stream i kontrole", R.drawable.lc_play),
-        SettingsLink("general", "Pokretanje i mreža", "Start s boxom, rad u pozadini, mreža", R.drawable.lc_settings),
-        SettingsLink("reminders", "Podsjetnici", "Emisije i utakmice", R.drawable.lc_bell),
-        SettingsLink("sports", "Sport", "Država, timovi i obavještenja", R.drawable.lc_trophy),
     ),
     "appearance" to listOf(
         SettingsLink("language", "Jezik", "Jezik menija i opisa sadržaja", R.drawable.lc_languages),
         SettingsLink("look", "Izgled", "Veličina teksta i performanse", R.drawable.lc_palette),
     ),
+    "home" to listOf(
+        SettingsLink("general", "Pokretanje i mreža", "Start s boxom, rad u pozadini, mreža", R.drawable.lc_settings),
+    ),
     "privacy" to listOf(
         SettingsLink("pin", "PIN", "Promijeni PIN i gdje se traži", R.drawable.lc_key_round),
         SettingsLink("parental", "Roditeljska kontrola", "Skrivene kategorije i vrijeme gledanja", R.drawable.lc_lock),
     ),
-    "backup" to listOf(
-        SettingsLink("backup", "Backup i vraćanje", "Sačuvaj ili vrati postavke", R.drawable.lc_archive),
+    "sportscenter" to listOf(
+        SettingsLink("sports", "Sport", "Država, timovi i obavještenja", R.drawable.lc_trophy),
     ),
-    "about" to listOf(
+    "notify" to listOf(
+        SettingsLink("reminders", "Podsjetnici", "Emisije i utakmice", R.drawable.lc_bell),
+    ),
+    "system" to listOf(
+        SettingsLink("device", "Uređaj i mreža", "Model, memorija, mreža, ocjena uređaja", R.drawable.lc_gauge2),
+        SettingsLink("backup", "Backup i vraćanje", "Sačuvaj ili vrati postavke", R.drawable.lc_archive),
         SettingsLink("update", "Ažuriranje", "Provjeri i instaliraj novu verziju", R.drawable.lc_download),
-        SettingsLink("about", "O aplikaciji", "Verzija i licence", R.drawable.lc_info),
         SettingsLink("diagnostics", "Dijagnostika", "Zapis streamova i grešaka", R.drawable.lc_gauge2),
+        SettingsLink("about", "O aplikaciji", "Verzija i licence", R.drawable.lc_info),
     ),
 )
 
@@ -532,6 +540,7 @@ object SettingsSearchIndex {
         "update" to "ažuriranje, nova verzija",
         "about" to "o aplikaciji, verzija, licence, privatnost, pomoć",
         "diagnostics" to "dijagnostika, zapis, greške, stream log",
+        "device" to "uređaj, box, memorija, RAM, mreža, IP, keš, ocjena",
     )
     fun find(query: String): List<SettingHit> {
         val words = query.lowercase().split(' ').filter { it.isNotBlank() }
@@ -605,7 +614,7 @@ fun SettingsScreen(nav: Nav) {
                             T(s.title, 14.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, maxLines = 1)
                             T(if (s.id == "mode") (if (SetMode.advanced) "Napredno" else "Osnovno") else s.sub, 11.sp, if (f) C.OnRed.copy(alpha = 0.6f) else C.Muted, maxLines = 1)
                         }
-                        if (!slim && s.id == "about" && Updater.available != null) Box(Modifier.size(16.dp).clip(CircleShape).background(C.Danger), contentAlignment = Alignment.Center) {
+                        if (!slim && s.id == "system" && Updater.available != null) Box(Modifier.size(16.dp).clip(CircleShape).background(C.Danger), contentAlignment = Alignment.Center) {
                             T("1", 9.sp, Color.White, FontWeight.Bold)
                         }
                     }
@@ -654,7 +663,7 @@ fun SettingsScreen(nav: Nav) {
                     "diagnostics" -> DiagnosticsV2()
                     "backup" -> BackupSettings()
                     "update" -> UpdateV2()
-                    "about" -> AboutV2(onSub = { sub = it }, onSection = { section = it })
+                    "about" -> AboutV2(onSub = { sub = it }, onSection = { id -> val t = target(id); if (t.first != section) { keepSub = t.second != null; section = t.first }; sub = t.second })
                     else -> SettingsHubPage(section, onOpen = { sub = it })
                 }
             }

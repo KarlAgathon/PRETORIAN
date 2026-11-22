@@ -191,7 +191,7 @@ fun OnyxMovieDetail(v: Vod, nav: Nav) {
     val probe by load(v.url) { probeTracks(ctx, v.url) }
     val similar by load(v.name, Prefs.tmdbKey) { VodMatch.match(p, false, "sim:" + v.name, Tmdb.similar(v.name)).filter { it.id != v.id }.take(14) }
     @Suppress("UNUSED_VARIABLE") val sr = SmartSubs.rev
-    LaunchedEffect(v.name, SmartSubs.lang()) { SmartSubs.prepare(v.name, null, null) }
+    LaunchedEffect(v.name, SmartSubs.lang()) { SmartSubs.prefetch(ctx, v.name, null, null) }
     var ext by remember { mutableStateOf(false) }
     val playFr = remember { FocusRequester() }
     LaunchedEffect(v.id) { NewContent.seen(p.id, "vod", v.id) }
