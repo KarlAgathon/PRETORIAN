@@ -253,7 +253,7 @@ private fun DawnCatchup(nav: Nav) {
             is Cu.Channels -> top.cat.name; is Cu.Archive -> top.ch.name
         }
     }
-    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { Dawn.crumb = "" } }
+    androidx.compose.runtime.DisposableEffect(Unit) { CuTitle.on = true; onDispose { Dawn.crumb = ""; CuTitle.on = false } }
     Box(Modifier.fillMaxSize().padding(start = 34.dp, end = 38.dp, top = 6.dp, bottom = 8.dp)) {
         when (val d = data) {
             is Load.Loading -> Loading("Učitavam kanale…")
@@ -300,8 +300,15 @@ internal class CuItem(val title: String, val icon: Int? = null, val ch: Channel?
 @Composable
 internal fun CuPanel(wide: Boolean = false, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
     Column((if (wide) Modifier.fillMaxWidth() else Modifier.width(560.dp)).fillMaxHeight().dawnGlass().padding(10.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
+        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Catch-up: the title inside the panel (approved): "CATCH-UP TV / <level>"
+        if (CuTitle.on) T("CATCH-UP TV" + (if (Dawn.crumb.isNotBlank()) " / " + Dawn.crumb.uppercase() else ""), 13.sp, C.Soft, FontWeight.SemiBold,  // i18n-ignore
+            maxLines = 1, modifier = Modifier.padding(start = 8.dp, top = 2.dp))
+        content()
+    }
 }
+
+internal object CuTitle { var on by mutableStateOf(false) }
 
 /** A list of one level; the focus comes back to the row you left (and the list scrolls to it). */
 @Composable
@@ -347,7 +354,7 @@ internal fun CuSearchField(hint: String, q: String, onQ: (String) -> Unit) {
             T(q.ifBlank { tr(hint) }, 15.sp, if (f) Dawn.onPill else if (q.isBlank()) C.Soft else C.Text, maxLines = 1)
         }
     }
-    if (ask) TextDialog(hint.removeSuffix("…"), "", q, onDismiss = { ask = false }) { t -> onQ(t.trim()); ask = false }
+    if (ask) TextDialog(hint.removeSuffix("…"), "", q, onDismiss = { ask = false }, onChange = { onQ(it.trim()) }) { t -> onQ(t.trim()); ask = false }
 }
 
 private fun mmss(ms: Long): String { val s = ms / 1000; return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, s / 60 % 60, s % 60) else "%d:%02d".format(s / 60, s % 60) }
@@ -464,17 +471,20 @@ private fun CuSearch(chans: List<Channel>, mem: HashMap<String, Int>, key: Strin
     var clear by remember { mutableStateOf(false) }
     var pick by remember { mutableStateOf<Pair<Channel, EpgItem>?>(null) }
     fun run(t: String) { mem.keys.removeAll { it.startsWith("q=") }; q = t; if (t.isNotBlank()) { mem["q=$t"] = 0; CatchupQ.add(t) } }
-    // shows: archives of the channels, read in small batches (a slow channel never holds up the rest)
+    // shows: searched in the guide kept on the box (past days as long as the archive goes back), every archive channel, no provider requests
     val shows by load(q) {
-        if (q.length < 2) emptyList() else kotlinx.coroutines.coroutineScope {
+        if (q.isEmpty()) emptyList() else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val byEpg = chans.filter { !it.epg.isNullOrBlank() }.groupBy { it.epg!!.lowercase() }
+            val srcs = chans.map { it.pid }.distinct().mapNotNull { Store.byId(ctx, it) }
+                .flatMap { p -> listOf(GuideDb.srcOf(p)) + EpgSources.urls(p.id).map { GuideDb.srcOf(it) } }.distinct()
+            val maxDays = chans.maxOfOrNull { it.archive }?.coerceIn(1, 14) ?: 7
             val n = Sports.norm(q)
-            chans.take(80).chunked(6).flatMap { part ->
-                part.map { c -> async(kotlinx.coroutines.Dispatchers.IO) {
-                    val p = Store.byId(ctx, c.pid) ?: return@async emptyList()
-                    try { kotlinx.coroutines.withTimeout(8000) { archiveOf(p, c) } } catch (e: Exception) { emptyList() }
-                        .filter { it.archived && it.end <= System.currentTimeMillis() && !expired(c, it.start) && Sports.norm(it.title).contains(n) }.map { c to it }
-                } }.map { it.await() }.flatten()
-            }
+            GuideDb.searchPast(srcs, q, System.currentTimeMillis() - maxDays * 86_400_000L)
+                .flatMap { pr -> byEpg[pr.channel.lowercase()].orEmpty().map { c -> c to pr } }
+                .filter { (c, pr) -> !expired(c, pr.start) && Sports.norm(pr.title).contains(n) }
+                .distinctBy { (c, pr) -> c.url + pr.start }
+                .sortedByDescending { it.second.start }
+                .map { (c, pr) -> c to EpgItem(pr.title, pr.desc, pr.start, pr.end, null, true) }
         }
     }
     CuPanel(wide = true) {
@@ -512,7 +522,7 @@ private fun CuSearch(chans: List<Channel>, mem: HashMap<String, Int>, key: Strin
             }
         }
     }
-    if (ask) TextDialog("Pretraži Catch-up", "", q, onDismiss = { ask = false }) { t -> ask = false; run(t.trim()) }
+    if (ask) TextDialog("Pretraži Catch-up", "", q, onDismiss = { ask = false }, onChange = { q = it.trim() }) { t -> ask = false; run(t.trim()) }
     if (clear) Popup("Obriši historiju pretrage?", { clear = false }) {
         OptionRow("Obriši", R.drawable.lc_trash_2) { CatchupQ.clear(); clear = false }
         OptionRow("Odustani", R.drawable.lc_x) { clear = false }

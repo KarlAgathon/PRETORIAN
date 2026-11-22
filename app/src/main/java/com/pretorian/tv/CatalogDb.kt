@@ -382,6 +382,8 @@ private fun Bar(p: Import.Part) {
  */
 object GuideDb {
     const val BACK = 6 * 3600_000L
+    /** past programmes stay on the box as long as a provider archive usually goes back (catch-up search runs here, no requests) */
+    val KEEP get() = (if (Perf.lite) 3 else 7) * 86_400_000L
     val ahead get() = (if (Perf.lite) 12 else 36) * 3600_000L
     private val known = java.util.concurrent.ConcurrentHashMap<String, Long>()
     /** guides that had nothing for your channels (in memory only): not downloaded again for a day */
@@ -412,6 +414,19 @@ object GuideDb {
         } catch (e: Throwable) { emptyList() }
     }
 
+    /** past programmes whose title contains [q] (catch-up search): channel id, start, end, title */
+    fun searchPast(srcs: List<String>, q: String, from: Long, limit: Int = 400): List<Sports.Prog> = try {
+        val now = System.currentTimeMillis()
+        val out = ArrayList<Sports.Prog>()
+        srcs.forEach { src ->
+            CatalogDb.db()?.rawQuery("SELECT ch, s, e, t, k, d FROM progs WHERE src=? AND e<=? AND s>=? AND t LIKE ? ORDER BY s DESC LIMIT ?", // i18n-ignore
+                arrayOf(src, now.toString(), from.toString(), "%" + q.replace("%", "").replace("_", "") + "%", limit.toString()))?.use { c ->
+                while (c.moveToNext()) out += Sports.Prog(c.getString(0) ?: "", c.getLong(1), c.getLong(2), c.getString(3) ?: "", c.getString(4), c.getString(5))
+            }
+        }
+        out
+    } catch (e: Throwable) { emptyList() }
+
     /** every programme of a source between two times (search, sport) */
     fun range(src: String, from: Long, to: Long, channels: Set<String>? = null, title: Regex? = null): List<Sports.Prog> = try {
         CatalogDb.db()?.rawQuery("SELECT ch, s, e, t, k, d FROM progs WHERE src=? AND e>? AND s<?", arrayOf(src, from.toString(), to.toString()))?.use { c -> // i18n-ignore
@@ -434,9 +449,13 @@ object GuideDb {
         var n = 0; var lastBytes = 0L; var total = -1L
         d.beginTransactionNonExclusive()
         try {
-            d.delete("progs", "src=?", arrayOf(src)) // i18n-ignore
+            // programmes that ended more than BACK ago are kept (up to KEEP days) for the catch-up search; the rest comes new
+            val cut = now - BACK
+            val hadPast = try { d.rawQuery("SELECT 1 FROM progs WHERE src=? AND s<? LIMIT 1", arrayOf(src, cut.toString())).use { it.moveToFirst() } } catch (_: Throwable) { false } // i18n-ignore
+            d.delete("progs", "src=? AND (s>=? OR e<?)", arrayOf(src, cut.toString(), (now - KEEP).toString())) // i18n-ignore
             val st = d.compileStatement("INSERT INTO progs(src, ch, s, e, t, d, k) VALUES(?,?,?,?,?,?,?)") // i18n-ignore
-            val ok = Xmltv.each(url, channels, now - BACK, now + ahead, true, bytes = { r, t -> lastBytes = r; total = t; progress?.invoke(n, r, t) }) { pr ->
+            val ok = Xmltv.each(url, channels, if (hadPast) cut else now - KEEP, now + ahead, true, bytes = { r, t -> lastBytes = r; total = t; progress?.invoke(n, r, t) }) { pr ->
+                if (hadPast && pr.start < cut) return@each
                 st.clearBindings()
                 st.bindString(1, src); st.bindString(2, pr.channel); st.bindLong(3, pr.start); st.bindLong(4, pr.end); st.bindString(5, pr.title)
                 st.bindString(6, pr.desc ?: ""); st.bindString(7, pr.category ?: "")

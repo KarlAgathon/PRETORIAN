@@ -2558,4 +2558,5 @@ Automatski: uređaj ima manje od 3 GB RAM-a ili nižu ocjenu.|Автоматич
 Automatski: uređaj je dovoljno jak.|Автоматически: устройство достаточно мощное.
 Pomak titla|Задержка субтитров
 ako titl kasni ili žuri|если субтитры отстают или спешат
+Obrisati zadnje pretrage za ovu kategoriju?|Удалить последние поиски для этой категории?
 """.trimIndent()

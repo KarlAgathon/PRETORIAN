@@ -295,22 +295,41 @@ fun HitActions(h: Hit, nav: Nav, onDismiss: () -> Unit) {
 }
 
 
-/** The last searches (newest first, at most 12): shown under an empty search field. */
+/** The last 10 searches of the chosen category (TV, Movies, Series, Sport, Settings), newest first. */
 object SearchHistory {
     var rev by androidx.compose.runtime.mutableIntStateOf(0)
-    fun list() = Prefs.str("search_hist").split('\n').filter { it.isNotBlank() }
+    private fun k() = "search_hist_" + (SearchMem.open ?: "tv")
+    fun list() = Prefs.str(k()).split('\n').filter { it.isNotBlank() }
     fun add(text: String) {
-        val t = text.trim(); if (t.length < 2) return
-        Prefs.put("search_hist", (listOf(t) + list().filter { !it.equals(t, true) }).take(12).joinToString("\n")); rev++
+        val t = text.trim(); if (t.isEmpty()) return
+        Prefs.put(k(), (listOf(t) + list().filter { !it.equals(t, true) }).take(10).joinToString("\n")); rev++
     }
-    fun remove(text: String) { Prefs.put("search_hist", list().filter { it != text }.joinToString("\n")); rev++ }
-    fun clear() { Prefs.put("search_hist", ""); rev++ }
+    fun remove(text: String) { Prefs.put(k(), list().filter { it != text }.joinToString("\n")); rev++ }
+    fun clear() { Prefs.put(k(), ""); rev++ }
 }
 
 /** "Recent searches": OK searches again, long OK removes one, "Clear all" at the end. */
 @Composable
 fun SearchRecent(onPick: (String) -> Unit) {
-    val items = remember(SearchHistory.rev) { SearchHistory.list() }
+    val items = remember(SearchHistory.rev, SearchMem.open) { SearchHistory.list() }
+    var ask by remember { mutableStateOf(false) }
+    // the category the history belongs to (the last one chosen)
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(top = 6.dp)) {
+        val cats = listOf("tv" to "TV", "vod" to "Filmovi", "series" to "Serije", "sport" to "Sport", "settings" to "Postavke")
+        items(cats.size) { i ->
+            val (id, label) = cats[i]
+            val sel = (SearchMem.open ?: "tv") == id
+            Focusable(onClick = { SearchMem.open = id; SearchHistory.rev++ }, shape = Pill, normal = if (sel) Color(0x33FFFFFF) else Color.Transparent, focused = C.Red,
+                zoom = 1.04f, modifier = Modifier.height(38.dp)) { f ->
+                T(label, 14.sp, if (f) C.OnRed else C.Text, if (sel) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.align(Alignment.Center).padding(horizontal = 14.dp))
+            }
+        }
+    }
+    if (ask) Popup("Obriši historiju", { ask = false }) {
+        T("Obrisati zadnje pretrage za ovu kategoriju?", 14.sp, C.Soft, maxLines = 2)
+        OptionRow("Obriši", R.drawable.lc_trash_2) { SearchHistory.clear(); ask = false }
+        OptionRow("Odustani", R.drawable.lc_x) { ask = false }
+    }
     if (items.isEmpty()) return
     Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         T("Nedavne pretrage", 15.sp, C.Text, FontWeight.Bold, modifier = Modifier.weight(1f))
@@ -324,13 +343,14 @@ fun SearchRecent(onPick: (String) -> Unit) {
                 Row(Modifier.align(Alignment.Center).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Ico(R.drawable.lc_clock, 14.dp, if (f) C.OnRed else C.Muted)
                     T(h, 14.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, maxLines = 1)
+                    Ico(R.drawable.lc_x, 13.dp, if (f) C.OnRed else C.Muted)
                 }
             }
         }
         item {
-            Focusable(onClick = { SearchHistory.clear() }, shape = Pill, normal = Color.Transparent, focused = C.Red, zoom = 1.04f, modifier = Modifier.height(40.dp)) { f ->
+            Focusable(onClick = { ask = true }, shape = Pill, normal = Color.Transparent, focused = C.Red, zoom = 1.04f, modifier = Modifier.height(40.dp)) { f ->
                 Row(Modifier.align(Alignment.Center).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Ico(R.drawable.lc_trash_2, 14.dp, if (f) C.OnRed else C.Muted); T("Obriši sve", 13.sp, if (f) C.OnRed else C.Soft)
+                    Ico(R.drawable.lc_trash_2, 14.dp, if (f) C.OnRed else C.Muted); T("Obriši historiju", 13.sp, if (f) C.OnRed else C.Soft)
                 }
             }
         }

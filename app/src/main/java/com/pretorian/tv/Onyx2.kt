@@ -166,7 +166,7 @@ fun OnyxSearch(nav: Nav) {
     val fr = remember { FocusRequester() }
     val firstFr = remember { FocusRequester() }
     var jump by remember { mutableIntStateOf(if (back) 1 else 0) }
-    LaunchedEffect(q) { SearchMem.q = q; delay(600); query = q.trim() }
+    LaunchedEffect(q) { SearchMem.q = q; delay(250); query = q.trim() }
     val voice = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { r ->
         r.data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.let { q = it; query = it.trim(); SearchHistory.add(it); jump++ }
     }
@@ -178,7 +178,8 @@ fun OnyxSearch(nav: Nav) {
     val serIdx by load(Unit) { SearchIndex.shows(ctx) }
     @Composable
     fun hitsOf(idx: Load<List<SearchIndex.Item>>, max: Int): State<List<Hit>> = produceState(emptyList<Hit>(), query, idx) {
-        value = if (query.length < 2) emptyList() else (idx as? Load.Ok)?.value?.let { SearchIndex.find(it, query, max) } ?: emptyList()
+        // results from the first letter (approved)
+        value = if (query.isEmpty()) emptyList() else (idx as? Load.Ok)?.value?.let { SearchIndex.find(it, query, max) } ?: emptyList()
     }
     val chHits by hitsOf(chIdx, 30)
     val vodHits by hitsOf(vodIdx, 30)
@@ -216,15 +217,14 @@ fun OnyxSearch(nav: Nav) {
                 }
             }
         }
-        if (query.length < 2) {
-            T("Upiši bar 2 slova ili klikni „glasom”", 13.sp, C.Muted)
+        if (query.isEmpty()) {
             SearchRecent { h -> q = h; query = h; jump++ }
             return@Column
         }
         // sport: matches already loaded in Sport (live scores) and sport broadcasts in the TV guide
         val sportHits by produceState(emptyList<SportEvent>(), query) {
             val nq = Sports.norm(query)
-            value = if (nq.length < 2) emptyList() else withContext(Dispatchers.Default) {
+            value = if (nq.isEmpty()) emptyList() else withContext(Dispatchers.Default) {
                 Sports.lastCombined.values.flatten().distinctBy { it.id }.filter { e ->
                     Sports.norm(listOfNotNull(e.home?.name, e.away?.name, e.title, e.league).joinToString(" ")).let { t -> nq.split(' ').all { w -> t.contains(w) } }
                 }.sortedWith(compareBy({ !it.live }, { it.start })).take(30)
@@ -551,5 +551,5 @@ fun BulkEditor(nav: Nav) {
 object SearchMem {
     var q = ""
     var open: String? = null
-    fun clear() { q = ""; open = null }
+    fun clear() { q = "" }  // the last category stays remembered
 }

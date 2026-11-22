@@ -364,11 +364,12 @@ fun Field(
 
 /** Ask for one line of text (rename, link…). */
 @Composable
-fun TextDialog(title: String, label: String, initial: String = "", onDismiss: () -> Unit, onOk: (String) -> Unit) {
+fun TextDialog(title: String, label: String, initial: String = "", onDismiss: () -> Unit, onChange: ((String) -> Unit)? = null, onOk: (String) -> Unit) {
     var v by remember { mutableStateOf(initial) }
     val fr = remember { FocusRequester() }
     Popup(title, onDismiss) {
-        Field(label, v, { v = it }, Modifier.fillMaxWidth().focusRequester(fr), onDone = { onOk(v.trim()) })
+        // onChange: live search, results follow every letter behind the window
+        Field(label, v, { v = it; onChange?.invoke(it) }, Modifier.fillMaxWidth().focusRequester(fr), onDone = { onOk(v.trim()) })
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button("Spremi", R.drawable.lc_check, primary = true) { onOk(v.trim()) }
             Button("Odustani", R.drawable.lc_x) { onDismiss() }
