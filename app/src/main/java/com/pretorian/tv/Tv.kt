@@ -258,7 +258,7 @@ fun GroupColumn(
                                     shape = shape,
                                     onClick = { onOpen(g) },
                                     onFocus = { onFocusRow(r.id); onFocusGroup(g) },
-                                    onMenu = if (g.cat.id == ALL_GROUP || g.cat.id == RECENT_GROUP) null else ({ onMenu(g) }),
+                                    onMenu = if (g.pid == null || g.cat.id == ALL_GROUP) null else ({ onMenu(g) }),
                                     focusRequester = if (containVerticalFocus) null else fr,
                                     normal = if (Look.dawn) Color.Transparent else if (selected) C.Red.copy(alpha = 0.28f) else Color.Transparent,
                                     focused = if (Look.dawn) Dawn.pill else null,
