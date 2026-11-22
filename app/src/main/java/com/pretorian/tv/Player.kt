@@ -293,12 +293,16 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     var subFile by remember { mutableStateOf(s.items.getOrNull(index)?.subFile) }
     // picture format: 0 Auto, 1 4:3, 2 16:9, 3 Fit, 4 Stretch, 5 Original — remembered per channel
     var resize by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) { if (!s.live) resize = Prefs.long("vod_fmt", 0).toInt() }
     val player = remember { Preview.stop(); buildPlayer(ctx) }
     val playerScope = rememberCoroutineScope()
     val mediaRequest = remember { PlaybackRequest() }
     val readyOnce = remember { booleanArrayOf(false) }   // the stream played since it was (re)loaded
     val applied = remember { booleanArrayOf(false) }
     val step = Prefs.seekStep * 1000L
+    // films and series: own steps forward and back (Player settings), the live keys keep the general step
+    val fwd = Prefs.long("skip_fwd", 10) * 1000L
+    val bwd = Prefs.long("skip_back", 10) * 1000L
     val focus = remember { FocusRequester() }
     val item = items.getOrElse(index) { items.first() }
     val p = item.channel?.let { Store.byId(ctx, it.pid) } ?: Store.ownerOf(ctx, item.url) ?: Store.active(ctx)
@@ -633,9 +637,9 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                         else { liveShift(-1); true }
                     Key.MediaFastForward -> if (!s.live) { player.seekTo(player.currentPosition + step); showInfo = true; true }
                         else { liveShift(1); true }
-                    Key.DirectionLeft -> if (!s.live) { player.seekTo((player.currentPosition - step).coerceAtLeast(0)); showInfo = true; true }
+                    Key.DirectionLeft -> if (!s.live) { player.seekTo((player.currentPosition - bwd).coerceAtLeast(0)); showInfo = true; true }
                         else { side = "channels"; showInfo = false; true }
-                    Key.DirectionRight -> if (!s.live) { player.seekTo(player.currentPosition + step); showInfo = true; true }
+                    Key.DirectionRight -> if (!s.live) { player.seekTo(player.currentPosition + fwd); showInfo = true; true }
                         else { side = "epg"; showInfo = false; true }
                     Key.MediaPause, Key.MediaPlay -> { if (!s.live || Tech.livePause) { if (e.key == Key.MediaPause) player.pause() else player.play() }; showInfo = true; true }
                     Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.MediaPlayPause -> {
@@ -663,20 +667,13 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                         descendantFocusability = android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
                         setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
                         setKeepContentOnPlayerReset(true)   // a silent reconnect keeps the last picture on screen
-                        // subtitle size and look from Settings › Player
-                        subtitleView?.let { sv ->
-                            val size = listOf(0.8f, 1f, 1.25f, 1.5f).getOrElse(Prefs.str("sub_size", "1").toIntOrNull() ?: 1) { 1f }
-                            sv.setFractionalTextSize(androidx.media3.ui.SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * size)
-                            val st = Prefs.str("sub_style", "0").toIntOrNull() ?: 0
-                            sv.setApplyEmbeddedStyles(st == 0)
-                            sv.setStyle(androidx.media3.ui.CaptionStyleCompat(android.graphics.Color.WHITE,
-                                if (st == 2) 0xB3000000.toInt() else android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT,
-                                if (st == 1) androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_OUTLINE else if (st == 0) androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW else androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_NONE,
-                                android.graphics.Color.BLACK, null))
-                        }
+                        // subtitle size, font and look from the player settings
+                        subtitleView?.let { applySubStyle(it) }
                     }
                 },
                 update = { v ->
+                    @Suppress("UNUSED_VARIABLE") val sr = SubStyle.rev
+                    v.subtitleView?.let { applySubStyle(it) }
                     // a list on the left or the guide on the right: the subtitles move into the free part of the picture (never cut)
                     if (Prefs.bool("sub_shift", true)) v.subtitleView?.let { sv ->
                         val dens = v.resources.displayMetrics.density
@@ -912,16 +909,17 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                     } else if (bar) {
                         val subT = tracksOf(player, MC.TRACK_TYPE_TEXT)
                         val subsOn = subFile != null || (!player.trackSelectionParameters.disabledTrackTypes.contains(MC.TRACK_TYPE_TEXT) && subT.any { it.selected })
-                        VodPlayerBar(false, playing, false, favOn = false, hasSubs = subT.isNotEmpty(), subsOn = subsOn,
-                            audioCount = tracksOf(player, MC.TRACK_TYPE_AUDIO).size, format = FORMATS[resize],
-                            onPause = { if (player.isPlaying) player.pause() else player.play() },
-                            onLong = { bar = false; dialog = "subs" },
-                            onAction = { action -> when (action) {
-                                "subs" -> { bar = false; dialog = "subs" }
-                                "audio" -> { bar = false; dialog = "audio" }
-                                "format" -> { resize = (resize + 1) % FORMATS.size }
-                                "menu" -> { bar = false; dialog = "menu" }
-                            } })
+                        @Suppress("UNUSED_VARIABLE") val unused = subT.size + if (subsOn) 1 else 0
+                        // films and series (approved): Play/Pause · back · forward · Subtitles · Audio · Format · Settings, icons only
+                        VodBar7(playing) { action -> when (action) {
+                            "pause" -> { if (player.isPlaying) player.pause() else player.play() }
+                            "back" -> player.seekTo((player.currentPosition - bwd).coerceAtLeast(0))
+                            "fwd" -> player.seekTo(player.currentPosition + fwd)
+                            "subs" -> { bar = false; dialog = "subs2" }
+                            "audio" -> { bar = false; dialog = "audio" }
+                            "format" -> { bar = false; dialog = "vfmt" }
+                            "settings" -> { bar = false; dialog = "psettings" }
+                        } }
                     }
                     else T(if (s.live) "▲ ▼ kanal · ◀ lista kanala · ▶ EPG · OK još jednom = dugmad"
                       else trf("OK pauza · ◀ ▶ %s s · ▼ = dugmad (audio, titlovi, format slike)", Prefs.seekStep), 13.sp, C.Soft)
@@ -1053,6 +1051,25 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 },
                 onReset = { subFile = base; loadMedia(item, base, player.currentPosition) })
         }
+        "subs2" -> SubsPanel(item, tracksOf(player, MC.TRACK_TYPE_TEXT), subFile, onDismiss = { dialog = null },
+            onOff = { subFile = null; player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, true).build(); dialog = null },
+            onTrack = { t ->
+                subFile = null
+                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false)
+                    .setOverrideForType(TrackSelectionOverride(t.group.mediaTrackGroup, t.index)).build()
+                dialog = null
+            },
+            onFile = { path ->
+                subFile = path
+                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false).build()
+                loadMedia(item, path, player.currentPosition)
+                dialog = null
+            })
+        "vfmt" -> Popup("Format prikaza", onDismiss = { dialog = null }) {
+            VOD_FORMATS.forEach { (i, label) -> OptionRow(label, R.drawable.lc_rectangle_horizontal, selected = resize == i) { resize = i; Prefs.put("vod_fmt", i.toLong()); dialog = null } }
+        }
+        "psettings" -> PlayerSettings(series = item.season != null, audio = tracksOf(player, MC.TRACK_TYPE_AUDIO).firstOrNull { it.selected }?.label, resize = resize,
+            onDismiss = { dialog = null }, onAudio = { dialog = "audio" }, onFormat = { dialog = "vfmt" })
         "audio" -> {
             val tracks = tracksOf(player, MC.TRACK_TYPE_AUDIO)
             Popup("Audio", onDismiss = { dialog = null }) {
@@ -1176,6 +1193,31 @@ private fun ChannelOptionsBar(favOn: Boolean, playing: Boolean, onAction: (Strin
     }
     LaunchedEffect(Unit) { delay(80); first.tryFocus() }
 }
+/** Formats for films and series (approved): Auto, Zoom, Fit, Stretch (index into [FORMATS]). */
+val VOD_FORMATS = listOf(0 to "Automatski", 5 to "Zoom", 3 to "Prilagodi", 4 to "Rastegni")
+
+/** The bottom bar of films and series: seven icons, no labels. */
+@Composable
+private fun VodBar7(playing: Boolean, onAction: (String) -> Unit) {
+    val first = remember { FocusRequester() }
+    val list = listOf(
+        "pause" to (if (playing) R.drawable.lc_pause else R.drawable.lc_play), "back" to R.drawable.lc_rotate_ccw, "fwd" to R.drawable.lc_rotate_cw,
+        "subs" to R.drawable.lc_message_square, "audio" to R.drawable.lc_headphones, "format" to R.drawable.lc_rectangle_horizontal, "settings" to R.drawable.lc_sliders_horizontal,
+    )
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(28.dp, Alignment.CenterHorizontally)) {
+        list.forEachIndexed { i, (id, icon) ->
+            Focusable(onClick = { onAction(id) }, focusRequester = if (i == 0) first else null, normal = Color.Transparent, focused = Dawn.pill,
+                focusBorderColor = Color.Transparent, shape = Rnd(14.dp), zoom = 1f, modifier = Modifier.width(88.dp).height(56.dp)) { f ->
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Ico(icon, 28.dp, if (f) Dawn.onPill else Color.White)
+                    if (id == "back" || id == "fwd") T(Prefs.long(if (id == "back") "skip_back" else "skip_fwd", 10).toString(), 9.sp, if (f) Dawn.onPill else Color.White, FontWeight.Bold)  // i18n-ignore
+                }
+            }
+        }
+    }
+    LaunchedEffect(Unit) { delay(80); first.tryFocus() }
+}
+
 @Composable
 private fun VodPlayerBar(live: Boolean, playing: Boolean, hasChannel: Boolean, favOn: Boolean, hasSubs: Boolean, subsOn: Boolean, audioCount: Int, format: String,
                       onPause: () -> Unit, onLong: (String) -> Unit, onAction: (String) -> Unit, rewind: Boolean = false, behind: Boolean = false) {

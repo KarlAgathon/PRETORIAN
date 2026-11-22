@@ -3,6 +3,9 @@ package com.pretorian.tv
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -207,80 +210,138 @@ private fun PlatformChip(id: String, m: Meta?, size: androidx.compose.ui.unit.Te
 
 /* ============================================================== film page */
 
-/** Film page: big poster with the rating, title, "year – length – genre – studio", story, buttons, cast; audio and subtitle at the bottom. */
+/** Language name of a track in the app language ("Engleski"), null when the stream does not say. */
+fun trackLang(f: androidx.media3.common.Format): String? = iso2(f.language)?.let { c ->
+    java.util.Locale(c).getDisplayLanguage(java.util.Locale(Look.lang)).replaceFirstChar { it.uppercase() }.ifBlank { null } }
+
+/** "Engleski (5.1)", "Njemački (Stereo)"; unknown language: "Audio providera". */
+fun audioText(l: List<androidx.media3.common.Format>): String {
+    if (l.isEmpty()) return tr("Audio providera")
+    return l.take(2).joinToString(", ") { f ->
+        val ch = when { f.channelCount >= 8 -> "7.1"; f.channelCount >= 6 -> "5.1"; f.channelCount == 2 -> "Stereo"; else -> null }  // i18n-ignore
+        (trackLang(f) ?: tr("Audio providera")) + (ch?.let { " ($it)" } ?: "")
+    } + if (l.size > 2) " +${l.size - 2}" else ""  // i18n-ignore
+}
+
+/** Provider subtitles: none / one language / two–three / "Više". */
+fun providerSubsText(l: List<androidx.media3.common.Format>): String {
+    val langs = l.map { trackLang(it) ?: tr("Nepoznat") }.distinct()
+    return when { langs.isEmpty() -> tr("Nema"); langs.size <= 3 -> langs.joinToString(", "); else -> tr("Više") }
+}
+
+@Composable
+private fun InfoCell(icon: Int, label: String, value: String, modifier: Modifier) {
+    Row(modifier.padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Ico(icon, 22.dp, C.Text)
+        Column { T(label, 14.sp, C.Text, FontWeight.Bold); T(value, 14.sp, C.Soft, maxLines = 2) }
+    }
+}
+
+/**
+ * Film page (approved): big picture, poster, title, 4K/HDR · year · length · genres, story, exactly three actions
+ * (Watch · Trailer · My List), a row Direction · Cast · Audio · Subtitles (provider) · Subtitles (online), and Similar films
+ * that are in your playlist. Online subtitles are already searched while you read.
+ */
 @Composable
 fun OnyxMovieDetail(v: Vod, nav: Nav) {
     val ctx = LocalContext.current
     val p = remember { Store.active(ctx) } ?: return
     val info by load(v.id) { Repo.movieInfo(p, v.id) }
     val meta by load(v.name, Prefs.tmdbKey) { Tmdb.find(v.name, tv = false) }
-    var choice by remember { mutableStateOf(TrackChoice()) }
+    val probe by load(v.url) { probeTracks(ctx, v.url) }
+    val similar by load(v.name, Prefs.tmdbKey) { VodMatch.match(p, false, "sim:" + v.name, Tmdb.similar(v.name)).filter { it.id != v.id }.take(14) }
+    @Suppress("UNUSED_VARIABLE") val sr = SmartSubs.rev
+    LaunchedEffect(v.name, SmartSubs.lang()) { SmartSubs.prepare(v.name, null, null) }
     var ext by remember { mutableStateOf(false) }
     val playFr = remember { FocusRequester() }
     LaunchedEffect(v.id) { NewContent.seen(p.id, "vod", v.id) }
     val i = (info as? Load.Ok)?.value
     val m = (meta as? Load.Ok)?.value
-    // neither TMDB nor the provider has one: a free source (Wikipedia)
-    val needFree = m?.overview == null && i?.plot == null && meta !is Load.Loading && info !is Load.Loading
-    // no TMDB: cast and director from the free card too (also when the provider has a story)
-    val needCard = m == null && meta !is Load.Loading && info !is Load.Loading && (needFree || i?.cast == null)
-    val free by load(v.name, needCard) { if (needCard) FreeMeta.movieFull(v.name, i?.year, i?.cast, i?.director) else null }
-    val fr = (free as? Load.Ok)?.value
-    val freeRow = fr
     val title = titleCase(m?.title ?: cleanTitle(v.name).first)
     val pr = remember(Watch.rev) { Watch.get(ctx, v.url) }
-    fun play(fromStart: Boolean = false) {
-        if (fromStart) Watch.remove(ctx, v.url)
-        if (ExtPlayer.always) openExternalOrAsk(ctx, v.url, title, if (fromStart) 0 else pr?.pos ?: 0) { ext = true }
-        else nav.push(Screen.Player(listOf(choice.apply(PlayItem(title, v.url, v.poster, null, null, v.name))), 0, live = false))
+    val started = pr != null && pr.started
+    fun play() {
+        VodMemory.returning = true
+        if (ExtPlayer.always) openExternalOrAsk(ctx, v.url, title, if (started) pr!!.pos else 0) { ext = true }
+        else nav.push(Screen.Player(listOf(PlayItem(title, v.url, v.poster, null, null, v.name, startAt = if (started) pr!!.pos else 0L)), 0, live = false))
     }
     val mins = m?.runtimeMin?.takeIf { it > 0 } ?: parseMin(i?.duration)
-    val rating = m?.imdbRating ?: (i?.rating ?: v.rating)?.toDoubleOrNull()?.takeIf { it > 0 }?.let { String.format("%.1f", it) }
-    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
-        val pw = ((maxHeight - 110.dp) * (2f / 3f)).coerceIn(150.dp, 280.dp)
-        Column(Modifier.fillMaxSize().padding(start = 32.dp, end = 32.dp, top = 6.dp, bottom = 12.dp)) {
-            Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                // picture and sound marks: 4K, HDR, 5.1, Dolby Atmos (from the provider's file info, else from the name)
-                val marks = (i?.marks ?: emptyList()).ifEmpty { listOfNotNull(qualityOf(v.name)) }
-                BigPoster(m?.poster ?: v.poster, v.id, rating, marks.filter { it in listOf("4K", "FHD", "HD", "HDR") }, pw)  // i18n-ignore
-                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Kicker("Film", C.Soft, size = 11.sp)
-                    T(title, 32.sp, C.Text, FontWeight.ExtraBold, maxLines = 2)
-                    // year – length – genre – studio
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        val parts = listOfNotNull((m?.year ?: i?.year ?: freeRow?.year)?.take(4), fmtMin(mins).ifBlank { freeRow?.runtime }, translated(m?.genres ?: i?.genre ?: freeRow?.genre)?.take(40))
-                        val plat = platformOf(v.id, m)
-                        T(parts.joinToString(" – ") + if (plat != null) " –" else "", 14.sp, C.Soft, FontWeight.SemiBold)
-                        PlatformChip(v.id, m, 11.sp, v.name)
+    Box(Modifier.fillMaxSize().background(Color(0xFF0B0B0C))) {
+        Box(Modifier.fillMaxHeight(0.78f).fillMaxWidth(0.72f).align(Alignment.TopEnd)) {
+            OnyxImage(m?.backdrop ?: v.poster, "bd:" + v.id, Modifier.fillMaxSize(), maxW = 1280, scale = ContentScale.Crop, highQuality = true)
+            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xFF0B0B0C), Color(0x800B0B0C), Color(0x000B0B0C)))))
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.6f to Color(0x000B0B0C), 1f to Color(0xFF0B0B0C))))
+        }
+        Column(Modifier.fillMaxSize().padding(start = 40.dp, end = 32.dp, top = 8.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+                Box(Modifier.width(190.dp).aspectRatio(2f / 3f).clip(Rnd(14.dp)).border(2.dp, Color(0xE6FFFFFF), Rnd(14.dp))) {
+                    OnyxImage(m?.poster ?: v.poster, "p:" + v.id, Modifier.fillMaxSize(), maxW = 400)
+                }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    T(title, 38.sp, C.Text, FontWeight.Bold, maxLines = 2)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        // 4K / HDR only when the file really says so
+                        (i?.marks ?: emptyList()).filter { it == "4K" || it == "HDR" }.forEach {  // i18n-ignore
+                            Box(Modifier.border(1.5.dp, C.Text, Rnd(6.dp)).padding(horizontal = 7.dp, vertical = 2.dp)) { T(it, 14.sp, C.Text, FontWeight.Bold) }
+                        }
+                        val parts = listOfNotNull((m?.year ?: i?.year)?.take(4), fmtMin(mins).ifBlank { null }, translated(m?.genres ?: i?.genre)?.replace(", ", " • ")?.take(48))
+                        T(parts.joinToString("   |   "), 16.sp, C.Text)
                     }
-                    val sound = (i?.marks ?: emptyList()).filter { it !in listOf("4K", "FHD", "HD") }  // i18n-ignore
-                    if (sound.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        sound.forEach { DBadge(it, bg = Color.White.copy(alpha = 0.12f)) }
-                    }
-                    val plot = translated(m?.overview ?: i?.plot ?: fr?.plot)
-                    T(plot ?: if (meta is Load.Loading || info is Load.Loading || free is Load.Loading) "Učitavam opis…" else tr("Opis nije dostupan."), 14.sp, C.Soft, maxLines = 7)
-                    val dir = m?.people?.firstOrNull { it.role == "Režija" }?.name ?: i?.director ?: fr?.director
-                    dir?.let { T(tr("Režija") + ": " + it, 12.sp, C.Muted) }
-                    Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        val started = pr != null && pr.started
-                        val left = if (started && pr!!.dur > 0) ((pr.dur - pr.pos) / 60_000).toInt().coerceAtLeast(1) else 0
-                        DBtn(if (started) trf("Nastavi · još %s min", left) else tr("Pokreni"), primary = true, fr = playFr, lead = { c -> Ico(R.drawable.lc_play, 14.dp, c) }) { play() }
-                        if (started) DBtn(tr("Od početka"), lead = { c -> Ico(R.drawable.lc_rotate_ccw, 14.dp, c) }) { play(fromStart = true) }
-                        DBtn(tr("Eksterni plejer"), lead = { c -> Ico(R.drawable.lc_external_link, 14.dp, c) }) { openExternalOrAsk(ctx, v.url, title, pr?.pos ?: 0) { ext = true } }
-                        DBtn(tr("Trailer"), lead = { _ -> TubeMark() }) { openTrailer(ctx, v.name, m?.trailerKey) }
+                    val plot = translated(m?.overview ?: i?.plot)
+                    T(plot ?: if (meta is Load.Loading || info is Load.Loading) "Učitavam opis…" else tr("Opis nije dostupan."), 16.sp, C.Soft, maxLines = 4,
+                        modifier = Modifier.widthIn(max = 620.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.padding(top = 4.dp)) {
+                        DetBtn(if (started) trf("Nastavi · još %s min", (((pr!!.dur - pr.pos) / 60_000).toInt()).coerceAtLeast(1)) else tr("Gledaj"), R.drawable.lc_play, primary = true, fr = playFr) { play() }
+                        DetBtn(tr("Trailer"), R.drawable.lc_film) { openTrailer(ctx, v.name, m?.trailerKey) }
                         val on = remember(MyList.rev) { MyList.has("vod", v.id) }
-                        DBtn(if (on) tr("✓ Ukloni s liste") else tr("+ Moja lista")) { MyList.toggle("vod", v.id, v.name, v.poster, v.url, p.id) }
+                        DetBtn(tr(if (on) "U mojoj listi" else "Dodaj na moju listu"), if (on) R.drawable.lc_bookmark_filled else R.drawable.lc_bookmark, on = on) {
+                            myListToggle(ctx, VItem(v.id, v.name, v.poster, v.rating, v.url, false, p.id))
+                        }
                     }
-                    if (pr != null && pr.started) ThinBar(pr.fraction, C.Text, Modifier.width(320.dp), 3.dp)
-                    m?.people?.let { Cast(it) } ?: (i?.cast ?: fr?.cast)?.let { T(tr("Glumci") + ": " + it, 12.sp, C.Muted, maxLines = 2) }
                 }
             }
-            Spacer(Modifier.height(10.dp))
-            TrackBar(v.name, null, null, v.url, choice) { choice = it }
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0x33FFFFFF)))
+            Row(Modifier.fillMaxWidth()) {
+                val dir = m?.people?.firstOrNull { it.role == "Režija" }?.name ?: i?.director
+                val cast = m?.people?.filter { it.role != "Režija" && it.role != "Autor" }?.take(3)?.joinToString(", ") { it.name } ?: i?.cast?.split(',')?.take(3)?.joinToString(",")?.trim()
+                val pv = (probe as? Load.Ok)?.value
+                InfoCell(R.drawable.lc_film, tr("Režija"), dir ?: "—", Modifier.weight(0.9f))
+                InfoCell(R.drawable.lc_users, tr("Glumci"), cast ?: "—", Modifier.weight(1.4f))
+                InfoCell(R.drawable.lc_headphones, "Audio", if (probe is Load.Loading) tr("Provjeravam…") else audioText(pv?.first ?: emptyList()), Modifier.weight(1f))
+                InfoCell(R.drawable.lc_message_square, tr("Titlovi (provider)"), if (probe is Load.Loading) tr("Provjeravam…") else providerSubsText(pv?.second ?: emptyList()), Modifier.weight(1f))
+                InfoCell(R.drawable.lc_cloud, tr("Titlovi (online)"), when (SmartSubs.state(v.name, null, null)) {
+                    is SmartSubs.State.Found -> Langs.label(SmartSubs.lang()); SmartSubs.State.None -> tr("Nije pronađeno"); else -> tr("Tražim…") }, Modifier.weight(1f))
+            }
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0x33FFFFFF)))
+            val sim = (similar as? Load.Ok)?.value.orEmpty()
+            if (sim.isNotEmpty()) {
+                T("Slični filmovi", 20.sp, C.Text, FontWeight.Bold)
+                androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(4.dp)) {
+                    items(sim.size) { k ->
+                        val it = sim[k]
+                        Focusable(onClick = { it.open(nav) }, shape = Rnd(12.dp), normal = Color.Transparent, focused = Color.Transparent, focusBorderColor = Color.White,
+                            zoom = 1.04f, modifier = Modifier.width(220.dp).height(124.dp)) { _ ->
+                            OnyxImage(it.image, "p:" + it.id, Modifier.fillMaxSize().clip(Rnd(12.dp)), maxW = 440)
+                        }
+                    }
+                }
+            }
         }
     }
     if (ext) ExternalPicker(v.url, title, pr?.pos ?: 0, onDismiss = { ext = false })
     LaunchedEffect(Unit) { delay(60); playFr.tryFocus() }
+}
+
+/** The three buttons of a film or series page: white = main action, outline = the others; a filled bookmark when on My List. */
+@Composable
+fun DetBtn(text: String, icon: Int, primary: Boolean = false, on: Boolean = false, fr: FocusRequester? = null, onClick: () -> Unit) {
+    Focusable(onClick = onClick, focusRequester = fr, shape = Rnd(12.dp), normal = if (primary || on) Color(0xE6F2F2F4) else Color(0x14FFFFFF), focused = Dawn.pill,
+        focusBorderColor = Color.Transparent, zoom = 1f, modifier = Modifier.height(52.dp).border(1.dp, if (primary || on) Color.Transparent else Color(0xB3FFFFFF), Rnd(12.dp))) { f ->
+        val fg = if (f || primary || on) Dawn.onPill else Color.White
+        Row(Modifier.align(Alignment.Center).padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Ico(icon, 20.dp, fg); T(text, 17.sp, fg, FontWeight.SemiBold)
+        }
+    }
 }
 
 /* ============================================================== series page */
