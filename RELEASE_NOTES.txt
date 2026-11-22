@@ -1,3 +1,21 @@
+Media Center 2.2.0
+
+• Movies and Series, one menu at a time: the menu disappears when a category opens, Back returns to the same place
+  – Movies: Continue watching, Recently added, In cinemas, My List, then the provider's groups
+  – Series: Continue watching, Recently added, Streaming, My List, then the provider's groups
+• Categories open as a full-screen browser: the selected title fills the top (picture, story, Watch · Trailer · My List), posters below
+• Continue watching: OK resumes at once; hold OK for Continue, Play from the beginning, Remove (the progress is kept)
+• In cinemas and Streaming (Netflix, Apple TV+, Disney+, Prime Video, HBO Max, Paramount+, Peacock, Hulu, Starz) show only titles that are in your playlist
+• My List: one press adds or removes, the bookmark fills white, a short note confirms
+• Film page: big picture, three actions, Direction · Cast · Audio · Subtitles (provider) · Subtitles (online), Similar movies from your playlist
+• Series page: Continue Sx Ex, Trailer, My List, season cards with progress; a season opens its episodes (watched, new, not out yet)
+• Hold OK on an episode: Episode details, Mark as watched / unwatched, Remove from Continue watching
+• Film and series player: seven icons (Play, back, forward, Subtitles, Audio, Format, Settings)
+• Subtitle menu: Provider tracks and Online versions in your language (V1, V2, V3), Find more subtitles
+• Player settings: subtitle language, audio, subtitle font and size, skip forward and back (5–30 s), display format; for series also autoplay next episode, skip intro, skip recap
+• Online subtitles are searched already on the film page, so they are ready when you press Watch
+• Live TV full screen: with the controls open, other channels of your playlist with the same match or programme can be chosen (top right)
+
 Media Center 2.1.0
 
 • First-time setup: language is one row with a drop-down list; choosing a language applies it at once
