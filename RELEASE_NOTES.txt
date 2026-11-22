@@ -1,3 +1,7 @@
+Media Center 2.3.1
+
+• Live TV options bar: icons only, no boxes; the selected icon has a thin underline
+
 Media Center 2.3.0
 
 • Works on phones and tablets too: tap the picture to show or hide the controls, tap the icons, press and hold = long OK

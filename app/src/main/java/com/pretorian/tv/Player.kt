@@ -1167,15 +1167,17 @@ private fun ChannelOptionsBar(favOn: Boolean, playing: Boolean, onAction: (Strin
         list.forEachIndexed { i, b ->
             val favorite = b.id == "favorites"
             Focusable(modifier = Modifier.weight(1f).height(58.dp), onClick = { onAction(b.id) },
-                focusRequester = if (i == 0) first else null, normal = Color(0x33FFFFFF),
-                focused = C.Red, focusBorderColor = Color.Transparent, shape = Rnd(12.dp), zoom = 1.0f) { focused ->
-                // icons only (approved): no text under the icons over the picture
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                focusRequester = if (i == 0) first else null, normal = Color.Transparent,
+                focused = Color.Transparent, focusBorderColor = Color.Transparent, shape = Rnd(12.dp), zoom = 1.0f) { focused ->
+                // icons only, no box (approved): the selected icon gets a thin underline, no text
+                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally) {
                     Ico(b.icon, 26.dp, when {
                         favorite && favOn -> C.Amber
-                        focused -> C.OnRed
                         else -> C.Text
                     })
+                    Box(Modifier.padding(top = 6.dp).width(28.dp).height(2.dp)
+                        .background(if (focused) C.Text else Color.Transparent))
                 }
             }
         }
