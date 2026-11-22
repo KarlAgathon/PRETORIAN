@@ -28,45 +28,43 @@ internal fun BackupSettings() {
     }
     val found = remember(rev) { try { Backup.found(ctx) } catch (_: Exception) { emptyList() } }
     var done by remember { mutableStateOf<String?>(null) }
+    var adv by remember { mutableStateOf(false) }
     key(rev) {
-        SetPage("Backup i vraćanje") {
-            SetSection("Napravi kopiju")
+        // simple outside (approved): two big actions on top, the copies by date, everything technical folded under "Napredno"
+        SetPage("Backup i vraćanje", "Sačuvaj sve postavke i liste, ili ih vrati s ranije kopije") {
             val usbIn = Backup.usbDirs().isNotEmpty()
             val usb = Prefs.str("backup_where", "0") == "2" && usbIn
-            // one OK: saved straight to the chosen place, no folder window
-            // a copy in Download / USB can be read by other apps: with a password it is locked (AES), and so are the copies before an update
             var passDlg by remember { mutableStateOf(false) }
-            SetRow("Lozinka za kopije", if (Backup.pass.isBlank()) tr("nema: lozinke playlista su u fajlu čitljive") else tr("kopije u Download i na USB-u su zaključane"),
-                tr(if (Backup.pass.isBlank()) "Postavi" else "Promijeni"), valueColor = if (Backup.pass.isBlank()) C.Amber else C.Green) { passDlg = true }
-            if (passDlg) TextDialog("Lozinka za kopije", "Lozinka (prazno = bez lozinke)", onDismiss = { passDlg = false }) { v -> Prefs.put("backup_pass", v.trim()); passDlg = false; rev++ }
-            SetRow("Napravi kopiju sada", done, arrow = "›", valueColor = C.Green) {
+            SetRow("Sačuvaj sve sada", done ?: tr("jedan klik · kopija se sprema na box"), arrow = "›", valueColor = C.Green) {
                 done = try { trf("✓ Spremljeno u %s", Backup.saveNow(ctx, usb, parts)) } catch (e: Exception) { e.message ?: tr("Nije uspjelo") }
                 rev++
             }
-            SetDrop("Gdje", if (usbIn) null else "USB se pojavi kad ga priključiš", if (usbIn) listOf("Download/MediaCenter", "USB") else listOf("Download/MediaCenter"),
-                if (usb) 1 else 0) { Prefs.put("backup_where", if (it == 1) "2" else "0"); rev++ }
-            if (usb && !FileAccess.hasAll(ctx)) Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                T("Za USB aplikacija treba dozvolu za fajlove.", 13.sp, C.Amber, maxLines = 1, modifier = Modifier.weight(1f))
-                Button("Dozvoli", R.drawable.lc_check) { FileAccess.allFilesIntent(ctx)?.let { i -> try { ctx.startActivity(i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {} } }
-            }
-            SetMulti("Šta uključiti", null, BACKUP_PARTS, parts,
-                note = tr("AI ključevi su po defaultu isključeni, zbog sigurnosti")) { s -> Prefs.put("backup_parts", s.sorted().joinToString(",")); rev++ }
-            SetDrop("Automatska kopija", "čuvaju se zadnje 3", listOf("Isključeno", "Sedmično", "Dnevno"),
-                if (!Prefs.bool("backup_auto", true)) 0 else if (Prefs.bool("backup_daily")) 2 else 1) {
-                Prefs.put("backup_auto", it > 0); Prefs.put("backup_daily", it == 2); rev++
-            }
-            SetSection("Vrati iz kopije")
+            SetSection("Vrati")
             if (found.isEmpty()) T("Još nema nijedne kopije.", 13.sp, C.Muted)
-            found.take(12).forEach { f ->
+            found.take(6).forEach { f ->
                 SetRow(java.text.SimpleDateFormat("EEE, dd.MM.yy · HH:mm", java.util.Locale(Look.lang)).format(java.util.Date(f.at)),
-                    trf("%s · %s KB", tr(f.where), (f.size / 1024).coerceAtLeast(1)), tr("Vrati")) {
+                    tr(f.where), tr("Vrati")) {
                     text = try { f.read() } catch (_: Exception) { null }
                     if (text == null || Backup.summary(text!!) == null) Toast.makeText(ctx, tr("Fajl nije backup ove aplikacije"), Toast.LENGTH_LONG).show() else step = "preview"
                 }
             }
-            SetRow("Drugi fajl…", ".json s USB-a ili diska", tr("Izaberi")) { step = "pick" }
-            SetSection("Opasno")
-            SetRow("Vrati aplikaciju na početak", "briše sve: playliste, profile, postavke", tr("Resetuj"), valueColor = C.Danger) { reset = true }
+            SetSwitch("Automatska kopija svake sedmice", "čuvaju se zadnje 3", Prefs.bool("backup_auto", true)) { Prefs.put("backup_auto", it); Prefs.put("backup_daily", false); rev++ }
+            SetRow("Napredno", "lozinka, gdje se sprema, šta uključiti, drugi fajl, reset", if (adv) "▲" else "▼", arrow = "") { adv = !adv }
+            if (adv) {
+                SetRow("Lozinka za kopije", if (Backup.pass.isBlank()) tr("nema: lozinke playlista su u fajlu čitljive") else tr("kopije u Download i na USB-u su zaključane"),
+                    tr(if (Backup.pass.isBlank()) "Postavi" else "Promijeni"), valueColor = if (Backup.pass.isBlank()) C.Amber else C.Green) { passDlg = true }
+                SetDrop("Gdje", if (usbIn) null else "USB se pojavi kad ga priključiš", if (usbIn) listOf("Download/MediaCenter", "USB") else listOf("Download/MediaCenter"),
+                    if (usb) 1 else 0) { Prefs.put("backup_where", if (it == 1) "2" else "0"); rev++ }
+                if (usb && !FileAccess.hasAll(ctx)) Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    T("Za USB aplikacija treba dozvolu za fajlove.", 13.sp, C.Amber, maxLines = 1, modifier = Modifier.weight(1f))
+                    Button("Dozvoli", R.drawable.lc_check) { FileAccess.allFilesIntent(ctx)?.let { i -> try { ctx.startActivity(i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {} } }
+                }
+                SetMulti("Šta uključiti", null, BACKUP_PARTS, parts,
+                    note = tr("AI ključevi su po defaultu isključeni, zbog sigurnosti")) { s -> Prefs.put("backup_parts", s.sorted().joinToString(",")); rev++ }
+                SetRow("Vrati iz drugog fajla…", ".json s USB-a ili diska", tr("Izaberi")) { step = "pick" }
+                SetRow("Vrati aplikaciju na početak", "briše sve: playliste, profile, postavke", tr("Resetuj"), valueColor = C.Danger) { reset = true }
+            }
+            if (passDlg) TextDialog("Lozinka za kopije", "Lozinka (prazno = bez lozinke)", onDismiss = { passDlg = false }) { v -> Prefs.put("backup_pass", v.trim()); passDlg = false; rev++ }
         }
     }
     when (step) {

@@ -408,7 +408,12 @@ object Notes {
         Prefs.put("notes", a.toString())
     }
 
+    /** Settings › Notifications: every kind can be switched off (on by default) */
+    val KINDS = listOf("series" to "Nove epizode serija", "vod" to "Novi filmovi", "update" to "Nova verzija aplikacije",
+        "sport" to "Sport: tvoji timovi i utakmice", "reminder" to "Podsjetnici")
+    fun on(kind: String): Boolean = Prefs.bool("note_" + kind, true)
     fun add(kind: String, text: String, id: String = "$kind:${System.currentTimeMillis()}") {
+        if (!on(kind)) return
         load()
         if (list.any { it.id == id }) return
         if (kind == "update") list.removeAll { it.kind == "update" }   // only the newest version is announced

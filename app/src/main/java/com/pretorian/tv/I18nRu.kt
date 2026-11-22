@@ -2585,4 +2585,38 @@ Filteri|Фильтры
 Izabrano|Выбрано
 Drži OK za opis epizode|Удерживайте OK для описания серии
 Evropski klubovi|Европейские клубы
+Sačuvaj sve postavke i liste, ili ih vrati s ranije kopije|Сохраните все настройки и списки или восстановите их из прежней копии
+Sačuvaj sve sada|Сохранить всё сейчас
+jedan klik · kopija se sprema na box|одно нажатие · копия сохраняется на устройстве
+Automatska kopija svake sedmice|Автокопия каждую неделю
+lozinka, gdje se sprema, šta uključiti, drugi fajl, reset|пароль, место, что включать, другой файл, сброс
+Vrati iz drugog fajla…|Восстановить из другого файла…
+%s – verzija %s|%s – версия %s
+OK na playlisti: uredi, uključi, osvježi, pomjeri ili ukloni|OK на плейлисте: изменить, включить, обновить, переместить или удалить
+＋ Dodaj playlistu|＋ Добавить плейлист
+Xtream, M3U ili Stalker · i s telefona preko QR koda|Xtream, M3U или Stalker · и с телефона по QR-коду
+Šta pratiš u Sportu|Что вы смотрите в Спорте
+reprezentacija, regija i domaća liga idu same|сборная, регион и местная лига добавляются сами
+Moji timovi|Мои команды
+uvijek na vrhu, s obavještenjima|всегда сверху, с уведомлениями
+＋ Dodaj|＋ Добавить
+Velika + moja regija|Крупные + мой регион
+Sva|Все
+Prilagođeno…|Свои…
+kontinenti, reprezentacije, osvježavanje, izvori|континенты, сборные, обновление, источники
+brži rezultati uživo|более быстрые результаты
+Šta ti aplikacija sama javlja (zvonce gore desno)|Что приложение сообщает само (колокольчик справа вверху)
+Za utakmice koje pratiš|Для матчей, которые вы отслеживаете
+Obavještenje stoji|Уведомление показывается
+Nove epizode serija|Новые серии
+Novi filmovi|Новые фильмы
+Sport: tvoji timovi i utakmice|Спорт: ваши команды и матчи
+Pomjeri|Переместить
+Ukloniti kanal iz favorita?|Удалить канал из избранного?
+Da, ukloni|Да, удалить
+Sadržaj iz Indije|Контент из Индии
+Šta ti aplikacija sama javlja|Что приложение сообщает само
+Emisije, filmovi, serije i utakmice|Передачи, фильмы, сериалы и матчи
+Zastoji, pali kanali i rušenja|Зависания, упавшие каналы и сбои
+Verzija, uređaj i licence|Версия, устройство и лицензии
 """.trimIndent()

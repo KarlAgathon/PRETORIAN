@@ -256,28 +256,32 @@ fun OnyxMovieDetail(v: Vod, nav: Nav) {
                             myListToggle(ctx, VItem(v.id, v.name, v.poster, v.rating, v.url, false, p.id))
                         }
                     }
+                    // director and cast under the buttons as plain text, whole names, only when known (approved)
+                    val dir = (m?.people?.firstOrNull { it.role == "Režija" }?.name ?: i?.director)?.trim()?.ifBlank { null }
+                    val cast = (m?.people?.filter { it.role != "Režija" && it.role != "Autor" }?.take(4)?.joinToString(", ") { it.name }
+                        ?: i?.cast?.split(',')?.map { it.trim() }?.filter { it.isNotBlank() }?.take(4)?.joinToString(", "))?.ifBlank { null }
+                    if (dir != null) Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        T(tr("Režija") + ":", 15.sp, C.Soft); T(dir, 15.sp, C.Text, maxLines = 1)
+                    }
+                    if (cast != null) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        T(tr("Glumci") + ":", 15.sp, C.Soft); T(cast, 15.sp, C.Text, maxLines = 1)
+                    }
                 }
             }
             Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0x33FFFFFF)))
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                val dir = (m?.people?.firstOrNull { it.role == "Režija" }?.name ?: i?.director)?.trim()?.ifBlank { null }
-                val cast = (m?.people?.filter { it.role != "Režija" && it.role != "Autor" }?.take(3)?.joinToString(", ") { it.name }
-                    ?: i?.cast?.split(',')?.take(3)?.joinToString(",")?.trim())?.ifBlank { null }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 val pv = (probe as? Load.Ok)?.value
-                // director and cast only when known: no empty dashes
-                if (dir != null) InfoCell(R.drawable.lc_film, tr("Režija"), dir, Modifier.weight(1f))
-                if (cast != null) InfoCell(R.drawable.lc_users, tr("Glumci"), cast, Modifier.weight(1.3f))
-                if (dir == null && cast == null) Spacer(Modifier.weight(1f))
-                else Spacer(Modifier.width(4.dp))
                 val audio = choice.audio?.title?.substringBefore(" · ") ?: if (probe is Load.Loading) tr("Provjeravam…") else audioText(pv?.first ?: emptyList())
-                val psubs = when { choice.subOff -> tr("Isključeno"); choice.sub != null -> choice.sub!!.title.substringBefore(" · ")
-                    probe is Load.Loading -> tr("Provjeravam…"); else -> providerSubsText(pv?.second ?: emptyList()) }
-                val osubs = if (choice.subFile != null) tr("Izabrano") else when (SmartSubs.state(v.name, null, null)) {
-                    is SmartSubs.State.Found -> Langs.label(SmartSubs.lang()); SmartSubs.State.None -> tr("Nije pronađeno"); else -> tr("Tražim…") }
-                InfoBtn(R.drawable.lc_headphones, tr("Audio"), audio, Modifier.width(200.dp)) { pick = "audio" }
-                InfoBtn(R.drawable.lc_message_square, tr("Titlovi"), psubs, Modifier.width(200.dp)) { pick = "subs" }
-                InfoBtn(R.drawable.lc_cloud, tr("Online titlovi"), osubs, Modifier.width(200.dp)) { pick = "online" }
-                if (dir == null && cast == null) Spacer(Modifier.weight(1f))   // the three buttons stand in the middle
+                // one Subtitles button: provider and online in one list (approved)
+                val subs = when {
+                    choice.subOff -> tr("Isključeno")
+                    choice.subFile != null -> subFileLabel(choice.subFile!!.name)
+                    choice.sub != null -> choice.sub!!.title.substringBefore(" · ")
+                    probe is Load.Loading -> tr("Provjeravam…")
+                    else -> providerSubsText(pv?.second ?: emptyList()).let { if (SmartSubs.state(v.name, null, null) is SmartSubs.State.Found) "$it · " + tr("Online") else it }
+                }
+                InfoBtn(R.drawable.lc_headphones, tr("Audio"), audio, Modifier.width(260.dp)) { pick = "audio" }
+                InfoBtn(R.drawable.lc_message_square, tr("Titlovi"), subs, Modifier.width(320.dp)) { pick = "subs" }
             }
             Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0x33FFFFFF)))
             val sim = (similar as? Load.Ok)?.value.orEmpty()
@@ -298,12 +302,63 @@ fun OnyxMovieDetail(v: Vod, nav: Nav) {
     if (ext) ExternalPicker(v.url, title, pr?.pos ?: 0, onDismiss = { ext = false })
     when (pick) {
         "audio" -> AudioPicker(v.url, choice.audio?.title, onDismiss = { pick = null }) { t -> choice = choice.copy(audio = t); pick = null }
-        "subs" -> ProviderSubsPicker(v.url, choice.sub?.title, choice.subOff, onDismiss = { pick = null },
-            onOff = { choice = choice.copy(sub = null, subFile = null, subOff = true); pick = null }) { t -> choice = choice.copy(sub = t, subFile = null, subOff = false); pick = null }
-        "online" -> SubtitlePicker(v.name, null, null, startMode = "results", onDismiss = { pick = null }) { f ->
-            if (f != null) choice = choice.copy(subFile = f, sub = null, subOff = false); pick = null }
+        "subs" -> FilmSubsPicker(v.name, (probe as? Load.Ok)?.value?.second ?: emptyList(), choice, onDismiss = { pick = null }) { c -> choice = c; pick = null }
     }
     LaunchedEffect(Unit) { delay(60); playFr.tryFocus() }
+}
+
+/** "Engleski – verzija 1" from a downloaded file named "Title (V1).en.srt" */
+fun subFileLabel(name: String): String {
+    val code = name.removeSuffix(".srt").substringAfterLast('.')
+    val v = Regex("\\(V(\\d+)\\)").find(name)?.groupValues?.get(1) ?: "1"
+    return trf("%s – verzija %s", Langs.label(code), v)
+}
+
+/** Film page › Subtitles: one list, one press (approved) — Provider tracks, a line, then online versions per chosen language. */
+@Composable
+fun FilmSubsPicker(search: String, provider: List<androidx.media3.common.Format>, choice: TrackChoice, onDismiss: () -> Unit, onPick: (TrackChoice) -> Unit) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    @Suppress("UNUSED_VARIABLE") val r = SmartSubs.rev
+    LaunchedEffect(search) { if (SmartSubs.state(search, null, null) == null) SmartSubs.prepare(search, null, null) }
+    var busy by remember { mutableStateOf<String?>(null) }
+    Popup("", onDismiss, width = 620.dp) {
+        T("Provider", 22.sp, C.Text, FontWeight.Bold)
+        val tracks = provider.map { StreamTrack(iso2(it.language), it.label, trackLabel(it, false)) }
+        if (tracks.isEmpty()) T("Nije dostupno", 15.sp, C.Soft, modifier = Modifier.padding(start = 8.dp, bottom = 4.dp))
+        val seen = HashMap<String, Int>()
+        tracks.forEach { t ->
+            val lang = t.lang?.let { Langs.label(it) } ?: tr("Nepoznat jezik")
+            val n = (seen[lang] ?: 0) + 1; seen[lang] = n
+            val label = if (tracks.count { (it.lang?.let { c -> Langs.label(c) } ?: tr("Nepoznat jezik")) == lang } > 1) "$lang (V$n)" else lang
+            OptionRow(label, R.drawable.lc_message_square, selected = choice.sub?.title == t.title && choice.subFile == null) {
+                onPick(choice.copy(sub = t, subFile = null, subOff = false)) }
+        }
+        Box(Modifier.fillMaxWidth().padding(vertical = 6.dp).height(1.dp).background(Color(0x33FFFFFF)))
+        T("Online", 22.sp, C.Text, FontWeight.Bold)
+        when (val st = SmartSubs.state(search, null, null)) {
+            null, SmartSubs.State.Searching -> T("Tražim titlove…", 15.sp, C.Soft, modifier = Modifier.padding(start = 8.dp))
+            SmartSubs.State.None -> T("Nije dostupno", 15.sp, C.Soft, modifier = Modifier.padding(start = 8.dp))
+            is SmartSubs.State.Found -> st.list.groupBy { it.lang }.forEach { (l, rs) ->
+                rs.take(3).forEachIndexed { k, res ->
+                    val id = res.provider + "|" + res.ref
+                    OptionRow(trf("%s – verzija %s", Langs.label(l), k + 1), R.drawable.lc_cloud,
+                        selected = choice.subFile != null && SmartSubs.fileOf(res)?.path == choice.subFile!!.path,
+                        value = if (busy == id) tr("Preuzimam…") else null) {
+                        if (busy != null) return@OptionRow
+                        busy = id
+                        scope.launch {
+                            try { val f = SmartSubs.get(ctx, res, search, k + 1); onPick(choice.copy(subFile = f, sub = null, subOff = false)) }
+                            catch (e: Exception) { Toast.makeText(ctx, tr("Titl se nije mogao preuzeti, probaj drugu verziju"), Toast.LENGTH_SHORT).show() }
+                            busy = null
+                        }
+                    }
+                }
+            }
+        }
+        Box(Modifier.fillMaxWidth().padding(vertical = 6.dp).height(1.dp).background(Color(0x33FFFFFF)))
+        OptionRow("Bez titlova", R.drawable.lc_x, selected = choice.subOff) { onPick(choice.copy(sub = null, subFile = null, subOff = true)) }
+    }
 }
 
 /** The three buttons of a film or series page: white = main action, outline = the others; a filled bookmark when on My List. */
@@ -421,12 +476,12 @@ fun OnyxSeriesDetail(s: SeriesItem, nav: Nav) {
                     myListToggle(ctx, VItem(s.id, s.name, s.cover, s.rating, "", true, p.id))
                 }
             }
-            Spacer(Modifier.weight(1f))
+            // the season boxes sit right under the buttons with an even gap; no "Seasons" heading (approved)
+            Spacer(Modifier.height(18.dp))
             when (val st = eps) {
                 is Load.Loading -> T("Učitavam epizode…", 15.sp, C.Soft)
                 is Load.Err -> T(tr("Epizode se nisu učitale") + ": " + st.message, 15.sp, C.Soft, maxLines = 2)
                 is Load.Ok -> if (all.isEmpty()) T("Nema epizoda", 15.sp, C.Soft) else {
-                    T("Sezone", 20.sp, C.Text, FontWeight.Bold)
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(4.dp)) {
                         items(seasons) { n ->
                             val count = all.count { it.season == n }
@@ -471,10 +526,10 @@ fun OnyxSeriesDetail(s: SeriesItem, nav: Nav) {
                         val count = all.count { it.season == n }
                         val done = count > 0 && all.count { it.season == n && Watch.get(ctx, it.url)?.watched == true } == count
                         val open = n == cur
-                        Focusable(onClick = { if (count > 0) season = n }, shape = Pill, normal = if (open) Color(0xF2F2F2F4) else Color(0x1FFFFFFF), focused = Dawn.pill,
+                        Focusable(onClick = { if (count > 0) season = n }, shape = Pill, normal = if (open) Color(0x59DADADE) else Color(0x1FFFFFFF), focused = Dawn.pill,
                             focusBorderColor = Color.Transparent, zoom = 1f, modifier = Modifier.height(46.dp).width(104.dp)) { f ->
                             Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                val fg = if (f || open) Dawn.onPill else if (count == 0) C.Muted else C.Text
+                                val fg = if (f) Dawn.onPill else if (count == 0) C.Muted else C.Text
                                 T("S$n", 17.sp, fg, FontWeight.Bold)  // i18n-ignore
                                 if (done) Ico(R.drawable.lc_check, 15.dp, fg) else if (count == 0) Ico(R.drawable.lc_lock, 14.dp, fg)
                             }
@@ -496,7 +551,7 @@ fun OnyxSeriesDetail(s: SeriesItem, nav: Nav) {
                             Focusable(onClick = { if (e != null) playEp(e) else Toast.makeText(ctx, if (future) tr("Još nije izašla") else tr("Čeka se provider"), Toast.LENGTH_SHORT).show() },
                                 onMenu = { epDlg = r }, onFocus = { lastFocusNum = r.num }, focusRequester = if (isJump || (jump == null && r == rows.firstOrNull { it.e != null && Watch.get(ctx, it.e.url)?.watched != true })) jumpFr else null,
                                 shape = Rnd(14.dp), normal = Color(0x99161618), focused = Color(0x99161618), focusBorderColor = Color.White, zoom = 1f,
-                                modifier = Modifier.fillMaxWidth().height(84.dp)) { _ ->
+                                modifier = Modifier.fillMaxWidth().height(74.dp)) { _ ->
                                 val img = e?.image ?: r.t?.still
                                 Row(Modifier.fillMaxSize().padding(start = if (img == null) 22.dp else 0.dp, end = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                                     // a picture only when the episode has one: no empty blurred boxes (approved)
@@ -506,11 +561,17 @@ fun OnyxSeriesDetail(s: SeriesItem, nav: Nav) {
                                         else if (pr?.watched == true) Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(22.dp).clip(Rnd(11.dp)).background(Color.White), contentAlignment = Alignment.Center) {
                                             Ico(R.drawable.lc_check, 14.dp, Dawn.onPill) }
                                     }
-                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        T("${r.num}. $name", 19.sp, if (e == null) C.Soft else C.Text, FontWeight.SemiBold, maxLines = 1)
-                                        if (pr?.started == true) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                            ThinBar(pr.fraction, Color.White, Modifier.width(240.dp), 4.dp)
-                                            T(trf("još %s min", ((pr.dur - pr.pos) / 60_000).toInt().coerceAtLeast(1)) + " (${(pr.fraction * 100).toInt()}%)", 14.sp, C.Soft)  // i18n-ignore
+                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        // length known before watching: the provider's, else TMDB's, else what the player saw
+                                        val lenMin = (e?.durSec?.takeIf { it > 0 }?.div(60)) ?: r.t?.runtime?.takeIf { it > 0 } ?: pr?.dur?.takeIf { it > 0 }?.let { (it / 60_000).toInt() }
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            T("${r.num}. $name", 18.sp, if (e == null) C.Soft else C.Text, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
+                                            if (e != null && lenMin != null) T(trf("%s min", lenMin), 14.sp, C.Soft)
+                                        }
+                                        // the bar runs the whole width on every episode, also at 0 %
+                                        if (e != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                            ThinBar(pr?.fraction ?: 0f, Color.White, Modifier.weight(1f), 4.dp)
+                                            T(if (pr?.started == true) trf("još %s min", ((pr.dur - pr.pos) / 60_000).toInt().coerceAtLeast(1)) else "${((pr?.fraction ?: 0f) * 100).toInt()}%", 13.sp, C.Soft)  // i18n-ignore
                                         }
                                     }
                                     when {

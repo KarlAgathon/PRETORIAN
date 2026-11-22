@@ -237,11 +237,14 @@ object Parental {
         Triple("adult", "Filmovi i kanali za odrasle", "XXX, Adult, 18+, [X], Rated R, Rated X"),
         Triple("lgbt", "LGBT kategorije", "LGBT, LGBTQ, gay, queer"),
         Triple("trans", "Trans kategorije", "trans, transgender"),
+        Triple("india", "Sadržaj iz Indije", "IN|, India, Indian, Bollywood, Hindi, Tamil, Telugu, Punjabi…"),
     )
     private val RX = mapOf(  // i18n-ignore
         "adult" to ADULT,
         "lgbt" to Regex("(?i)\\b(lgbt\\w*|gay|lesbian\\w*|lezb\\w*|queer)\\b"),
         "trans" to Regex("(?i)\\b(trans|transgender\\w*|transsexual\\w*|transseksual\\w*|tgirl\\w*|shemale\\w*)\\b"),
+        // groups and titles from India: the provider's country tag ("IN|", "IN:", "[IN]") and the usual words
+        "india" to Regex("(?i)(^\\s*[\\[(]?IN\\s*[|:\\])-]|\\b(india|indian|indija|bollywood|tollywood|kollywood|hindi|tamil|telugu|malayalam|kannada|punjabi|marathi|bengali|gujarati|desi|zee\\s?tv|star\\s?plus|sony\\s?sab|colors\\s?tv)\\b)"),
     )
     /** shown again until PRETORIAN is closed (after the PIN) */
     var unlocked by androidx.compose.runtime.mutableStateOf(false)

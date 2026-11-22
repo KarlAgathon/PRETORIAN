@@ -37,7 +37,9 @@ object SmartSubs {
     sealed class State { object Searching : State(); data class Found(val list: List<SubResult>) : State(); object None : State() }
     private val cache = java.util.concurrent.ConcurrentHashMap<String, State>()
     var rev by mutableIntStateOf(0)
-    private fun key(search: String, season: Int?, episode: Int?) = cleanTitle(search).first.lowercase() + "|" + (season ?: -1) + "|" + (episode ?: -1) + "|" + lang()
+    /** every language set in Settings › Subtitles, in that order (English and Croatian by default) */
+    fun langs(): List<String> = Prefs.subLangs.split(',').map { it.trim().lowercase() }.filter { it.length == 2 }.distinct().ifEmpty { listOf(Look.lang) }
+    private fun key(search: String, season: Int?, episode: Int?) = cleanTitle(search).first.lowercase() + "|" + (season ?: -1) + "|" + (episode ?: -1) + "|" + langs().joinToString(",")
 
     fun state(search: String, season: Int?, episode: Int?): State? = cache[key(search, season, episode)]
 
@@ -46,11 +48,11 @@ object SmartSubs {
         val k = key(search, season, episode)
         cache[k]?.let { if (it !is State.Searching) return it }
         cache[k] = State.Searching; rev++
-        val l = lang()
+        val ls = langs()
         val st = try {
-            val all = Subs.search(search, season, episode).filter { it.lang == l }
-            // the same release from two sources counts once
-            val uniq = all.distinctBy { Sports.norm(it.release.substringBeforeLast('.')) }
+            val all = Subs.search(search, season, episode).filter { it.lang in ls }
+            // the same release from two sources counts once; the languages keep the order they were set in
+            val uniq = all.distinctBy { it.lang + "|" + Sports.norm(it.release.substringBeforeLast('.')) }.sortedBy { ls.indexOf(it.lang) }
             if (uniq.isEmpty()) State.None else State.Found(uniq)
         } catch (e: Exception) { State.None }
         cache[k] = st; rev++
@@ -131,20 +133,22 @@ fun SubsPanel(item: PlayItem, tracks: List<TrackItem>, current: String?, online:
         tracks.forEachIndexed { i, t -> OptionRow(names[i], R.drawable.lc_message_square, selected = current == null && t.selected) { onTrack(t) } }
         if (online) Box(Modifier.fillMaxWidth().padding(vertical = 6.dp).height(1.dp).background(Color(0x33FFFFFF)))
         if (online) T("Online", 22.sp, C.Text, FontWeight.Bold)
-        val langName = Langs.label(SmartSubs.lang())
         if (online) when (val st = SmartSubs.state(search, item.season, item.episode)) {
             null, SmartSubs.State.Searching -> T("Tražim titlove…", 15.sp, C.Soft, modifier = Modifier.padding(start = 8.dp))
             SmartSubs.State.None -> T("Nije dostupno", 15.sp, C.Soft, modifier = Modifier.padding(start = 8.dp))
             is SmartSubs.State.Found -> {
-                st.list.take(shown).forEachIndexed { i, res ->
+                // every chosen language, one version per row: "Engleski – verzija 1", "Engleski – verzija 2", "Hrvatski – verzija 1"
+                val byLang = st.list.groupBy { it.lang }
+                val rows = byLang.flatMap { (l, rs) -> rs.take(shown).mapIndexed { i, r -> Triple(l, i + 1, r) } }
+                rows.forEach { (l, ver, res) ->
                     val id = res.provider + "|" + res.ref
-                    OptionRow(trf("%s (V%s)", langName, i + 1), R.drawable.lc_cloud, selected = current != null && chosen.value == id,
+                    OptionRow(trf("%s – verzija %s", Langs.label(l), ver), R.drawable.lc_cloud, selected = current != null && chosen.value == id,
                         value = if (busy == id) tr("Preuzimam…") else null) {
                         if (busy != null) return@OptionRow
                         busy = id
                         scope.launch {
                             try {
-                                val f = SmartSubs.get(ctx, res, search, i + 1)
+                                val f = SmartSubs.get(ctx, res, search, ver)
                                 Prefs.put("subpick_" + item.url.hashCode(), id); chosen.value = id
                                 onFile(f.path)
                             } catch (e: Exception) { Toast.makeText(ctx, tr("Titl se nije mogao preuzeti, probaj drugu verziju"), Toast.LENGTH_SHORT).show() }
@@ -152,7 +156,7 @@ fun SubsPanel(item: PlayItem, tracks: List<TrackItem>, current: String?, online:
                         }
                     }
                 }
-                if (st.list.size > shown) {
+                if (byLang.values.any { it.size > shown }) {
                     Box(Modifier.fillMaxWidth().padding(vertical = 6.dp).height(1.dp).background(Color(0x33FFFFFF)))
                     OptionRow("Pronađi još titlova", R.drawable.lc_search) { shown += 3 }
                 }

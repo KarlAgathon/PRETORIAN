@@ -455,7 +455,7 @@ private fun TvList(nav: Nav) {
     LaunchedEffect(inChannels, st.group?.key) {
         Dawn.crumb = if (inChannels) st.group?.cat?.name ?: "" else ""
         if (!inChannels) Dawn.pos = ""
-        Dawn.hints = if (inChannels) listOf("▲▼" to "Izaberi kanal", "OK" to "Pregled", "OK" to "Cijeli ekran", "Back" to "Grupe")
+        Dawn.hints = if (inChannels) listOf("▲▼" to "Izaberi kanal", "1× OK" to "Pregled", "2× OK" to "Cijeli ekran", "Back" to "Grupe")
             else listOf("▲▼" to "Izaberi grupu", "OK" to "Otvori grupu", "Back" to "Meni")
     }
     DisposableEffect(Unit) { onDispose { Dawn.crumb = ""; Dawn.pos = ""; Dawn.hints = emptyList() } }
@@ -497,11 +497,16 @@ private fun TvList(nav: Nav) {
                         onBackToGroups = { PreviewSel.ch = null; Preview.stop(); backToGroups() }, onChanged = { st.rev++ }, focusOnStart = true)
                 }
             }
-            Column(Modifier.weight(0.60f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                // the picture takes all the height left over and keeps 16:9 inside it, so nothing is pushed up under the top bar
-                Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.TopCenter) { DawnPreview(Modifier) }
-                DawnNowNext(focusedCh ?: PreviewSel.ch, Modifier.fillMaxWidth())
-                DawnOptions(PreviewSel.ch ?: focusedCh, nav, modifier = Modifier.fillMaxWidth().height(64.dp))
+            // one fixed layout for every channel (approved): picture, programme box and icons are always the same size
+            // and exactly as wide as each other, with or without a programme guide
+            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(0.60f).fillMaxHeight(), contentAlignment = Alignment.TopCenter) {
+                val infoH = 112.dp; val optH = 64.dp; val gaps = 20.dp
+                val w = minOf(maxWidth, (maxHeight - infoH - optH - gaps) * 16f / 9f)
+                Column(Modifier.width(w).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    DawnPreview(Modifier.fillMaxWidth())
+                    DawnNowNext(focusedCh ?: PreviewSel.ch, Modifier.fillMaxWidth().height(infoH))
+                    DawnOptions(PreviewSel.ch ?: focusedCh, nav, modifier = Modifier.fillMaxWidth().height(optH))
+                }
             }
         }
         opts?.let { ch ->
@@ -670,6 +675,8 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
     val state by load(g.key, listRev, Favs.rev, keep = true) { channelsOf(ctx, g) }
     var menu by remember { mutableStateOf<Channel?>(null) }
     var menuUrl by remember { mutableStateOf<String?>(null) }
+    var favAsk by remember { mutableStateOf<Channel?>(null) }
+    var favMove by remember { mutableStateOf<Channel?>(null) }
     val cWrap = remember { Wrap() }
     val cState = rememberLazyListState()
     val chFr = remember { FocusRequester() }
@@ -725,9 +732,14 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                     }
                                 },
                                 onMenu = {
-                                    val on = Favs.flip(ctx, ch)
-                                    android.widget.Toast.makeText(ctx, tr(if (on) "Dodano u favorite" else "Uklonjeno iz favorita"), android.widget.Toast.LENGTH_SHORT).show()
-                                    listRev++
+                                    // never removes anything by itself (approved): in Favourites hold OK asks first and offers to move;
+                                    // elsewhere it only adds, and a channel already in Favourites asks before removing
+                                    if (isFav || isFavGroup(g.cat.id) || Favs.inAny(ctx, ch)) { menuUrl = ch.url; favAsk = ch }
+                                    else {
+                                        Favs.flip(ctx, ch)
+                                        android.widget.Toast.makeText(ctx, tr("Dodano u favorite"), android.widget.Toast.LENGTH_SHORT).show()
+                                        listRev++
+                                    }
                                 },
                                 onFocus = { onFocusCh(ch) },
                                 focusRequester = cWrap.requester(i, if (ch.url == menuUrl) chFr else null),
@@ -769,8 +781,30 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                         if (reload) onChanged()
                     }
                 }
+                favAsk?.let { ch ->
+                    val inFavList = isFav || isFavGroup(g.cat.id)
+                    Popup(ch.name, onDismiss = { favAsk = null }, width = 460.dp) {
+                        if (inFavList && list.size > 1) OptionRow("Pomjeri", R.drawable.lc_hand_grab, sub = "▲ ▼ pa OK") { favAsk = null; favMove = ch }
+                        T("Ukloniti kanal iz favorita?", 15.sp, C.Soft)
+                        OptionRow("Da, ukloni", R.drawable.lc_star, color = C.Danger) {
+                            Favs.lists(ctx).forEach { l -> if (Favs.contains(l.id, ch)) Favs.toggle(l.id, ch) }
+                            android.widget.Toast.makeText(ctx, tr("Uklonjeno iz favorita"), android.widget.Toast.LENGTH_SHORT).show()
+                            favAsk = null; listRev++
+                        }
+                        OptionRow("Ne", R.drawable.lc_x) { favAsk = null }
+                    }
+                }
+                favMove?.let { ch ->
+                    val from = list.indexOfFirst { it.url == ch.url }
+                    MoveDialog(ch.name, list.map { it.name }, from, onDone = { to ->
+                        val id = if (isFavGroup(g.cat.id)) favListId(g.cat.id) else Favs.mainId(ctx)
+                        val d = to - from
+                        repeat(kotlin.math.abs(d)) { Favs.move(id, ch, if (d > 0) 1 else -1) }
+                        favMove = null; listRev++
+                    }, onCancel = { favMove = null })
+                }
                 // after the options close, the focus stays on that channel
-                LaunchedEffect(menu) { if (menu == null && menuUrl != null) chFr.tryFocus() }
+                LaunchedEffect(menu, favAsk, favMove) { if (menu == null && favAsk == null && favMove == null && menuUrl != null) { delay(60); chFr.tryFocus() } }
             }
         }
     }

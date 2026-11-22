@@ -509,15 +509,17 @@ private val SETTINGS_LINKS = mapOf(
     "sportscenter" to listOf(
         SettingsLink("sports", "Sport", "Država, timovi i obavještenja", R.drawable.lc_trophy),
     ),
+    // notifications (what the app tells by itself) and reminders (what you asked for) are two different things
     "notify" to listOf(
-        SettingsLink("reminders", "Podsjetnici", "Emisije i utakmice", R.drawable.lc_bell),
+        SettingsLink("notifications", "Obavještenja", "Šta ti aplikacija sama javlja", R.drawable.lc_bell),
+        SettingsLink("reminders", "Podsjetnici", "Emisije, filmovi, serije i utakmice", R.drawable.lc_clock),
     ),
+    // Updates first; device facts are in About (approved)
     "system" to listOf(
-        SettingsLink("device", "Uređaj i mreža", "Model, memorija, mreža, ocjena uređaja", R.drawable.lc_gauge2),
-        SettingsLink("backup", "Backup i vraćanje", "Sačuvaj ili vrati postavke", R.drawable.lc_archive),
         SettingsLink("update", "Ažuriranje", "Provjeri i instaliraj novu verziju", R.drawable.lc_download),
-        SettingsLink("diagnostics", "Dijagnostika", "Zapis streamova i grešaka", R.drawable.lc_gauge2),
-        SettingsLink("about", "O aplikaciji", "Verzija i licence", R.drawable.lc_info),
+        SettingsLink("backup", "Backup i vraćanje", "Sačuvaj ili vrati postavke", R.drawable.lc_archive),
+        SettingsLink("diagnostics", "Dijagnostika", "Zastoji, pali kanali i rušenja", R.drawable.lc_gauge2),
+        SettingsLink("about", "O aplikaciji", "Verzija, uređaj i licence", R.drawable.lc_info),
     ),
 )
 
@@ -631,6 +633,9 @@ fun SettingsScreen(nav: Nav) {
             }
         }
         LaunchedEffect(listFocused) { inPage = false }
+        // the page changed under the focus (a sub-page opened or closed): the focus goes back into the page,
+        // never by itself to the first entry of the menu on the left (approved)
+        LaunchedEffect(section, sub) { if (inPage) { delay(120); try { pageFr.requestFocus() } catch (_: Exception) {} } }
         // into a section: Right lands on the item at the same height; Left from anywhere in the page goes back to this section on the left
         val pageFr = remember { FocusRequester() }
         Box(Modifier.weight(1f).fillMaxHeight().onFocusChanged { if (it.hasFocus) inPage = true }
@@ -646,8 +651,10 @@ fun SettingsScreen(nav: Nav) {
             }
             .focusRequester(pageFr).focusGroup()
             .padding(start = 18.dp, end = 24.dp, top = 4.dp, bottom = 8.dp)) {
+            // a section with one page opens that page at once (approved: no extra step)
+            val only = SETTINGS_LINKS[section]?.singleOrNull()?.id
             key(section, sub) {
-                when (sub) {
+                when (sub ?: only) {
                     "groups" -> GroupManager(nav)
                     "epg" -> { val epl = PlEdit.id?.let { id -> Store.playlists(ctx).firstOrNull { it.id == id } }
                         SetPage(if (epl != null) trf("EPG · %s", epl.name) else tr("EPG izvori"), "OK: meni · desno: uključi/ugasi · ▲ ▼ redoslijed") { EpgSourcesBlock(epl) } }
@@ -661,6 +668,7 @@ fun SettingsScreen(nav: Nav) {
                     "language" -> LanguageV2()
                     "sports" -> SportV2()
                     "reminders" -> RemindersV2(nav)
+                    "notifications" -> NotificationsV2()
                     "diagnostics" -> DiagnosticsV2()
                     "backup" -> BackupSettings()
                     "update" -> UpdateV2()
@@ -1008,7 +1016,9 @@ private fun PlaylistsListV2(nav: Nav) {
     fun refresh() { list = Store.playlists(ctx); Repo.clear() }
     // a playlist clicked on the Playlists page opens its menu right away
     LaunchedEffect(Unit) { PlMenu.open?.let { id -> menu = list.firstOrNull { it.id == id }; PlMenu.open = null } }
-    SetPage("Uredi playliste", "OK na playlisti: meni s opcijama.") {
+    SetPage("Playliste", "OK na playlisti: uredi, uključi, osvježi, pomjeri ili ukloni") {
+        // the first row adds a new playlist (approved)
+        SetRow("＋ Dodaj playlistu", "Xtream, M3U ili Stalker · i s telefona preko QR koda", arrow = "›") { EditPlaylist.target = null; nav.push(Screen.AddPlaylist) }
         list.forEach { pl ->
             val sec = pl.exp.toLongOrNull()
             SetRow(pl.name, (when (pl.type) { SourceType.XTREAM -> "Xtream"; SourceType.STALKER -> "Stalker"; else -> "M3U" }) +
@@ -1255,101 +1265,83 @@ private fun CheckRow(label: String, on: Boolean, onClick: () -> Unit) {
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun SportV2() {
-    val scope = rememberCoroutineScope()
     var rev by remember { mutableIntStateOf(0) }
-    var keyDlg by remember { mutableStateOf(false) }
-    var status by remember { mutableStateOf<String?>(null) }
     var more by remember { mutableStateOf(false) }
     var teamDlg by remember { mutableStateOf(false) }
+    var leaguesDlg by remember { mutableStateOf(false) }
+    var adv by remember { mutableStateOf(false) }
     val main = listOf("football" to "Fudbal", "basketball" to "Košarka", "tennis" to "Tenis", "volleyball" to "Odbojka")
     val others = (Sports.SPORTS + Sports.MORE_SPORTS).filter { o -> main.none { it.first == o.first } }
     fun changed() { Sports.lastCombined.clear(); SportCache.clear(); rev++ }
+    val raw = Prefs.str("sport_leagues", Sports.BIG.joinToString(","))
+    val allL = Sports.LEAGUES.map { it.abbr }
+    val onL: Set<String> = when (raw) { "-" -> emptySet(); "" -> allL.toSet(); else -> raw.split(',').filter { it.isNotBlank() }.toSet() }
+    fun saveL(x: Set<String>) { Prefs.put("sport_leagues", if (x.isEmpty()) "-" else if (x.size == allL.size) "" else x.joinToString(",")); changed() }
+    // simple outside, complex inside (approved): one column of five rows, everything else under "Napredno"
     key(rev) {
-        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            // ---------------------------------------------------------- left: what you follow
-            Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                T("Sportski centar", 20.sp, C.Text, FontWeight.Bold)
-                // one drop-down for the sports: only how many are chosen on the row; All / None / each, stays open until Back
-                SetSection("Sportovi")
-                val en = csv("sport_enabled", "football").toMutableSet()
-                val allSports = Sports.SPORTS + Sports.MORE_SPORTS
-                SetMulti("Sportovi", null, allSports.map { it.second }, allSports.indices.filter { allSports[it].first in en }.toSet(), none = true) { s2 ->
-                    Prefs.remove("sm_sports"); Prefs.put("sport_enabled", (if (s2.isEmpty()) setOf(0) else s2).sorted().joinToString(",") { allSports[it].first }); changed()
-                }
-                SetSection("Države")
+        SetPage("Sportski centar", "Šta pratiš u Sportu") {
+            val en = csv("sport_enabled", "football").toMutableSet()
+            val allSports = Sports.SPORTS + Sports.MORE_SPORTS
+            SetMulti("Sport", null, allSports.map { it.second }, allSports.indices.filter { allSports[it].first in en }.toSet(), none = true) { s2 ->
+                Prefs.remove("sm_sports"); Prefs.put("sport_enabled", (if (s2.isEmpty()) setOf(0) else s2).sorted().joinToString(",") { allSports[it].first }); changed()
+            }
+            // my country also gives my national team, my region and the home league by itself
+            val picked = Prefs.str("sport_country").split(',').filter { it.isNotBlank() }.toSet()
+            val opts = COUNTRIES.drop(1)
+            SetMulti("Moja država", "reprezentacija, regija i domaća liga idu same", opts.map { it.second }, opts.indices.filter { opts[it].first in picked }.toSet(), all = false,
+                note = tr("Ništa označeno = automatski (po uređaju)")) { s2 ->
+                val codes = s2.sorted().map { opts[it].first }
+                Prefs.put("sport_country", codes.joinToString(","))
+                if (Prefs.str("sport_nations").isBlank()) Prefs.put("sport_nations", codes.filter { it in MyTeams.NATIONS }.joinToString(","))
+                MyTeams.rev++; changed()
+            }
+            val teams = Prefs.str("sport_teams").split(',').map { it.trim() }.filter { it.isNotBlank() }
+            SetRow("Moji timovi", "uvijek na vrhu, s obavještenjima", if (teams.isEmpty()) tr("＋ Dodaj") else trf("%s tima", teams.size)) { teamDlg = true }
+            val preset = when (onL) { Sports.BIG.toSet() -> 0; (Sports.BIG + Sports.REGION_LEAGUES).toSet() -> 1; allL.toSet() -> 2; else -> 3 }
+            SetDrop("Takmičenja", null, listOf("Velika takmičenja", "Velika + moja regija", "Sva", "Prilagođeno…"), preset) {
+                when (it) { 0 -> saveL(Sports.BIG.toSet()); 1 -> saveL((Sports.BIG + Sports.REGION_LEAGUES).toSet()); 2 -> saveL(allL.toSet()); else -> leaguesDlg = true }
+            }
+            SetRow("Napredno", "kontinenti, reprezentacije, osvježavanje, izvori", if (adv) "▲" else "▼", arrow = "") { adv = !adv }
+            if (adv) {
                 val conts = Sports.CONTINENTS
                 val cOn = csv("sport_cont", "eu").map { if (it == "am") "na" else it }
                 SetMulti("Kontinenti", "svjetska takmičenja uvijek", conts.map { it.second }, conts.indices.filter { conts[it].first in cOn }.toSet(), all = false) { s2 ->
                     Prefs.put("sport_cont", (if (s2.isEmpty()) setOf(0) else s2).sorted().joinToString(",") { conts[it].first }); changed()
                 }
-                // several countries at once; none ticked = automatic (by the device)
-                val picked = Prefs.str("sport_country").split(',').filter { it.isNotBlank() }.toSet()
-                val opts = COUNTRIES.drop(1)
-                SetMulti("Moja država", "ništa = po uređaju", opts.map { it.second }, opts.indices.filter { opts[it].first in picked }.toSet(), all = false,
-                    note = tr("Ništa označeno = automatski (po uređaju)")) { s2 ->
-                    Prefs.put("sport_country", s2.sorted().joinToString(",") { opts[it].first }); Sports.lastCombined.clear(); changed()
-                }
-                SetSection("Timovi")
                 val nOpts = COUNTRIES.drop(1).filter { it.first in MyTeams.NATIONS }
                 val nOn = Prefs.str("sport_nations").split(',').filter { it.isNotBlank() }.toSet()
                 SetMulti("Moje reprezentacije", "igraju prve u Sportu", nOpts.map { it.second }, nOpts.indices.filter { nOpts[it].first in nOn }.toSet(), all = false) { s2 ->
                     Prefs.put("sport_nations", s2.sorted().joinToString(",") { nOpts[it].first }); MyTeams.rev++; changed()
                 }
-                val teams = Prefs.str("sport_teams").split(',').map { it.trim() }.filter { it.isNotBlank() }
-                SetRow("Omiljeni timovi", "uvijek na vrhu", if (teams.isEmpty()) tr("Nijedan") else trf("%s tima", teams.size)) { teamDlg = true }
                 SetSwitch("Automatski prati", "timove i reprezentacije", MyTeams.auto) { Prefs.put("sa_auto", it); MyTeams.rev++; rev++ }
-                // the same switches as in Settings › Home ("Remove" on Home switches the first one off)
-                SetSwitch("Utakmice danas na Početnoj", "„Ukloni“ na Početnoj ga isključi", HomeRows.isOn("today")) { HomeRows.setOn("today", it); rev++ }
-                SetSwitch("Pratiš · uživo na Početnoj", "rezultat, kartoni, zadnji događaj", HomeRows.isOn("follow")) { HomeRows.setOn("follow", it); rev++ }
-                SetSection("Obavijesti")
-                val ks = GoalNote.KINDS
-                SetMulti("Obavijesti", "za ono što pratiš", ks.map { it.second },
-                    ks.indices.filter { GoalNote.on(ks[it].first) }.toSet(), all = false) { s2 -> ks.forEachIndexed { i, k -> Prefs.put("sa_" + k.first, i in s2) }; rev++ }
-                SetSwitch("Podsjetnik prije početka", "za timove i utakmice koje pratiš", (Prefs.str("sport_team_remind", "1").toIntOrNull() ?: 1) > 0) {
-                    Prefs.put("sport_team_remind", if (it) "1" else "0"); rev++
-                }
-                SetSection("Općenito")
+                SetSwitch("Utakmice danas na Početnoj", null, HomeRows.isOn("today")) { HomeRows.setOn("today", it); rev++ }
+                SetSwitch("Pratiš · uživo na Početnoj", null, HomeRows.isOn("follow")) { HomeRows.setOn("follow", it); rev++ }
                 SetDrop("Osvježavanje", "dok je Sport otvoren", listOf("Svake minute", "Svake 3 min", "Svakih 5 min"),
                     listOf(1, 3, 5).indexOf(Prefs.str("sport_refresh", "1").toIntOrNull() ?: 1).coerceAtLeast(0)) { Prefs.put("sport_refresh", listOf(1, 3, 5)[it].toString()); rev++ }
-                SetSection("Izgled")
                 SetDrop("Mala slika utakmice", null, listOf("Na OK", "Isključena"), if (Prefs.bool("sport_preview", true)) 0 else 1) { Prefs.put("sport_preview", it == 0); rev++ }
-                SetSection("Ko prenosi")
                 val srcKeys = listOf("sport_src_rights", "sport_src_espn")
-                SetMulti("Izvori", "tvoji TV kanali uvijek", listOf("Prava po ligi", "ESPN"),
+                SetMulti("Ko prenosi", "tvoji TV kanali uvijek", listOf("Prava po ligi", "ESPN"),
                     srcKeys.indices.filter { Prefs.bool(srcKeys[it], true) }.toSet(), all = false) { s2 -> srcKeys.forEachIndexed { i, k -> Prefs.put(k, i in s2) }; changed() }
                 var afDlg by remember { mutableStateOf(false) }
-                SetRow("API-Football ključ", "brži rezultati uživo · besplatno 100 upita dnevno", if (ApiFootball.on) tr("upisan") else tr("nema"),
-                    valueColor = if (ApiFootball.on) C.Green else null) { afDlg = true }
+                SetRow("API-Football ključ", "brži rezultati uživo", if (ApiFootball.on) tr("upisan") else tr("nema"), valueColor = if (ApiFootball.on) C.Green else null) { afDlg = true }
                 if (afDlg) TextDialog("API-Football ključ", "ključ s dashboard.api-football.com", ApiFootball.key, onDismiss = { afDlg = false; SetFocus.tick++ }) { v ->
                     ApiFootball.key = v; afDlg = false; SportCache.clear(); rev++ }
             }
-            // ---------------------------------------------------------- right: competitions
-            val en = csv("sport_enabled", "football")
-            val raw = Prefs.str("sport_leagues", Sports.BIG.joinToString(","))
-            val all = Sports.LEAGUES.map { it.abbr }
-            val on: Set<String> = when (raw) { "-" -> emptySet(); "" -> all.toSet(); else -> raw.split(',').filter { it.isNotBlank() }.toSet() }
-            fun save(x: Set<String>) { Prefs.put("sport_leagues", if (x.isEmpty()) "-" else if (x.size == all.size) "" else x.joinToString(",")); changed() }
-            val groups = Sports.LEAGUE_GROUPS.filter { (_, abbrs) -> abbrs.any { a -> Sports.LEAGUES.firstOrNull { it.abbr == a }?.sport in en } }
-            Column(Modifier.weight(1f).fillMaxHeight().glass(18.dp).verticalScroll(rememberScrollState()).padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    T(tr("Takmičenja") + (if (en.size == 1) " · " + tr(main.firstOrNull { it.first == en.first() }?.second ?: "") else ""), 16.sp, C.Text, FontWeight.Bold, modifier = Modifier.weight(1f))
-                    T(trf("%s od %s uključeno", on.size, all.size), 10.sp, C.Muted)
-                }
-                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    SportChip("Velika takmičenja", on == Sports.BIG.toSet()) { save(Sports.BIG.toSet()) }
-                    SportChip("Moja regija", on == (Sports.BIG + Sports.REGION_LEAGUES).toSet()) { save((Sports.BIG + Sports.REGION_LEAGUES).toSet()) }
-                    SportChip("Sve", on.size == all.size) { save(all.toSet()) }
-                    SportChip("Ništa", on.isEmpty()) { save(emptySet()) }
-                }
-                groups.forEach { (title, abbrs) ->
-                    Kicker(tr(title), modifier = Modifier.padding(top = 6.dp))
-                    abbrs.forEach { a ->
-                        val lg = Sports.LEAGUES.firstOrNull { it.abbr == a } ?: return@forEach
-                        CheckRow(tr(lg.name), a in on) { save(if (a in on) on - a else on + a) }
-                    }
-                }
+        }
+    }
+    // the full competition list only when you ask for it ("Prilagođeno…")
+    if (leaguesDlg) Popup("Takmičenja", { leaguesDlg = false; SetFocus.tick++ }, width = 620.dp) {
+        val en = csv("sport_enabled", "football")
+        val groups = Sports.LEAGUE_GROUPS.filter { (_, abbrs) -> abbrs.any { a -> Sports.LEAGUES.firstOrNull { it.abbr == a }?.sport in en } }
+        var cur by remember { mutableStateOf(onL) }
+        groups.forEach { (title, abbrs) ->
+            Kicker(tr(title), modifier = Modifier.padding(top = 6.dp))
+            abbrs.forEach { a ->
+                val lg = Sports.LEAGUES.firstOrNull { it.abbr == a } ?: return@forEach
+                CheckRow(tr(lg.name), a in cur) { cur = if (a in cur) cur - a else cur + a }
             }
         }
+        Button("Gotovo", R.drawable.lc_check, primary = true) { saveL(cur); leaguesDlg = false; SetFocus.tick++ }
     }
     if (more) Popup("Ostali sportovi", { more = false; SetFocus.tick++ }) {
         val en = csv("sport_enabled", "football").toMutableSet()
@@ -1383,8 +1375,6 @@ private fun RemindersV2(nav: Nav) {
                 offs.indices.filter { offs[it] in Reminders.offsets() }.toSet(), all = false, new = true) { set ->
                 Reminders.setOffsets(set.sorted().map { offs[it] }); rev++
             }
-            SetDrop("Obavijest stoji", null, listOf("10 s", "20 s", "30 s"), listOf(10, 20, 30).indexOf(Reminders.popupSec).coerceAtLeast(1)) { Reminders.popupSec = listOf(10, 20, 30)[it]; rev++ }
-            SetSwitch("Zvuk obavijesti", null, Prefs.bool("rem_sound", true), new = true) { Prefs.put("rem_sound", it) }
             SetSwitch("Utakmice koje pratiš", "same dobiju podsjetnik prije početka", Prefs.str("sport_team_remind", "1") != "0") { Prefs.put("sport_team_remind", if (it) "1" else "0"); rev++ }
             SetSection("Ostalo")
             SetDrop("Kad je aplikacija zatvorena", "ne radi na svim uređajima", listOf("Otvori aplikaciju", "Ništa"), if (Reminders.wake) 0 else 1, new = true) { Reminders.wake = it == 0; rev++ }
@@ -1400,6 +1390,27 @@ private fun RemindersV2(nav: Nav) {
             OptionRow("Pomjeri 5 min ranije", R.drawable.lc_arrow_up) { Reminders.remove(r.id); Reminders.add(r.copy(start = r.start - 5 * 60_000L)); menu = null; rev++ }
             OptionRow("Pomjeri 5 min kasnije", R.drawable.lc_arrow_down) { Reminders.remove(r.id); Reminders.add(r.copy(start = r.start + 5 * 60_000L)); menu = null; rev++ }
             OptionRow("Zatvori", R.drawable.lc_x) { menu = null }
+        }
+    }
+}
+
+/* ---------------------------------------------------------------- Obavještenja */
+
+/** What the app tells by itself: each kind on or off, sound and how long a notice stays. */
+@Composable
+private fun NotificationsV2() {
+    var rev by remember { mutableIntStateOf(0) }
+    key(rev) {
+        SetPage("Obavještenja", "Šta ti aplikacija sama javlja (zvonce gore desno)") {
+            SetSection("Javi mi")
+            Notes.KINDS.forEach { (k, t) -> SetSwitch(t, null, Prefs.bool("note_" + k, true)) { Prefs.put("note_" + k, it); rev++ } }
+            SetSection("Sport")
+            val ks = GoalNote.KINDS
+            SetMulti("Za utakmice koje pratiš", null, ks.map { it.second }, ks.indices.filter { GoalNote.on(ks[it].first) }.toSet(), all = false) { s2 ->
+                ks.forEachIndexed { i, k -> Prefs.put("sa_" + k.first, i in s2) }; rev++ }
+            SetSection("Izgled")
+            SetDrop("Obavještenje stoji", null, listOf("10 s", "20 s", "30 s"), listOf(10, 20, 30).indexOf(Reminders.popupSec).coerceAtLeast(1)) { Reminders.popupSec = listOf(10, 20, 30)[it]; rev++ }
+            SetSwitch("Zvuk", null, Prefs.bool("rem_sound", true)) { Prefs.put("rem_sound", it) }
         }
     }
 }
@@ -1587,6 +1598,13 @@ private fun UpdateV2() {
     var showAll by remember { mutableStateOf<Release?>(null) }
     val rels by load(rev / 1000) { Updater.releases() }
     val releases = (rels as? Load.Ok)?.value ?: emptyList()
+    // opening Updates checks at once and, when there is a new version, downloads and installs it in the same step (approved)
+    LaunchedEffect(Unit) {
+        checking = true
+        try { Prefs.put("upd_skip", ""); Updater.check(ctx) } catch (_: Exception) {}
+        checking = false; checkedAt = System.currentTimeMillis()
+        Updater.available?.let { nu -> if (Updater.progress !in 0..101) Updater.install(ctx, nu) }
+    }
     val u = Updater.available
     key(rev) {
         SetPage("Ažuriranje") {

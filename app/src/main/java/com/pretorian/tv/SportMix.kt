@@ -693,23 +693,31 @@ private fun Kit(t: Team?, size: androidx.compose.ui.unit.Dp) {
 private fun MatchRow(e: SportEvent, selected: Boolean, fr: FocusRequester?, onFocus: () -> Unit, onMenu: () -> Unit, onClick: () -> Unit) {
     val title = if (e.home != null && e.away != null) e.home.name + " – " + e.away.name else e.title
     val reminded = e.state == "pre" && Reminders.has(title, e.start)
-    Focusable(onClick = onClick, onMenu = onMenu, onFocus = onFocus, focusRequester = fr, shape = Rnd(12.dp),
-        normal = if (selected) Color(0xFF424242) else Color(0xFF282828), focused = Color.White, zoom = 1f,
-        modifier = Modifier.fillMaxWidth().height(46.dp).then(if (reminded) Modifier.border(1.5.dp, C.Amber, Rnd(12.dp)) else Modifier)) { f ->
-        Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            T(when { e.onAir -> tr(if (e.replay) "SNIMAK" else "NA TV"); e.state == CACHED_SCORE -> tr("Zadnji podaci"); e.state == "in" -> e.clock ?: tr("UŽIVO"); e.state == "post" -> "FT"; else -> whenShort(e.start) },  // i18n-ignore
-                11.sp, if (f) Color.Black else if (e.onAir) C.Amber else if (e.state == "in") C.Danger else Color.LightGray, FontWeight.Bold, modifier = Modifier.width(70.dp), maxLines = 1)
+    val live = e.state == "in" && !e.fromGuide
+    // a match row in colour (approved): both crests (logo, or the team colour with its short name), the score in the middle, live in red
+    Focusable(onClick = onClick, onMenu = onMenu, onFocus = onFocus, focusRequester = fr, shape = Rnd(14.dp),
+        normal = if (selected) Color(0xFF34343A) else Color(0xFF232328), focused = Color(0xFFEDEDEF), zoom = 1f,
+        modifier = Modifier.fillMaxWidth().height(62.dp).then(when { live -> Modifier.border(1.5.dp, C.Danger, Rnd(14.dp)); reminded -> Modifier.border(1.5.dp, C.Amber, Rnd(14.dp)); else -> Modifier })) { f ->
+        val fg = if (f) Color(0xFF111113) else Color.White
+        Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            val tag = when { e.onAir -> tr(if (e.replay) "SNIMAK" else "NA TV"); e.state == CACHED_SCORE -> tr("Zadnji podaci"); live -> e.clock ?: tr("UŽIVO"); e.state == "post" -> "FT"; else -> whenShort(e.start) }  // i18n-ignore
+            Box(Modifier.width(64.dp)) {
+                if (live) Box(Modifier.clip(Rnd(6.dp)).background(C.Danger).padding(horizontal = 6.dp, vertical = 2.dp)) { T(tag, 12.sp, Color.White, FontWeight.Bold, maxLines = 1) }
+                else T(tag, 13.sp, if (f) fg else if (e.onAir) C.Amber else Color.LightGray, FontWeight.Bold, maxLines = 1)
+            }
             if (e.home != null && e.away != null) {
-                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
-                    T(tn(e.home.name), 14.sp, if (f) Color.Black else Color.White, FontWeight.SemiBold, maxLines = 1); Kit(e.home, 15.dp)
+                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
+                    T(tn(e.home.name), 15.sp, fg, FontWeight.SemiBold, maxLines = 1); Crest(e.home, 30.dp)
                 }
-                T(if (e.state == "pre" || e.fromGuide) "–" else (e.home.score ?: "–") + " : " + (e.away.score ?: "–"), 15.sp, if (f) Color.Black else Color.White, FontWeight.ExtraBold,  // i18n-ignore
-                    modifier = Modifier.width(58.dp), maxLines = 1, align = androidx.compose.ui.text.style.TextAlign.Center)
-                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Kit(e.away, 15.dp); T(tn(e.away.name), 14.sp, if (f) Color.Black else Color.White, FontWeight.SemiBold, maxLines = 1)
+                Box(Modifier.width(66.dp).clip(Rnd(8.dp)).background(if (live) C.Danger.copy(alpha = 0.22f) else if (f) Color(0x14000000) else Color(0x14FFFFFF)).padding(vertical = 4.dp),
+                    contentAlignment = Alignment.Center) {
+                    T(if (e.state == "pre" || e.fromGuide) "–" else (e.home.score ?: "–") + " : " + (e.away.score ?: "–"), 16.sp, fg, FontWeight.ExtraBold, maxLines = 1)  // i18n-ignore
                 }
-            } else T(e.title, 14.sp, if (f) Color.Black else Color.White, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
-            if (reminded) Ico(R.drawable.lc_bell, 14.dp, if (f) Color.Black else C.Amber)
+                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Crest(e.away, 30.dp); T(tn(e.away.name), 15.sp, fg, FontWeight.SemiBold, maxLines = 1)
+                }
+            } else T(e.title, 15.sp, fg, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
+            if (reminded) Ico(R.drawable.lc_bell, 16.dp, if (f) fg else C.Amber)
         }
     }
 }

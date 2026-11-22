@@ -216,6 +216,9 @@ fun CardGrid(want: Int, items: List<@Composable (Modifier) -> Unit>) {
 
 /* ============================================================== Settings › Diagnostics */
 
+/** Diagnostics: only stability and the stream log (approved 22.11.) */
+const val DIAG_SIMPLE = true
+
 @Composable
 fun DiagnosticsV2() {
     val ctx = LocalContext.current
@@ -283,7 +286,8 @@ fun DiagnosticsV2() {
             val total = tv + ser + mov
             // ---- watched (two columns wide) and uptime
             // every card full width, one under the other, so all the text can be read
-            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // Diagnostics shows only what tells what went wrong (approved): stability and the stream log; device facts live in About
+            if (!DIAG_SIMPLE) Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 InfoCard("Gledano", fmtDur(total), trf("ukupno · %s", tr(pw)), R.drawable.lc_play, Silver.TextSoft, Modifier.fillMaxWidth(),
                     action = { SmallBtn(tr("↺ Reset")) { Stats.reset(listOf("tv", "ser", "mov", "eps", "films", "sea", "ch")); rev++ } }) {
                     Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(36.dp)) {
@@ -369,9 +373,9 @@ fun DiagnosticsV2() {
                         stats = listOf(Triple("Izvještaj o grešci", tr(if (crash == null) "nema" else "postoji"), null),
                             Triple("Automatski oporavak", tr(if (Recover.on) "uključen" else "isključen"), if (Recover.on) C.Green else C.Muted)))
                 },
-            ))
+            ).let { if (DIAG_SIMPLE) it.takeLast(1) else it })
             // every step of the last updates, with the time: shows exactly where an update stops
-            key(UpdLog.rev) {
+            if (!DIAG_SIMPLE) key(UpdLog.rev) {
                 val log = UpdLog.lines()
                 InfoCard("Zapis ažuriranja", log.lastOrNull()?.substringAfter("  ") ?: tr("Još nema zapisa"), log.lastOrNull()?.substringBefore("  "),
                     R.drawable.lc_file_text, Silver.TextSoft, Modifier.fillMaxWidth(),

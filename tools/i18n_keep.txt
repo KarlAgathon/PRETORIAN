@@ -625,3 +625,5 @@ sportscenter
 notify
 %,d
 Back
+1× OK
+2× OK

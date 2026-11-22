@@ -1,3 +1,22 @@
+Media Center 2.3.4
+
+• Favourites: holding OK never removes anything by itself – it asks "Remove the channel from favourites?" and offers Move to put your channels in your own order
+• TV channels: the picture, programme box and icons are the same size on every channel and exactly as wide as each other; hints read "1× OK Preview · 2× OK Full screen"
+• Films and series: whole, bigger posters fill the row from edge to edge, the row moves one poster at a time
+• Film page: director and cast as text under the buttons; one Subtitles button with the provider's subtitles, a line, then online versions per language ("English – version 1")
+• Player subtitles: every provider track is listed; a downloaded subtitle replaces the provider's one, never two on screen
+• Online subtitles: every language you set is searched, each with its versions
+• Series page: no "Seasons" heading, the season boxes sit right under the buttons; the chosen season is softer grey
+• Episodes: length and a full-width progress bar on every episode from the start; smaller rows
+• Settings: the focus stays in the page you opened; a section with one page opens it at once
+• Settings › Playlists: "+ Add playlist" on top
+• Settings › Notifications and reminders: a new Notifications page – each kind on or off, sport, how long a notice stays, sound
+• Settings › System: Updates first – opening it checks and installs a new version in one step; Device and network removed (it is in About); Diagnostics shows only freezes, failed channels and crashes
+• Settings › Backup: "Save everything now", the copies by date, weekly copy; the rest under Advanced
+• Settings › Sports Center: one simple column – Sport, My country, My teams, Competitions; the rest under Advanced
+• Parental controls: hide content from India
+• Sport: match rows in colour with both crests, the score in the middle, live in red
+
 Media Center 2.3.3
 
 • Settings › Playlists opens again, so playlists can be added and edited

@@ -234,7 +234,7 @@ private fun VodGalleryBody(title: String, icon: Int, items: Load<List<VItem>>, m
     LaunchedEffect(focused) { delay(300); shown = focused }
     val m by load(shown.name, shown.series, Prefs.tmdbKey) { Tmdb.find(shown.name, tv = shown.series) }
     val meta = (m as? Load.Ok)?.value
-    val st = rememberLazyListState(initialFirstVisibleItemIndex = (start - 2).coerceAtLeast(0))
+    val st = rememberLazyListState(initialFirstVisibleItemIndex = 0)
     val fr = remember { FocusRequester() }
     Box(Modifier.fillMaxSize().clip(Rnd(18.dp)).background(Color(0xFF0B0B0C))) {
         // picture on the right, fading into black towards the text
@@ -247,15 +247,23 @@ private fun VodGalleryBody(title: String, icon: Int, items: Load<List<VItem>>, m
         // the poster row has its own fixed height, so the text and buttons above can never run over it;
         // the gap is chosen so a whole number of posters fills the row (no poster cut at the right edge)
         // approved: bigger posters, about five at once, the row centred with the same space left and right
-        val gap = 20.dp
-        var posterW = (maxWidth - gap * 4) / 5
+        // whole posters fill the row from edge to edge (approved): n posters and n−1 equal gaps make exactly the width
+        var posterW = (maxWidth - 20.dp * 4) / 5
         var posterH = posterW * 1.5f
         val maxH = maxHeight * 0.5f
         if (posterH > maxH) { posterH = maxH; posterW = posterH / 1.5f }
-        val n = ((maxWidth + gap) / (posterW + gap)).toInt().coerceIn(1, 5)
-        val side = ((maxWidth - posterW * n - gap * (n - 1)) / 2).coerceAtLeast(0.dp)
+        val n = ((maxWidth + 16.dp) / (posterW + 16.dp)).toInt().coerceIn(1, 5)
+        val gap = if (n > 1) (maxWidth - posterW * n) / (n - 1) else 0.dp
+        val side = 0.dp
         val rowH = posterH + 16.dp
-        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        // the row moves a whole poster at a time, so the first and the last one on screen are never cut
+        var firstShown by remember { mutableStateOf((start - (n - 1)).coerceAtLeast(0)) }
+        LaunchedEffect(focused, n) {
+            val i = list.indexOf(focused).takeIf { it >= 0 } ?: return@LaunchedEffect
+            if (i < firstShown) firstShown = i else if (i > firstShown + n - 1) firstShown = i - (n - 1)
+            runCatching { st.scrollToItem(firstShown) }
+        }
+        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(22.dp)) {
           Column(Modifier.fillMaxWidth().weight(1f).clip(Rnd(0.dp)), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Ico(icon, 18.dp, C.Soft); T(title, 16.sp, C.Soft, FontWeight.SemiBold)

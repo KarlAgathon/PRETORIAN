@@ -189,7 +189,8 @@ private fun tracksOf(player: ExoPlayer, type: Int): List<TrackItem> {
     for (g in player.currentTracks.groups) {
         if (g.type != type) continue
         for (i in 0 until g.length) {
-            if (!g.isTrackSupported(i)) continue
+            // every track the stream has, also those the box can only just play (otherwise some languages went missing)
+            if (!g.isTrackSupported(i, true)) continue
             out.add(TrackItem(trackLabel(g.getTrackFormat(i), type == MC.TRACK_TYPE_AUDIO), g, i, g.isTrackSelected(i)))
         }
     }
@@ -1108,14 +1109,23 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         "subs" -> SubsPanel(item, tracksOf(player, MC.TRACK_TYPE_TEXT), subFile, online = !s.live, onDismiss = { dialog = null },
             onOff = { subFile = null; player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, true).build(); dialog = null },
             onTrack = { t ->
-                subFile = null
-                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false)
+                // only one subtitle on screen: a downloaded file is taken out of the stream first, then the provider track is chosen
+                val lang = try { t.group.getTrackFormat(t.index).language } catch (_: Exception) { null }
+                if (subFile != null) {
+                    subFile = null
+                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().clearOverridesOfType(MC.TRACK_TYPE_TEXT)
+                        .setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false).setPreferredTextLanguage(lang).build()
+                    loadMedia(item, null, player.currentPosition)
+                } else player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false)
                     .setOverrideForType(TrackSelectionOverride(t.group.mediaTrackGroup, t.index)).build()
                 dialog = null
             },
             onFile = { path ->
                 subFile = path
-                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false).build()
+                // the downloaded file replaces the provider's subtitle (never both on screen)
+                val code = java.io.File(path).name.removeSuffix(".srt").substringAfterLast('.').takeIf { it.length in 2..3 }
+                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().clearOverridesOfType(MC.TRACK_TYPE_TEXT)
+                    .setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false).setPreferredTextLanguage(code).build()
                 loadMedia(item, path, player.currentPosition)
                 dialog = null
             })
