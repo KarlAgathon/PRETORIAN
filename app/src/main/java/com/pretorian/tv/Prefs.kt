@@ -34,7 +34,7 @@ object Prefs {
     var osPass: String get() = str("os_pass"); set(v) = put("os_pass", v)
     var subdlKey: String get() = str("subdl_key"); set(v) = put("subdl_key", v.trim())
     /** preferred subtitle languages, first = most wanted (ISO 639-1) */
-    var subLangs: String get() = str("sub_langs", "bs,hr,sr,en"); set(v) = put("sub_langs", v)
+    var subLangs: String get() = str("sub_langs", "en,hr"); set(v) = put("sub_langs", v)
     var audioLangs: String get() = str("audio_langs", "en,bs,hr,sr,de"); set(v) = put("audio_langs", v)
     var metaLang: String get() = str("meta_lang", "auto"); set(v) = put("meta_lang", v)
     var autoSubs: Boolean get() = bool("auto_subs", false); set(v) = put("auto_subs", v)

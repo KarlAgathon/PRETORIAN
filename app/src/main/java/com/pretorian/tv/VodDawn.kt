@@ -66,11 +66,14 @@ data class VItem(val id: String, val name: String, val image: String?, val ratin
 }
 
 /** The streaming services of Series › Streaming: TMDB network ids of their own series (originals). */
-data class Service(val name: String, val networks: String)
+private val COUNTRY_TAG = Regex("\\s*\\((US|UK|AU|CA|NZ|DE|IE)\\)\\s*$", RegexOption.IGNORE_CASE)
+
+/** A streaming service: [networks] = its own productions on TMDB, [providers] = everything it streams (TMDB watch providers). */
+data class Service(val name: String, val networks: String, val providers: String = "")
 val SERVICES = listOf(
-    Service("Netflix", "213"), Service("Apple TV+", "2552"), Service("Disney+", "2739"),
-    Service("Prime Video", "1024"), Service("HBO Max", "49%7C3186"), Service("Paramount+", "4330"),
-    Service("Peacock", "3353"), Service("Hulu", "453"), Service("Starz", "318"),
+    Service("Netflix", "213", "8"), Service("Apple TV+", "2552", "350"), Service("Disney+", "2739", "337"),
+    Service("Prime Video", "1024", "9%7C119"), Service("HBO Max", "49%7C3186", "1899%7C384"), Service("Paramount+", "4330", "531"),
+    Service("Peacock", "3353", "386"), Service("Hulu", "453", "15"), Service("Starz", "318", "43"),
 )
 
 /** TMDB titles → the same titles in the playlist (name and year must agree). Nothing is shown that the playlist does not have. */
@@ -87,9 +90,11 @@ object VodMatch {
                 val want = setOf(Sports.norm(h.title), Sports.norm(h.original)).filter { it.isNotBlank() }
                 val words = Sports.norm(h.title).split(' ').filter { it.length >= 2 }.take(3).ifEmpty { listOf(Sports.norm(h.title)) }
                 CatalogDb.search(listOf(p.id), kind, words, 40).forEach { r ->
-                    val (t, y) = cleanTitle(r.n)
-                    val yOk = y == null || h.year == null || kotlin.math.abs((y.toIntOrNull() ?: 0) - (h.year.toIntOrNull() ?: 0)) <= 1
-                    if (Sports.norm(t) in want && yOk && out.values.none { it.id == r.id }) out[h.id.toString() + "|" + r.id] =
+                    val (t0, y) = cleanTitle(r.n)
+                    // "Show (AU)", "Show (US)" in the playlist are the same show; a series' year is the year of its latest season, so it is not compared
+                    val t = t0.replace(COUNTRY_TAG, "")
+                    val yOk = series || y == null || h.year == null || kotlin.math.abs((y.toIntOrNull() ?: 0) - (h.year.toIntOrNull() ?: 0)) <= 1
+                    if ((Sports.norm(t) in want || Sports.norm(t0) in want) && yOk && out.values.none { it.id == r.id }) out[h.id.toString() + "|" + r.id] =
                         VItem(r.id, r.n, r.i, r.r, r.u, series, p.id)
                 }
             }
@@ -173,7 +178,7 @@ fun DawnVod(nav: Nav, series: Boolean) {
                 is VL.Gallery -> VodGalleryLevel(p, series, top, mem, nav)
                 VL.Streaming -> StreamingGrid(mem) { stack.add(VL.Svc(it)) }
                 is VL.Svc -> {
-                    val items by load(top.s.name) { VodMatch.match(p, true, "svc:" + top.s.name, Tmdb.network(top.s.networks)) }
+                    val items by load(top.s.name) { VodMatch.match(p, true, "svc:" + top.s.name, (Tmdb.network(top.s.networks) + Tmdb.provider(top.s.providers)).distinctBy { it.id }) }
                     VodGalleryBody(top.s.name, R.drawable.lc_tv, items, mem, top.key, nav,
                         empty = if (!Tmdb.enabled()) "Ova lista trenutno nije dostupna" else "U tvojoj playlisti nema serija ovog servisa")
                 }
@@ -386,7 +391,7 @@ private fun StreamingGrid(mem: HashMap<String, Int>, onPick: (Service) -> Unit) 
                     shape = Rnd(16.dp), normal = Color(0xCC161618), focused = Color(0xCC161618), focusBorderColor = Color.White, zoom = 1.03f,
                     modifier = Modifier.fillMaxWidth().height(118.dp).border(1.dp, Color(0x33FFFFFF), Rnd(16.dp))) { f ->
                     // the service's original logo from TMDB on a light plate, the name below; no logo → only the name
-                    val logo by produceState<String?>(null, s.networks) { value = try { Tmdb.networkLogo(s.networks) } catch (_: Exception) { null } }
+                    val logo by produceState<String?>(null, s.networks) { value = try { Tmdb.providerLogo(s.providers) ?: Tmdb.networkLogo(s.networks) } catch (_: Exception) { null } }
                     if (logo == null) T(s.name, 26.sp, Color.White, if (f) FontWeight.Bold else FontWeight.SemiBold, modifier = Modifier.align(Alignment.Center))
                     else Column(Modifier.fillMaxSize().padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Box(Modifier.fillMaxWidth().weight(1f).clip(Rnd(10.dp)).background(Color(0xFFE6E7E9)).padding(horizontal = 18.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {

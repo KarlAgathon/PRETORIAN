@@ -469,19 +469,16 @@ fun SportMixScreen(nav: Nav) {
                 }
             }
             Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                listOf("all" to "Sve", "live" to "Uživo", "soon" to "Uskoro", "done" to "Završeno", "fav" to "★ Favoriti", "mine" to "Pratim").forEach { (id, l) ->
+                listOf("all" to "Sve", "live" to "Uživo", "soon" to "Uskoro", "done" to "Završeno").forEach { (id, l) ->
                     val n = withCh.count { e -> inSport(e) && inUserFilters(e) && (if (id == "live") e.live else inTab(e, id)) }
                     Chip2((if (id == "live") "● " else "") + tr(l) + (if (id == "done" || (id == "soon" && other == null && tab != "soon")) "" else " · $n"), tab == id, if (tab == id) tabFr else null) { tab = id }
                 }
             }
-            if (delayed && shown.isNotEmpty()) T("Osvježavanje nije uspjelo", 13.sp, Color.LightGray)
-            val updated = (if (shown.any { it.state == CACHED_SCORE }) shown.filter { it.state == CACHED_SCORE }.minOfOrNull { it.observedAt } else shown.maxOfOrNull { it.observedAt }) ?: 0
-            if (updated > 0) T((if (shown.any { it.state == CACHED_SCORE }) tr("Zadnji podaci") else tr("Osvježavanje")) + " · " + java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT).format(java.util.Date(updated)), 12.sp, Color.LightGray)
+
             val next = remember(shown, tick, tab) {
                 if (tab == "all") shown.filter { it.state == "pre" && it.start > System.currentTimeMillis() }
                     .minWithOrNull(compareBy({ !fav(it) }, { it.start })) else null
             }
-            if (next != null) Chip2(tr("Sljedeća utakmica") + " · " + next.title + " · " + whenShort(next.start), false) { sel = next.id; jumpTick++ }
             if (loading && shown.isEmpty()) Loading("Učitavam utakmice…")
             else if (shown.isEmpty()) Message(when (tab) { ALL_MATCHES -> "Nema rezultata"; "live" -> "Trenutno nema utakmica uživo"; "soon" -> "Nema utakmica uskoro"; "mine" -> "Ne pratiš nijednu utakmicu · dugi OK na utakmicu › Prati"; "fav" -> "Nema utakmica tvojih favorita u idućih 10 dana · ＋ Države ili ＋ Timovi"; else -> "Nema završenih utakmica" })
             else LazyColumn(state = listState, modifier = Modifier.onFocusChanged { listFocus = it.hasFocus }, verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
@@ -681,9 +678,15 @@ private fun Chip2(label: String, on: Boolean, fr: FocusRequester? = null, onClic
 }
 
 /** A team's colours as a small square (a picture would cost more). */
+/** A team name as people say it: guide titles often start with a channel number and LIVE ("30 LIVE Liverpool" → "Liverpool"). */
+private val TEAM_JUNK = Regex("^\\s*(\\d{1,3}\\s+)?(LIVE|UŽIVO|UZIVO)\\s*[:|-]?\\s*", RegexOption.IGNORE_CASE)
+private fun tn(name: String): String = name.replace(TEAM_JUNK, "").trim().ifBlank { name.trim() }
+
 @Composable
 private fun Kit(t: Team?, size: androidx.compose.ui.unit.Dp) {
-    Box(Modifier.size(size).background(t?.color ?: Color.Gray, Rnd(3.dp)))
+    // only a real team colour: no empty grey squares (approved)
+    val c = t?.color ?: return
+    Box(Modifier.size(size).background(c, Rnd(3.dp)))
 }
 
 @Composable
@@ -698,12 +701,12 @@ private fun MatchRow(e: SportEvent, selected: Boolean, fr: FocusRequester?, onFo
                 11.sp, if (f) Color.Black else if (e.onAir) C.Amber else if (e.state == "in") C.Danger else Color.LightGray, FontWeight.Bold, modifier = Modifier.width(70.dp), maxLines = 1)
             if (e.home != null && e.away != null) {
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
-                    T(e.home.name, 14.sp, if (f) Color.Black else Color.White, FontWeight.SemiBold, maxLines = 1); Kit(e.home, 15.dp)
+                    T(tn(e.home.name), 14.sp, if (f) Color.Black else Color.White, FontWeight.SemiBold, maxLines = 1); Kit(e.home, 15.dp)
                 }
                 T(if (e.state == "pre" || e.fromGuide) "–" else (e.home.score ?: "–") + " : " + (e.away.score ?: "–"), 15.sp, if (f) Color.Black else Color.White, FontWeight.ExtraBold,  // i18n-ignore
                     modifier = Modifier.width(58.dp), maxLines = 1, align = androidx.compose.ui.text.style.TextAlign.Center)
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Kit(e.away, 15.dp); T(e.away.name, 14.sp, if (f) Color.Black else Color.White, FontWeight.SemiBold, maxLines = 1)
+                    Kit(e.away, 15.dp); T(tn(e.away.name), 14.sp, if (f) Color.Black else Color.White, FontWeight.SemiBold, maxLines = 1)
                 }
             } else T(e.title, 14.sp, if (f) Color.Black else Color.White, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
             if (reminded) Ico(R.drawable.lc_bell, 14.dp, if (f) Color.Black else C.Amber)
@@ -716,16 +719,16 @@ private fun MatchCard(e: SportEvent, playing: Channel?, playingFr: FocusRequeste
     Column(Modifier.fillMaxWidth().background(Color(0xFF181818), Rnd(4.dp)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (e.home != null && e.away != null) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { Crest(e.home, 32.dp); T(e.home.name, 15.sp, Color.White, FontWeight.Bold, maxLines = 1) }
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { Crest(e.home, 32.dp); T(tn(e.home.name), 15.sp, Color.White, FontWeight.Bold, maxLines = 1) }
                 T(if (e.state == "pre" || e.fromGuide) java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(e.start)) else (e.home.score ?: "–") + " : " + (e.away.score ?: "–"),  // i18n-ignore
-                    28.sp, Color.White, FontWeight.ExtraBold, maxLines = 1)
-                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) { T(e.away.name, 15.sp, Color.White, FontWeight.Bold, maxLines = 1); Crest(e.away, 32.dp) }
+                    24.sp, Color.White, FontWeight.ExtraBold, maxLines = 1, modifier = Modifier.padding(horizontal = 14.dp))
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) { T(tn(e.away.name), 15.sp, Color.White, FontWeight.Bold, maxLines = 1); Crest(e.away, 32.dp) }
             }
         } else T(e.title, 17.sp, Color.White, FontWeight.Bold, maxLines = 2)
         if (e.state == CACHED_SCORE) T("Zadnji podaci", 13.sp, Color.LightGray)
         if (e.state != "pre") T(whenLong(e.start), 12.sp, Color.LightGray)
         if (e.state == "pre") T(whenLong(e.start), 13.sp, Color.White, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.fillMaxWidth(), align = androidx.compose.ui.text.style.TextAlign.Center)
-        T(listOfNotNull(if (e.onAir) "📺 " + tr(if (e.replay) "SNIMAK" else "NA TV") else if (e.state == "in") "● " + (e.clock ?: tr("UŽIVO")) else null, e.league, e.round).joinToString(" · "), 11.sp,  // i18n-ignore
+        T(listOfNotNull(if (e.onAir) "📺 " + tr(if (e.replay) "SNIMAK" else "NA TV") else if (e.state == "in") "● " + (e.clock ?: tr("UŽIVO")) else null, e.league, e.round?.takeIf { e.league != null }).joinToString(" · "), 11.sp,  // i18n-ignore
             if (e.onAir) C.Amber else if (e.state == "in") C.Danger else Color.LightGray, FontWeight.Bold, maxLines = 1, modifier = Modifier.fillMaxWidth(), align = androidx.compose.ui.text.style.TextAlign.Center)
         // goals and cards with the minute
         if (e.details.isNotEmpty()) Row(Modifier.fillMaxWidth()) {

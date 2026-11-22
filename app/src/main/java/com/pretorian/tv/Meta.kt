@@ -176,17 +176,38 @@ object Tmdb {
     }
     /** series made by one network (its originals), most popular first */
     suspend fun network(ids: String): List<Hit> = list("/discover/tv", "language=en-US&sort_by=popularity.desc&with_networks=$ids", 5, tv = true)
+    /** everything a service streams in this country (TMDB watch providers), also shows it did not make itself; US list when this country has none */
+    suspend fun provider(ids: String): List<Hit> {
+        if (ids.isBlank()) return emptyList()
+        val cc = java.util.Locale.getDefault().country.ifBlank { "DE" }
+        return list("/discover/tv", "language=en-US&sort_by=popularity.desc&watch_region=$cc&with_watch_providers=$ids", 5, tv = true)
+            .ifEmpty { list("/discover/tv", "language=en-US&sort_by=popularity.desc&watch_region=US&with_watch_providers=$ids", 5, tv = true) }
+    }
     /** the network's own logo from TMDB (kept on the box); null when TMDB has none — then only the name is shown */
     suspend fun networkLogo(ids: String): String? = withContext(Dispatchers.IO) {
         val id = ids.substringBefore("%7C").substringBefore("|")
         val k = "netlogo_$id"
-        val saved = Prefs.str(k, "?")
-        if (saved != "?") return@withContext saved.ifBlank { null }
+        val saved = Prefs.str(k, "")
+        if (saved.isNotBlank()) return@withContext saved   // a failed try is not kept: it is asked again next time
         if (!enabled()) return@withContext null
         try {
             val lp = get("/network/$id", "").optString("logo_path", "")
             val u = if (lp.isNotBlank() && lp != "null") IMG + "w300" + lp else ""
-            Prefs.put(k, u); u.ifBlank { null }
+            if (u.isNotBlank()) Prefs.put(k, u); u.ifBlank { null }
+        } catch (_: Exception) { null }
+    }
+    /** the service's app logo from TMDB watch providers (always there for the big services); only a found logo is kept */
+    suspend fun providerLogo(ids: String): String? = withContext(Dispatchers.IO) {
+        val id = ids.substringBefore("%7C").substringBefore("|").toIntOrNull() ?: return@withContext null
+        val k = "provlogo_$id"
+        Prefs.str(k, "").ifBlank { null }?.let { return@withContext it }
+        if (!enabled()) return@withContext null
+        try {
+            val a = get("/watch/providers/tv", "watch_region=US").optJSONArray("results") ?: return@withContext null
+            var u: String? = null
+            for (i in 0 until a.length()) { val x = a.getJSONObject(i); if (x.optInt("provider_id") == id) { val lp = x.optString("logo_path", ""); if (lp.isNotBlank() && lp != "null") u = IMG + "w300" + lp; break } }
+            if (u != null) Prefs.put(k, u)
+            u
         } catch (_: Exception) { null }
     }
     /** films like this one */
@@ -399,7 +420,11 @@ object Subs {
     private fun langs() = Prefs.subLangs.split(',').map { it.trim().lowercase() }.filter { it.length == 2 }
 
     suspend fun search(rawTitle: String, season: Int? = null, episode: Int? = null): List<SubResult> = withContext(Dispatchers.IO) {
-        val (title, year) = cleanTitle(rawTitle)
+        // by the film's real name and year (TMDB), not by the provider's file name; the cleaned name only when TMDB does not know it
+        val (t0, y0) = cleanTitle(rawTitle)
+        val known = try { Tmdb.find(rawTitle, tv = season != null) } catch (e: Exception) { null }
+        val title = known?.title?.ifBlank { null } ?: t0
+        val year = known?.year?.take(4)?.takeIf { it.length == 4 } ?: y0
         val out = ArrayList<SubResult>()
         val errors = ArrayList<String>()
         try { out += podnapisi(title, year, season, episode) } catch (e: Exception) { errors += "Podnapisi: ${e.message}" }

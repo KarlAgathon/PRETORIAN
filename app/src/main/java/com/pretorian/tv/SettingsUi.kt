@@ -708,6 +708,10 @@ fun ResetSection(name: String, keys: List<String>, onDone: () -> Unit) {
 
 /** Keeps the focus on the row you worked on: after a choice, a switch or a closed list the page is drawn again
  *  and the same row takes the focus back (it never jumps up to the menu). */
+/** settings rows are solid, so the background picture never shows through them */
+val SolidRow: Color get() = androidx.compose.ui.graphics.Color(0xFF1B1B1E).let { base -> C.Rail.compositeOverSafe(base) }
+private fun Color.compositeOverSafe(b: Color): Color { val a = alpha; return Color(red * a + b.red * (1 - a), green * a + b.green * (1 - a), blue * a + b.blue * (1 - a), 1f) }
+
 object SetFocus { var last: String? = null; var pending = false; var tick by mutableIntStateOf(0) }
 
 @Composable
@@ -741,19 +745,19 @@ fun SetRow(title: String, sub: String? = null, value: String? = null, arrow: Str
     val fr = setFocusFr(id, focusRequester)
     Focusable(modifier = Modifier.fillMaxWidth().heightIn(min = if (sub != null) 56.dp else 48.dp).border(1.dp, C.Line, Rnd(12.dp)),
         onClick = { SetFocus.last = id; SetFocus.pending = true; onClick() }, onMenu = onLong, onFocus = { SetFocus.last = id },
-        focusRequester = fr, shape = Rnd(12.dp), normal = C.Rail, focused = C.Red, zoom = 1.01f) { f ->
+        focusRequester = fr, shape = Rnd(12.dp), normal = SolidRow, focused = C.Red, zoom = 1.01f) { f ->
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 10.dp, top = 7.dp, bottom = 7.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    T(title, 15.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, maxLines = 1)
-                    if (new) Box(Modifier.clip(Rnd(4.dp)).background(C.Green.copy(alpha = 0.2f)).padding(horizontal = 4.dp)) { T("NOVO", 8.sp, C.Green, FontWeight.Bold) }
+                    T(title, 15.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, maxLines = 2)
+                    // no "NEW" badges in Settings (approved: calm rows)
                 }
                 if (sub != null) T(sub, 12.sp, if (f) C.OnRed.copy(alpha = 0.65f) else C.Muted, maxLines = 2)
             }
             if (value != null || arrow.isNotEmpty()) Row(Modifier.clip(Rnd(9.dp)).background(if (f) Color(0x14000000) else C.Card)
                 .border(1.dp, if (f) Color(0x26000000) else C.Line, Rnd(9.dp)).padding(horizontal = 10.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                if (value != null) T(value, 14.sp, if (f) C.OnRed else (valueColor ?: C.Text), FontWeight.SemiBold, maxLines = 1, modifier = Modifier.widthIn(max = 220.dp))
+                if (value != null) T(value, 14.sp, if (f) C.OnRed else (valueColor ?: C.Text), FontWeight.SemiBold, maxLines = 1, modifier = Modifier.widthIn(max = 170.dp))
                 if (arrow.isNotEmpty()) T(arrow, 10.sp, if (f) C.OnRed else C.Muted)
             }
         }
@@ -820,12 +824,11 @@ fun SetSwitch(title: String, sub: String? = null, on: Boolean, new: Boolean = fa
     var cur by remember(on) { mutableStateOf(on) }
     Focusable(modifier = Modifier.fillMaxWidth().heightIn(min = if (sub != null) 54.dp else 46.dp).border(1.dp, C.Line, Rnd(12.dp)),
         onClick = { SetFocus.last = id; cur = !cur; onChange(cur) }, onMenu = onLong, onFocus = { SetFocus.last = id }, focusRequester = fr,
-        shape = Rnd(12.dp), normal = C.Rail, focused = C.Red, zoom = 1.01f) { f ->
+        shape = Rnd(12.dp), normal = SolidRow, focused = C.Red, zoom = 1.01f) { f ->
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 7.dp, bottom = 7.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    T(title, 15.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, maxLines = 1)
-                    if (new) Box(Modifier.clip(Rnd(4.dp)).background(Color(0xFFFBBF24)).padding(horizontal = 4.dp)) { T("NOVO", 8.sp, Color(0xFF111111), FontWeight.Bold) }
+                    T(title, 15.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, maxLines = 2)
                 }
                 if (sub != null) T(sub, 12.sp, if (f) C.OnRed.copy(alpha = 0.65f) else C.Muted, maxLines = 2)
             }
@@ -853,7 +856,7 @@ fun SetSlider(title: String, sub: String?, value: Int, min: Int, max: Int, step:
     }
     Focusable(modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).border(1.dp, C.Line, Rnd(12.dp)),
         onClick = { SetFocus.last = id; SliderOpen.id = "sl:$title" }, onFocus = { SetFocus.last = id }, focusRequester = fr,
-        shape = Rnd(12.dp), normal = C.Rail, focused = C.Red, zoom = 1.01f) { f ->
+        shape = Rnd(12.dp), normal = SolidRow, focused = C.Red, zoom = 1.01f) { f ->
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 9.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 T(title, 15.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
@@ -1265,7 +1268,7 @@ private fun SportV2() {
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             // ---------------------------------------------------------- left: what you follow
             Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                T("Sports Center", 20.sp, C.Text, FontWeight.Bold)
+                T("Sportski centar", 20.sp, C.Text, FontWeight.Bold)
                 // one drop-down for the sports: only how many are chosen on the row; All / None / each, stays open until Back
                 SetSection("Sportovi")
                 val en = csv("sport_enabled", "football").toMutableSet()
@@ -1339,7 +1342,7 @@ private fun SportV2() {
                     SportChip("Ništa", on.isEmpty()) { save(emptySet()) }
                 }
                 groups.forEach { (title, abbrs) ->
-                    Kicker(title, modifier = Modifier.padding(top = 6.dp))
+                    Kicker(tr(title), modifier = Modifier.padding(top = 6.dp))
                     abbrs.forEach { a ->
                         val lg = Sports.LEAGUES.firstOrNull { it.abbr == a } ?: return@forEach
                         CheckRow(tr(lg.name), a in on) { save(if (a in on) on - a else on + a) }
@@ -1367,7 +1370,7 @@ private fun RemindersV2(nav: Nav) {
         SetPage("Podsjetnici") {
             val all = Reminders.all().filter { it.start > System.currentTimeMillis() - 3600_000L }.sortedBy { it.start }
             SetSection(trf("Nadolazeći · %s", all.size))
-            if (all.isEmpty()) T("Nema podsjetnika. U programu kanala ili Sportu: OK na emisiji › Podsjeti me.", 12.sp, C.Muted, maxLines = 2)
+            if (all.isEmpty()) T("Nema podsjetnika. U TV vodiču ili Sportu: OK na emisiji › Podsjeti me.", 12.sp, C.Muted, maxLines = 2)
             all.forEach { r ->
                 SetRow(r.title, java.text.SimpleDateFormat("EEE d. M. HH:mm", java.util.Locale(Look.lang)).format(java.util.Date(r.start)) + (r.channelName?.let { " · $it" } ?: ""), arrow = "›",
                     onLong = { menu = r }) { menu = r }

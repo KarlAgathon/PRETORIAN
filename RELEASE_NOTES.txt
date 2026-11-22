@@ -1,3 +1,16 @@
+Media Center 2.3.3
+
+• Settings › Playlists opens again, so playlists can be added and edited
+• Settings: the section names stay readable inside a page; Sports Center and Reminders cleaned up – names no longer cut, no "NEW" badges, solid rows, one language
+• Film page: Audio, Subtitles and Online subtitles open the real choice; what you choose is used when you press Watch
+• Film page: a description from a second source when the provider has none; no "No description available" line
+• Trailer: red play icon
+• Films and series: bigger posters, about five at once, centred
+• Series episodes: no empty blurred pictures; the real episode names; hold OK shows the episode description at once
+• Online subtitles: searched by the film's real name and year; English and Croatian by default
+• Series › Streaming: shows the services stream in your country too, better matching with your playlist, the services' app logos
+• Sport: team names without channel numbers, no empty grey squares, one row of filters (All, Live, Coming up, Finished), no refresh notices, the match time no longer runs into the team name
+
 Media Center 2.3.2
 
 • Films and series: the poster row has its own space under the buttons and never runs over them; whole posters fill the row

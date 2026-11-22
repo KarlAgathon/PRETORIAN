@@ -2584,4 +2584,5 @@ Titlovi se biraju u plejeru|Субтитры выбираются в плеер�
 Filteri|Фильтры
 Izabrano|Выбрано
 Drži OK za opis epizode|Удерживайте OK для описания серии
+Evropski klubovi|Европейские клубы
 """.trimIndent()
