@@ -1,5 +1,6 @@
-Media Center 2.0.0
+Media Center 2.0.1
 
+• First-time setup: the language panel scrolls on small screens, Continue is always reachable
 A fresh start: new name, new look, simpler from the first screen.
 • New identity: Media Center, new icon and banner
 • One design for everyone: Monochrome Silver (black, charcoal, silver, white)

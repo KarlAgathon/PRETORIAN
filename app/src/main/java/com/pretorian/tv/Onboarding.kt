@@ -55,8 +55,9 @@ fun OnboardingScreen(nav: Nav) {
     var step by remember { mutableIntStateOf(if (first) 2 else Onboard.step.coerceIn(0, 2)) }
     LaunchedEffect(step) { Onboard.step = step }
     BackHandler(enabled = step > 0 && !first) { step-- }
-    Box(Modifier.fillMaxSize().background(Color(0x99000000)), contentAlignment = Alignment.Center) {
-        Column(Modifier.widthIn(max = 860.dp).fillMaxWidth(0.72f).dawnGlass(22.dp).padding(horizontal = 40.dp, vertical = 30.dp),
+    Box(Modifier.fillMaxSize().background(Color(0x99000000)).padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+        // the panel scrolls when the screen is small (phones, big text): Continue is always reachable
+        Column(Modifier.widthIn(max = 900.dp).fillMaxWidth(0.78f).dawnGlass(22.dp).verticalScroll(rememberScrollState()).padding(horizontal = 36.dp, vertical = 26.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)) {
             if (!first) Row(verticalAlignment = Alignment.CenterVertically) {
                 T("PRVO POKRETANJE", 12.sp, C.Muted, FontWeight.Bold, modifier = Modifier.weight(1f))
@@ -80,24 +81,24 @@ private fun LanguageStep(onNext: () -> Unit) {
     // English first, then German, then the rest in the app's order; the order never follows the device language
     val langs = remember { Langs.APP.sortedBy { when (it.code) { "en" -> 0; "de" -> 1; else -> 2 } } }
     key(rev) {
-        T("Dobrodošli u vaš media centar.", 30.sp, C.Text, FontWeight.Bold)
+        T("Dobrodošli u vaš media centar.", 26.sp, C.Text, FontWeight.Bold)
         T("Nova era zabave počinje ovdje.", 17.sp, C.Soft)
         T("Složeno iznutra. Jednostavno spolja.", 13.sp, C.Muted)
         Spacer(Modifier.height(4.dp))
-        langs.chunked(2).forEachIndexed { r, pair ->
+        langs.chunked(3).forEachIndexed { r, pair ->
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 pair.forEachIndexed { c, l ->
                     val sel = l.code == Look.lang
                     Focusable(onClick = { setAppLang(ctx, l.code); rev++ }, focusRequester = if (sel || (r == 0 && c == 0 && langs.none { it.code == Look.lang })) firstLang else null,
                         shape = Rnd(12.dp), normal = if (sel) C.CardHi else Color.Transparent, focused = C.Red, focusBorderColor = Color.Transparent, zoom = 1f,
-                        modifier = Modifier.weight(1f).height(46.dp)) { f ->
+                        modifier = Modifier.weight(1f).height(42.dp)) { f ->
                         Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             T(l.native, 16.sp, if (f) C.OnRed else C.Text, if (sel) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
                             if (sel) Ico(R.drawable.lc_check, 16.dp, if (f) C.OnRed else C.Text)
                         }
                     }
                 }
-                if (pair.size == 1) Spacer(Modifier.weight(1f))
+                repeat(3 - pair.size) { Spacer(Modifier.weight(1f)) }
             }
         }
         Spacer(Modifier.height(4.dp))

@@ -236,7 +236,10 @@ private fun DawnTopBar(top: Screen, menu: Boolean) {
     val section = if (menu) "" else when (top) {
         Screen.Tv -> "TV"; Screen.Movies, is Screen.MovieDetail -> "Filmovi"; Screen.Series, is Screen.SeriesDetail -> "Serije"
         Screen.Catchup -> "Catch-up"; Screen.Sports -> "Sport"; Screen.Search -> "Pretraga"
-        Screen.Settings, Screen.AddPlaylist -> "Postavke"; else -> ""
+        Screen.Settings -> "Postavke"
+        // first-time setup has no section title
+        Screen.AddPlaylist -> if (Store.playlists(LocalContext.current).isEmpty()) "" else "Postavke"
+        else -> ""
     }
     var now by remember { mutableStateOf(Date()) }
     LaunchedEffect(Unit) { while (true) { now = Date(); delay(15_000) } }
