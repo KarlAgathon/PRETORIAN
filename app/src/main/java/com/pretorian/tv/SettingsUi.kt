@@ -314,19 +314,15 @@ fun AddPlaylistScreen(nav: Nav) {
     }
     val qr = remember(phoneUrl) { phoneUrl?.let { PhoneLink.qr(it) }?.asImageBitmap() }
 
+    val saveFr = remember { FocusRequester() }
+    // phone "Done": the fields are filled and the focus waits on "Save and load" (nothing is imported by itself)
+    LaunchedEffect(phoneGot) { if (phoneGot) { delay(150); saveFr.tryFocus() } }
     Column(Modifier.fillMaxSize()) {
         Header(if (old != null) "Uredi playlistu" else "Dodaj playlistu")
-        Column(Modifier.fillMaxSize().padding(horizontal = 36.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Box(Modifier.weight(1f)) { Segmented(listOf("Xtream Codes", "M3U playlista", "Stalker portal"), tab) { tab = it } }
-                if (qr != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        T(if (phoneGot) "✓ Primljeno s telefona" else "Unesi s telefona", 15.sp, if (phoneGot) C.Green else C.Text, FontWeight.SemiBold)
-                        T("skeniraj kamerom · ista kućna mreža", 12.sp, C.Muted)
-                    }
-                    androidx.compose.foundation.Image(qr, null, Modifier.size(104.dp).clip(Rnd(10.dp)).background(Color.White).padding(4.dp))
-                }
-            }
+        // two columns (approved): the form on the left, the phone QR always on the right
+        Row(Modifier.fillMaxSize().padding(horizontal = 36.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+        Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Segmented(listOf("Xtream Codes", "M3U playlista", "Stalker portal"), tab) { tab = it }
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Field("Naziv playliste", name, { name = it }, Modifier.weight(1f))
                 when (tab) {
@@ -356,7 +352,7 @@ fun AddPlaylistScreen(nav: Nav) {
             T("Dugačke linkove i lozinke možeš kucati s telefona: Google TV aplikacija › Daljinski › ikona tastature.", 12.sp, C.Muted, maxLines = 2)
             error?.let { T(it, 14.sp, C.Danger, maxLines = 3) }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(if (busy) "Provjeravam…" else "Spremi i učitaj", R.drawable.lc_check, primary = true) {
+                Button(if (busy) "Provjeravam…" else "Spremi i učitaj", R.drawable.lc_check, primary = true, focusRequester = saveFr) {
                     if (busy) return@Button
                     val base = Playlist(
                         id = old?.id ?: System.currentTimeMillis().toString(),
@@ -389,13 +385,14 @@ fun AddPlaylistScreen(nav: Nav) {
                                 EditPlaylist.target = null; Repo.clear(); Repo.dropCatalogs(); nav.playlistsChanged(); nav.back()
                                 if (pl.active) Import.run(pl, reset = true) else CatalogDb.forget(old.id)
                             } else {
-                                Store.savePlaylists(ctx, Store.playlists(ctx) + pl.copy(active = true))
+                                // only one playlist is active (approved): the new one switches the others off
+                                Store.savePlaylists(ctx, Store.playlists(ctx).map { it.copy(active = false) } + pl.copy(active = true))
                                 Import.run(pl.copy(active = true))
                                 Toast.makeText(ctx, if (pl.type != SourceType.M3U) tr("Povezano ✓") else trf("Učitano: %s", info), Toast.LENGTH_LONG).show()
                                 nav.playlistsChanged(); nav.root(Screen.Home)
                             }
                         } catch (e: Exception) {
-                            error = trf("Nije uspjelo: %s", e.message ?: e.javaClass.simpleName)
+                            error = connectionError(e)
                         } finally { busy = false }
                     }
                 }
@@ -403,6 +400,28 @@ fun AddPlaylistScreen(nav: Nav) {
                 else if (Look.age) Button("Nazad", R.drawable.lc_x) { Welcome.tab = -1 }
             }
         }
+        Column(Modifier.width(290.dp).padding(top = 4.dp).clip(Rnd(16.dp)).background(Color(0x14FFFFFF)).border(1.dp, Silver.Border, Rnd(16.dp)).padding(18.dp),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            T(if (phoneGot) "✓ Primljeno s telefona" else "Unesi s telefona", 17.sp, if (phoneGot) C.Green else C.Text, FontWeight.SemiBold)
+            if (qr != null) androidx.compose.foundation.Image(qr, null, Modifier.size(200.dp).clip(Rnd(12.dp)).background(Color.White).padding(6.dp))
+            else T("QR kod nije dostupan bez kućne mreže.", 13.sp, C.Muted, maxLines = 3)
+            T("Skeniraj kamerom telefona (ista kućna mreža), upiši podatke i pritisni Gotovo.", 13.sp, C.Soft, maxLines = 4)
+        }
+        }
+    }
+}
+
+/** Connection errors in plain words instead of technical messages. */
+private fun connectionError(e: Exception): String {
+    val m = (e.message ?: "").lowercase()
+    return when {
+        e is java.net.UnknownHostException || "unable to resolve" in m -> tr("Server nije pronađen. Provjeri adresu.")
+        e is java.net.SocketTimeoutException || "timeout" in m || "timed out" in m -> tr("Server ne odgovara. Pokušaj ponovo malo kasnije.")
+        e is java.net.ConnectException || "refused" in m -> tr("Veza sa serverom odbijena. Provjeri adresu i port.")
+        "401" in m || "403" in m || "auth" in m || "lozink" in m -> tr("Pogrešno korisničko ime ili lozinka.")
+        e is javax.net.ssl.SSLException -> tr("Sigurna veza nije uspjela. Probaj adresu s http://")
+        "404" in m -> tr("Adresa ne postoji na serveru. Provjeri link.")
+        else -> trf("Nije uspjelo: %s", e.message ?: e.javaClass.simpleName)
     }
 }
 

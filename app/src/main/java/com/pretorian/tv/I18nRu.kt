@@ -2561,4 +2561,12 @@ ako titl kasni ili žuri|если субтитры отстают или спе�
 Obrisati zadnje pretrage za ovu kategoriju?|Удалить последние поиски для этой категории?
 Obrisati sva obavještenja?|Удалить все уведомления?
 Trajanje nepoznato|Срок неизвестен
+QR kod nije dostupan bez kućne mreže.|QR-код недоступен без домашней сети.
+Skeniraj kamerom telefona (ista kućna mreža), upiši podatke i pritisni Gotovo.|Отсканируй камерой телефона (та же домашняя сеть), введи данные и нажми Готово.
+Server nije pronađen. Provjeri adresu.|Сервер не найден. Проверь адрес.
+Server ne odgovara. Pokušaj ponovo malo kasnije.|Сервер не отвечает. Попробуй чуть позже.
+Veza sa serverom odbijena. Provjeri adresu i port.|Соединение отклонено. Проверь адрес и порт.
+Pogrešno korisničko ime ili lozinka.|Неверное имя пользователя или пароль.
+Sigurna veza nije uspjela. Probaj adresu s http://|Защищённое соединение не удалось. Попробуй адрес с http://
+Adresa ne postoji na serveru. Provjeri link.|Адрес не существует на сервере. Проверь ссылку.
 """.trimIndent()

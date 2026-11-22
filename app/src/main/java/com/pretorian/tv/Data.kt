@@ -157,14 +157,14 @@ object Store {
 
     fun byId(c: Context, id: String?): Playlist? = playlists(c).firstOrNull { it.id == id } ?: active(c)
 
-    /** several playlists are on at once: adding or switching one on never switches the others off */
-    var multi: Boolean get() = true; set(@Suppress("UNUSED_PARAMETER") v) {}
+    /** only one playlist is active (approved): switching one on switches the others off */
+    var multi: Boolean get() = false; set(@Suppress("UNUSED_PARAMETER") v) {}
 
     fun open(c: Context, id: String) { Prefs.put("pl_open", id) }
 
-    /** switches one playlist on or off; the others stay as they are (all may be off) */
+    /** switches one playlist on (the others go off) or off */
     fun activate(c: Context, id: String) {
-        val l = playlists(c).map { if (it.id == id) it.copy(active = !it.active) else it }
+        val l = playlists(c).map { if (it.id == id) it.copy(active = !it.active) else it.copy(active = false) }
         savePlaylists(c, l)
         if (l.firstOrNull { it.id == id }?.active == true) open(c, id)
     }
