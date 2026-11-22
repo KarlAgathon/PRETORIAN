@@ -33,6 +33,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -301,6 +302,12 @@ fun resumeContinue(ctx: Context, nav: Nav, pr: Progress, fromStart: Boolean) {
 }
 
 /** Continue watching: posters with a thin progress line. OK resumes at once; hold OK: Continue · Play from the beginning · Remove. */
+/** Home › Continue watching: Movies (or Series) opens straight on its Continue watching list; Back goes to that section's menu. */
+fun openContinue(series: Boolean) {
+    VodMemory.stack[if (series) "series" else "vod"] = mutableStateListOf(VL.Menu, VL.Gallery(VG_CONT, tr("Nastavi gledati"), R.drawable.lc_play))
+    VodMemory.returning = true
+}
+
 @Composable
 private fun ContinueGallery(series: Boolean, mem: HashMap<String, Int>, key: String, nav: Nav) {
     val ctx = LocalContext.current
@@ -362,7 +369,15 @@ private fun StreamingGrid(mem: HashMap<String, Int>, onPick: (Service) -> Unit) 
                 Focusable(onClick = { mem["st"] = i; onPick(s) }, onFocus = { mem["st"] = i }, focusRequester = if (i == start) fr else null,
                     shape = Rnd(16.dp), normal = Color(0xCC161618), focused = Color(0xCC161618), focusBorderColor = Color.White, zoom = 1.03f,
                     modifier = Modifier.fillMaxWidth().height(118.dp).border(1.dp, Color(0x33FFFFFF), Rnd(16.dp))) { f ->
-                    T(s.name, 26.sp, Color.White, if (f) FontWeight.Bold else FontWeight.SemiBold, modifier = Modifier.align(Alignment.Center))
+                    // the service's original logo from TMDB on a light plate, the name below; no logo → only the name
+                    val logo by produceState<String?>(null, s.networks) { value = try { Tmdb.networkLogo(s.networks) } catch (_: Exception) { null } }
+                    if (logo == null) T(s.name, 26.sp, Color.White, if (f) FontWeight.Bold else FontWeight.SemiBold, modifier = Modifier.align(Alignment.Center))
+                    else Column(Modifier.fillMaxSize().padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Box(Modifier.fillMaxWidth().weight(1f).clip(Rnd(10.dp)).background(Color(0xFFE6E7E9)).padding(horizontal = 18.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
+                            coil.compose.AsyncImage(model = logo, contentDescription = s.name, contentScale = androidx.compose.ui.layout.ContentScale.Fit, modifier = Modifier.fillMaxSize())
+                        }
+                        T(s.name, 14.sp, if (f) Color.White else C.Soft, if (f) FontWeight.Bold else FontWeight.Medium, maxLines = 1)
+                    }
                 }
             }
         }

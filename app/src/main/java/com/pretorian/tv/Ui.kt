@@ -123,7 +123,7 @@ fun Focusable(
     val isFocused by src.collectIsFocusedAsState()
     LaunchedEffect(isFocused) { if (isFocused) onFocus?.invoke() }
     // Lite: no zoom animation on focus (lighter for weak boxes)
-    val scale by animateFloatAsState(if (isFocused && !Perf.lite) zoom else 1f, label = "zoom")
+    val scale by animateFloatAsState(if (isFocused) zoom else 1f, label = "zoom")
     var m = modifier
     if (focusRequester != null) m = m.focusRequester(focusRequester)
     val long = onMenu ?: onLongClick
@@ -150,7 +150,7 @@ fun Focusable(
             .clip(shape)
             .background(if (isFocused) (focused ?: C.CardFocus) else normal)
             .border(1.5.dp, if (isFocused) (focusBorderColor ?: C.Red.copy(alpha = (0.45f + FocusCard.pct / 180f).coerceIn(0.5f, 1f))) else (borderColor ?: Color.Transparent), shape)
-            .combinedClickable(interactionSource = src, indication = null, onClick = onClick, onLongClick = null),
+            .combinedClickable(interactionSource = src, indication = null, onClick = onClick, onLongClick = long),
         content = { content(isFocused) },
     )
 }

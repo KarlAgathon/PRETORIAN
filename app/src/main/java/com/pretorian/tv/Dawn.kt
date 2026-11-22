@@ -115,7 +115,7 @@ fun DawnBackground() {
     }
 }
 
-private data class DawnItem(val screen: Screen, val icon: Int, val label: String, val badge: Int = 0, val kind: String? = null)
+private data class DawnItem(val screen: Screen, val icon: Int, val label: String, val badge: Int = 0, val kind: String? = null, val go: (() -> Unit)? = null)
 
 /** The whole app: on Home only the left menu (nothing else); every section replaces it and fills the screen. */
 @Composable
@@ -180,8 +180,23 @@ fun DawnHintBar(hints: List<Pair<String, String>>) {
 /** Home: the six sections, nothing else. A small number beside Movies / Series = new items; long OK there = Clear notifications. */
 @Composable
 private fun DawnMenu(nav: Nav) {
-    @Suppress("UNUSED_VARIABLE") val r = NewContent.rev + Follow.rev
-    val items = listOf(
+    @Suppress("UNUSED_VARIABLE") val r = NewContent.rev + Follow.rev + Watch.rev + Favs.rev + Recent.rev
+    val ctx = LocalContext.current
+    // shortcuts on top (approved): only when they have something in them
+    val cont = remember(Watch.rev) { Watch.continueList(ctx).filter { !ContinueHidden.hidden(it.url, it.ts) } }
+    val recent = remember(Recent.rev) { Recent.list().isNotEmpty() }
+    val favs = remember(Favs.rev) { Favs.all(ctx).isNotEmpty() }
+    val shortcuts = buildList {
+        if (cont.isNotEmpty()) {
+            val series = cont.none { it.series == null }
+            add(DawnItem(if (series) Screen.Series else Screen.Movies, R.drawable.lc_play, "Nastavi gledati", go = { openContinue(series); nav.root(if (series) Screen.Series else Screen.Movies) }))
+        }
+        if (recent) add(DawnItem(Screen.Tv, R.drawable.lc_history, "Nedavno gledano", go = {
+            TvMemory.group = GroupRef(null, Category(RECENT_GROUP, tr("Nedavno gledano"))); TvMemory.channel = 0; nav.root(Screen.Tv) }))
+        if (favs) add(DawnItem(Screen.Tv, R.drawable.lc_star, "Favoriti", go = {
+            TvMemory.group = GroupRef(null, Category(FAV_PREFIX + Favs.mainId(ctx), tr("Favoriti"))); TvMemory.channel = 0; nav.root(Screen.Tv) }))
+    }
+    val items = shortcuts + listOf(
         DawnItem(Screen.Tv, R.drawable.lc_tv, "TV"),
         DawnItem(Screen.Movies, R.drawable.lc_film, "Filmovi", NewContent.count("vod"), "vod"),
         DawnItem(Screen.Series, R.drawable.lc_layers, "Serije", NewContent.count("series") + Follow.fresh().size, "series"),
@@ -190,12 +205,12 @@ private fun DawnMenu(nav: Nav) {
         DawnItem(Screen.Search, R.drawable.lc_search, "Pretraga"),
         DawnItem(Screen.Settings, R.drawable.lc_settings, "Postavke", if (Updater.available != null) 1 else 0, "system"),
     )
-    val frs = remember { items.map { FocusRequester() } }
+    val frs = remember(items.size) { items.map { FocusRequester() } }
     var clear by remember { mutableStateOf<DawnItem?>(null) }
     DisposableEffect(Unit) { onDispose { Chrome.inRail = false } }
     // back from a section: the focus waits on that section's item (first start: TV)
     LaunchedEffect(Unit) {
-        val i = items.indexOfFirst { it.screen == (Dawn.last ?: Screen.Tv) }.coerceAtLeast(0)
+        val i = items.indexOfFirst { it.go == null && it.screen == (Dawn.last ?: Screen.Tv) }.coerceAtLeast(0)
         delay(120); frs[i].tryFocus()
     }
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -209,8 +224,8 @@ private fun DawnMenu(nav: Nav) {
                 modifier = Modifier.fillMaxWidth().height(rowH),
                 onClick = {
                     Chrome.inRail = false
-                    Dawn.last = it.screen
-                    nav.root(it.screen)
+                    if (it.go != null) it.go.invoke()
+                    else { Dawn.last = it.screen; nav.root(it.screen) }
                 },
                 onMenu = if (it.badge > 0 && it.kind != null && it.kind != "system") ({ clear = it }) else null,
                 focusRequester = frs[i],
@@ -372,7 +387,7 @@ fun DawnOptions(ch: Channel?, nav: Nav, modifier: Modifier) {
             val p = Store.byId(ctx, c.pid)
             if (p != null && Catchups.has(p, c)) { Preview.stop(); PreviewSel.ch = null; CatchupOpen.ch = c; nav.push(Screen.Catchup) } else toast("Ovaj kanal nema arhivu")
         }
-        Opt(R.drawable.lc_more_horizontal) { more = true }
+        Opt(R.drawable.lc_settings) { more = true }
     }
     // sleep timer set here also ends the preview and goes back to the menu
     LaunchedEffect(Sleep.until) {
@@ -383,16 +398,20 @@ fun DawnOptions(ch: Channel?, nav: Nav, modifier: Modifier) {
     epg?.let { c -> Popup(c.name, { epg = null }, width = 720.dp) { EpgList(c, 16, Modifier.fillMaxWidth().height(440.dp)) } }
     fmt?.let { c -> Popup("Format", { fmt = null }) {
         val cur = Prefs.long("fmt_v2_" + c.url.hashCode(), 0).toInt()
-        FORMATS.forEachIndexed { i, label -> OptionRow(tr(label), R.drawable.lc_maximize, selected = cur == i) { Prefs.put("fmt_v2_" + c.url.hashCode(), i.toLong()); PreviewFmt.rev++; fmt = null } }
+        VOD_FORMATS.forEach { (i, label) -> OptionRow(tr(label), R.drawable.lc_maximize, selected = cur == i) { Prefs.put("fmt_v2_" + c.url.hashCode(), i.toLong()); PreviewFmt.rev++; fmt = null } }
     } }
-    // More: exactly six entries (approved), each says honestly when this channel cannot do it
-    if (more) Popup(ch?.name ?: tr("Više"), { more = false }) {
-        OptionRow("Titlovi", R.drawable.lc_captions) { if (live()) { more = false; sub = 1 } }
-        OptionRow("Audio", R.drawable.lc_volume) { if (live()) { more = false; sub = 2 } }
+    // Settings (gear, approved): Channel info · Audio · Subtitles · Sleep timer · External player · EPG settings — only what works now
+    if (more) Popup(tr("Postavke"), { more = false }) {
+        val pl = Preview.player
+        val playingHere = pl != null && PreviewSel.ch != null
+        val texts = if (playingHere) pl!!.currentTracks.groups.filter { it.type == androidx.media3.common.C.TRACK_TYPE_TEXT }.sumOf { it.length } else 0
+        val auds = if (playingHere) pl!!.currentTracks.groups.filter { it.type == androidx.media3.common.C.TRACK_TYPE_AUDIO }.sumOf { it.length } else 0
+        if (playingHere) OptionRow("Informacije o kanalu", R.drawable.lc_info) { more = false; sub = 4 }
+        if (auds > 1) OptionRow("Audio", R.drawable.lc_volume) { more = false; sub = 2 }
+        if (texts > 0) OptionRow("Titlovi", R.drawable.lc_captions) { more = false; sub = 1 }
         OptionRow(if (Sleep.until > 0) trf("Tajmer: %s min", ((Sleep.until - System.currentTimeMillis()) / 60_000 + 1).coerceAtLeast(1)) else tr("Tajmer za spavanje"), R.drawable.lc_moon) { more = false; sub = 3 }
-        OptionRow("Informacije o streamu", R.drawable.lc_info) { if (live()) { more = false; sub = 4 } }
-        OptionRow("Vanjski plejer", R.drawable.lc_external_link) { if (ch != null) { more = false; sub = 5 } }
-        OptionRow("Pomak uživo", R.drawable.lc_rotate_ccw, sub = tr("Dostupno u cijelom ekranu")) { toast("Pritisni OK još jednom za cijeli ekran") }
+        if (ch != null) OptionRow("Vanjski plejer", R.drawable.lc_external_link) { more = false; sub = 5 }
+        if (ch != null) OptionRow("EPG postavke", R.drawable.lc_calendar_clock, value = EpgShift.label(EpgShift.chMin(ch.url))) { more = false; sub = 6 }
     }
     when (sub) {
         1 -> DawnTracks(androidx.media3.common.C.TRACK_TYPE_TEXT) { sub = 0 }
@@ -412,6 +431,7 @@ fun DawnOptions(ch: Channel?, nav: Nav, modifier: Modifier) {
             }
         }
         5 -> ch?.let { c -> ExternalPicker(c.url, c.name, 0L, onDismiss = { sub = 0 }) }
+        6 -> ch?.let { c -> EpgShiftPopup(c) { sub = 0 } }
     }
 }
 
@@ -428,10 +448,15 @@ private fun DawnTracks(type: Int, onDismiss: () -> Unit) {
             if (text) OptionRow("Isključeno", R.drawable.lc_x) {
                 p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setTrackTypeDisabled(type, true).build(); onDismiss()
             }
+            // only the language; several of the same language get (V1), (V2)
+            val all = groups.flatMap { g -> (0 until g.length).map { g to it } }
+            val langs = all.map { (g, i) -> iso2(g.getTrackFormat(i).language)?.let { Langs.label(it) } ?: tr("Nepoznat jezik") }
+            val seen = HashMap<String, Int>()
+            val names = langs.map { l -> if (langs.count { it == l } > 1) { val n = (seen[l] ?: 0) + 1; seen[l] = n; "$l (V$n)" } else l }
+            var k = 0
             groups.forEach { g ->
                 for (i in 0 until g.length) {
-                    val f = g.getTrackFormat(i)
-                    val name = listOfNotNull(f.label, f.language?.uppercase()).distinct().joinToString(" · ").ifBlank { "#${i + 1}" }
+                    val name = names[k++]
                     OptionRow(name, if (g.isTrackSelected(i)) R.drawable.lc_check else if (text) R.drawable.lc_captions else R.drawable.lc_volume,
                         color = if (g.isTrackSelected(i)) C.Green else null) {
                         p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setTrackTypeDisabled(type, false)

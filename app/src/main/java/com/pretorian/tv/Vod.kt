@@ -758,22 +758,9 @@ data class TrackChoice(val subFile: File? = null, val subOff: Boolean = false, v
 /** Subtitle + audio buttons next to Play: green frame when a subtitle is ready. */
 @Composable
 fun TrackButtons(search: String, season: Int?, episode: Int?, url: String, choice: TrackChoice, onChange: (TrackChoice) -> Unit) {
-    var showSubs by remember { mutableStateOf(false) }
     var showAudio by remember { mutableStateOf(false) }
-    val subText = when {
-        choice.subFile != null -> tr("Titl") + ": " + Langs.label(choice.subFile.nameWithoutExtension.substringAfterLast('_'))
-        choice.sub != null -> tr("Titl") + ": " + choice.sub.title.substringBefore(" · ")
-        choice.subOff -> tr("Bez titla")
-        else -> tr("Titlovi")
-    }
-    Button(subText, R.drawable.lc_captions, outline = if (choice.subFile != null || choice.sub != null) C.Green else null) { showSubs = true }
+    // subtitles are chosen only in the player's one Subtitles menu (Provider + Online)
     Button(if (choice.audio != null) tr("Audio") + ": " + choice.audio.title.substringBefore(" · ") else tr("Audio"), R.drawable.lc_volume) { showAudio = true }
-    if (showSubs) SubtitlePicker(search, season, episode, probeUrl = url,
-        onProbed = { t -> onChange(choice.copy(sub = t, subFile = null, subOff = false)); showSubs = false },
-        onDismiss = { showSubs = false }) { f ->
-        onChange(if (f == null) choice.copy(subFile = null, sub = null, subOff = true) else choice.copy(subFile = f, sub = null, subOff = false))
-        showSubs = false
-    }
     if (showAudio) AudioPicker(url, choice.audio?.title, onDismiss = { showAudio = false }) { t -> onChange(choice.copy(audio = t)); showAudio = false }
 }
 

@@ -176,6 +176,19 @@ object Tmdb {
     }
     /** series made by one network (its originals), most popular first */
     suspend fun network(ids: String): List<Hit> = list("/discover/tv", "language=en-US&sort_by=popularity.desc&with_networks=$ids", 5, tv = true)
+    /** the network's own logo from TMDB (kept on the box); null when TMDB has none — then only the name is shown */
+    suspend fun networkLogo(ids: String): String? = withContext(Dispatchers.IO) {
+        val id = ids.substringBefore("%7C").substringBefore("|")
+        val k = "netlogo_$id"
+        val saved = Prefs.str(k, "?")
+        if (saved != "?") return@withContext saved.ifBlank { null }
+        if (!enabled()) return@withContext null
+        try {
+            val lp = get("/network/$id", "").optString("logo_path", "")
+            val u = if (lp.isNotBlank() && lp != "null") IMG + "w300" + lp else ""
+            Prefs.put(k, u); u.ifBlank { null }
+        } catch (_: Exception) { null }
+    }
     /** films like this one */
     suspend fun similar(rawTitle: String): List<Hit> {
         val m = find(rawTitle, tv = false) ?: return emptyList()

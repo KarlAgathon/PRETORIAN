@@ -1725,6 +1725,9 @@ private fun AppearanceV2() {
             SetDrop("Način rada", trf("Ocjena uređaja %s/100 · %s GB RAM", Perf.score, String.format("%.1f", Perf.ramGb)),
                 Perf.MODES, Perf.mode.coerceIn(0, Perf.MODES.lastIndex)) { Perf.set(it); rev++ }
             T("Lite štedi memoriju i procesor na slabijim uređajima. Izgled i funkcije ostaju isti.", 12.sp, C.Muted, maxLines = 2)
+            // the mode that really runs now (Automatic picks it from RAM and the device score)
+            T(trf("Sada radi: %s", if (Perf.lite) "Lite" else "Full"), 14.sp, C.Text, FontWeight.SemiBold)  // i18n-ignore
+            T(when { Perf.mode == 1 -> "Izabrano ručno."; Perf.mode == 2 -> "Izabrano ručno."; Perf.lite -> "Automatski: uređaj ima manje od 3 GB RAM-a ili nižu ocjenu."; else -> "Automatski: uređaj je dovoljno jak." }, 12.sp, C.Muted, maxLines = 2)
         }
     }
 }

@@ -83,24 +83,35 @@ fun applySubStyle(sv: androidx.media3.ui.SubtitleView) {
  * The subtitle menu of films and series (approved): PROVIDER (the tracks of the stream, every language) and ONLINE
  * (versions in the one chosen language: Bosanski (V1), (V2), (V3)), then "Find more subtitles". OK applies at once.
  */
+/** Provider subtitles show only the language; several of the same language become "English (V1)", "English (V2)". */
+fun subTrackNames(tracks: List<TrackItem>): List<String> {
+    val langs = tracks.map { t ->
+        val f = try { t.group.getTrackFormat(t.index) } catch (_: Exception) { null }
+        iso2(f?.language)?.let { Langs.label(it) } ?: tr("Nepoznat jezik")
+    }
+    val seen = HashMap<String, Int>()
+    return langs.map { l -> if (langs.count { it == l } > 1) { val n = (seen[l] ?: 0) + 1; seen[l] = n; "$l (V$n)" } else l }
+}
+
 @Composable
-fun SubsPanel(item: PlayItem, tracks: List<TrackItem>, current: String?, onDismiss: () -> Unit, onOff: () -> Unit, onTrack: (TrackItem) -> Unit, onFile: (String) -> Unit) {
+fun SubsPanel(item: PlayItem, tracks: List<TrackItem>, current: String?, online: Boolean = true, onDismiss: () -> Unit, onOff: () -> Unit, onTrack: (TrackItem) -> Unit, onFile: (String) -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val search = item.search ?: item.title
     @Suppress("UNUSED_VARIABLE") val r = SmartSubs.rev
-    LaunchedEffect(search) { if (SmartSubs.state(search, item.season, item.episode) == null) SmartSubs.prepare(search, item.season, item.episode) }
+    LaunchedEffect(search) { if (online && SmartSubs.state(search, item.season, item.episode) == null) SmartSubs.prepare(search, item.season, item.episode) }
     var shown by remember { mutableIntStateOf(3) }
     var busy by remember { mutableStateOf<String?>(null) }
     val chosen = remember { mutableStateOf(Prefs.str("subpick_" + item.url.hashCode())) }
     Popup("", onDismiss, width = 620.dp) {
         T("Provider", 22.sp, C.Text, FontWeight.Bold)
         if (tracks.isEmpty()) T("Nije dostupno", 15.sp, C.Soft, modifier = Modifier.padding(start = 8.dp, bottom = 4.dp))
-        tracks.forEach { t -> OptionRow(t.label, R.drawable.lc_message_square, selected = current == null && t.selected) { onTrack(t) } }
-        Box(Modifier.fillMaxWidth().padding(vertical = 6.dp).height(1.dp).background(Color(0x33FFFFFF)))
-        T("Online", 22.sp, C.Text, FontWeight.Bold)
+        val names = subTrackNames(tracks)
+        tracks.forEachIndexed { i, t -> OptionRow(names[i], R.drawable.lc_message_square, selected = current == null && t.selected) { onTrack(t) } }
+        if (online) Box(Modifier.fillMaxWidth().padding(vertical = 6.dp).height(1.dp).background(Color(0x33FFFFFF)))
+        if (online) T("Online", 22.sp, C.Text, FontWeight.Bold)
         val langName = Langs.label(SmartSubs.lang())
-        when (val st = SmartSubs.state(search, item.season, item.episode)) {
+        if (online) when (val st = SmartSubs.state(search, item.season, item.episode)) {
             null, SmartSubs.State.Searching -> T("Tražim titlove…", 15.sp, C.Soft, modifier = Modifier.padding(start = 8.dp))
             SmartSubs.State.None -> T("Nije dostupno", 15.sp, C.Soft, modifier = Modifier.padding(start = 8.dp))
             is SmartSubs.State.Found -> {
@@ -139,7 +150,8 @@ fun SubsPanel(item: PlayItem, tracks: List<TrackItem>, current: String?, onDismi
  * Every choice applies at once; one list at a time, Back goes one step out.
  */
 @Composable
-fun PlayerSettings(series: Boolean, audio: String?, resize: Int, onDismiss: () -> Unit, onAudio: () -> Unit, onFormat: () -> Unit) {
+fun PlayerSettings(series: Boolean, audio: String?, resize: Int, onDismiss: () -> Unit, onAudio: () -> Unit, onFormat: () -> Unit,
+                   onSubDelay: (() -> Unit)? = null, onAudioDelay: (() -> Unit)? = null, audioDelayLabel: String? = null) {
     var sub by remember { mutableStateOf("") }
     var rev by remember { mutableIntStateOf(0) }
     @Suppress("UNUSED_VARIABLE") val rr = rev
@@ -162,6 +174,8 @@ fun PlayerSettings(series: Boolean, audio: String?, resize: Int, onDismiss: () -
             OptionRow("Preskakanje naprijed", R.drawable.lc_rotate_cw, value = trf("+%s s", Prefs.long("skip_fwd", 10))) { sub = "fwd" }
             OptionRow("Preskakanje nazad", R.drawable.lc_rotate_ccw, value = trf("−%s s", Prefs.long("skip_back", 10))) { sub = "back" }
             OptionRow("Format prikaza", R.drawable.lc_rectangle_horizontal, value = tr(VOD_FORMATS.firstOrNull { it.first == resize }?.second ?: "Automatski")) { onFormat() }
+            onSubDelay?.let { f -> OptionRow("Pomak titla", R.drawable.lc_clock, sub = "ako titl kasni ili žuri") { f() } }
+            onAudioDelay?.let { f -> OptionRow("Pomak zvuka", R.drawable.lc_volume, value = audioDelayLabel) { f() } }
         }
         "lang" -> Popup("Titlovi", { sub = "" }) {
             T("Jezik u kojem se titlovi traže online. Titlovi providera ostaju svi dostupni.", 13.sp, C.Soft, maxLines = 3)

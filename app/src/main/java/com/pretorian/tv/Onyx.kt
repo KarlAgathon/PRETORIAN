@@ -98,17 +98,24 @@ object Perf {
         var ms = Prefs.long("perf_speed_ms", -1)
         // the speed test only runs when the mode is "Automatic" (or on "Measure again"): a new install starts in Lite
         // without spending its first seconds on a benchmark
-        if (ms < 0 && (Prefs.long("perf_mode", -1) == 0L || forceMeasure)) {
-            ms = Long.MAX_VALUE
-            repeat(5) { val t0 = System.nanoTime(); var x = 0L; for (i in 0 until 3_000_000) x += (i xor (i shr 3)).toLong()
-                ms = minOf(ms, (System.nanoTime() - t0) / 1_000_000 + (x and 0)) }
-            Prefs.put("perf_speed_ms", ms)
+        // the test runs on a quiet background thread, never on the main thread; the score is updated when it is done
+        if (ms < 0 && (Prefs.long("perf_mode", -1) == 0L || forceMeasure) && !measuring) {
+            measuring = true
+            val app = c.applicationContext
+            Thread {
+                var best = Long.MAX_VALUE
+                repeat(5) { val t0 = System.nanoTime(); var x = 0L; for (i in 0 until 3_000_000) x += (i xor (i shr 3)).toLong()
+                    best = minOf(best, (System.nanoTime() - t0) / 1_000_000 + (x and 0)) }
+                Prefs.put("perf_speed_ms", best)
+                android.os.Handler(android.os.Looper.getMainLooper()).post { measuring = false; try { init(app) } catch (_: Exception) {} }
+            }.apply { priority = Thread.MIN_PRIORITY; isDaemon = true }.start()
         }
         val speed = when { ms < 0 -> 7; ms < 12 -> 15; ms < 20 -> 11; ms < 35 -> 7; ms < 60 -> 3; else -> 0 }
         score = (ram + cpu + os + gpu + speed).coerceIn(0, 100)
         parts = listOf(tr("RAM") to listOf(ram, "/30").joinToString(""), tr("Procesor") to listOf(cpu, "/25").joinToString(""), "Android" to listOf(os, "/15").joinToString(""),  // i18n-ignore
             tr("Čip i grafika") to listOf(gpu, "/15").joinToString(""), tr("Test brzine") to listOf(speed, "/15").joinToString(""))
-        weak = am.isLowRamDevice || ramGb < 2.8 || score < 70
+        // Lite below 3 GB RAM (approved); Lite looks the same as Full, it only saves memory and background work
+        weak = am.isLowRamDevice || ramGb < 3.0 || score < 70
         // a new install (no playlist yet) always starts in Lite, whatever the box; the user switches to Full or Automatic later.
         // Boxes that already had PRETORIAN keep what they had.
         if (Prefs.long("perf_mode", -1) < 0) Prefs.put("perf_mode", if (Store.playlists(c).isEmpty()) 1L else 0L)
@@ -117,6 +124,7 @@ object Perf {
     fun set(m: Int) { mode = m; Prefs.put("perf_mode", m.toLong()) }
     /** About › Box score › Measure again */
     private var forceMeasure = false
+    @Volatile private var measuring = false
     fun remeasure(c: Context) { Prefs.remove("perf_speed_ms"); forceMeasure = true; init(c); forceMeasure = false }
     val MODES = listOf("Automatski", "Lite", "Full")
 }
@@ -136,7 +144,7 @@ fun OnyxImage(url: String?, key: String, modifier: Modifier = Modifier, maxW: In
         // never decode more pixels than the screen shows; Lite also uses half the memory per pixel
         val w = if (highQuality) maxW else if (Perf.lite || Lean.posters) maxW * 2 / 3 else maxW
         val req = remember(url, w) {
-            coil.request.ImageRequest.Builder(ctx).data(url).size(w, w * 3 / 2).allowRgb565(!highQuality && (Perf.lite || Lean.posters)).crossfade(!Perf.lite && !highQuality).build()
+            coil.request.ImageRequest.Builder(ctx).data(url).size(w, w * 3 / 2).allowRgb565(!highQuality && (Perf.lite || Lean.posters)).crossfade(!highQuality).build()
         }
         AsyncImage(model = req, contentDescription = null, contentScale = scale, modifier = modifier, error = fb, placeholder = fb)
     }
@@ -220,7 +228,7 @@ fun WideCard(title: String, sub: String, image: String?, key: String, progress: 
     Column(Modifier.width(height * (250f / 140f)), verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Focusable(onClick = onClick, onMenu = onMenu, focusRequester = fr, shape = Rnd(12.dp), normal = C.Card, zoom = 1.05f, modifier = Modifier.fillMaxWidth().height(height).then(keys)) { f ->
             // the whole poster is shown (never cut); the empty sides get a soft, blurred copy of the same picture
-            if (!Perf.lite) OnyxImage(image, key, Modifier.fillMaxSize().clip(Rnd(12.dp)).blur(18.dp).alpha(0.55f), maxW = 160)
+            OnyxImage(image, key, Modifier.fillMaxSize().clip(Rnd(12.dp)).blur(18.dp).alpha(0.55f), maxW = 160)
             OnyxImage(image, key, Modifier.fillMaxSize().clip(Rnd(12.dp)), maxW = 300, scale = ContentScale.Fit)
             if (f) Box(Modifier.fillMaxSize().border(2.dp, Color.White, Rnd(12.dp)))
             if (progress != null) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Color(0x33FFFFFF))) {
@@ -492,7 +500,7 @@ private fun Shirt(t: Team, size: Dp) {
             val collar = androidx.compose.ui.graphics.Path().apply { moveTo(22 * u, 4 * u); quadraticBezierTo(37 * u, 14 * u, 52 * u, 4 * u) }
             drawPath(collar, trim, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4 * u))
         }
-        if (t.logo != null && !Perf.lite) coil.compose.AsyncImage(model = t.logo, contentDescription = null, modifier = Modifier.size(size * 0.3f).offset(y = size * 0.06f))
+        if (t.logo != null) coil.compose.AsyncImage(model = t.logo, contentDescription = null, modifier = Modifier.size(size * 0.3f).offset(y = size * 0.06f))
     }
 }
 

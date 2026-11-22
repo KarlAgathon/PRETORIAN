@@ -2550,4 +2550,12 @@ Ništa novo od zadnjeg ažuriranja playliste|Ничего нового с пос
 Nijedan film iz kina trenutno nije u tvojoj playlisti|Ни одного фильма из кинотеатров сейчас нет в вашем плейлисте
 Ukloni s moje liste|Удалить из моего списка
 Kanali za ovaj program (%s)|Каналы с этой передачей (%s)
+EPG postavke|Настройки EPG
+Dostupno (%s)|Доступно (%s)
+Sada radi: %s|Сейчас работает: %s
+Izabrano ručno.|Выбрано вручную.
+Automatski: uređaj ima manje od 3 GB RAM-a ili nižu ocjenu.|Автоматически: у устройства меньше 3 ГБ ОЗУ или низкая оценка.
+Automatski: uređaj je dovoljno jak.|Автоматически: устройство достаточно мощное.
+Pomak titla|Задержка субтитров
+ako titl kasni ili žuri|если субтитры отстают или спешат
 """.trimIndent()

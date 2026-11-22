@@ -35,6 +35,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -656,7 +658,15 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                     else -> false
                 }
             }
-            .focusable(),
+            .focusable()
+            // phone / touch screen: a tap on the picture opens the controls (a second tap closes them), like OK on the remote
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = {
+                    if (dialog == null && side == null) {
+                        if (bar) { bar = false; showInfo = false } else { showInfo = true; bar = true }
+                    }
+                })
+            },
     ) {
         // the picture always stays full screen; the lists and the guide open over it (no black hole, no resizing of the picture)
         Box(Modifier.fillMaxSize()) {
@@ -918,7 +928,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                             "pause" -> { if (player.isPlaying) player.pause() else player.play() }
                             "back" -> player.seekTo((player.currentPosition - bwd).coerceAtLeast(0))
                             "fwd" -> player.seekTo(player.currentPosition + fwd)
-                            "subs" -> { bar = false; dialog = "subs2" }
+                            "subs" -> { bar = false; dialog = "subs" }
                             "audio" -> { bar = false; dialog = "audio" }
                             "format" -> { bar = false; dialog = "vfmt" }
                             "settings" -> { bar = false; dialog = "psettings" }
@@ -932,8 +942,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         // upper right, only with the controls open: the other channels with this programme (PROVIDER: in your playlist, selectable)
         if (bar && s.live && sameShow.size > 1 && dialog == null && side == null) {
             Column(Modifier.align(Alignment.TopEnd).padding(top = 28.dp, end = 36.dp).width(360.dp).dawnGlass(16.dp).padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                T(trf("Kanali za ovaj program (%s)", sameShow.size), 15.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 6.dp, bottom = 2.dp))
-                T("PROVIDER", 11.sp, C.Muted, FontWeight.SemiBold, modifier = Modifier.padding(start = 6.dp))
+                T(trf("Dostupno (%s)", sameShow.size), 15.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 6.dp, bottom = 2.dp))
                 sameShow.forEach { c ->
                     val cur = c.url == item.url
                     Focusable(onClick = { if (!cur) { items = listOf(PlayItem(c.name, c.url, c.logo, c.num.toString(), c)) + items.filterNot { it.url == c.url }; index = 0; bar = false } },
@@ -1012,23 +1021,23 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             if (tracksOf(player, MC.TRACK_TYPE_AUDIO).size > 1) OptionRow("Audio", R.drawable.lc_volume, value = tracksOf(player, MC.TRACK_TYPE_AUDIO).firstOrNull { it.selected }?.label ?: "—") { dialog = "audio" }
         }
         // Live › More: Subtitles · Audio Track · Sleep Timer · Stream Information · External Player · Time Shift (only what this stream has)
-        "more" -> Popup(item.title, onDismiss = { dialog = null }) {
-            // exactly six entries, always in this order; what this stream cannot do says so instead of pretending
-            fun na() = android.widget.Toast.makeText(ctx, tr("Nije dostupno za ovaj kanal"), android.widget.Toast.LENGTH_SHORT).show()
+        // Live › Settings (gear, approved): only what works for this stream is shown
+        "more" -> Popup(tr("Postavke"), onDismiss = { dialog = null }) {
             val subs = tracksOf(player, MC.TRACK_TYPE_TEXT); val auds = tracksOf(player, MC.TRACK_TYPE_AUDIO)
-            OptionRow("Titlovi", R.drawable.lc_captions, value = if (subs.isEmpty()) tr("Nije dostupno") else null) { if (subs.isEmpty()) na() else dialog = "subs" }
-            OptionRow("Audio", R.drawable.lc_volume, value = auds.firstOrNull { it.selected }?.label ?: if (auds.isEmpty()) tr("Nije dostupno") else "—") { if (auds.size > 1) dialog = "audio" else na() }
+            OptionRow("Informacije o kanalu", R.drawable.lc_info, value = if (videoH > 0) qualityLabel(videoH) else null) { dialog = "info" }
+            if (auds.size > 1) OptionRow("Audio", R.drawable.lc_volume, value = auds.firstOrNull { it.selected }?.label?.substringBefore(" · ") ?: "—") { dialog = "audio" }
+            if (subs.isNotEmpty()) OptionRow("Titlovi", R.drawable.lc_captions) { dialog = "subs" }
             OptionRow(if (Sleep.until > 0) trf("Tajmer: %s min", ((Sleep.until - System.currentTimeMillis()) / 60_000 + 1).coerceAtLeast(1)) else tr("Tajmer za spavanje"), R.drawable.lc_moon) { dialog = "sleep" }
-            OptionRow("Informacije o streamu", R.drawable.lc_info, value = if (videoH > 0) qualityLabel(videoH) else null) { dialog = "info" }
             OptionRow("Vanjski plejer", R.drawable.lc_external_link) { player.pause(); saveProgress(); dialog = "ext" }
             val c = item.channel
-            val shift = c != null && Catchups.has(p, c)
-            OptionRow("Pomak uživo", R.drawable.lc_rotate_ccw, sub = tr(if (shift) "5 minuta nazad kroz arhivu" else "Nije dostupno za ovaj kanal")) { if (shift) { dialog = null; liveShift(-1) } else na() }
+            if (c != null && Catchups.has(p, c)) OptionRow("Pomak uživo", R.drawable.lc_rotate_ccw, sub = tr("5 minuta nazad kroz arhivu")) { dialog = null; liveShift(-1) }
+            if (c != null) OptionRow("EPG postavke", R.drawable.lc_calendar_clock, value = EpgShift.label(EpgShift.chMin(c.url))) { dialog = "epgshift" }
         }
         "fav" -> item.channel?.let { FavPicker(it) { dialog = null } }
         "epgshift" -> item.channel?.let { EpgShiftPopup(it) { dialog = null } }
         "zoom" -> Popup("Format", onDismiss = { dialog = null }) {
-            FORMATS.forEachIndexed { i, label ->
+            // live Format (approved): only Auto, Fit, Zoom, Stretch
+            VOD_FORMATS.forEach { (i, label) ->
                 OptionRow(tr(label), R.drawable.lc_maximize, selected = resize == i) {
                     resize = i
                     item.channel?.let { Prefs.put("fmt_v2_" + it.url.hashCode(), resize.toLong()) }
@@ -1073,25 +1082,15 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 },
                 onReset = { subFile = base; loadMedia(item, base, player.currentPosition) })
         }
-        "subs2" -> SubsPanel(item, tracksOf(player, MC.TRACK_TYPE_TEXT), subFile, onDismiss = { dialog = null },
-            onOff = { subFile = null; player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, true).build(); dialog = null },
-            onTrack = { t ->
-                subFile = null
-                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false)
-                    .setOverrideForType(TrackSelectionOverride(t.group.mediaTrackGroup, t.index)).build()
-                dialog = null
-            },
-            onFile = { path ->
-                subFile = path
-                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false).build()
-                loadMedia(item, path, player.currentPosition)
-                dialog = null
-            })
         "vfmt" -> Popup("Format prikaza", onDismiss = { dialog = null }) {
             VOD_FORMATS.forEach { (i, label) -> OptionRow(label, R.drawable.lc_rectangle_horizontal, selected = resize == i) { resize = i; Prefs.put("vod_fmt", i.toLong()); dialog = null } }
         }
-        "psettings" -> PlayerSettings(series = item.season != null, audio = tracksOf(player, MC.TRACK_TYPE_AUDIO).firstOrNull { it.selected }?.label, resize = resize,
-            onDismiss = { dialog = null }, onAudio = { dialog = "audio" }, onFormat = { dialog = "vfmt" })
+        "psettings" -> PlayerSettings(series = item.season != null, audio = tracksOf(player, MC.TRACK_TYPE_AUDIO).firstOrNull { it.selected }?.label?.substringBefore(" · "), resize = resize,
+            onDismiss = { dialog = null }, onAudio = { dialog = "audio" }, onFormat = { dialog = "vfmt" },
+            // time shift only in films and series (approved): subtitle delay (when a subtitle file is on) and audio delay
+            onSubDelay = if (subFile != null) ({ dialog = "subsync" }) else null,
+            onAudioDelay = if (Tech.audioDelay) ({ dialog = "adelay" }) else null,
+            audioDelayLabel = AudioDelay.label(AudioDelay.of(item.url)))
         "audio" -> {
             val tracks = tracksOf(player, MC.TRACK_TYPE_AUDIO)
             Popup("Audio", onDismiss = { dialog = null }) {
@@ -1105,53 +1104,21 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 }
             }
         }
-        "subs" -> {
-            if (s.live) {
-                val tracks = tracksOf(player, MC.TRACK_TYPE_TEXT)
-                val selected = tracks.firstOrNull { it.selected }?.label
-                val off = player.trackSelectionParameters.disabledTrackTypes.contains(MC.TRACK_TYPE_TEXT) || tracks.none { it.selected }
-                ProviderSubsPicker(item.url, selected, off,
-                    onDismiss = { dialog = null },
-                    onOff = {
-                        subFile = null
-                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-                            .setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, true).build()
-                        dialog = null
-                    },
-                    onPick = { picked ->
-                        val track = tracksOf(player, MC.TRACK_TYPE_TEXT).firstOrNull { it.label == picked.title }
-                        if (track != null) {
-                            subFile = null
-                            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-                                .setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false)
-                                .setOverrideForType(TrackSelectionOverride(track.group.mediaTrackGroup, track.index)).build()
-                        }
-                        dialog = null
-                    })
-            } else {
-                val tracks = tracksOf(player, MC.TRACK_TYPE_TEXT)
-                SubtitlePicker(item.search ?: item.title, item.season, item.episode, embedded = tracks.map { it.label },
-                    onEmbedded = { i ->
-                        val t = tracks[i]
-                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-                            .setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false)
-                            .setOverrideForType(TrackSelectionOverride(t.group.mediaTrackGroup, t.index)).build()
-                        dialog = null
-                    },
-                    onDismiss = { dialog = null }) { f ->
-                    if (f == null) {
-                        subFile = null
-                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, true).build()
-                    } else {
-                        subFile = f.path
-                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false).build()
-                        loadMedia(item, f.path, player.currentPosition)
-                        Toast.makeText(ctx, tr("Titl učitan"), Toast.LENGTH_SHORT).show()
-                    }
-                    dialog = null
-                }
-            }
-        }
+        // one Subtitles menu everywhere (approved): Provider on top, Online below (films/series only), language + version only
+        "subs" -> SubsPanel(item, tracksOf(player, MC.TRACK_TYPE_TEXT), subFile, online = !s.live, onDismiss = { dialog = null },
+            onOff = { subFile = null; player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, true).build(); dialog = null },
+            onTrack = { t ->
+                subFile = null
+                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false)
+                    .setOverrideForType(TrackSelectionOverride(t.group.mediaTrackGroup, t.index)).build()
+                dialog = null
+            },
+            onFile = { path ->
+                subFile = path
+                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false).build()
+                loadMedia(item, path, player.currentPosition)
+                dialog = null
+            })
         "sleep" -> Popup("Tajmer za spavanje", onDismiss = { dialog = null }) {
             T("Kad vrijeme istekne, gledanje stane i aplikacija se vrati na početnu.", 14.sp, C.Soft, maxLines = 3)
             OptionRow("Isključen", if (Sleep.until <= 0) R.drawable.lc_check else R.drawable.lc_moon, color = if (Sleep.until <= 0) C.Green else null) { Sleep.until = 0; dialog = null }
@@ -1183,7 +1150,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
 
 internal val FORMATS = listOf("Zadano / automatski", "4:3", "16:9", "Prilagodi širinu", "Rastegni", "Zoom")
 
-/** Live TV: exactly six actions in one row (approved): Pause · Favorite · EPG · Format · Archive · More. */
+/** Live TV: exactly six actions in one row (approved): Pause · Favorite · EPG · Format · Archive · Settings (gear). */
 @Composable
 private fun ChannelOptionsBar(favOn: Boolean, playing: Boolean, onAction: (String) -> Unit) {
     val first = remember { FocusRequester() }
@@ -1194,7 +1161,7 @@ private fun ChannelOptionsBar(favOn: Boolean, playing: Boolean, onAction: (Strin
         B("epg", "EPG", R.drawable.lc_calendar_clock),
         B("zoom", "Format", R.drawable.lc_maximize),
         B("archive", "Arhiva", R.drawable.lc_history),
-        B("more", "Više", R.drawable.lc_layout_grid),
+        B("more", "Postavke", R.drawable.lc_settings),
     )
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         list.forEachIndexed { i, b ->
@@ -1241,7 +1208,7 @@ suspend fun sameShowOf(p: Playlist, ch: Channel, title: String?): List<Channel> 
 }
 
 /** Formats for films and series (approved): Auto, Zoom, Fit, Stretch (index into [FORMATS]). */
-val VOD_FORMATS = listOf(0 to "Automatski", 5 to "Zoom", 3 to "Prilagodi", 4 to "Rastegni")
+val VOD_FORMATS = listOf(0 to "Automatski", 3 to "Prilagodi", 5 to "Zoom", 4 to "Rastegni")
 
 /** The bottom bar of films and series: seven icons, no labels. */
 @Composable

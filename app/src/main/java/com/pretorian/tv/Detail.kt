@@ -133,67 +133,7 @@ private fun Cast(people: List<Person>) {
     }
 }
 
-/** Audio, subtitle and "find a subtitle" at the bottom of the film page; each shows where it comes from. */
-@Composable
-private fun TrackBar(search: String, season: Int?, episode: Int?, url: String, choice: TrackChoice, onChange: (TrackChoice) -> Unit) {
-    var showSubs by remember { mutableStateOf(false) }
-    var showFind by remember { mutableStateOf(false) }
-    var showAudio by remember { mutableStateOf(false) }
-    val audioText = choice.audio?.title?.substringBefore(" · ")
-        ?: if (Prefs.bool("audio_default")) tr("Od providera") else Prefs.audioLangs.split(',').firstOrNull { it.isNotBlank() }?.let { Langs.label(it) } ?: tr("Od providera")
-    val (subText, src) = when {
-        choice.subOff -> tr("Bez titla") to null
-        choice.sub != null -> choice.sub.title.substringBefore(" · ") to ("Provider" to LampGreen)
-        choice.subFile != null -> {
-            val l = choice.subFile.nameWithoutExtension.substringAfterLast('_')
-            if (l == "xx") tr("Titl s diska") to ("Disk" to LampAmber) else Langs.label(l) to ("Online" to LampBlue)
-        }
-        Prefs.autoSubs -> (Prefs.subLangs.split(',').firstOrNull { it.isNotBlank() }?.let { Langs.label(it) } ?: tr("Automatski")) to ("Provider" to LampGreen)
-        else -> tr("Isključen") to null
-    }
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        BarBox("ZVUK", audioText, R.drawable.lc_volume, null, Modifier.weight(1f)) { showAudio = true }
-        BarBox("TITL", subText, R.drawable.lc_captions, src, Modifier.weight(1f)) { showSubs = true }
-        BarBox("ONLINE · DISK", tr("Traži titl"), R.drawable.lc_search, null, Modifier.weight(1f)) { showFind = true }
-    }
-    // "Traži titl": only two ways — search all subtitle sites online, or load a file from the disk / USB
-    var findMode by remember { mutableStateOf<String?>(null) }
-    if (showFind && findMode == null) Popup("Traži titl", { showFind = false }, width = 560.dp) {
-        OptionRow("Traži online", R.drawable.lc_search, sub = "Pretraži sve stranice s titlovima i izaberi") { findMode = "results" }
-        OptionRow("Učitaj s diska / USB-a", R.drawable.lc_folder, sub = ".srt · .ass · .vtt · .sub") { findMode = "disk" }
-    }
-    fun picked(f: java.io.File?) {
-        onChange(if (f == null) choice.copy(subFile = null, sub = null, subOff = true) else choice.copy(subFile = f, sub = null, subOff = false))
-        showSubs = false; showFind = false; findMode = null
-    }
-    findMode?.let { fm -> key(fm) { SubtitlePicker(search, season, episode, probeUrl = url, startMode = fm, onDismiss = { findMode = null }) { f -> picked(f) } } }
-    if (showSubs) ProviderSubsPicker(url, choice.sub?.title, choice.subOff, onDismiss = { showSubs = false },
-        onOff = { onChange(choice.copy(sub = null, subFile = null, subOff = true)); showSubs = false }) { t ->
-        onChange(choice.copy(sub = t, subFile = null, subOff = false)); showSubs = false
-    }
-    if (showAudio) AudioPicker(url, choice.audio?.title, onDismiss = { showAudio = false }) { t -> onChange(choice.copy(audio = t)); showAudio = false }
-}
 
-@Composable
-private fun BarBox(label: String, value: String, icon: Int, src: Pair<String, Color?>?, modifier: Modifier, onClick: () -> Unit) {
-    Focusable(onClick = onClick, shape = Rnd(16.dp), normal = Color.Black.copy(alpha = 0.28f), focused = Color.White.copy(alpha = 0.16f), zoom = 1.02f,
-        modifier = modifier.height(58.dp).border(1.dp, C.Line, Rnd(16.dp))) { f ->
-        Row(Modifier.fillMaxSize().then(if (f) Modifier.border(2.dp, Color.White, Rnd(16.dp)) else Modifier).padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Box(Modifier.size(34.dp).clip(Rnd(10.dp)).background(Color.White.copy(alpha = 0.1f)), contentAlignment = Alignment.Center) { Ico(icon, 17.dp, C.Text) }
-            Column(Modifier.weight(1f)) {
-                Kicker(label, C.Muted, size = 9.sp)
-                T(value, 14.sp, C.Text, FontWeight.Bold)
-            }
-            if (src != null) Row(Modifier.clip(Pill).background((src.second ?: C.Text).copy(alpha = 0.16f)).padding(horizontal = 8.dp, vertical = 3.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                if (src.second != null) Lamp(src.second!!, 7.dp)
-                T(src.first, 10.sp, src.second ?: C.Soft, FontWeight.Bold)
-            }
-            T("▾", 12.sp, C.Muted)
-        }
-    }
-}
 
 fun platformOf(id: String, m: Meta?) = Platforms.norm(VodMemory.catOf[id]) ?: m?.studio
 
