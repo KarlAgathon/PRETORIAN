@@ -2549,4 +2549,5 @@ Lista je prazna. U detaljima filma ili serije izaberi „Dodaj na moju listu“.
 Ništa novo od zadnjeg ažuriranja playliste|Ничего нового с последнего обновления плейлиста
 Nijedan film iz kina trenutno nije u tvojoj playlisti|Ни одного фильма из кинотеатров сейчас нет в вашем плейлисте
 Ukloni s moje liste|Удалить из моего списка
+Kanali za ovaj program (%s)|Каналы с этой передачей (%s)
 """.trimIndent()

@@ -283,6 +283,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     var resUntil by remember { mutableLongStateOf(0L) }
     var channels by remember { mutableIntStateOf(0) }
     var nowNext by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
+    /** full screen only: other channels of your playlist that show this same programme (a match from Sport, the same match by the guide, or the same channel from another source) */
+    var sameShow by remember { mutableStateOf<List<Channel>>(emptyList()) }
     var dialog by remember { mutableStateOf<String?>(null) }   // menu, audio, subs, info, fav, ext
     var side by remember { mutableStateOf<String?>(null) }     // channels, groups, epg (live only)
     // the player owns the focus: a left menu that held it before must not block the lists here
@@ -494,6 +496,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         nowNext = emptyList()
         val ch = cur.channel
         if (s.live && ch != null && p != null) nowNext = Repo.nowNext(p, ch)
+        sameShow = if (s.live && ch != null && p != null) sameShowOf(p, ch, nowNext.getOrNull(0)?.first) else emptyList()
     }
     LaunchedEffect(retryToken) {
         if (retryToken == 0) return@LaunchedEffect
@@ -926,6 +929,25 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 }
             }
         }
+        // upper right, only with the controls open: the other channels with this programme (PROVIDER: in your playlist, selectable)
+        if (bar && s.live && sameShow.size > 1 && dialog == null && side == null) {
+            Column(Modifier.align(Alignment.TopEnd).padding(top = 28.dp, end = 36.dp).width(360.dp).dawnGlass(16.dp).padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                T(trf("Kanali za ovaj program (%s)", sameShow.size), 15.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 6.dp, bottom = 2.dp))
+                T("PROVIDER", 11.sp, C.Muted, FontWeight.SemiBold, modifier = Modifier.padding(start = 6.dp))
+                sameShow.forEach { c ->
+                    val cur = c.url == item.url
+                    Focusable(onClick = { if (!cur) { items = listOf(PlayItem(c.name, c.url, c.logo, c.num.toString(), c)) + items.filterNot { it.url == c.url }; index = 0; bar = false } },
+                        shape = Rnd(10.dp), normal = Color.Transparent, focused = Dawn.pill, focusBorderColor = Color.Transparent, zoom = 1f,
+                        modifier = Modifier.fillMaxWidth().height(46.dp)) { f ->
+                        Row(Modifier.fillMaxSize().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            ChannelLogo(c.logo, c.name)
+                            T(c.name, 15.sp, if (f) Dawn.onPill else C.Text, maxLines = 1, modifier = Modifier.weight(1f))
+                            if (cur) Ico(R.drawable.lc_check, 16.dp, if (f) Dawn.onPill else C.Text)
+                        }
+                    }
+                }
+            }
+        }
         if (!playing && !s.live && error == null && !buffering && resume == null) {
             Box(Modifier.align(Alignment.Center).size(84.dp).clip(Rnd(42.dp)).background(Color(0x99000000)), contentAlignment = Alignment.Center) {
                 Ico(R.drawable.lc_pause, 36.dp, Color.White)
@@ -1193,6 +1215,31 @@ private fun ChannelOptionsBar(favOn: Boolean, playing: Boolean, onAction: (Strin
     }
     LaunchedEffect(Unit) { delay(80); first.tryFocus() }
 }
+private val MATCH_TITLE = Regex("\\S.*\\s(-|–|vs\\.?)\\s.*\\S", RegexOption.IGNORE_CASE)
+
+/**
+ * Other channels of the playlist with the same programme now. Only when it is reliable: a match chosen in Sport,
+ * a match title ("Real Madrid – Bayern") at the same start and end in the guide, or the same channel from another source.
+ * A plain title like "News" on two channels is never treated as the same programme.
+ */
+suspend fun sameShowOf(p: Playlist, ch: Channel, title: String?): List<Channel> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+    if (MatchWatch.on(ch.url)) return@withContext MatchWatch.alts
+    val all = try { Repo.allChannels(p) } catch (e: Exception) { return@withContext emptyList() }
+    val key = StreamBackup.key(ch.name)
+    val same = if (key.length >= 2) all.filter { StreamBackup.key(it.name) == key } else emptyList()
+    val t = title?.trim().orEmpty()
+    val byGuide = if (t.length >= 6 && MATCH_TITLE.matches(t)) {
+        val now = System.currentTimeMillis()
+        val srcs = listOf(GuideDb.srcOf(p)) + EpgSources.urls(p.id).map { GuideDb.srcOf(it) }
+        val exact = Regex("^" + Regex.escape(t) + "$", RegexOption.IGNORE_CASE)
+        val progs = srcs.flatMap { GuideDb.range(it, now, now + 1, null, exact) }
+        val mine = progs.firstOrNull { it.channel.equals(ch.epg ?: "", true) }
+        val ids = progs.filter { mine == null || (it.start == mine.start && it.end == mine.end) }.map { it.channel.lowercase() }.toSet()
+        all.filter { it.epg?.lowercase() in ids }
+    } else emptyList()
+    (listOf(ch) + same + byGuide).distinctBy { it.url }.take(8).let { if (it.size > 1) it else emptyList() }
+}
+
 /** Formats for films and series (approved): Auto, Zoom, Fit, Stretch (index into [FORMATS]). */
 val VOD_FORMATS = listOf(0 to "Automatski", 5 to "Zoom", 3 to "Prilagodi", 4 to "Rastegni")
 
