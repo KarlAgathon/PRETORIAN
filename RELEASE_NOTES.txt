@@ -1,3 +1,24 @@
+Media Center 2.3.0
+
+• Works on phones and tablets too: tap the picture to show or hide the controls, tap the icons, press and hold = long OK
+• Home: Continue watching, Recently watched and Favourites appear at the top only when they have something in them
+• Top bar on one line: playlist · expiry date · days left (green, orange, red; grey when the provider gives no date), bell with unread count, time and date
+• Notification center: newest first, OK opens the place it is about, hold OK removes one, Clear notifications with a confirmation
+• Live TV: the sixth icon is now Settings (gear) with Channel info, Audio, Subtitles, Sleep timer, External player, Time shift and EPG settings – only what works for that channel
+• Live TV format: Auto, Fit, Zoom, Stretch
+• Other channels with the same programme: "Available (n)" at the top right
+• One Subtitles menu everywhere: Provider on top, Online below, only language and version (English (V1), English (V2)) – no file or release names
+• Film page: the first online subtitle is downloaded in the background, so it is ready at once
+• Film and series player settings: subtitle delay and audio delay
+• Series › Streaming: the services' own logos
+• Search: results from the first letter; the last 10 searches per category, each can be removed, Clear history with a confirmation
+• Catch-up: shows are searched in the guide kept on the box (up to 7 days back), on every archive channel at once, results while you type; the panel shows where you are
+• Settings in eight categories: Playlists, Playback, Appearance & Language, Home & Navigation, Parental control, Sports center, Notifications & Reminders, System & Maintenance
+• Only one playlist is active: switching one on switches the others off
+• Adding a playlist: form on the left, phone QR always on the right; Done on the phone fills the fields and waits on Save; connection errors in plain words
+• Loading a playlist ends with "The library is ready" and Enter Media Center; a part the provider does not offer shows Not available
+• Lite looks the same as Full (focus zoom, team crests, soft poster backgrounds, fades); Lite below 3 GB RAM; the speed test no longer runs on the main thread; Settings shows which mode is really running
+
 Media Center 2.2.0
 
 • Movies and Series, one menu at a time: the menu disappears when a category opens, Back returns to the same place

@@ -15,8 +15,8 @@ android {
         minSdk = 24
         targetSdk = 34
         // raise both numbers for every new version (needed for updates)
-        versionCode = 220
-        versionName = "2.2.0"
+        versionCode = 230
+        versionName = "2.3.0"
         // TMDB_KEY from GitHub Secrets: posters, cast, platform and coming episodes work for everyone without typing a key
         buildConfigField("String", "TMDB_KEY", "\"" + (System.getenv("TMDB_KEY") ?: "") + "\"")
     }
