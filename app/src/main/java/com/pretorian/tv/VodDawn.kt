@@ -238,7 +238,16 @@ private fun VodGalleryBody(title: String, icon: Int, items: Load<List<VItem>>, m
             Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xFF0B0B0C), Color(0x990B0B0C), Color(0x000B0B0C)))))
             Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.55f to Color(0x000B0B0C), 1f to Color(0xFF0B0B0C))))
         }
-        Column(Modifier.fillMaxSize().padding(start = 26.dp, end = 18.dp, top = 16.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().padding(start = 26.dp, end = 26.dp, top = 16.dp, bottom = 14.dp)) {
+        // the poster row has its own fixed height, so the text and buttons above can never run over it;
+        // the gap is chosen so a whole number of posters fills the row (no poster cut at the right edge)
+        val rowH = (maxHeight * 0.44f).coerceIn(150.dp, 250.dp)
+        val posterH = rowH - 16.dp
+        val posterW = posterH * 2f / 3f
+        val n = ((maxWidth + 12.dp) / (posterW + 12.dp)).toInt().coerceAtLeast(1)
+        val gap = if (n > 1) ((maxWidth - posterW * n - 8.dp) / (n - 1)).coerceAtLeast(8.dp) else 12.dp
+        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+          Column(Modifier.fillMaxWidth().weight(1f).clip(Rnd(0.dp)), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Ico(icon, 18.dp, C.Soft); T(title, 16.sp, C.Soft, FontWeight.SemiBold)
                 Spacer(Modifier.weight(1f))
@@ -247,7 +256,7 @@ private fun VodGalleryBody(title: String, icon: Int, items: Load<List<VItem>>, m
             T(titleCase(meta?.title ?: cleanTitle(shown.name).first), 34.sp, C.Text, FontWeight.Bold, maxLines = 1)
             val facts = listOfNotNull(meta?.year?.take(4) ?: cleanTitle(shown.name).second, meta?.runtime, translated(meta?.genres)?.replace(", ", " · "))
             if (facts.isNotEmpty()) T(facts.joinToString("  |  "), 15.sp, C.Soft)
-            T(translated(meta?.overview) ?: "", 15.sp, C.Soft, maxLines = 3, modifier = Modifier.widthIn(max = 560.dp))
+            T(translated(meta?.overview) ?: "", 15.sp, C.Soft, maxLines = 2, modifier = Modifier.widthIn(max = 560.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 HeroBtn(if (shown.series) "Otvori" else "Gledaj", R.drawable.lc_play, primary = true) {
                     if (shown.series) shown.open(nav) else { VodMemory.returning = true; nav.push(Screen.Player(listOf(PlayItem(cleanTitle(shown.name).first, shown.url, shown.image, null, null, shown.name)), 0, live = false)) }
@@ -256,17 +265,19 @@ private fun VodGalleryBody(title: String, icon: Int, items: Load<List<VItem>>, m
                 val on = remember(MyList.rev, shown.id) { MyList.has(shown.kind, shown.id) }
                 HeroBtn(if (on) "Ukloni s moje liste" else "Dodaj na moju listu", if (on) R.drawable.lc_bookmark_filled else R.drawable.lc_bookmark) { myListToggle(ctx, shown) }
             }
-            Spacer(Modifier.weight(1f))
-            LazyRow(state = st, horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)) {
+          }
+            LazyRow(state = st, modifier = Modifier.fillMaxWidth().height(rowH), horizontalArrangement = Arrangement.spacedBy(gap),
+                verticalAlignment = Alignment.CenterVertically, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)) {
                 itemsIndexed(list, key = { _, it -> it.id + it.url }) { i, it ->
                     Focusable(onClick = { mem[key] = i; it.open(nav) }, onFocus = { mem[key] = i; focused = it },
                         focusRequester = if (i == start) fr else null, shape = Rnd(12.dp), normal = Color.Transparent, focused = Color.Transparent,
-                        focusBorderColor = Color.White, zoom = 1.04f, modifier = Modifier.width(150.dp).aspectRatio(2f / 3f)) { _ ->
+                        focusBorderColor = Color.White, zoom = 1.0f, modifier = Modifier.width(posterW).height(posterH)) { _ ->
                         OnyxImage(it.image, "p:" + it.id, Modifier.fillMaxSize().clip(Rnd(12.dp)), maxW = 300)
                         if (it.image == null) T(cleanTitle(it.name).first, 13.sp, C.Text, FontWeight.SemiBold, maxLines = 3, modifier = Modifier.align(Alignment.Center).padding(8.dp))
                     }
                 }
             }
+        }
         }
     }
     LaunchedEffect(Unit) { delay(60); fr.tryFocus() }

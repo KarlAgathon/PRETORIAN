@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 package com.pretorian.tv
 
 import android.widget.Toast
@@ -32,6 +33,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -403,6 +405,17 @@ private fun TvList(nav: Nav) {
     val rows by load(st.rev, Favs.rev, Recent.rev, keep = true) { groupRows(ctx) }
     val gState = rememberLazyListState()
     WrapEffect(st.wrap, gState)
+    // groups never stop half cut at the top edge of the panel: after a scroll the list settles on a whole row
+    val rowsNow = androidx.compose.runtime.rememberUpdatedState(rows)
+    LaunchedEffect(gState) {
+        androidx.compose.runtime.snapshotFlow { gState.isScrollInProgress }.collect { moving ->
+            if (!moving && gState.firstVisibleItemScrollOffset > 0) {
+                val first = gState.firstVisibleItemIndex
+                val f = (rowsNow.value as? Load.Ok)?.value?.indexOfFirst { it.id == st.focusKey } ?: -1
+                runCatching { gState.animateScrollToItem(if (f > first) first + 1 else first) }
+            }
+        }
+    }
     val coming = remember { TvMemory.restore && TvMemory.group != null && TvMemory.channel >= 0 }
     // New Dawn opens TV on the groups (one level at a time); only the way back from the player lands in the channels
     var inChannels by remember { mutableStateOf(coming) }
@@ -476,17 +489,18 @@ private fun TvList(nav: Nav) {
             val i = focusedCh?.let { c -> list.indexOfFirst { it.url == c.url } } ?: -1
             Dawn.pos = if (i >= 0) "${i + 1} / ${list.size}" else ""
         }
-        Row(Modifier.fillMaxSize().padding(start = 34.dp, end = 38.dp, top = 6.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Box(Modifier.weight(0.42f).fillMaxHeight().dawnGlass().padding(vertical = 4.dp)) {
+        Row(Modifier.fillMaxSize().padding(start = 34.dp, end = 34.dp, top = 6.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            // ◀ from the preview or the options comes back to the same channel, never to the one that happens to sit beside them
+            Box(Modifier.weight(0.40f).fillMaxHeight().focusRestorer().focusGroup().dawnGlass().padding(vertical = 4.dp)) {
                 if (g != null) key(g.key, st.rev) {
                     ChannelList(g, nav, st.gate, rows, enterTick, onFocusCh = { focusedCh = it },
                         onBackToGroups = { PreviewSel.ch = null; Preview.stop(); backToGroups() }, onChanged = { st.rev++ }, focusOnStart = true)
                 }
             }
-            Column(Modifier.weight(0.58f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                DawnPreview(Modifier.fillMaxWidth().weight(1f, fill = false))
+            Column(Modifier.weight(0.60f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                // the picture takes all the height left over and keeps 16:9 inside it, so nothing is pushed up under the top bar
+                Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.TopCenter) { DawnPreview(Modifier) }
                 DawnNowNext(focusedCh ?: PreviewSel.ch, Modifier.fillMaxWidth())
-                Spacer(Modifier.weight(0.001f))
                 DawnOptions(PreviewSel.ch ?: focusedCh, nav, modifier = Modifier.fillMaxWidth().height(64.dp))
             }
         }

@@ -2578,4 +2578,8 @@ Uređaj i mreža|Устройство и сеть
 Model, memorija, mreža, ocjena uređaja|Модель, память, сеть, оценка устройства
 Biblioteka je spremna|Библиотека готова
 Uđi u Media Center|Войти в Media Center
+Online titlovi|Онлайн субтитры
+Titlovi se biraju u plejeru|Субтитры выбираются в плеере
+1 sezona|1 сезон
+Filteri|Фильтры
 """.trimIndent()

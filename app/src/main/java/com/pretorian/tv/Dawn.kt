@@ -3,6 +3,7 @@ package com.pretorian.tv
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Arrangement
@@ -169,7 +170,8 @@ fun DawnHintBar(hints: List<Pair<String, String>>) {
         hints.forEach { (key, label) ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                 Box(Modifier.clip(Rnd(6.dp)).border(1.dp, Silver.Border, Rnd(6.dp)).padding(horizontal = 7.dp, vertical = 1.dp)) {
-                    T(key, 13.sp, C.Text, FontWeight.SemiBold)
+                    // the Back key is drawn as an arrow, so "Back  Back" never shows twice in English
+                    T(if (key == "Back") "↩" else key, 13.sp, C.Text, FontWeight.SemiBold)  // i18n-ignore
                 }
                 T(label, 15.sp, C.Soft)
             }
@@ -214,10 +216,12 @@ private fun DawnMenu(nav: Nav) {
         delay(120); frs[i].tryFocus()
     }
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
-    val rowH = ((maxHeight - 6.dp - 8.dp - 24.dp) / items.size - 4.dp).coerceIn(40.dp, 58.dp)
+    // every entry always fits (Postavke never falls off the bottom): the rows shrink to the space there is
+    val rowH = ((maxHeight - 6.dp - 8.dp - 24.dp - 4.dp * (items.size - 1)) / items.size).coerceIn(30.dp, 58.dp)
     val big = rowH >= 48.dp
     Column(Modifier.padding(start = 34.dp, top = 6.dp, bottom = 8.dp).width(330.dp)
-        .dawnGlass().onFocusChanged { Chrome.inRail = it.hasFocus }.padding(horizontal = 10.dp, vertical = 12.dp),
+        .dawnGlass().onFocusChanged { Chrome.inRail = it.hasFocus }.padding(horizontal = 10.dp, vertical = 12.dp)
+        .then(Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState())),
         verticalArrangement = Arrangement.spacedBy(4.dp)) {
         items.forEachIndexed { i, it ->
             Focusable(

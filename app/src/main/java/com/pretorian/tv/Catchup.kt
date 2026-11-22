@@ -299,7 +299,8 @@ internal class CuItem(val title: String, val icon: Int? = null, val ch: Channel?
 
 @Composable
 internal fun CuPanel(wide: Boolean = false, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
-    Column((if (wide) Modifier.fillMaxWidth() else Modifier.width(560.dp)).fillMaxHeight().dawnGlass().padding(10.dp),
+    // the panel always uses the whole width of the screen (approved: no narrow panel with empty space beside it)
+    Column(Modifier.fillMaxWidth().fillMaxHeight().dawnGlass().padding(10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         // Catch-up: the title inside the panel (approved): "CATCH-UP TV / <level>"
         if (CuTitle.on) T("CATCH-UP TV" + (if (Dawn.crumb.isNotBlank()) " / " + Dawn.crumb.uppercase() else ""), 13.sp, C.Soft, FontWeight.SemiBold,  // i18n-ignore

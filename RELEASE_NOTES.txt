@@ -1,3 +1,15 @@
+Media Center 2.3.2
+
+• Films and series: the poster row has its own space under the buttons and never runs over them; whole posters fill the row
+• Film page: Audio, Subtitles and Online subtitles are real buttons; Director and Cast show only when known (no empty dashes)
+• Series page: long titles fit on one line, shorter description, "1 season", smaller season tiles
+• Home menu: every entry always fits, Settings is always visible
+• TV channels: the picture uses all the space on the right and no longer slides under the top bar; ◀ from the preview or the icons comes back to the same channel
+• TV groups: the list always stops on a whole row, nothing is half cut at the top
+• Catch-up: the panel uses the whole width of the screen
+• Sport: one clean top row – Sports, Filters (teams, countries, regions, competitions, favourites inside), Following; no "refresh failed" over an empty list
+• Hint bar: the Back key is an arrow, so it no longer reads "Back Back"
+
 Media Center 2.3.1
 
 • Live TV options bar: icons only, no boxes; the selected icon has a thin underline

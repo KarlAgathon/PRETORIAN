@@ -173,7 +173,20 @@ fun providerSubsText(l: List<androidx.media3.common.Format>): String {
 private fun InfoCell(icon: Int, label: String, value: String, modifier: Modifier) {
     Row(modifier.padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Ico(icon, 22.dp, C.Text)
-        Column { T(label, 14.sp, C.Text, FontWeight.Bold); T(value, 14.sp, C.Soft, maxLines = 2) }
+        Column { T(label, 14.sp, C.Text, FontWeight.Bold, maxLines = 1); T(value, 14.sp, C.Soft, maxLines = 2) }
+    }
+}
+
+/** Audio / Subtitles on the film page: a real option button (icon, short label, value), OK opens the details. */
+@Composable
+private fun InfoBtn(icon: Int, label: String, value: String, modifier: Modifier, onClick: () -> Unit) {
+    Focusable(onClick = onClick, shape = Rnd(12.dp), normal = Color(0x14FFFFFF), focused = Dawn.pill, focusBorderColor = Color.Transparent,
+        zoom = 1f, modifier = modifier.height(58.dp).border(1.dp, Color(0x66FFFFFF), Rnd(12.dp))) { f ->
+        val fg = if (f) Dawn.onPill else Color.White
+        Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Ico(icon, 20.dp, fg)
+            Column { T(label, 13.sp, fg, FontWeight.Bold, maxLines = 1); T(value, 13.sp, if (f) fg else C.Soft, maxLines = 1) }
+        }
     }
 }
 
@@ -193,6 +206,7 @@ fun OnyxMovieDetail(v: Vod, nav: Nav) {
     @Suppress("UNUSED_VARIABLE") val sr = SmartSubs.rev
     LaunchedEffect(v.name, SmartSubs.lang()) { SmartSubs.prefetch(ctx, v.name, null, null) }
     var ext by remember { mutableStateOf(false) }
+    var infoDlg by remember { mutableStateOf<Pair<String, String>?>(null) }
     val playFr = remember { FocusRequester() }
     LaunchedEffect(v.id) { NewContent.seen(p.id, "vod", v.id) }
     val i = (info as? Load.Ok)?.value
@@ -241,16 +255,22 @@ fun OnyxMovieDetail(v: Vod, nav: Nav) {
                 }
             }
             Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0x33FFFFFF)))
-            Row(Modifier.fillMaxWidth()) {
-                val dir = m?.people?.firstOrNull { it.role == "Režija" }?.name ?: i?.director
-                val cast = m?.people?.filter { it.role != "Režija" && it.role != "Autor" }?.take(3)?.joinToString(", ") { it.name } ?: i?.cast?.split(',')?.take(3)?.joinToString(",")?.trim()
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                val dir = (m?.people?.firstOrNull { it.role == "Režija" }?.name ?: i?.director)?.trim()?.ifBlank { null }
+                val cast = (m?.people?.filter { it.role != "Režija" && it.role != "Autor" }?.take(3)?.joinToString(", ") { it.name }
+                    ?: i?.cast?.split(',')?.take(3)?.joinToString(",")?.trim())?.ifBlank { null }
                 val pv = (probe as? Load.Ok)?.value
-                InfoCell(R.drawable.lc_film, tr("Režija"), dir ?: "—", Modifier.weight(0.9f))
-                InfoCell(R.drawable.lc_users, tr("Glumci"), cast ?: "—", Modifier.weight(1.4f))
-                InfoCell(R.drawable.lc_headphones, "Audio", if (probe is Load.Loading) tr("Provjeravam…") else audioText(pv?.first ?: emptyList()), Modifier.weight(1f))
-                InfoCell(R.drawable.lc_message_square, tr("Titlovi (provider)"), if (probe is Load.Loading) tr("Provjeravam…") else providerSubsText(pv?.second ?: emptyList()), Modifier.weight(1f))
-                InfoCell(R.drawable.lc_cloud, tr("Titlovi (online)"), when (SmartSubs.state(v.name, null, null)) {
-                    is SmartSubs.State.Found -> Langs.label(SmartSubs.lang()); SmartSubs.State.None -> tr("Nije pronađeno"); else -> tr("Tražim…") }, Modifier.weight(1f))
+                // director and cast only when known: no empty dashes
+                if (dir != null) InfoCell(R.drawable.lc_film, tr("Režija"), dir, Modifier.weight(1f))
+                if (cast != null) InfoCell(R.drawable.lc_users, tr("Glumci"), cast, Modifier.weight(1.3f))
+                if (dir == null && cast == null) Spacer(Modifier.weight(1f))
+                val audio = if (probe is Load.Loading) tr("Provjeravam…") else audioText(pv?.first ?: emptyList())
+                val psubs = if (probe is Load.Loading) tr("Provjeravam…") else providerSubsText(pv?.second ?: emptyList())
+                val osubs = when (SmartSubs.state(v.name, null, null)) {
+                    is SmartSubs.State.Found -> Langs.label(SmartSubs.lang()); SmartSubs.State.None -> tr("Nije pronađeno"); else -> tr("Tražim…") }
+                InfoBtn(R.drawable.lc_headphones, "Audio", audio, Modifier.width(190.dp)) { infoDlg = tr("Audio") to audio }
+                InfoBtn(R.drawable.lc_message_square, tr("Titlovi"), psubs, Modifier.width(170.dp)) { infoDlg = tr("Titlovi") to psubs }
+                InfoBtn(R.drawable.lc_cloud, tr("Online titlovi"), osubs, Modifier.width(190.dp)) { infoDlg = tr("Online titlovi") to osubs }
             }
             Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0x33FFFFFF)))
             val sim = (similar as? Load.Ok)?.value.orEmpty()
@@ -269,6 +289,14 @@ fun OnyxMovieDetail(v: Vod, nav: Nav) {
         }
     }
     if (ext) ExternalPicker(v.url, title, pr?.pos ?: 0, onDismiss = { ext = false })
+    infoDlg?.let { (h, value) ->
+        Popup(h, onDismiss = { infoDlg = null }, width = 460.dp) {
+            T(value, 17.sp, C.Text, FontWeight.SemiBold)
+            if (h != tr("Audio")) T(tr("Titlovi se biraju u plejeru"), 14.sp, C.Soft)
+            OptionRow(tr("Gledaj"), R.drawable.lc_play) { infoDlg = null; play() }
+            OptionRow(tr("Zatvori")) { infoDlg = null }
+        }
+    }
     LaunchedEffect(Unit) { delay(60); playFr.tryFocus() }
 }
 
@@ -363,15 +391,15 @@ fun OnyxSeriesDetail(s: SeriesItem, nav: Nav) {
             Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.55f to Color(0x000B0B0C), 1f to Color(0xFF0B0B0C))))
         }
         if (!epsOpen) Column(Modifier.fillMaxSize().padding(start = 44.dp, end = 32.dp, top = 6.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            T(title, 40.sp, C.Text, FontWeight.Bold, maxLines = 2, modifier = Modifier.widthIn(max = 640.dp))
+            T(title, if (title.length > 26) 30.sp else 38.sp, C.Text, FontWeight.Bold, maxLines = 1, modifier = Modifier.widthIn(max = 760.dp).padding(top = 8.dp))
             val needFree = m == null && meta !is Load.Loading
             val free by load(s.name, needFree) { if (needFree) FreeMeta.seriesFull(s.name) else null }
             val fr = (free as? Load.Ok)?.value
             T(listOfNotNull(tr("Serija"), translated(m?.genres ?: fr?.genre)?.replace(", ", " • ")?.take(40), (m?.year ?: fr?.year)?.take(4)).joinToString("  •  "), 16.sp, C.Text)
-            T(listOfNotNull(if (seasons.isNotEmpty()) trf("%s sezone", seasons.size) else null, if (all.isNotEmpty()) trf("%s epizoda", all.size) else null,
+            T(listOfNotNull(if (seasons.size == 1) tr("1 sezona") else if (seasons.isNotEmpty()) trf("%s sezone", seasons.size) else null, if (all.isNotEmpty()) trf("%s epizoda", all.size) else null,
                 if (all.isNotEmpty()) trf("%s %% odgledano", seenAll * 100 / all.size) else null).joinToString("   "), 15.sp, C.Soft)
             val story = listOfNotNull(m?.overview ?: s.plot?.ifBlank { null } ?: fr?.plot).firstOrNull()
-            T(translated(story) ?: if (free is Load.Loading) tr("Učitavam opis…") else " ", 15.sp, C.Soft, maxLines = 3, modifier = Modifier.widthIn(max = 620.dp))
+            T(translated(story) ?: if (free is Load.Loading) tr("Učitavam opis…") else " ", 15.sp, C.Soft, maxLines = 2, modifier = Modifier.widthIn(max = 660.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.padding(top = 4.dp)) {
                 val np = next?.let { Watch.get(ctx, it.url) }
                 val label = when {
@@ -400,8 +428,8 @@ fun OnyxSeriesDetail(s: SeriesItem, nav: Nav) {
                             val fresh = all.any { it.season == n && isNew(it.air) }
                             Focusable(onClick = { season = n; epsOpen = true }, onMenu = { if (count > 0) seasonMenu = n },
                                 focusRequester = if (n == cur) seasonFr else null, shape = Rnd(16.dp), normal = Color(0xCC161618), focused = Color(0xCC161618),
-                                focusBorderColor = Color.White, zoom = 1.03f, modifier = Modifier.width(300.dp).height(130.dp).border(1.dp, Color(0x33FFFFFF), Rnd(16.dp))) { _ ->
-                                Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                focusBorderColor = Color.White, zoom = 1.0f, modifier = Modifier.width(260.dp).height(104.dp).border(1.dp, Color(0x33FFFFFF), Rnd(16.dp))) { _ ->
+                                Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         T(trf("Sezona %s", n), 22.sp, C.Text, FontWeight.Bold, modifier = Modifier.weight(1f))
                                         if (count > 0 && seen == count) Ico(R.drawable.lc_circle_check, 22.dp, C.Text)

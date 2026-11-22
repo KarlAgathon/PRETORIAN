@@ -408,13 +408,10 @@ fun SportMixScreen(nav: Nav) {
         }
         Row(Modifier.fillMaxWidth().padding(bottom = 10.dp).horizontalScroll(androidx.compose.foundation.rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            // one clean row (approved): Sport · Filteri (everything else is inside) · Pratim
             Chip2(tr("Sportovi") + if (sportsOn.isEmpty()) "" else " · " + sportsOn.size, false) { pick = "sport" }
-            Chip2(tr("Timovi") + if (selectedTeams.isEmpty()) "" else " · " + selectedTeams.size, false) { pick = "teams" }
-            Chip2(tr("Države") + if (selectedCountries.isEmpty()) "" else " · " + selectedCountries.size, false) { pick = "countries" }
-            Chip2(tr("Regije") + " ▾", false) { pick = "region" }
-            Chip2(tr("Takmičenja") + if (selectedLeagues.isEmpty()) "" else " · " + selectedLeagues.size, false) { pick = "leagues" }
-            Chip2(tr("Omiljeni timovi"), false) { pick = "myTeams" }
-            Chip2(tr("Moja takmičenja"), false) { pick = "myLeagues" }
+            val nFilters = selectedTeams.size + selectedCountries.size + selectedLeagues.size
+            Chip2(tr("Filteri") + if (nFilters == 0) " ▾" else " · $nFilters", false) { pick = "filters" }
             // followed matches and teams in one press
             if (Look.dawn) Chip2("🔔 " + tr("Pratim") + " · " + withCh.count { followedEv(it) }, tab == "mine") { tab = "mine" }  // i18n-ignore
         }
@@ -477,7 +474,7 @@ fun SportMixScreen(nav: Nav) {
                     Chip2((if (id == "live") "● " else "") + tr(l) + (if (id == "done" || (id == "soon" && other == null && tab != "soon")) "" else " · $n"), tab == id, if (tab == id) tabFr else null) { tab = id }
                 }
             }
-            if (delayed) T("Osvježavanje nije uspjelo", 13.sp, Color.LightGray)
+            if (delayed && shown.isNotEmpty()) T("Osvježavanje nije uspjelo", 13.sp, Color.LightGray)
             val updated = (if (shown.any { it.state == CACHED_SCORE }) shown.filter { it.state == CACHED_SCORE }.minOfOrNull { it.observedAt } else shown.maxOfOrNull { it.observedAt }) ?: 0
             if (updated > 0) T((if (shown.any { it.state == CACHED_SCORE }) tr("Zadnji podaci") else tr("Osvježavanje")) + " · " + java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT).format(java.util.Date(updated)), 12.sp, Color.LightGray)
             val next = remember(shown, tick, tab) {
@@ -550,8 +547,16 @@ fun SportMixScreen(nav: Nav) {
         }
     }
     if (pick == "myTeams") FavTeamsDialog { pick = null }
+    if (pick == "filters") Popup(tr("Filteri"), { pick = null }, width = 480.dp) {
+        OptionRow(tr("Timovi"), value = if (selectedTeams.isEmpty()) null else selectedTeams.size.toString()) { pick = "teams" }
+        OptionRow(tr("Države"), value = if (selectedCountries.isEmpty()) null else selectedCountries.size.toString()) { pick = "countries" }
+        OptionRow(tr("Regije")) { pick = "region" }
+        OptionRow(tr("Takmičenja"), value = if (selectedLeagues.isEmpty()) null else selectedLeagues.size.toString()) { pick = "leagues" }
+        OptionRow(tr("Omiljeni timovi")) { pick = "myTeams" }
+        OptionRow(tr("Moja takmičenja")) { pick = "myLeagues" }
+    }
     // teams: the list with ✕ and "＋ Add team" (search or any name), several at once
-    pick?.takeUnless { it == "myTeams" }?.let { k ->
+    pick?.takeUnless { it == "myTeams" || it == "filters" }?.let { k ->
         Popup(tr(when (k) { "sport" -> "Sportovi"; "region" -> "Regije"; "fav" -> "Favoriti – države"; "countries" -> "Države"; "teams" -> "Timovi"; else -> "Takmičenja" }), { pick = null }, width = 520.dp) {
             var query by remember(k) { mutableStateOf("") }
             SportsSearchField(query) { query = it }
