@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -98,6 +99,15 @@ fun DawnBackground() {
         drawRect(dc(Color(0xFF1C1C1E)), topLeft = Offset(lx - 12 * u, ly + 22 * u), size = Size(24 * u, 6 * u))
         drawRect(dc(Color(0xFF1C1C1E)), topLeft = Offset(lx - 1.5f * u, ly - 16 * u), size = Size(3 * u, 38 * u))
         drawCircle(Brush.radialGradient(listOf(dc(Color(0xE6FFF0D2)), dc(Color(0x00FFF0D2))), center = Offset(lx, ly + 4 * u), radius = 22 * u), radius = 22 * u, center = Offset(lx, ly + 4 * u))
+        // bench beside the lamp: a dark silhouette in the fog (seat, back rails, legs)
+        val bc = dc(Color(0xB30B0F15)); val bx = lx + 34 * u; val bw = 120 * u; val by = h * 0.80f
+        drawRect(bc, topLeft = Offset(bx, by), size = Size(bw, 5 * u))
+        drawRect(bc, topLeft = Offset(bx, by - 30 * u), size = Size(bw, 4 * u))
+        drawRect(bc, topLeft = Offset(bx, by - 19 * u), size = Size(bw, 4 * u))
+        listOf(bx + 6 * u, bx + bw - 10 * u).forEach { x ->
+            drawRect(bc, topLeft = Offset(x, by - 30 * u), size = Size(4 * u, 30 * u))
+            drawRect(bc, topLeft = Offset(x, by + 5 * u), size = Size(4 * u, 22 * u))
+        }
         // ground fog
         drawRect(Brush.verticalGradient(0f to dc(Color(0x00788799)), 0.5f to dc(Color(0x1A788799)), 1f to dc(Color(0x80080C14)), startY = h * 0.6f, endY = h),
             topLeft = Offset(0f, h * 0.6f), size = Size(w, h * 0.4f))
@@ -174,6 +184,7 @@ private fun DawnMenu(nav: Nav) {
         DawnItem(Screen.Tv, R.drawable.lc_tv, "TV"),
         DawnItem(Screen.Movies, R.drawable.lc_film, "Filmovi", NewContent.count("vod"), "vod"),
         DawnItem(Screen.Series, R.drawable.lc_layers, "Serije", NewContent.count("series") + Follow.fresh().size, "series"),
+        DawnItem(Screen.Sports, R.drawable.lc_trophy, "Sport"),
         DawnItem(Screen.Catchup, R.drawable.lc_history, "Catch-up"),
         DawnItem(Screen.Search, R.drawable.lc_search, "Pretraga"),
         DawnItem(Screen.Settings, R.drawable.lc_settings, "Postavke", if (Updater.available != null) 1 else 0, "system"),
@@ -244,8 +255,10 @@ private fun DawnTopBar(top: Screen, menu: Boolean) {
     var now by remember { mutableStateOf(Date()) }
     LaunchedEffect(Unit) { while (true) { now = Date(); delay(15_000) } }
     val sep: @Composable () -> Unit = { Box(Modifier.width(1.dp).height(20.dp).background(Silver.Border)) }
+    val ctx = LocalContext.current
     Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 38.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        if (top != Screen.AddPlaylist) Store.actives(ctx).firstOrNull()?.let { PlaylistChip(it, now.time) }
         if (section.isNotEmpty()) {
             if (Dawn.crumb.isEmpty()) T(section, 18.sp, C.Text, FontWeight.SemiBold)
             else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -259,6 +272,27 @@ private fun DawnTopBar(top: Screen, menu: Boolean) {
         T(SimpleDateFormat("EEE, d MMM", Locale(Look.lang)).format(now), 15.sp, C.Soft)
         sep()
         T(SimpleDateFormat("HH:mm", Locale.getDefault()).format(now), 17.sp, C.Text, FontWeight.Bold)
+    }
+}
+
+/** Active playlist · expiry date · days left (green > 7, orange 3–7, red ≤ 2). Unknown expiry: only the name, no invented date. */
+@Composable
+private fun PlaylistChip(p: Playlist, now: Long) {
+    val sec = p.exp.toLongOrNull()?.takeIf { it > 0 }
+    val days = sec?.let { ((it * 1000 - now) / 86_400_000L).toInt() }
+    Row(Modifier.height(40.dp).clip(Rnd(12.dp)).background(Silver.Panel).border(1.dp, Silver.Border, Rnd(12.dp)).padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Ico(R.drawable.lc_list, 16.dp, C.Soft)
+        T(p.name, 14.sp, C.Text, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.widthIn(max = 180.dp))
+        if (sec != null && days != null) {
+            Box(Modifier.width(1.dp).height(18.dp).background(Silver.Border))
+            Ico(R.drawable.lc_calendar, 15.dp, C.Soft)
+            T(SimpleDateFormat("d MMM yyyy", Locale(Look.lang)).format(Date(sec * 1000)), 14.sp, C.Text)
+            val col = when { days <= 2 -> Silver.Error; days <= 7 -> Silver.Warning; else -> Silver.Success }
+            Box(Modifier.clip(Rnd(9.dp)).background(col.copy(alpha = 0.85f)).padding(horizontal = 10.dp, vertical = 4.dp)) {
+                T(if (days < 0) tr("Istekla") else trf("%s dana", days), 13.sp, Color.White, FontWeight.Bold)
+            }
+        }
     }
 }
 
@@ -305,32 +339,79 @@ fun DawnNowNext(ch: Channel?, modifier: Modifier) {
     }
 }
 
-/** Bottom options of the channels level: Favourite, EPG, Audio, Subtitles, Options. */
+/** Bottom options of the channel screen, exactly six icons in this order (approved): Pause · Favorite · EPG · Format · Archive · More. */
 @Composable
-fun DawnOptions(ch: Channel?, onOptions: () -> Unit, modifier: Modifier) {
-    var fav by remember { mutableStateOf<Channel?>(null) }
+fun DawnOptions(ch: Channel?, nav: Nav, modifier: Modifier) {
+    val ctx = LocalContext.current
     var epg by remember { mutableStateOf<Channel?>(null) }
-    var tracks by remember { mutableStateOf(0) }
+    var fmt by remember { mutableStateOf<Channel?>(null) }
+    var more by remember { mutableStateOf(false) }
+    var sub by remember { mutableStateOf("") }
+    @Suppress("UNUSED_VARIABLE") val fr = Favs.rev
+    var paused by remember { mutableStateOf(false) }
+    fun toast(t: String) = android.widget.Toast.makeText(ctx, tr(t), android.widget.Toast.LENGTH_SHORT).show()
+    // actions that need a picture work on the channel in the preview (after the first OK)
+    fun live(): Boolean = (PreviewSel.ch != null && Preview.player != null).also { if (!it) toast("Prvo pritisni OK na kanalu za pregled.") }
     Row(modifier.dawnGlass(14.dp).padding(5.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        @Composable fun Opt(icon: Int, label: String, onClick: () -> Unit) {
+        @Composable fun Opt(icon: Int, tint: Color? = null, onClick: () -> Unit) {
             Focusable(modifier = Modifier.weight(1f).fillMaxHeight(), onClick = onClick, shape = Rnd(10.dp), normal = Color.Transparent,
                 focused = Dawn.pill, focusBorderColor = Color.Transparent, zoom = 1.0f) { f ->
-                Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterVertically)) {
-                    Ico(icon, 24.dp, if (f) Dawn.onPill else C.Text)
-                    T(label, 12.sp, if (f) Dawn.onPill else C.Soft, FontWeight.Medium)
-                }
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Ico(icon, 26.dp, if (f && tint == null) Dawn.onPill else tint ?: C.Text) }
             }
         }
-        Opt(R.drawable.lc_star, "Favorit") { ch?.let { fav = it } }
-        Opt(R.drawable.lc_calendar, "EPG") { ch?.let { epg = it } }
-        Opt(R.drawable.lc_volume, "Audio") { tracks = androidx.media3.common.C.TRACK_TYPE_AUDIO }
-        Opt(R.drawable.lc_captions, "Titlovi") { tracks = androidx.media3.common.C.TRACK_TYPE_TEXT }
-        Opt(R.drawable.lc_settings, "Opcije") { onOptions() }
+        Opt(if (paused) R.drawable.lc_play else R.drawable.lc_pause) {
+            if (live()) Preview.player?.let { p -> if (p.isPlaying) { p.pause(); paused = true } else { p.play(); paused = false } }
+        }
+        val on = ch != null && Favs.inAny(ctx, ch)
+        Opt(R.drawable.lc_star, if (on) C.Amber else null) { ch?.let { c -> toast(if (Favs.flip(ctx, c)) "Dodano u favorite" else "Uklonjeno iz favorita") } }
+        Opt(R.drawable.lc_calendar) { ch?.let { epg = it } }
+        Opt(R.drawable.lc_maximize) { ch?.let { fmt = it } }
+        Opt(R.drawable.lc_history) {
+            val c = ch ?: return@Opt
+            val p = Store.byId(ctx, c.pid)
+            if (p != null && Catchups.has(p, c)) { Preview.stop(); PreviewSel.ch = null; CatchupOpen.ch = c; nav.push(Screen.Catchup) } else toast("Ovaj kanal nema arhivu")
+        }
+        Opt(R.drawable.lc_more_horizontal) { more = true }
     }
-    fav?.let { c -> FavPicker(c) { fav = null } }
+    // sleep timer set here also ends the preview and goes back to the menu
+    LaunchedEffect(Sleep.until) {
+        val u = Sleep.until; if (u <= 0) return@LaunchedEffect
+        delay((u - System.currentTimeMillis()).coerceAtLeast(0))
+        if (Sleep.until == u) { Sleep.until = 0; Preview.stop(); PreviewSel.ch = null; nav.root(Screen.Home) }
+    }
     epg?.let { c -> Popup(c.name, { epg = null }, width = 720.dp) { EpgList(c, 16, Modifier.fillMaxWidth().height(440.dp)) } }
-    if (tracks != 0) DawnTracks(tracks) { tracks = 0 }
+    fmt?.let { c -> Popup("Format", { fmt = null }) {
+        val cur = Prefs.long("fmt_v2_" + c.url.hashCode(), 0).toInt()
+        FORMATS.forEachIndexed { i, label -> OptionRow(tr(label), R.drawable.lc_maximize, selected = cur == i) { Prefs.put("fmt_v2_" + c.url.hashCode(), i.toLong()); PreviewFmt.rev++; fmt = null } }
+    } }
+    // More: exactly six entries (approved), each says honestly when this channel cannot do it
+    if (more) Popup(ch?.name ?: tr("Više"), { more = false }) {
+        OptionRow("Titlovi", R.drawable.lc_captions) { if (live()) { more = false; sub = "text" } }
+        OptionRow("Audio", R.drawable.lc_volume) { if (live()) { more = false; sub = "audio" } }
+        OptionRow(if (Sleep.until > 0) trf("Tajmer: %s min", ((Sleep.until - System.currentTimeMillis()) / 60_000 + 1).coerceAtLeast(1)) else tr("Tajmer za spavanje"), R.drawable.lc_moon) { more = false; sub = "sleep" }
+        OptionRow("Informacije o streamu", R.drawable.lc_info) { if (live()) { more = false; sub = "info" } }
+        OptionRow("Vanjski plejer", R.drawable.lc_external_link) { if (ch != null) { more = false; sub = "ext" } }
+        OptionRow("Pomak uživo", R.drawable.lc_rotate_ccw, sub = tr("Dostupno u cijelom ekranu")) { toast("Pritisni OK još jednom za cijeli ekran") }
+    }
+    when (sub) {
+        "text" -> DawnTracks(androidx.media3.common.C.TRACK_TYPE_TEXT) { sub = "" }
+        "audio" -> DawnTracks(androidx.media3.common.C.TRACK_TYPE_AUDIO) { sub = "" }
+        "sleep" -> Popup("Tajmer za spavanje", { sub = "" }) {
+            OptionRow("Isključen", if (Sleep.until <= 0) R.drawable.lc_check else R.drawable.lc_moon) { Sleep.until = 0; sub = "" }
+            listOf(15, 30, 60, 90).forEach { m -> OptionRow(trf("%s min", m), R.drawable.lc_moon) { Sleep.until = System.currentTimeMillis() + m * 60_000L; sub = "" } }
+        }
+        "info" -> Popup("Informacije o streamu", { sub = "" }) {
+            val f = Preview.player?.videoFormat
+            if (f == null) T("Podaci još nisu dostupni.", 14.sp, C.Soft)
+            else {
+                OptionRow("Rezolucija", R.drawable.lc_info, value = "${f.width}×${f.height}") {}
+                if (f.frameRate > 0) OptionRow("FPS", R.drawable.lc_info, value = "%.0f".format(f.frameRate)) {}
+                f.sampleMimeType?.let { OptionRow("Kodek", R.drawable.lc_info, value = it.substringAfter('/')) {} }
+                if (f.bitrate > 0) OptionRow("Bitrate", R.drawable.lc_info, value = "${f.bitrate / 1000} kb/s") {}
+            }
+        }
+        "ext" -> ch?.let { c -> ExternalPicker(c.url, c.name, 0L, onDismiss = { sub = "" }) }
+    }
 }
 
 /** Audio or subtitle tracks of the channel in the preview. */

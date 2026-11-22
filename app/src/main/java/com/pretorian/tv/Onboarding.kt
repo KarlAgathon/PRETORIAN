@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -76,35 +78,52 @@ fun OnboardingScreen(nav: Nav) {
 private fun LanguageStep(onNext: () -> Unit) {
     val ctx = LocalContext.current
     var rev by remember { mutableIntStateOf(0) }
+    var open by remember { mutableStateOf(false) }
     val cont = remember { FocusRequester() }
-    val firstLang = remember { FocusRequester() }
+    val drop = remember { FocusRequester() }
+    val cur = remember { FocusRequester() }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     // English first, then German, then the rest in the app's order; the order never follows the device language
     val langs = remember { Langs.APP.sortedBy { when (it.code) { "en" -> 0; "de" -> 1; else -> 2 } } }
+    androidx.activity.compose.BackHandler(enabled = open) { open = false; scope.launch { drop.tryFocus() } }
     key(rev) {
         T("Dobrodošli u vaš media centar.", 26.sp, C.Text, FontWeight.Bold)
         T("Nova era zabave počinje ovdje.", 17.sp, C.Soft)
         T("Složeno iznutra. Jednostavno spolja.", 13.sp, C.Muted)
         Spacer(Modifier.height(4.dp))
-        langs.chunked(3).forEachIndexed { r, pair ->
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                pair.forEachIndexed { c, l ->
-                    val sel = l.code == Look.lang
-                    Focusable(onClick = { setAppLang(ctx, l.code); rev++ }, focusRequester = if (sel || (r == 0 && c == 0 && langs.none { it.code == Look.lang })) firstLang else null,
-                        shape = Rnd(12.dp), normal = if (sel) C.CardHi else Color.Transparent, focused = C.Red, focusBorderColor = Color.Transparent, zoom = 1f,
-                        modifier = Modifier.weight(1f).height(42.dp)) { f ->
+        // one row "Language: English ▾"; OK opens the list, OK on a language applies it at once (no extra question)
+        val now = langs.firstOrNull { it.code == Look.lang } ?: langs.first()
+        Focusable(onClick = { open = !open }, focusRequester = drop, shape = Rnd(12.dp), normal = Color(0x14FFFFFF), focused = C.Red,
+            focusBorderColor = Color.Transparent, zoom = 1f, modifier = Modifier.fillMaxWidth().height(50.dp).border(1.dp, Color(0x4DFFFFFF), Rnd(12.dp))) { f ->
+            Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Ico(R.drawable.lc_globe, 18.dp, if (f) C.OnRed else C.Text)
+                T("Jezik", 15.sp, if (f) C.OnRed else C.Soft)
+                T(now.native, 17.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Ico(R.drawable.lc_chevron_down, 18.dp, if (f) C.OnRed else C.Text)
+            }
+        }
+        if (open) {
+            androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxWidth().heightIn(max = 260.dp).dawnGlass().padding(6.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                items(langs.size) { i ->
+                    val l = langs[i]; val sel = l.code == Look.lang
+                    Focusable(onClick = { open = false; if (!sel) { setAppLang(ctx, l.code); rev++ } else scope.launch { cont.tryFocus() } },
+                        focusRequester = if (sel) cur else null, shape = Rnd(10.dp), normal = Color.Transparent, focused = C.Red,
+                        focusBorderColor = Color.Transparent, zoom = 1f, modifier = Modifier.fillMaxWidth().height(44.dp)) { f ->
                         Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             T(l.native, 16.sp, if (f) C.OnRed else C.Text, if (sel) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
                             if (sel) Ico(R.drawable.lc_check, 16.dp, if (f) C.OnRed else C.Text)
                         }
                     }
                 }
-                repeat(3 - pair.size) { Spacer(Modifier.weight(1f)) }
             }
+            LaunchedEffect(Unit) { cur.tryFocus() }
         }
         Spacer(Modifier.height(4.dp))
         Button("Nastavi", R.drawable.lc_chevron_right, primary = true, focusRequester = cont) { onNext() }
     }
-    LaunchedEffect(Unit) { firstLang.tryFocus() }
+    // first open: on the language row; after a language was chosen: on Continue
+    LaunchedEffect(rev) { if (rev == 0) drop.tryFocus() else cont.tryFocus() }
 }
 
 @Composable

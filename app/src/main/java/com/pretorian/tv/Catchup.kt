@@ -26,6 +26,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.key
+import kotlinx.coroutines.async
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -171,191 +173,348 @@ private fun ArchiveList(list: Load<List<EpgItem>>, ch: Channel, p: Playlist, day
     }
 }
 
-/* ------------------------------------------------------------ New Dawn catch-up */
+/* ------------------------------------------------------------ Catch-up (one menu at a time) */
 
-/**
- * New Dawn catch-up: channels with an archive on the left (all / favourites, search), on the right the channel with its days,
- * the past shows and the chosen show (first OK = small picture, second OK = full screen), Watch from start · Restart · Live TV.
- */
+/** Set by the Archive button of the TV screen: Catch-up opens straight on this channel's archive. */
+object CatchupOpen { var ch: Channel? = null }
+
+/** Catch-up shows you played: the entries of "Continue watching" (progress itself lives in [Watch]; removing here never deletes it). */
+object CatchupHist {
+    var rev by mutableIntStateOf(0)
+    data class E(val url: String, val title: String, val ch: Channel, val start: Long, val end: Long, val ts: Long)
+    private fun chJ(c: Channel) = org.json.JSONObject().put("id", c.id).put("num", c.num).put("n", c.name).put("l", c.logo ?: "").put("g", c.group)
+        .put("u", c.url).put("e", c.epg ?: "").put("p", c.pid).put("a", c.archive).put("c", c.catchup ?: "")
+    private fun chOf(o: org.json.JSONObject) = Channel(o.str("id"), o.optInt("num"), o.str("n"), o.str("l").ifBlank { null }, o.str("g"), o.str("u"),
+        o.str("e").ifBlank { null }, o.str("p"), o.optInt("a"), o.str("c").ifBlank { null })
+    fun all(): List<E> = try {
+        val a = org.json.JSONArray(Prefs.str("cu_hist", "[]"))
+        (0 until a.length()).map { a.getJSONObject(it) }.map { o -> E(o.str("url"), o.str("t"), chOf(o.getJSONObject("ch")), o.optLong("s"), o.optLong("e"), o.optLong("ts")) }
+    } catch (e: Exception) { emptyList() }
+    private fun save(l: List<E>) {
+        val a = org.json.JSONArray()
+        l.take(60).forEach { a.put(org.json.JSONObject().put("url", it.url).put("t", it.title).put("ch", chJ(it.ch)).put("s", it.start).put("e", it.end).put("ts", it.ts)) }
+        Prefs.put("cu_hist", a.toString()); rev++
+    }
+    fun add(e: E) = save(listOf(e) + all().filter { it.url != e.url })
+    fun remove(url: String) = save(all().filter { it.url != url })
+    fun urls(): Set<String> = all().mapTo(HashSet()) { it.url }
+    /** started and not finished, newest first */
+    fun open(ctx: android.content.Context): List<Pair<E, Progress>> = all().mapNotNull { e -> Watch.get(ctx, e.url)?.takeIf { it.started }?.let { e to it } }
+}
+
+/** Last 10 Catch-up searches. */
+object CatchupQ {
+    var rev by mutableIntStateOf(0)
+    fun list(): List<String> = Prefs.str("cu_q").split('\n').filter { it.isNotBlank() }
+    private fun save(l: List<String>) { Prefs.put("cu_q", l.take(10).joinToString("\n")); rev++ }
+    fun add(q: String) = save(listOf(q) + list().filter { !it.equals(q, true) })
+    fun remove(q: String) = save(list().filter { it != q })
+    fun clear() = save(emptyList())
+}
+
+/** the archive of a channel only reaches back this far */
+private fun expired(ch: Channel, start: Long) = start < Sports.dayStart(-(ch.archive.coerceIn(1, 14) - 1))
+
+private sealed class Cu {
+    object Menu : Cu()
+    object Continue : Cu()
+    object Groups : Cu()
+    object Search : Cu()
+    data class Channels(val pid: String, val cat: Category) : Cu()
+    data class Archive(val ch: Channel) : Cu()
+    val key get() = when (this) { Menu -> "m"; Continue -> "c"; Groups -> "g"; Search -> "s"; is Channels -> "ch:$pid:${cat.id}"; is Archive -> "a:${ch.url}" }
+}
+
+private data class CuData(val chans: List<Channel>, val groups: List<Pair<String, Category>>)
+
+/** Catch-up: Continue watching · Groups · Search; every level replaces the one before, Back goes exactly one level out. */
 @Composable
 private fun DawnCatchup(nav: Nav) {
     val ctx = LocalContext.current
-    val chans by load(Unit) {
-        Store.actives(ctx).filter { it.type == SourceType.XTREAM || (it.type == SourceType.M3U && Tech.m3uCatchup) }
-            .flatMap { p -> try { Repo.allChannels(p).filter { Catchups.has(p, it) } } catch (e: Exception) { emptyList() } }
-            .distinctBy { it.url }
+    val stack = remember { androidx.compose.runtime.mutableStateListOf<Cu>(Cu.Menu).also { s -> CatchupOpen.ch?.let { s.add(Cu.Archive(it)) }; CatchupOpen.ch = null } }
+    val mem = remember { HashMap<String, Int>() }
+    val data by load(Unit) {
+        val pls = Store.actives(ctx).filter { it.type == SourceType.XTREAM || (it.type == SourceType.M3U && Tech.m3uCatchup) }
+        val chans = ArrayList<Channel>(); val groups = ArrayList<Pair<String, Category>>()
+        pls.forEach { p ->
+            val cs = try { Repo.allChannels(p).filter { Catchups.has(p, it) } } catch (e: Exception) { emptyList() }
+            chans += cs
+            val ids = cs.map { it.group }.toSet()
+            try { Repo.liveGroups(p).filter { it.id in ids }.forEach { groups += p.id to it } } catch (_: Exception) {}
+        }
+        CuData(chans.distinctBy { it.url }, groups)
     }
-    var q by remember { mutableStateOf("") }
-    var askQ by remember { mutableStateOf(false) }
-    var favOnly by remember { mutableStateOf(false) }
-    var ch by remember { mutableStateOf<Channel?>(null) }
-    var day by remember { mutableIntStateOf(0) }
-    val first = remember { FocusRequester() }
-    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { Preview.stop(); PreviewSel.ch = null } }
-    Row(Modifier.fillMaxSize().padding(start = 34.dp, end = 38.dp, top = 6.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        Column(Modifier.width(360.dp).fillMaxHeight().dawnGlass().padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf(false to "Svi kanali", true to "Favoriti").forEach { (fav, label) ->
-                    Focusable(onClick = { favOnly = fav }, shape = Rnd(10.dp), normal = if (favOnly == fav) Color(0x33FFFFFF) else Color.Transparent,
-                        focused = Dawn.pill, focusBorderColor = Color.Transparent, zoom = 1f, modifier = Modifier.weight(1f).height(42.dp)) { f ->
-                        Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Ico(if (fav) R.drawable.lc_star else R.drawable.lc_tv, 18.dp, if (f) Dawn.onPill else Color.White)
-                            T(label, 14.sp, if (f) Dawn.onPill else Color.White, FontWeight.SemiBold)
-                        }
+    val top = stack.last()
+    androidx.activity.compose.BackHandler(enabled = stack.size > 1) { stack.removeAt(stack.lastIndex) }
+    fun push(c: Cu) { stack.add(c) }
+    LaunchedEffect(top) {
+        Dawn.crumb = when (top) {
+            Cu.Menu -> ""; Cu.Continue -> tr("Nastavi gledati"); Cu.Groups -> tr("Grupe"); Cu.Search -> tr("Pretraga")
+            is Cu.Channels -> top.cat.name; is Cu.Archive -> top.ch.name
+        }
+    }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { Dawn.crumb = "" } }
+    Box(Modifier.fillMaxSize().padding(start = 34.dp, end = 38.dp, top = 6.dp, bottom = 8.dp)) {
+        when (val d = data) {
+            is Load.Loading -> Loading("Učitavam kanale…")
+            is Load.Err -> Message("Greška", d.message)
+            is Load.Ok -> key(top.key) {
+                val all = d.value
+                when (top) {
+                    Cu.Menu -> CuPanel {
+                        CuList(mem, top.key, listOf(
+                            CuItem("Nastavi gledati", icon = R.drawable.lc_play) { push(Cu.Continue) },
+                            CuItem("Grupe", icon = R.drawable.lc_layers) { push(Cu.Groups) },
+                            CuItem("Pretraga", icon = R.drawable.lc_search) { push(Cu.Search) },
+                        ))
                     }
+                    Cu.Continue -> CuContinue(mem, top.key, nav)
+                    Cu.Groups -> CuPanel {
+                        var q by remember { mutableStateOf("") }
+                        CuSearchField("Traži grupe…", q) { q = it }
+                        val list = all.groups.filter { q.isBlank() || Sports.norm(it.second.name).contains(Sports.norm(q)) }
+                        if (all.chans.isEmpty()) Message("Nijedan kanal nema arhivu", "Provider ne nudi catch-up za tvoje kanale")
+                        else if (list.isEmpty()) Message("Nema rezultata", null)
+                        else CuList(mem, top.key, list.map { (pid, cat) ->
+                            CuItem(cat.name, icon = R.drawable.lc_tv, trailing = all.chans.count { it.pid == pid && it.group == cat.id }.toString()) { push(Cu.Channels(pid, cat)) }
+                        })
+                    }
+                    is Cu.Channels -> CuPanel {
+                        var q by remember { mutableStateOf("") }
+                        CuSearchField(trf("Traži kanale u %s…", top.cat.name), q) { q = it }
+                        val list = all.chans.filter { it.pid == top.pid && it.group == top.cat.id && (q.isBlank() || Sports.norm(it.name).contains(Sports.norm(q))) }
+                        if (list.isEmpty()) Message("Nema rezultata", null)
+                        else CuList(mem, top.key, list.map { c -> CuItem(c.name, ch = c, trailing = trf("%sd", c.archive.coerceAtMost(14))) { push(Cu.Archive(c)) } })
+                    }
+                    is Cu.Archive -> CuArchive(top.ch, mem, top.key, nav)
+                    Cu.Search -> CuSearch(all.chans, mem, top.key, nav, onChannel = { push(Cu.Archive(it)) })
                 }
             }
-            Focusable(onClick = { askQ = true }, onMenu = { q = "" }, shape = Pill, normal = Color.Transparent, focused = Dawn.pill, focusBorderColor = Color.Transparent,
-                zoom = 1f, modifier = Modifier.fillMaxWidth().height(40.dp).border(1.dp, Color(0x4DFFFFFF), Pill)) { f ->
-                Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Ico(R.drawable.lc_search, 16.dp, if (f) Dawn.onPill else Color.White)
-                    T(q.ifBlank { tr("Traži kanal") }, 14.sp, if (f) Dawn.onPill else C.Soft)
-                }
-            }
-            when (val s = chans) {
-                is Load.Loading -> Loading("Učitavam kanale…")
-                is Load.Err -> Message("Greška", s.message)
-                is Load.Ok -> {
-                    val list = s.value.filter { (q.isBlank() || Sports.norm(it.name).contains(Sports.norm(q))) && (!favOnly || Favs.inAny(ctx, it)) }
-                    if (s.value.isEmpty()) Message("Nijedan kanal nema arhivu", "Provider ne nudi catch-up za tvoje kanale")
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        itemsIndexed(list, key = { _, c -> c.url }) { i, c ->
-                            val sel = ch?.url == c.url
-                            Focusable(modifier = Modifier.fillMaxWidth().height(48.dp), onClick = { ch = c; day = 0 }, onFocus = { if (ch?.url != c.url) { ch = c; day = 0; PreviewSel.ch = null; Preview.stop() } },
-                                focusRequester = if (i == 0) first else null, shape = Rnd(10.dp), normal = if (sel) Color(0x26FFFFFF) else Color.Transparent,
-                                focused = Dawn.pill, focusBorderColor = Color.Transparent, zoom = 1f) { f ->
-                                Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    T("%03d".format(c.num), 14.sp, if (f) Dawn.onPill else C.Soft)
-                                    ChannelLogo(c.logo, c.name)
-                                    T(c.name, 15.sp, if (f) Dawn.onPill else Color.White, if (f) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
-                                }
+        }
+    }
+}
+
+private class CuItem(val title: String, val icon: Int? = null, val ch: Channel? = null, val sub: String? = null, val trailing: String? = null,
+                     val progress: Float? = null, val dim: Boolean = false, val onLong: (() -> Unit)? = null, val onClick: () -> Unit)
+
+@Composable
+private fun CuPanel(wide: Boolean = false, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    Column((if (wide) Modifier.fillMaxWidth() else Modifier.width(560.dp)).fillMaxHeight().dawnGlass().padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
+}
+
+/** A list of one level; the focus comes back to the row you left (and the list scrolls to it). */
+@Composable
+private fun CuList(mem: HashMap<String, Int>, key: String, items: List<CuItem>, modifier: Modifier = Modifier) {
+    val start = (mem[key] ?: 0).coerceIn(0, (items.size - 1).coerceAtLeast(0))
+    val st = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = (start - 3).coerceAtLeast(0))
+    val fr = remember { FocusRequester() }
+    LazyColumn(modifier, state = st, verticalArrangement = Arrangement.spacedBy(3.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
+        itemsIndexed(items) { i, it ->
+            Focusable(onClick = it.onClick, onMenu = it.onLong, onFocus = { mem[key] = i }, focusRequester = if (i == start) fr else null,
+                shape = Rnd(12.dp), normal = Color.Transparent, focused = Dawn.pill, focusBorderColor = Color.Transparent, zoom = 1f,
+                modifier = Modifier.fillMaxWidth().height(if (it.sub != null || it.progress != null) 62.dp else 50.dp)) { f ->
+                val fg = if (f) Dawn.onPill else if (it.dim) C.Muted else C.Text
+                Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    if (it.ch != null) ChannelLogo(it.ch.logo, it.ch.name) else if (it.icon != null) Ico(it.icon, 18.dp, fg)
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        T(it.title, 17.sp, fg, if (f) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1)
+                        if (it.sub != null) T(it.sub, 13.sp, if (f) fg else C.Soft, maxLines = 1)
+                        it.progress?.let { pr ->
+                            Box(Modifier.fillMaxWidth().height(3.dp).background(if (f) Color(0x33000000) else Color(0x33FFFFFF))) {
+                                Box(Modifier.fillMaxHeight().fillMaxWidth(pr.coerceIn(0.02f, 1f)).background(if (f) Dawn.onPill else Silver.Focus))
                             }
                         }
                     }
-                    LaunchedEffect(list.isNotEmpty()) { if (list.isNotEmpty()) first.tryFocus() }
+                    if (it.trailing != null) T(it.trailing, 13.sp, if (f) fg else C.Soft)
+                    Ico(R.drawable.lc_chevron_right, 16.dp, if (f) fg else C.Muted)
                 }
             }
         }
-        Box(Modifier.weight(1f).fillMaxHeight().dawnGlass().padding(14.dp)) {
-            val c = ch
-            if (c == null) Message("Izaberi kanal", "Emisije iz arhive možeš gledati i kad su prošle")
-            else DawnArchive(c, day, { day = it }, nav)
+    }
+    LaunchedEffect(items.isNotEmpty()) { if (items.isNotEmpty()) { runCatching { st.scrollToItem((start - 3).coerceAtLeast(0)) }; fr.tryFocus() } }
+}
+
+/** "Search …" line at the top of a level: OK opens the keyboard, long OK clears it. */
+@Composable
+private fun CuSearchField(hint: String, q: String, onQ: (String) -> Unit) {
+    var ask by remember { mutableStateOf(false) }
+    Focusable(onClick = { ask = true }, onMenu = { onQ("") }, shape = Pill, normal = Color.Transparent, focused = Dawn.pill, focusBorderColor = Color.Transparent,
+        zoom = 1f, modifier = Modifier.fillMaxWidth().height(42.dp).border(1.dp, Color(0x4DFFFFFF), Pill)) { f ->
+        Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Ico(R.drawable.lc_search, 16.dp, if (f) Dawn.onPill else Color.White)
+            T(q.ifBlank { tr(hint) }, 15.sp, if (f) Dawn.onPill else if (q.isBlank()) C.Soft else C.Text, maxLines = 1)
         }
     }
-    if (askQ) TextDialog("Traži kanal", "Naziv", q, onDismiss = { askQ = false }) { t -> q = t.trim(); askQ = false }
+    if (ask) TextDialog(hint.removeSuffix("…"), "", q, onDismiss = { ask = false }) { t -> onQ(t.trim()); ask = false }
+}
+
+private fun mmss(ms: Long): String { val s = ms / 1000; return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, s / 60 % 60, s % 60) else "%d:%02d".format(s / 60, s % 60) }
+
+/** Plays a show: from [at] ms (0 = from the beginning), and remembers it for "Continue watching". */
+private fun cuPlay(ctx: android.content.Context, nav: Nav, ch: Channel, e: EpgItem, at: Long) {
+    val p = Store.byId(ctx, ch.pid)
+    if (expired(ch, e.start)) { android.widget.Toast.makeText(ctx, tr("Ova emisija više nije u arhivi"), android.widget.Toast.LENGTH_SHORT).show(); return }
+    val url = Catchups.url(p, ch, e) ?: run { android.widget.Toast.makeText(ctx, tr("Arhiva nije dostupna"), android.widget.Toast.LENGTH_SHORT).show(); return }
+    Preview.stop(); PreviewSel.ch = null
+    CatchupHist.add(CatchupHist.E(url, e.title, ch, e.start, e.end, System.currentTimeMillis()))
+    nav.push(Screen.Player(listOf(PlayItem(e.title, url, ch.logo, ch.name + " · " + e.times(), startAt = at)), 0, live = false))
+}
+
+/** The small action box of a show: Watch from the beginning, or Continue / Start from the beginning when it was partly watched. */
+@Composable
+private fun CuActions(ch: Channel, e: EpgItem, nav: Nav, onRemove: (() -> Unit)? = null, onDismiss: () -> Unit) {
+    val ctx = LocalContext.current
+    val p = Store.byId(ctx, ch.pid)
+    val pr = Catchups.url(p, ch, e)?.let { Watch.get(ctx, it) }?.takeIf { it.started }
+    Popup(e.title, onDismiss) {
+        T(ch.name + " · " + SimpleDateFormat("EEE d. MMM", Locale(Look.lang)).format(Date(e.start)) + " · " + e.times(), 14.sp, C.Soft)
+        if (expired(ch, e.start)) T("Ova emisija više nije u arhivi.", 15.sp, C.Text)
+        else if (pr != null) {
+            OptionRow(trf("Nastavi (%s)", mmss(pr.pos)), R.drawable.lc_play) { onDismiss(); cuPlay(ctx, nav, ch, e, pr.pos) }
+            OptionRow("Od početka", R.drawable.lc_rotate_ccw) { onDismiss(); cuPlay(ctx, nav, ch, e, 0L) }
+        } else OptionRow("Gledaj od početka", R.drawable.lc_play) { onDismiss(); cuPlay(ctx, nav, ch, e, 0L) }
+        if (onRemove != null) OptionRow("Ukloni iz „Nastavi gledati“", R.drawable.lc_x) { onDismiss(); onRemove() }
+    }
 }
 
 @Composable
-private fun DawnArchive(c: Channel, day: Int, onDay: (Int) -> Unit, nav: Nav) {
+private fun CuContinue(mem: HashMap<String, Int>, key: String, nav: Nav) {
     val ctx = LocalContext.current
-    var shown by remember { mutableStateOf<Channel?>(null) }
-    LaunchedEffect(c.url) { delay(350); shown = c }
-    val ch = shown ?: return
-    val p = Store.byId(ctx, ch.pid) ?: return
-    val list by load(ch.url) { archiveOf(p, ch) }
-    var pick by remember(ch.url, day) { mutableStateOf<EpgItem?>(null) }
-    var fav by remember { mutableStateOf(false) }
-    val curShow = nowOf(ch, 0)
-    fun play(e: EpgItem) {
-        Preview.stop(); PreviewSel.ch = null
-        val url = Catchups.url(p, ch, e) ?: return
-        nav.push(Screen.Player(listOf(PlayItem(e.title, url, ch.logo, ch.name + " · " + e.times())), 0, live = false))
+    @Suppress("UNUSED_VARIABLE") val r = CatchupHist.rev + Watch.rev
+    var q by remember { mutableStateOf("") }
+    var pick by remember { mutableStateOf<CatchupHist.E?>(null) }
+    CuPanel(wide = true) {
+        CuSearchField("Traži sačuvane emisije…", q) { q = it }
+        val list = CatchupHist.open(ctx).filter { (e, _) -> q.isBlank() || Sports.norm(e.title).contains(Sports.norm(q)) || Sports.norm(e.ch.name).contains(Sports.norm(q)) }
+        if (list.isEmpty()) Message(if (q.isBlank()) "Nema započetih emisija" else "Nema rezultata", if (q.isBlank()) "Ovdje se pojave emisije iz arhive koje nisi dogledao." else null)
+        else CuList(mem, key, list.map { (e, pr) ->
+            val exp = expired(e.ch, e.start)
+            CuItem(e.title, ch = e.ch, dim = exp,
+                sub = e.ch.name + " · " + SimpleDateFormat("EEE d. MMM HH:mm", Locale(Look.lang)).format(Date(e.start)) + if (exp) " · " + tr("Arhiva istekla") else "",
+                trailing = "${(pr.fraction * 100).toInt()}%", progress = pr.fraction) { pick = e }
+        })
     }
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+    pick?.let { e -> CuActions(e.ch, EpgItem(e.title, null, e.start, e.end, null, true), nav, onRemove = { CatchupHist.remove(e.url) }) { pick = null } }
+}
+
+@Composable
+private fun CuArchive(ch: Channel, mem: HashMap<String, Int>, key: String, nav: Nav) {
+    val ctx = LocalContext.current
+    val p = Store.byId(ctx, ch.pid)
+    val list by load(ch.url) { if (p == null) emptyList() else archiveOf(p, ch) }
+    @Suppress("UNUSED_VARIABLE") val wr = Watch.rev
+    var day by remember { mutableIntStateOf(mem[key + ":day"] ?: 0) }
+    var q by remember { mutableStateOf("") }
+    var pick by remember { mutableStateOf<EpgItem?>(null) }
+    CuPanel(wide = true) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.padding(horizontal = 6.dp)) {
             ChannelLogo(ch.logo, ch.name)
-            Column(Modifier.weight(1f)) {
-                T(ch.name, 20.sp, Color.White, FontWeight.Bold)
-                T("Catch-up / Vraćanje programa", 13.sp, C.Soft)
-            }
-            Focusable(onClick = { fav = true }, shape = Rnd(10.dp), normal = Color.Transparent, focused = Dawn.pill, focusBorderColor = Color.Transparent, zoom = 1f,
-                modifier = Modifier.height(40.dp).border(1.dp, Color(0x4DFFFFFF), Rnd(10.dp))) { f ->
-                Row(Modifier.align(Alignment.Center).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Ico(R.drawable.lc_star, 16.dp, if (f) Dawn.onPill else Color.White); T("Dodaj u favorite", 13.sp, if (f) Dawn.onPill else Color.White)
-                }
-            }
+            T(ch.name, 20.sp, C.Text, FontWeight.Bold, modifier = Modifier.weight(1f))
+            T(trf("Arhiva: %s dana", ch.archive.coerceIn(1, 14)), 13.sp, C.Soft)
         }
-        // days: the oldest on the left, today on the right (only as far back as the provider keeps)
+        // days: the oldest on the left, today on the right
         val days = (0 until ch.archive.coerceIn(1, 14)).toList().reversed()
         val dState = androidx.compose.foundation.lazy.rememberLazyListState()
-        LaunchedEffect(ch.url) { dState.scrollToItem(days.lastIndex.coerceAtLeast(0)) }
+        LaunchedEffect(Unit) { dState.scrollToItem(days.indexOf(day).coerceAtLeast(0)) }
         LazyRow(state = dState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(days) { d ->
                 val sel = d == day
-                val label = if (d == 0) tr("Danas") else SimpleDateFormat("EEE", Locale(Look.lang)).format(Date(Sports.dayStart(-d)))
-                val date = SimpleDateFormat("d MMM", Locale(Look.lang)).format(Date(Sports.dayStart(-d)))
-                Focusable(onClick = { onDay(d) }, shape = Rnd(10.dp), normal = if (sel) Color(0xD9DADADE) else Color.Transparent, focused = Dawn.pill,
-                    focusBorderColor = Color.Transparent, zoom = 1f, modifier = Modifier.width(120.dp).height(50.dp).border(1.dp, Color(0x4DFFFFFF), Rnd(10.dp))) { f ->
+                val label = when (d) { 0 -> tr("Danas"); 1 -> tr("Jučer"); else -> SimpleDateFormat("EEE", Locale(Look.lang)).format(Date(Sports.dayStart(-d))) }
+                Focusable(onClick = { day = d; mem[key + ":day"] = d; mem[key] = 0 }, shape = Rnd(10.dp), normal = if (sel) Color(0xD9DADADE) else Color.Transparent, focused = Dawn.pill,
+                    focusBorderColor = Color.Transparent, zoom = 1f, modifier = Modifier.width(112.dp).height(48.dp).border(1.dp, Color(0x4DFFFFFF), Rnd(10.dp))) { f ->
                     val fg = if (f || sel) Dawn.onPill else Color.White
-                    Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Ico(R.drawable.lc_calendar, 16.dp, fg)
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) { T(label, 13.sp, fg, FontWeight.SemiBold); T(date, 12.sp, fg) }
+                    Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                        T(label, 13.sp, fg, FontWeight.SemiBold); T(SimpleDateFormat("d. MMM", Locale(Look.lang)).format(Date(Sports.dayStart(-d))), 12.sp, fg)
                     }
                 }
             }
         }
+        CuSearchField("Traži emisije…", q) { q = it }
         when (val s = list) {
             is Load.Loading -> Loading("Učitavam arhivu…")
             is Load.Err -> Message("Arhiva nije dostupna", s.message)
             is Load.Ok -> {
                 val now = System.currentTimeMillis()
                 val from = Sports.dayStart(-day); val to = Sports.dayStart(-day + 1)
-                val items = s.value.filter { it.start in from until to && it.end <= now && it.archived }.sortedBy { it.start }
-                if (items.isEmpty()) Message("Nema emisija u arhivi za ovaj dan", "Probaj drugi dan gore")
-                else Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    LazyColumn(Modifier.weight(0.48f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        items(items, key = { it.start }) { e ->
-                            val on = pick?.start == e.start
-                            Focusable(modifier = Modifier.fillMaxWidth().height(46.dp), onFocus = { if (pick?.start != e.start) { pick = e; PreviewSel.ch = null; Preview.stop() } },
-                                onClick = {
-                                    // first OK = small picture, second OK on the same show = full screen
-                                    val url = Catchups.url(p, ch, e)
-                                    if (url != null && PreviewSel.ch?.url == url) play(e) else if (url != null) PreviewSel.ch = ch.copy(url = url, name = e.title)
-                                }, shape = Rnd(10.dp), normal = if (on) Color(0x26FFFFFF) else Color.Transparent, focused = Dawn.pill, focusBorderColor = Color.Transparent, zoom = 1f) { f ->
-                                val fg = if (f) Dawn.onPill else Color.White
-                                Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                                    T(SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(e.start)), 14.sp, fg)
-                                    T(e.title, 15.sp, fg, if (f) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
-                                    T(trf("%s min", ((e.end - e.start) / 60_000).toInt()), 12.sp, if (f) fg else C.Soft)
-                                    Ico(if (f) R.drawable.lc_play else R.drawable.lc_history, 16.dp, fg)
-                                }
-                            }
-                        }
-                    }
-                    Column(Modifier.weight(0.52f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        val e = pick ?: items.last()
-                        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).dawnGlass(12.dp), contentAlignment = Alignment.Center) {
-                            val pc = PreviewSel.ch
-                            if (pc != null) PreviewBox(pc, Modifier.fillMaxSize()) else Ico(R.drawable.lc_play, 46.dp, Color(0x99DADADE))
-                        }
-                        T(e.title, 19.sp, Color.White, FontWeight.Bold)
-                        T(e.times() + " · " + trf("%s min", ((e.end - e.start) / 60_000).toInt()), 13.sp, C.Soft)
-                        cleanDesc(e.desc)?.let { T(it, 13.sp, C.Soft, maxLines = 3) }
-                        Spacer(Modifier.weight(1f))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            @Composable fun B(label: String, icon: Int, primary: Boolean, onClick: () -> Unit) {
-                                Focusable(onClick = onClick, shape = Rnd(10.dp), normal = if (primary) Color(0xD9DADADE) else Color.Transparent, focused = Dawn.pill,
-                                    focusBorderColor = Color.Transparent, zoom = 1f, modifier = Modifier.weight(1f).height(44.dp).border(1.dp, Color(0x4DFFFFFF), Rnd(10.dp))) { f ->
-                                    val fg = if (f || primary) Dawn.onPill else Color.White
-                                    Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        Ico(icon, 16.dp, fg); T(label, 13.sp, fg, FontWeight.SemiBold)
-                                    }
-                                }
-                            }
-                            B(tr("Gledaj od početka"), R.drawable.lc_play, true) { play(e) }
-                            // restart: the show that is on now, from its beginning
-                            B(tr("Ispočetka"), R.drawable.lc_rotate_ccw, false) {
-                                val cur = curShow
-                                if (cur != null) Catchups.url(p, ch, cur)?.let { u -> Preview.stop(); PreviewSel.ch = null
-                                    nav.push(Screen.Player(listOf(PlayItem(cur.title, u, ch.logo, ch.name + " · " + cur.times())), 0, live = false)) }
-                                else android.widget.Toast.makeText(ctx, tr("Program koji sada ide nije poznat"), android.widget.Toast.LENGTH_SHORT).show()
-                            }
-                            B(tr("Uživo"), R.drawable.lc_tv, false) { Preview.stop(); PreviewSel.ch = null; playChannels(nav, listOf(ch), 0) }
-                        }
-                    }
-                }
+                // a search looks through every day of the archive; without it only the chosen day
+                val items = s.value.filter { it.end <= now && it.archived && !expired(ch, it.start) &&
+                    (if (q.isBlank()) it.start in from until to else Sports.norm(it.title).contains(Sports.norm(q))) }.sortedBy { it.start }
+                if (items.isEmpty()) Message(if (q.isBlank()) "Nema emisija u arhivi za ovaj dan" else "Nema rezultata", if (q.isBlank()) "Izaberi drugi dan gore" else null)
+                else CuList(mem, key + ":" + day + ":" + q, items.map { e ->
+                    val pr = Catchups.url(p, ch, e)?.let { Watch.get(ctx, it) }?.takeIf { it.started || it.watched }
+                    CuItem(e.title, icon = R.drawable.lc_history,
+                        sub = (if (q.isBlank()) "" else SimpleDateFormat("EEE d. MMM · ", Locale(Look.lang)).format(Date(e.start))) + e.times() + " · " + trf("%s min", ((e.end - e.start) / 60_000).toInt()),
+                        trailing = pr?.let { if (it.watched) "✓" else "${(it.fraction * 100).toInt()}%" }, progress = pr?.takeIf { !it.watched }?.fraction) { pick = e }
+                })
             }
         }
     }
-    if (fav) FavPicker(ch) { fav = false }
+    pick?.let { e -> CuActions(ch, e, nav) { pick = null } }
+}
+
+/** One search for Catch-up: channel names and show titles of the archive, best matches first, with the last 10 searches. */
+@Composable
+private fun CuSearch(chans: List<Channel>, mem: HashMap<String, Int>, key: String, nav: Nav, onChannel: (Channel) -> Unit) {
+    val ctx = LocalContext.current
+    @Suppress("UNUSED_VARIABLE") val r = CatchupQ.rev
+    var q by remember { mutableStateOf(mem.keys.firstOrNull { it.startsWith("q=") }?.removePrefix("q=") ?: "") }
+    var ask by remember { mutableStateOf(false) }
+    var clear by remember { mutableStateOf(false) }
+    var pick by remember { mutableStateOf<Pair<Channel, EpgItem>?>(null) }
+    fun run(t: String) { mem.keys.removeAll { it.startsWith("q=") }; q = t; if (t.isNotBlank()) { mem["q=$t"] = 0; CatchupQ.add(t) } }
+    // shows: archives of the channels, read in small batches (a slow channel never holds up the rest)
+    val shows by load(q) {
+        if (q.length < 2) emptyList() else kotlinx.coroutines.coroutineScope {
+            val n = Sports.norm(q)
+            chans.take(80).chunked(6).flatMap { part ->
+                part.map { c -> async(kotlinx.coroutines.Dispatchers.IO) {
+                    val p = Store.byId(ctx, c.pid) ?: return@async emptyList()
+                    try { kotlinx.coroutines.withTimeout(8000) { archiveOf(p, c) } } catch (e: Exception) { emptyList() }
+                        .filter { it.archived && it.end <= System.currentTimeMillis() && !expired(c, it.start) && Sports.norm(it.title).contains(n) }.map { c to it }
+                } }.map { it.await() }.flatten()
+            }
+        }
+    }
+    CuPanel(wide = true) {
+        Focusable(onClick = { ask = true }, onMenu = { run("") }, shape = Pill, normal = Color.Transparent, focused = Dawn.pill, focusBorderColor = Color.Transparent,
+            zoom = 1f, modifier = Modifier.fillMaxWidth().height(46.dp).border(1.dp, Color(0x4DFFFFFF), Pill)) { f ->
+            Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Ico(R.drawable.lc_search, 18.dp, if (f) Dawn.onPill else Color.White)
+                T(q.ifBlank { tr("Pretraži Catch-up…") }, 16.sp, if (f) Dawn.onPill else if (q.isBlank()) C.Soft else C.Text, maxLines = 1)
+            }
+        }
+        if (q.isBlank()) {
+            val hist = CatchupQ.list()
+            if (hist.isEmpty()) Message("Traži kanal ili emisiju", "Na primjer naziv kanala ili emisije iz arhive.")
+            else {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp)) {
+                    T("Nedavne pretrage", 14.sp, C.Soft, FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                    T("Drži OK za brisanje jedne", 12.sp, C.Muted)
+                }
+                CuList(mem, key + ":h", hist.map { h -> CuItem(h, icon = R.drawable.lc_history, onLong = { CatchupQ.remove(h) }) { run(h) } } +
+                    CuItem("Obriši historiju pretrage", icon = R.drawable.lc_trash_2) { clear = true })
+            }
+        } else {
+            val n = Sports.norm(q)
+            fun score(t: String): Int { val x = Sports.norm(t); return when { x == n -> 0; x.startsWith(n) -> 1; x.split(' ').any { it.startsWith(n) } -> 2; else -> 3 } }
+            val chHits = chans.filter { Sports.norm(it.name).contains(n) }.sortedBy { score(it.name) }
+            val showHits = ((shows as? Load.Ok)?.value ?: emptyList()).sortedWith(compareBy<Pair<Channel, EpgItem>> { score(it.second.title) }.thenByDescending { it.second.start })
+            val items = chHits.map { c -> CuItem(c.name, ch = c, sub = tr("Kanal"), trailing = trf("%sd", c.archive.coerceAtMost(14))) { onChannel(c) } } +
+                showHits.take(100).map { (c, e) -> CuItem(e.title, icon = R.drawable.lc_history,
+                    sub = tr("Emisija") + " · " + c.name + " · " + SimpleDateFormat("EEE d. MMM HH:mm", Locale(Look.lang)).format(Date(e.start))) { pick = c to e } }
+            if (items.isEmpty() && shows is Load.Loading) Loading("Tražim u arhivi…")
+            else if (items.isEmpty()) Message("Nema rezultata", "Probaj drugi naziv.")
+            else {
+                if (shows is Load.Loading) T("Tražim još u arhivi…", 12.sp, C.Muted, modifier = Modifier.padding(horizontal = 8.dp))
+                CuList(mem, key + ":r:" + q, items)
+            }
+        }
+    }
+    if (ask) TextDialog("Pretraži Catch-up", "", q, onDismiss = { ask = false }) { t -> ask = false; run(t.trim()) }
+    if (clear) Popup("Obriši historiju pretrage?", { clear = false }) {
+        OptionRow("Obriši", R.drawable.lc_trash_2) { CatchupQ.clear(); clear = false }
+        OptionRow("Odustani", R.drawable.lc_x) { clear = false }
+    }
+    pick?.let { (c, e) -> CuActions(c, e, nav) { pick = null } }
 }

@@ -147,7 +147,7 @@ const val RECENT_GROUP = "__recent__"
 
 suspend fun channelsOf(ctx: android.content.Context, ref: GroupRef): List<Channel> {
     if (ref.cat.id == RECENT_GROUP) return Recent.list().map { it.ch }
-    if (ref.pid == null) return Favs.channels(favListId(ref.cat.id))
+    if (ref.pid == null) return Favs.all(ctx)
     val p = Store.byId(ctx, ref.pid) ?: return emptyList()
     val ovr = Ovr(ctx, p.id)
     return when {
@@ -175,10 +175,9 @@ internal fun groupFocusTarget(rows: List<GRow>, selected: GroupRef?): String? {
 
 suspend fun groupRows(ctx: android.content.Context): List<GRow> {
     val out = ArrayList<GRow>()
-    out.add(GRow.Sport())
-    if (Look.age && !Look.dawn && Recent.list().isNotEmpty()) out.add(GRow.Group(GroupRef(null, Category(RECENT_GROUP, tr("Zadnje gledano")))))
-    Favs.lists(ctx).forEach { out.add(GRow.Group(GroupRef(null, Category(FAV_PREFIX + it.id, "★ " + it.name)))) }
-    out.add(GRow.NewFav())
+    // TV groups: Favorites (always), Recently watched (only when there is history), then the provider's groups as the playlist gives them
+    out.add(GRow.Group(GroupRef(null, Category(FAV_PREFIX + Favs.mainId(ctx), tr("Favoriti")))))
+    if (Recent.list().isNotEmpty()) out.add(GRow.Group(GroupRef(null, Category(RECENT_GROUP, tr("Nedavno gledano")))))
     val pls = Store.actives(ctx)
     pls.forEachIndexed { _, p ->
         // several playlists: all folded until you open one (its groups are read only then)
@@ -186,9 +185,7 @@ suspend fun groupRows(ctx: android.content.Context): List<GRow> {
         if (pls.size > 1) out.add(GRow.Header(p, open))
         if (open) {
             val ovr = Ovr(ctx, p.id)
-            out.add(GRow.Group(GroupRef(p.id, Category(ALL_GROUP, tr("Svi kanali")))))
             ovr.groups("live", Repo.liveGroups(p)).forEach { out.add(GRow.Group(GroupRef(p.id, it))) }
-            out.add(GRow.NewGroup(p.id))
         }
     }
     return out
@@ -238,6 +235,11 @@ fun GroupColumn(
                     contentPadding = PaddingValues(bottom = 16.dp, top = 1.dp),
                 ) {
                     itemsIndexed(list, key = { _, r -> r.id }) { i, r ->
+                        if (Look.dawn && r is GRow.Group && r.ref.pid != null && list.getOrNull(i - 1).let { it !is GRow.Group || it.ref.pid == null })
+                            Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0x33FFFFFF)))
+                                T("GRUPE PROVAJDERA", 11.sp, C.Muted, FontWeight.SemiBold)
+                            }
                         // Let Compose move focus naturally inside this focus group. Manual scroll/focus
                         // coroutines here used to race on DPAD key-repeat and made rows jump/flicker.
                         val m = Modifier.fillMaxWidth().padding(horizontal = if (classicStyle) 3.dp else 0.dp).height(if (classicStyle) 42.dp else Rows.group)
@@ -265,8 +267,12 @@ fun GroupColumn(
                                 ) { gf ->
                                     Row(Modifier.fillMaxSize().padding(horizontal = if (Look.dawn) 20.dp else 12.dp), verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        if (Look.dawn) T(g.cat.name, 18.sp, if (gf) Dawn.onPill else C.Text, if (gf) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, modifier = Modifier.weight(1f))
-                                        else {
+                                        if (Look.dawn) {
+                                            val fg = if (gf) Dawn.onPill else C.Text
+                                            Ico(when { g.pid == null && g.cat.id == RECENT_GROUP -> R.drawable.lc_history; g.pid == null -> R.drawable.lc_star; else -> R.drawable.lc_tv }, 18.dp, fg)
+                                            T(g.cat.name, 18.sp, fg, if (gf) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, modifier = Modifier.weight(1f))
+                                            Ico(R.drawable.lc_chevron_right, 16.dp, if (gf) fg else C.Muted)
+                                        } else {
                                         if (selected) Dot(C.Red, 7.dp)
                                         if (width > 100.dp) T(g.cat.name, if (classicStyle) 13.sp else Rows.font, if (selected) C.Text else C.Soft, if (selected) FontWeight.Bold else FontWeight.Normal, maxLines = 1, modifier = Modifier.weight(1f)) else Ico(R.drawable.lc_layers, 18.dp, if (selected) C.Text else C.Muted)
                                         }
@@ -359,6 +365,8 @@ fun TvDialogs(st: TvState, rows: Load<List<GRow>>) {
 /** Opens a group (after the PIN when locked). */
 /** The channel shown in the small picture when the preview starts on OK. */
 object PreviewSel { var ch by mutableStateOf<Channel?>(null) }
+/** bumps when the preview's picture format changes */
+object PreviewFmt { var rev by mutableIntStateOf(0) }
 
 /** Hints on the screen (Settings › Appearance): 0 a few seconds, then they go · 1 always · 2 never. */
 object Hints {
@@ -479,7 +487,7 @@ private fun TvList(nav: Nav) {
                 DawnPreview(Modifier.fillMaxWidth().weight(1f, fill = false))
                 DawnNowNext(focusedCh ?: PreviewSel.ch, Modifier.fillMaxWidth())
                 Spacer(Modifier.weight(0.001f))
-                DawnOptions(focusedCh ?: PreviewSel.ch, onOptions = { opts = focusedCh ?: PreviewSel.ch }, modifier = Modifier.fillMaxWidth().height(68.dp))
+                DawnOptions(PreviewSel.ch ?: focusedCh, nav, modifier = Modifier.fillMaxWidth().height(64.dp))
             }
         }
         opts?.let { ch ->
@@ -661,8 +669,17 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                 val list = s.value
                 if (list.isEmpty()) {
                     Message(if (isFav) "Nema favorita" else "Grupa je prazna",
-                        if (isFav) "Na kanalu drži OK › Dodaj u favorite" else "Kanale možeš prebaciti ovamo preko opcija kanala")
+                        if (isFav) "Na kanalu drži OK da ga dodaš u favorite" else "Kanale možeš prebaciti ovamo preko opcija kanala")
                 } else {
+                    // Recently watched: one direct action, no second question
+                    if (g.cat.id == RECENT_GROUP) Focusable(onClick = { Recent.clear(); onBackToGroups() }, shape = Rnd(12.dp), normal = Color.Transparent,
+                        focused = Dawn.pill, focusBorderColor = Color.Transparent, zoom = 1f,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp).height(44.dp).border(1.dp, Color(0x4DFFFFFF), Rnd(12.dp))) { f ->
+                        Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Ico(R.drawable.lc_trash_2, 16.dp, if (f) Dawn.onPill else C.Text)
+                            T("Obriši nedavno gledano", 14.sp, if (f) Dawn.onPill else C.Text, FontWeight.SemiBold)
+                        }
+                    }
                     LazyColumn(
                         modifier = Modifier.focusGroup().onPreviewKeyEvent { e ->
                             if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { onBackToGroups(); true } else false
@@ -693,7 +710,11 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                         }
                                     }
                                 },
-                                onMenu = { menu = ch; menuUrl = ch.url },
+                                onMenu = {
+                                    val on = Favs.flip(ctx, ch)
+                                    android.widget.Toast.makeText(ctx, tr(if (on) "Dodano u favorite" else "Uklonjeno iz favorita"), android.widget.Toast.LENGTH_SHORT).show()
+                                    listRev++
+                                },
                                 onFocus = { onFocusCh(ch) },
                                 focusRequester = cWrap.requester(i, if (ch.url == menuUrl) chFr else null),
                                 normal = if (Look.dawn) Color.Transparent else if (active) C.Green.copy(alpha = 0.10f) else C.Card,
@@ -709,7 +730,6 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                     T(ch.name, 16.sp, if (f) Dawn.onPill else C.Text, if (f) FontWeight.SemiBold else FontWeight.Normal,
                                         maxLines = 1, modifier = Modifier.weight(1f))
                                     if (locked) Ico(R.drawable.lc_lock, 16.dp, C.Muted)
-                                    if (!isFav && Favs.inAny(ctx, ch)) T("★", 17.sp, C.Amber)
                                     if (active) Dot(C.Green, 8.dp)
                                 }
                             }
@@ -1142,6 +1162,14 @@ fun PreviewBox(ch: Channel?, modifier: Modifier) {
                 keepScreenOn = true
                 setShutterBackgroundColor(android.graphics.Color.BLACK)
                 descendantFocusability = android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
+            }
+        }, update = { v ->
+            @Suppress("UNUSED_VARIABLE") val r = PreviewFmt.rev
+            v.resizeMode = when (ch?.let { Prefs.long("fmt_v2_" + it.url.hashCode(), 0) }?.toInt() ?: 0) {
+                3 -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
+                4 -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
+                5 -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                else -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
             }
         }, modifier = Modifier.fillMaxSize())
         // until the picture is there: the channel logo and a small spinner, not a black box

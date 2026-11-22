@@ -107,6 +107,8 @@ data class PlayItem(
     val subOff: Boolean = false,
     /** built-in subtitle chosen before playing: language + label */
     val subLang: String? = null, val subLabel: String? = null,
+    /** start here (ms) without asking; null = the usual resume question */
+    val startAt: Long? = null,
 )
 
 fun JSONObject.str(k: String): String = if (!has(k) || isNull(k)) "" else optString(k, "")

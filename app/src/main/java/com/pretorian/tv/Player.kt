@@ -483,7 +483,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         subFile = cur.subFile ?: if (!s.live) SubSync.kept(cur.url) else null
         val saved = if (!s.live) Watch.get(ctx, cur.url) else null
         val rm = Prefs.str("resume_mode", "0")
-        if (saved != null && saved.started && cur.subFile == null && rm == "0") { resume = saved; loadMedia(cur, subFile, saved.pos, play = false) }
+        if (cur.startAt != null) loadMedia(cur, subFile, cur.startAt)
+        else if (saved != null && saved.started && cur.subFile == null && rm == "0") { resume = saved; loadMedia(cur, subFile, saved.pos, play = false) }
         else if (saved != null && saved.started && cur.subFile == null && rm == "1") loadMedia(cur, subFile, saved.pos)
         else loadMedia(cur, subFile, 0L)
         nowNext = emptyList()
@@ -992,15 +993,17 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         }
         // Live › More: Subtitles · Audio Track · Sleep Timer · Stream Information · External Player · Time Shift (only what this stream has)
         "more" -> Popup(item.title, onDismiss = { dialog = null }) {
-            if (tracksOf(player, MC.TRACK_TYPE_TEXT).isNotEmpty()) OptionRow("Titlovi", R.drawable.lc_captions) { dialog = "subs" }
-            if (tracksOf(player, MC.TRACK_TYPE_AUDIO).size > 1) OptionRow("Audio", R.drawable.lc_volume, value = tracksOf(player, MC.TRACK_TYPE_AUDIO).firstOrNull { it.selected }?.label ?: "—") { dialog = "audio" }
+            // exactly six entries, always in this order; what this stream cannot do says so instead of pretending
+            fun na() = android.widget.Toast.makeText(ctx, tr("Nije dostupno za ovaj kanal"), android.widget.Toast.LENGTH_SHORT).show()
+            val subs = tracksOf(player, MC.TRACK_TYPE_TEXT); val auds = tracksOf(player, MC.TRACK_TYPE_AUDIO)
+            OptionRow("Titlovi", R.drawable.lc_captions, value = if (subs.isEmpty()) tr("Nije dostupno") else null) { if (subs.isEmpty()) na() else dialog = "subs" }
+            OptionRow("Audio", R.drawable.lc_volume, value = auds.firstOrNull { it.selected }?.label ?: if (auds.isEmpty()) tr("Nije dostupno") else "—") { if (auds.size > 1) dialog = "audio" else na() }
             OptionRow(if (Sleep.until > 0) trf("Tajmer: %s min", ((Sleep.until - System.currentTimeMillis()) / 60_000 + 1).coerceAtLeast(1)) else tr("Tajmer za spavanje"), R.drawable.lc_moon) { dialog = "sleep" }
             OptionRow("Informacije o streamu", R.drawable.lc_info, value = if (videoH > 0) qualityLabel(videoH) else null) { dialog = "info" }
             OptionRow("Vanjski plejer", R.drawable.lc_external_link) { player.pause(); saveProgress(); dialog = "ext" }
             val c = item.channel
-            if (c != null && Tech.rewind && Catchups.has(p, c)) OptionRow("Premotavanje uživo", R.drawable.lc_rotate_ccw, sub = tr("5 minuta nazad kroz arhivu")) { dialog = null; liveShift(-1) }
-            if (c != null) OptionRow("Pomak vremena", R.drawable.lc_clock, value = EpgShift.label(EpgShift.chMin(c.url))) { dialog = "epgshift" }
-            if (Tech.audioDelay) OptionRow("Pomak zvuka", R.drawable.lc_volume, sub = tr("ako zvuk kasni ili žuri"), value = AudioDelay.label(AudioDelay.of(item.url))) { dialog = "adelay" }
+            val shift = c != null && Catchups.has(p, c)
+            OptionRow("Pomak uživo", R.drawable.lc_rotate_ccw, sub = tr(if (shift) "5 minuta nazad kroz arhivu" else "Nije dostupno za ovaj kanal")) { if (shift) { dialog = null; liveShift(-1) } else na() }
         }
         "fav" -> item.channel?.let { FavPicker(it) { dialog = null } }
         "epgshift" -> item.channel?.let { EpgShiftPopup(it) { dialog = null } }
@@ -1139,7 +1142,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     LaunchedEffect(item.url) { resize = item.channel?.let { Prefs.long("fmt_v2_" + it.url.hashCode(), 0).toInt().coerceIn(0, FORMATS.lastIndex) } ?: resize }
 }
 
-private val FORMATS = listOf("Zadano / automatski", "4:3", "16:9", "Prilagodi širinu", "Rastegni", "Zoom")
+internal val FORMATS = listOf("Zadano / automatski", "4:3", "16:9", "Prilagodi širinu", "Rastegni", "Zoom")
 
 /** Live TV: exactly six actions in one row (approved): Pause · Favorite · EPG · Format · Archive · More. */
 @Composable
@@ -1157,17 +1160,16 @@ private fun ChannelOptionsBar(favOn: Boolean, playing: Boolean, onAction: (Strin
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         list.forEachIndexed { i, b ->
             val favorite = b.id == "favorites"
-            Focusable(modifier = Modifier.weight(1f).height(66.dp), onClick = { onAction(b.id) },
+            Focusable(modifier = Modifier.weight(1f).height(58.dp), onClick = { onAction(b.id) },
                 focusRequester = if (i == 0) first else null, normal = Color(0x33FFFFFF),
                 focused = C.Red, focusBorderColor = Color.Transparent, shape = Rnd(12.dp), zoom = 1.0f) { focused ->
-                Column(Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 7.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically)) {
-                    Ico(b.icon, 22.dp, when {
+                // icons only (approved): no text under the icons over the picture
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Ico(b.icon, 26.dp, when {
                         favorite && favOn -> C.Amber
                         focused -> C.OnRed
                         else -> C.Text
                     })
-                    T(b.label, 12.sp, if (focused) C.OnRed else C.Text, FontWeight.SemiBold, maxLines = 1)
                 }
             }
         }

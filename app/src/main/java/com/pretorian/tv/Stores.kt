@@ -67,6 +67,16 @@ object Favs {
 
     fun contains(id: String, ch: Channel) = channels(id).any { it.url == ch.url }
     fun inAny(ctx: Context, ch: Channel) = lists(ctx).any { contains(it.id, ch) }
+    /** The one Favorites list of the TV screen: its id (the first list; created when missing). */
+    fun mainId(ctx: Context): String = lists(ctx).firstOrNull()?.id ?: addList(ctx, "Favoriti").id
+    /** Favorites as one list: every saved channel once (older extra lists are folded in, nothing is lost). */
+    fun all(ctx: Context): List<Channel> = lists(ctx).flatMap { channels(it.id) }.distinctBy { it.url }.mapIndexed { i, c -> c.copy(num = i + 1) }
+    /** Long OK / the star: on → off everywhere, off → on in the Favorites list. No question asked. */
+    fun flip(ctx: Context, ch: Channel): Boolean {
+        val on = inAny(ctx, ch)
+        if (on) lists(ctx).forEach { l -> if (contains(l.id, ch)) toggle(l.id, ch) } else toggle(mainId(ctx), ch)
+        return !on
+    }
     fun toggle(id: String, ch: Channel) { val l = channels(id).toMutableList(); if (!l.removeAll { it.url == ch.url }) l.add(ch); save(id, l) }
     fun rename(id: String, ch: Channel, name: String) = save(id, channels(id).map { if (it.url == ch.url) it.copy(name = name) else it })
     fun move(id: String, ch: Channel, d: Int) {
@@ -184,7 +194,9 @@ object Watch {
         val on = Store.actives(ctx).map { it.id }.toSet()
         if (on.isEmpty()) return emptyList()
         val single = Store.playlists(ctx).size == 1
-        return all(ctx).values.filter { (it.started || it.next) && !it.done && (owner(ctx, it, single) in on || alt[it.url]?.first in on) }
+        // catch-up shows have their own "Continue watching" in Catch-up
+        val cu = CatchupHist.urls()
+        return all(ctx).values.filter { (it.started || it.next) && !it.done && it.url !in cu && (owner(ctx, it, single) in on || alt[it.url]?.first in on) }
             .sortedByDescending { it.ts }
             // the same film / episode from two playlists: only the newest one
             .distinctBy { (it.series?.let { s -> "s:" + key(s) + ":" + it.season + ":" + it.episode } ?: ("m:" + key(it.title))) }
