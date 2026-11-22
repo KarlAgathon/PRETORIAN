@@ -2507,4 +2507,46 @@ Traži grupe…|Искать группы…
 Traži sačuvane emisije…|Искать сохранённые передачи…
 Traži emisije…|Искать передачи…
 Pritisni OK još jednom za cijeli ekran|Нажмите OK ещё раз для полного экрана
+Audio providera|Аудио провайдера
+Nepoznat|Неизвестно
+U mojoj listi|В моём списке
+Dodaj na moju listu|Добавить в мой список
+Titlovi (provider)|Субтитры (провайдер)
+Titlovi (online)|Субтитры (онлайн)
+Nije pronađeno|Не найдено
+Slični filmovi|Похожие фильмы
+%s %% odgledano|Просмотрено %s%%
+Sezone|Сезоны
+Drži OK za opcije|Удерживайте OK для параметров
+Sezona|Сезон
+Čeka se provider|Ожидается провайдер
+Izlazi %s|Выходит %s
+Detalji epizode|Подробнее о серии
+Uklonjeno iz „Nastavi gledati“|Удалено из «Продолжить просмотр»
+Format prikaza|Формат изображения
+Tražim titlove…|Ищу субтитры…
+Titl se nije mogao preuzeti, probaj drugu verziju|Не удалось скачать субтитры, попробуйте другую версию
+Pronađi još titlova|Найти ещё субтитры
+Bez titlova|Без субтитров
+Font titlova|Шрифт субтитров
+Veličina titlova|Размер субтитров
+Automatski sljedeća epizoda|Следующая серия автоматически
+Preskoči uvod (Intro)|Пропускать заставку
+Preskoči sažetak (Recap)|Пропускать краткое содержание
+Preskakanje naprijed|Перемотка вперёд
+Preskakanje nazad|Перемотка назад
+Jezik u kojem se titlovi traže online. Titlovi providera ostaju svi dostupni.|Язык, на котором ищутся субтитры онлайн. Все субтитры провайдера остаются доступны.
+U kinima|В кино
+Dodano na vašu listu|Добавлено в ваш список
+Uklonjeno s vaše liste|Удалено из вашего списка
+Ovdje se pojave serije koje nisi dogledao.|Здесь появляются сериалы, которые вы не досмотрели.
+Ovdje se pojave filmovi koje nisi dogledao.|Здесь появляются фильмы, которые вы не досмотрели.
+OK: nastavi · Drži OK: opcije|OK: продолжить · Удерживайте OK: параметры
+Pusti od početka|Смотреть с начала
+Ova lista trenutno nije dostupna|Этот список сейчас недоступен
+U tvojoj playlisti nema serija ovog servisa|В вашем плейлисте нет сериалов этого сервиса
+Lista je prazna. U detaljima filma ili serije izaberi „Dodaj na moju listu“.|Список пуст. На странице фильма или сериала выберите «Добавить в мой список».
+Ništa novo od zadnjeg ažuriranja playliste|Ничего нового с последнего обновления плейлиста
+Nijedan film iz kina trenutno nije u tvojoj playlisti|Ни одного фильма из кинотеатров сейчас нет в вашем плейлисте
+Ukloni s moje liste|Удалить из моего списка
 """.trimIndent()

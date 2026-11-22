@@ -106,7 +106,7 @@ fun SubsPanel(item: PlayItem, tracks: List<TrackItem>, current: String?, onDismi
             is SmartSubs.State.Found -> {
                 st.list.take(shown).forEachIndexed { i, res ->
                     val id = res.provider + "|" + res.ref
-                    OptionRow("$langName (V${i + 1})", R.drawable.lc_cloud, selected = current != null && chosen.value == id,
+                    OptionRow(trf("%s (V%s)", langName, i + 1), R.drawable.lc_cloud, selected = current != null && chosen.value == id,
                         value = if (busy == id) tr("Preuzimam…") else null) {
                         if (busy != null) return@OptionRow
                         busy = id
@@ -159,8 +159,8 @@ fun PlayerSettings(series: Boolean, audio: String?, resize: Int, onDismiss: () -
                 OptionRow("Preskoči sažetak (Recap)", R.drawable.lc_rotate_cw, value = tr(if (recap) "Uključeno" else "Isključeno")) {
                     Prefs.put("skip_recap", if (recap) 2L else 1L); rev++ }
             }
-            OptionRow("Preskakanje naprijed", R.drawable.lc_rotate_cw, value = "+${Prefs.long("skip_fwd", 10)} s") { sub = "fwd" }  // i18n-ignore
-            OptionRow("Preskakanje nazad", R.drawable.lc_rotate_ccw, value = "−${Prefs.long("skip_back", 10)} s") { sub = "back" }  // i18n-ignore
+            OptionRow("Preskakanje naprijed", R.drawable.lc_rotate_cw, value = trf("+%s s", Prefs.long("skip_fwd", 10))) { sub = "fwd" }
+            OptionRow("Preskakanje nazad", R.drawable.lc_rotate_ccw, value = trf("−%s s", Prefs.long("skip_back", 10))) { sub = "back" }
             OptionRow("Format prikaza", R.drawable.lc_rectangle_horizontal, value = tr(VOD_FORMATS.firstOrNull { it.first == resize }?.second ?: "Automatski")) { onFormat() }
         }
         "lang" -> Popup("Titlovi", { sub = "" }) {

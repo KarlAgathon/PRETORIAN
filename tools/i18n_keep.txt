@@ -594,3 +594,27 @@ d. MMM
 Kodek
 FPS
 Bitrate
+back
+fwd
+lang
+font
+size
+skip_back
+skip_fwd
+sans-serif
+sans-serif-medium
+sans-serif-condensed
+serif
+monospace
+casual
+Streaming
+%s (V%s)
++%s s
+−%s s
+Sans
+Sans Medium
+Condensed
+Serif
+Monospace
+Casual
+Zoom

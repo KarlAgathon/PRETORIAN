@@ -174,7 +174,7 @@ fun DawnVod(nav: Nav, series: Boolean) {
                 is VL.Svc -> {
                     val items by load(top.s.name) { VodMatch.match(p, true, "svc:" + top.s.name, Tmdb.network(top.s.networks)) }
                     VodGalleryBody(top.s.name, R.drawable.lc_tv, items, mem, top.key, nav,
-                        empty = if (!Tmdb.enabled()) "Za ovu listu treba TMDB ključ (Postavke › Izvori)" else "U tvojoj playlisti nema serija ovog servisa")
+                        empty = if (!Tmdb.enabled()) "Ova lista trenutno nije dostupna" else "U tvojoj playlisti nema serija ovog servisa")
                 }
             }
         }
@@ -204,7 +204,7 @@ private fun VodGalleryLevel(p: Playlist, series: Boolean, g: VL.Gallery, mem: Ha
     VodGalleryBody(g.title, g.icon, items, mem, g.key, nav, empty = when (g.id) {
         VG_MY -> "Lista je prazna. U detaljima filma ili serije izaberi „Dodaj na moju listu“."
         VG_NEW -> "Ništa novo od zadnjeg ažuriranja playliste"
-        VG_CINEMA -> if (!Tmdb.enabled()) "Za ovu listu treba TMDB ključ (Postavke › Izvori)" else "Nijedan film iz kina trenutno nije u tvojoj playlisti"
+        VG_CINEMA -> if (!Tmdb.enabled()) "Ova lista trenutno nije dostupna" else "Nijedan film iz kina trenutno nije u tvojoj playlisti"
         else -> "Kategorija je prazna"
     })
 }
