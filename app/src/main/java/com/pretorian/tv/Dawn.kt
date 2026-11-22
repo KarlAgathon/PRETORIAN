@@ -124,7 +124,7 @@ fun DawnShell(top: Screen, nav: Nav, content: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize().background(Silver.Background)) {
         DawnBackground()
         Column(Modifier.fillMaxSize()) {
-            DawnTopBar(top, menu)
+            DawnTopBar(top, menu, nav)
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 if (menu) DawnMenu(nav) else content()
                 OfflineNote(Modifier.align(Alignment.BottomEnd).padding(end = 34.dp, bottom = 6.dp))
@@ -259,7 +259,7 @@ private fun DawnMenu(nav: Nav) {
 }
 
 @Composable
-private fun DawnTopBar(top: Screen, menu: Boolean) {
+private fun DawnTopBar(top: Screen, menu: Boolean, nav: Nav) {
     val section = if (menu) "" else when (top) {
         Screen.Tv -> "TV"; Screen.Movies, is Screen.MovieDetail -> "Filmovi"; Screen.Series, is Screen.SeriesDetail -> "Serije"
         Screen.Catchup -> "Catch-up"; Screen.Sports -> "Sport"; Screen.Search -> "Pretraga"
@@ -285,9 +285,52 @@ private fun DawnTopBar(top: Screen, menu: Boolean) {
         }
         Spacer(Modifier.weight(1f))
         if (top == Screen.Tv && Dawn.pos.isNotEmpty()) { T(Dawn.pos, 15.sp, C.Soft); sep() }
-        T(SimpleDateFormat("EEE, d MMM", Locale(Look.lang)).format(now), 15.sp, C.Soft)
-        sep()
+        if (top != Screen.AddPlaylist) { NoteBell(nav); sep() }
+        // right side (approved): HH:mm · dd.MM.yyyy
         T(SimpleDateFormat("HH:mm", Locale.getDefault()).format(now), 17.sp, C.Text, FontWeight.Bold)
+        T("·", 15.sp, C.Soft)
+        T(SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(now), 15.sp, C.Soft)
+    }
+}
+
+/** The bell with a red number of unread notifications; OK opens the notification center. */
+@Composable
+private fun NoteBell(nav: Nav) {
+    LaunchedEffect(Unit) { Notes.load() }
+    val unread = Notes.unread()
+    var open by remember { mutableStateOf(false) }
+    Focusable(onClick = { open = true }, shape = androidx.compose.foundation.shape.CircleShape, normal = Color.Transparent, focused = Dawn.pill, focusBorderColor = Color.Transparent,
+        zoom = 1f, modifier = Modifier.size(40.dp)) { f ->
+        Box(Modifier.align(Alignment.Center)) { Ico(R.drawable.lc_bell, 20.dp, if (f) Dawn.onPill else C.Text) }
+        if (unread > 0) Box(Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 2.dp).size(17.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Color(0xFFE5484D)),
+            contentAlignment = Alignment.Center) { T(if (unread > 9) "9+" else unread.toString(), 10.sp, Color.White, FontWeight.Bold) }
+    }
+    if (open) NoteCenter(nav) { open = false }
+}
+
+/** Notification center (approved): newest first, OK marks read and goes straight there, long OK removes one,
+ *  "Clear notifications" last, with a confirmation. */
+@Composable
+private fun NoteCenter(nav: Nav, onDismiss: () -> Unit) {
+    var ask by remember { mutableStateOf(false) }
+    val items = Notes.list.sortedByDescending { it.time }
+    if (ask) { Popup("Obriši obavještenja", { ask = false }) {
+        T("Obrisati sva obavještenja?", 14.sp, C.Soft)
+        OptionRow("Obriši", R.drawable.lc_trash_2) { Notes.clear(); ask = false; onDismiss() }
+        OptionRow("Odustani", R.drawable.lc_x) { ask = false }
+    }; return }
+    Popup("Obavještenja", onDismiss, width = 680.dp) {
+        if (items.isEmpty()) T("Nema obavještenja.", 15.sp, C.Soft)
+        items.forEach { n ->
+            val icon = when (n.kind) { "update" -> R.drawable.lc_download; "reminder" -> R.drawable.lc_bell; "sport" -> R.drawable.lc_trophy
+                "series" -> R.drawable.lc_layers; "vod" -> R.drawable.lc_film; else -> R.drawable.lc_info }
+            OptionRow(n.text, icon, sub = SimpleDateFormat("dd.MM.yyyy · HH:mm", Locale.getDefault()).format(Date(n.time)),
+                color = if (n.read) null else C.Text, onLong = { Notes.remove(n.id) }) { onDismiss(); openNote(nav, n) }
+        }
+        if (items.isNotEmpty()) {
+            Box(Modifier.fillMaxWidth().padding(vertical = 6.dp).height(1.dp).background(Color(0x33FFFFFF)))
+            OptionRow("Obriši obavještenja", R.drawable.lc_trash_2) { ask = true }
+        }
     }
 }
 
@@ -298,17 +341,16 @@ private fun PlaylistChip(p: Playlist, now: Long) {
     val days = sec?.let { ((it * 1000 - now) / 86_400_000L).toInt() }
     Row(Modifier.height(40.dp).clip(Rnd(12.dp)).background(Silver.Panel).border(1.dp, Silver.Border, Rnd(12.dp)).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        // one line (approved): Name · dd.MM.yyyy · X days left — green > 7, orange 3–7, red ≤ 2, gray when the provider gives no date
         Ico(R.drawable.lc_list, 16.dp, C.Soft)
         T(p.name, 14.sp, C.Text, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.widthIn(max = 180.dp))
+        T("·", 14.sp, C.Soft)
         if (sec != null && days != null) {
-            Box(Modifier.width(1.dp).height(18.dp).background(Silver.Border))
-            Ico(R.drawable.lc_calendar, 15.dp, C.Soft)
-            T(SimpleDateFormat("d MMM yyyy", Locale(Look.lang)).format(Date(sec * 1000)), 14.sp, C.Text)
+            T(SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date(sec * 1000)), 14.sp, C.Text)
+            T("·", 14.sp, C.Soft)
             val col = when { days <= 2 -> Silver.Error; days <= 7 -> Silver.Warning; else -> Silver.Success }
-            Box(Modifier.clip(Rnd(9.dp)).background(col.copy(alpha = 0.85f)).padding(horizontal = 10.dp, vertical = 4.dp)) {
-                T(if (days < 0) tr("Istekla") else trf("%s dana", days), 13.sp, Color.White, FontWeight.Bold)
-            }
-        }
+            T(if (days < 0) tr("Istekla") else trf("još %s dana", days), 14.sp, col, FontWeight.Bold)
+        } else T("Trajanje nepoznato", 14.sp, C.Muted)
     }
 }
 

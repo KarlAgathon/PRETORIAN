@@ -620,3 +620,4 @@ Casual
 Zoom
 PROVIDER
 CATCH-UP TV
+dd.MM.yyyy · HH:mm

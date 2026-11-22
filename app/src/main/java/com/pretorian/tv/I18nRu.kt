@@ -2559,4 +2559,6 @@ Automatski: uređaj je dovoljno jak.|Автоматически: устройс�
 Pomak titla|Задержка субтитров
 ako titl kasni ili žuri|если субтитры отстают или спешат
 Obrisati zadnje pretrage za ovu kategoriju?|Удалить последние поиски для этой категории?
+Obrisati sva obavještenja?|Удалить все уведомления?
+Trajanje nepoznato|Срок неизвестен
 """.trimIndent()

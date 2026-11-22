@@ -284,10 +284,11 @@ fun Popup(title: String, onDismiss: () -> Unit, width: Dp = 560.dp, content: @Co
 /** One choice inside a Popup or a settings page. */
 @Composable
 fun OptionRow(label: String, icon: Int? = null, sub: String? = null, value: String? = null, selected: Boolean = false,
-              focusRequester: FocusRequester? = null, color: Color? = null, valueColor: Color? = null, onClick: () -> Unit) {
+              focusRequester: FocusRequester? = null, color: Color? = null, valueColor: Color? = null, onLong: (() -> Unit)? = null, onClick: () -> Unit) {
     Focusable(
         modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp),
         onClick = onClick,
+        onMenu = onLong,
         focusRequester = focusRequester,
         normal = if (selected) C.CardFocus else C.Card,
         zoom = 1.01f,

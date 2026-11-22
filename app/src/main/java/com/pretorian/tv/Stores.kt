@@ -420,6 +420,7 @@ object Notes {
         for (i in list.indices) if (kind == null || list[i].kind == kind) list[i] = list[i].copy(read = true)
         save()
     }
+    fun remove(id: String) { if (list.removeAll { it.id == id }) save() }
     fun markRead(id: String) { val i = list.indexOfFirst { it.id == id }; if (i >= 0 && !list[i].read) { list[i] = list[i].copy(read = true); save() } }
     /** clearing the bell also clears "Recently added": nothing comes back until the provider really adds something new */
     fun clear() { list.clear(); save(); NewContent.clear() }
