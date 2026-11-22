@@ -318,7 +318,7 @@ fun DiagnosticsV2() {
             val updW = Stats.sum("upd", 1); val updM = Stats.sum("upd", 2); val updY = Stats.sum("upd", 3)
             val recs = Stats.sum("rec", period)
             val stall = Stats.sum("stall", period)
-            CardGrid(1, listOf(
+            CardGrid(1, listOf<@Composable (Modifier) -> Unit>(
                 { m ->
                     // today on the left (with TV / Series / Movies under it), the total since the last Reset on the right
                     val dTv = Stats.sum("b_tv", 0); val dSer = Stats.sum("b_ser", 0); val dMov = Stats.sum("b_mov", 0)

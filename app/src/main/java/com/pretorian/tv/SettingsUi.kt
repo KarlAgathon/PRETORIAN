@@ -633,11 +633,11 @@ fun SettingsScreen(nav: Nav) {
             }
         }
         LaunchedEffect(listFocused) { inPage = false }
+        // into a section: Right lands on the item at the same height; Left from anywhere in the page goes back to this section on the left
+        val pageFr = remember { FocusRequester() }
         // the page changed under the focus (a sub-page opened or closed): the focus goes back into the page,
         // never by itself to the first entry of the menu on the left (approved)
         LaunchedEffect(section, sub) { if (inPage) { delay(120); try { pageFr.requestFocus() } catch (_: Exception) {} } }
-        // into a section: Right lands on the item at the same height; Left from anywhere in the page goes back to this section on the left
-        val pageFr = remember { FocusRequester() }
         Box(Modifier.weight(1f).fillMaxHeight().onFocusChanged { if (it.hasFocus) inPage = true }
             .onKeyEvent { ev ->
                 if (ev.type == androidx.compose.ui.input.key.KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
