@@ -323,7 +323,19 @@ fun SearchScreen(nav: Nav) {
             }
         }
     }
-    LaunchedEffect(jump, catHits.isNotEmpty()) { if (jump > 0 && catHits.isNotEmpty()) firstFr.tryFocus() }
+    // focus moves to the results only right after OK/Done or a recent search, never while typing;
+    // when the results are still coming it waits for them, and gives up as soon as another letter is typed
+    val hitsNow = androidx.compose.runtime.rememberUpdatedState(catHits.isNotEmpty())
+    val qNow = androidx.compose.runtime.rememberUpdatedState(q)
+    LaunchedEffect(jump) {
+        if (jump == 0) return@LaunchedEffect
+        val at = qNow.value
+        repeat(50) {
+            if (qNow.value != at) return@LaunchedEffect
+            if (hitsNow.value) { firstFr.tryFocus(); return@LaunchedEffect }
+            delay(100)
+        }
+    }
     favAsk?.let { c ->
         val on = Favs.inAny(ctx, c)
         Popup(c.name, { favAsk = null }, width = 460.dp) {

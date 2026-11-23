@@ -2751,4 +2751,7 @@ Serije po streaming servisima, iz tvoje playliste.|Сериалы по стри�
 Naslovi koje si sačuvao za kasnije.|Названия, сохранённые на потом.
 Pregledaj serije u ovoj kategoriji.|Просмотреть сериалы этой категории.
 Pregledaj filmove u ovoj kategoriji.|Просмотреть фильмы этой категории.
+Klub|Клуб
+reprezentacija i lige|сборная и лиги
+nema zakazanih utakmica|нет запланированных матчей
 """.trimIndent()

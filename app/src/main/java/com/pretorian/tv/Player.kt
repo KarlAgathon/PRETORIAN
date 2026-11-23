@@ -757,6 +757,13 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 factory = { c ->
                     PlayerView(c).apply {
                         this.player = player
+                        // after PlayerView's own listener: picture subtitles get the chosen size too
+                        val pv = this
+                        player.addListener(object : androidx.media3.common.Player.Listener {
+                            override fun onCues(cueGroup: androidx.media3.common.text.CueGroup) {
+                                if (cueGroup.cues.any { it.bitmap != null }) pv.subtitleView?.setCues(scaleBitmapCues(cueGroup.cues))
+                            }
+                        })
                         useController = false
                         keepScreenOn = true
                         isFocusable = false

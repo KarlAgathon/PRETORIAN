@@ -536,6 +536,17 @@ object Sports {
         out.take(30)
     }
 
+    /** The next matches of one team (ESPN's team schedule); empty when ESPN has none or the request fails. */
+    suspend fun teamNext(lg: League, teamId: String): List<SportEvent> = withContext(Dispatchers.IO) {
+        val o = try { JSONObject(http("https://site.api.espn.com/apis/site/v2/sports/${lg.path}/teams/$teamId/schedule?fixture=true")) }  // i18n-ignore
+            catch (e: Exception) { return@withContext emptyList() }
+        val ev = o.optJSONArray("events") ?: return@withContext emptyList()
+        (0 until ev.length()).mapNotNull { ev.optJSONObject(it) }.mapNotNull { e ->
+            val comp = e.optJSONArray("competitions")?.optJSONObject(0) ?: return@mapNotNull null
+            try { parseCompetition(lg, e, comp, e.str("name")) } catch (x: Exception) { null }
+        }
+    }
+
     /** Team statistics of one match from ESPN's summary (possession, shots, corners …): label → (home, away). Empty when ESPN has none. */
     suspend fun stats(ev: SportEvent): List<Triple<String, String, String>> = withContext(Dispatchers.IO) {
         val lg = LEAGUES.firstOrNull { ev.id.startsWith(it.path + "/") } ?: return@withContext emptyList()

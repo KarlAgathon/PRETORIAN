@@ -90,14 +90,31 @@ object SubStyle {
     var rev by mutableIntStateOf(0)
     val FONTS = listOf("Sans" to "sans-serif", "Sans Medium" to "sans-serif-medium", "Condensed" to "sans-serif-condensed",
         "Serif" to "serif", "Monospace" to "monospace", "Casual" to "casual")
-    val SIZES = listOf("Mala", "Srednja", "Velika")
+    val SIZES = listOf("Mala", "Srednja", "Velika", "Vrlo velika")
+    val SCALE = listOf(0.75f, 1f, 1.3f, 1.6f)
     fun font() = Prefs.long("sub_font", 0).toInt().coerceIn(0, FONTS.lastIndex)
-    fun size() = (Prefs.str("sub_size", "1").toIntOrNull() ?: 1).coerceIn(0, 2)
+    fun size() = (Prefs.str("sub_size", "1").toIntOrNull() ?: 1).coerceIn(0, 3)
 }
 
 /** Applies size, font and outline to the player's subtitle view (works for text subtitles; picture subtitles keep their look). */
+/** Picture subtitles (Blu-ray / DVD) ignore the text size: their cues are scaled here, kept at the bottom centre. */
+fun scaleBitmapCues(cues: List<androidx.media3.common.text.Cue>): List<androidx.media3.common.text.Cue> {
+    val k = SubStyle.SCALE[SubStyle.size()]
+    if (k == 1f || cues.none { it.bitmap != null }) return cues
+    return cues.map { c ->
+        if (c.bitmap == null || c.size == androidx.media3.common.text.Cue.DIMEN_UNSET) c
+        else {
+            val w = (c.size * k).coerceAtMost(0.95f)
+            val h = if (c.bitmapHeight != androidx.media3.common.text.Cue.DIMEN_UNSET) c.bitmapHeight * (w / c.size) else c.bitmapHeight
+            c.buildUpon().setSize(w).setBitmapHeight(h)
+                .setPosition(0.5f).setPositionAnchor(androidx.media3.common.text.Cue.ANCHOR_TYPE_MIDDLE)
+                .setLine(0.94f, androidx.media3.common.text.Cue.LINE_TYPE_FRACTION).setLineAnchor(androidx.media3.common.text.Cue.ANCHOR_TYPE_END).build()
+        }
+    }
+}
+
 fun applySubStyle(sv: androidx.media3.ui.SubtitleView) {
-    val size = listOf(0.8f, 1f, 1.25f)[SubStyle.size()]
+    val size = SubStyle.SCALE[SubStyle.size()]
     sv.setFractionalTextSize(androidx.media3.ui.SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * size)
     sv.setApplyEmbeddedStyles(false)
     val tf = android.graphics.Typeface.create(SubStyle.FONTS[SubStyle.font()].second, android.graphics.Typeface.NORMAL)
@@ -160,6 +177,11 @@ fun SubsMenu(search: String, season: Int?, episode: Int?, online: Boolean, provi
                     Ico(R.drawable.lc_chevron_down, 14.dp, Color.White)
                 }
             }
+        }
+        // subtitle size: OK steps Small → Medium → Large → Very large, at once and for every movie and series
+        @Suppress("UNUSED_VARIABLE") val sr = SubStyle.rev
+        MenuRow(tr("Veličina titla") + ": " + tr(SubStyle.SIZES[SubStyle.size()]) + "  ▸") {
+            Prefs.put("sub_size", ((SubStyle.size() + 1) % SubStyle.SIZES.size).toString()); SubStyle.rev++
         }
         MenuHead(tr("Provider").uppercase())
         MenuRow(tr("Isključeno"), on = offOn) { onOff() }
