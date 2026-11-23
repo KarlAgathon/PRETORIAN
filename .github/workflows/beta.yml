@@ -1,12 +1,12 @@
 name: Beta APK
 
-# Runs only when a branch beta/<n> is pushed (a manual start would need this file on main, which stays untouched;
+# Runs only when a branch redesign-beta/<n> is pushed (a manual start would need this file on main, which stays untouched;
 # tags cannot be pushed from the development session).
 # Builds the signed BETA APK (com.pretorian.tv.beta, installs next to Stable) and keeps it as a workflow artifact
 # for 14 days. Publishes nothing: no release, no update.json, main untouched.
 on:
   push:
-    branches: ["beta/**"]
+    branches: ["redesign-beta/**"]
 
 permissions:
   contents: read

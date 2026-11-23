@@ -36,4 +36,4 @@ Checkpoints are branches `checkpoint/<phase>` that are never moved (tags cannot 
 - Old-style controls inside pages (switches, drop-downs, sliders) keep their 2.6.0 look until phases E–G.
 
 ## Next
-Beta 1 (A0 + A) → owner Mi Box test → only then Phase B.
+Beta 1 (A0 + A, built from branch `redesign-beta/1`) → owner Mi Box test → only then Phase B.
