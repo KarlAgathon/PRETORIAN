@@ -1782,3 +1782,10 @@ private fun AppearanceV2() {
         }
     }
 }
+
+/** Search › Settings: the real settings pages whose name or description matches (id, title, description). */
+fun settingsSearch(q: String): List<Triple<String, String, String>> {
+    val n = Sports.norm(q)
+    return SETTINGS_LINKS.values.flatten().distinctBy { it.id }.map { Triple(it.id, tr(it.title), tr(it.sub)) }
+        .filter { (_, t, sub) -> Sports.norm(t).contains(n) || Sports.norm(sub).contains(n) }
+}

@@ -2657,4 +2657,19 @@ Obrisati nedavno gledane kanale?|Очистить недавно просмот�
 Historija|История
 Pauza nije dostupna za ovaj kanal|Пауза недоступна для этого канала
 ◀ grupe · ▶ / Back zatvori|◀ группы · ▶ / Назад закрыть
+%s DAN|%s ДЕНЬ
+%s DANA|%s ДНЕЙ
+Isti događaj|То же событие
+Gledaš|Сейчас
+Traži TV, filmove, serije, sport, postavke…|Искать ТВ, фильмы, сериалы, спорт, настройки…
+Nema nedavnih pretraga|Нет недавних запросов
+%s rezultati za „%s“|%s: результаты для «%s»
+Pretraga sporta stiže s novim Sport modulom.|Поиск по спорту появится с новым модулем Спорт.
+Nema rezultata za „%s“|Нет результатов для «%s»
+Kanali koje gledaš pojavit će se ovdje · Back za grupe|Здесь появятся каналы, которые вы смотрите · Назад к группам
+Dodaj kanal u favorite preko opcija kanala · Back za grupe|Добавьте канал в избранное через параметры канала · Назад к группам
+Uređivanje · OK uzmi kanal · Back gotovo|Редактирование · OK взять канал · Назад готово
+▲▼ pomjeri · OK spusti|▲▼ переместить · OK отпустить
+Za premještanje trebaju bar dva kanala|Для перемещения нужно не менее двух каналов
+Ukloni iz historije|Удалить из истории
 """.trimIndent()

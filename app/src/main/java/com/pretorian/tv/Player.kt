@@ -227,6 +227,9 @@ private fun errorText(e: PlaybackException, live: Boolean): String {
     }
 }
 
+/** Clear history (TV › Recently watched): the player's own last-channels list goes with it. */
+fun clearPlayerChannelHistory() = PlayerChannelHistory.clear()
+
 private object PlayerChannelHistory {
     private const val KEY = "player_channel_recent"
     var rev by androidx.compose.runtime.mutableIntStateOf(0)
@@ -313,6 +316,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     var clearAsk by remember { mutableStateOf(false) }
     var epgDirect by remember { mutableStateOf(false) }   // EPG opened with ▶ (Back → clean picture) or from the dock (Back → dock)
     var backArmed by remember { mutableStateOf(false) }
+    var altFocused by remember { mutableStateOf(false) }   // the focus is in the SAME EVENT panel
     var keyTick by remember { mutableIntStateOf(0) }
     var upSel by remember { mutableIntStateOf(0) }
     var autoCancel by remember { mutableStateOf(false) }
@@ -639,6 +643,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                         backArmed = false
                         when {
                             side != null -> { side = null; sideGroup = null }                                  // channel list → picture
+                            lv == LiveUi.OPTIONS && altFocused -> { liveFrs[lastAct]?.tryFocus() }              // SAME EVENT panel → dock
                             lv == LiveUi.EPG && epgDirect -> { lv = LiveUi.NONE; epgDirect = false }           // ▶ EPG → picture
                             else -> lv = LiveUi.back(lv)                                                         // sub → More → dock → picture
                         }
@@ -1035,6 +1040,13 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 val i = items.indexOfFirst { it.url == c.url }
                 if (i >= 0) index = i else { items = listOf(PlayItem(c.name, c.url, c.logo, c.num.toString(), c)) + items.filterNot { it.url == c.url }; index = 0 }
             }
+            // SAME EVENT (spec 11): only with the dock open and only when the guide proves other channels carry this event
+            val alts by androidx.compose.runtime.produceState(emptyList<Channel>(), item.url, lv == LiveUi.OPTIONS) {
+                value = if (lv == LiveUi.OPTIONS && ch != null) SameEvent.find(ctx, ch) else emptyList()
+            }
+            if (lv == LiveUi.OPTIONS && alts.size > 1) Box(Modifier.fillMaxSize().onFocusChanged { altFocused = it.hasFocus }) {
+                SameEventPanel(alts, item.url) { c -> lv = LiveUi.NONE; altFocused = false; tune(c) }
+            } else if (altFocused) altFocused = false
             if (lv == LiveUi.INFO) LiveInfoOverlay(item, ch?.num ?: (index + 1), if (videoH > 0) qualityLabel(videoH) else null, liveEpg)
             else Column(Modifier.fillMaxSize().padding(bottom = 28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Bottom) {
                 key(lv) {

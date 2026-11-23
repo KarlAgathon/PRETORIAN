@@ -227,6 +227,7 @@ fun HomeV2(nav: Nav) {
                     onClick = {
                         HomeMem.key = key
                         if (it.screen == Screen.Home) return@Focusable
+                        if (it.screen == Screen.Search) SearchSession.reset()   // a new Search always starts empty
                         Chrome.inRail = false; Dawn.last = it.screen; nav.root(it.screen)
                     },
                     onMenu = if (it.badge > 0 && it.kind != null && it.kind != "system") ({ clear = it }) else null,

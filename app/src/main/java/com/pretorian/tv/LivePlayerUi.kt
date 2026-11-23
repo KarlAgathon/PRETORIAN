@@ -315,3 +315,90 @@ private fun HistoryTile(ch: Channel) {
         T(ch.name.substringAfterLast('|').trim(), 11.sp, Color(0xFFDDE1E6), maxLines = 1, align = TextAlign.Center)
     }
 }
+
+/**
+ * Same event on other channels (spec 11): conservative, from the guide only. The programme now on the current channel must be
+ * a real event (≥ 30 min, not a generic title); another channel qualifies only if its programme starts within 15 min, overlaps
+ * ≥ 80 % and names the same event — both sides of "A – B" found in its title, or almost the same title for a single event.
+ * Channels that share the current channel's guide id (the same channel in another quality) always qualify while it has a guide.
+ * Computed off the UI thread from the guide already kept on the box (ProgIndex), cached per channel and programme.
+ */
+object SameEvent {
+    private val generic = "fudbal football soccer sport sports live uzivo highlights pregled studio najava najave magazin vijesti news replay snimak emisija program prijenos prenos utakmica match game".split(' ').toSet()  // i18n-ignore
+    private val noise = setOf("fc", "fk", "nk", "sc", "cf", "ac", "afc", "sk", "vs", "the", "und", "and", "live", "uzivo", "hd", "fhd", "uhd", "4k")  // i18n-ignore
+    private val cache = HashMap<String, List<Channel>>()
+
+    private fun toks(t: String): Set<String> = Sports.norm(t).split(Regex("[^a-z0-9]+")).filter { it.length >= 3 && it !in noise }.toSet()
+    private fun sides(t: String): List<Set<String>>? {
+        val parts = Sports.norm(t).split(Regex("\\s+(?:vs\\.?|v|-|–|—|:)\\s+"))
+        if (parts.size != 2) return null
+        val s = parts.map { toks(it) }
+        return s.takeIf { it.all { x -> x.isNotEmpty() } }
+    }
+    private fun same(mine: String, other: String, mySides: List<Set<String>>?): Boolean {
+        val o = toks(other)
+        if (o.isEmpty() || o.all { it in generic }) return false
+        if (mySides != null) return mySides.all { side -> side.any { it in o } }
+        val m = toks(mine)
+        if (m.size < 2) return false
+        val inter = m.intersect(o).size.toFloat(); val union = m.union(o).size.toFloat()
+        return union > 0 && inter / union >= 0.8f
+    }
+
+    suspend fun find(ctx: android.content.Context, cur: Channel): List<Channel> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+        try {
+            val data = ProgIndex.get(ctx)
+            val now = System.currentTimeMillis()
+            val epgId = cur.epg?.lowercase()?.ifBlank { null } ?: return@withContext emptyList()
+            val mine = data.firstOrNull { it.first.epg?.lowercase() == epgId && it.second.start <= now && it.second.end > now }?.second ?: return@withContext emptyList()
+            val key = cur.url + "|" + mine.start
+            cache[key]?.let { return@withContext it }
+            val all = Store.actives(ctx).flatMap { p -> try { Repo.allChannels(p) } catch (_: Exception) { emptyList() } }
+            val byEpg = all.filter { !it.epg.isNullOrBlank() }.groupBy { it.epg!!.lowercase() }
+            val out = LinkedHashMap<String, Channel>()
+            // the same channel in another quality: same guide id
+            byEpg[epgId]?.filter { it.url != cur.url }?.forEach { out[it.url] = it }
+            val t = toks(mine.title)
+            val real = mine.end - mine.start >= 30 * 60_000L && t.isNotEmpty() && !t.all { it in generic }
+            if (real) {
+                val mySides = sides(mine.title)
+                data.forEach { (c, e) ->
+                    val id = c.epg?.lowercase() ?: return@forEach
+                    if (id == epgId) return@forEach
+                    if (kotlin.math.abs(e.start - mine.start) > 15 * 60_000L) return@forEach
+                    val ov = (minOf(e.end, mine.end) - maxOf(e.start, mine.start)).toFloat() / (mine.end - mine.start)
+                    if (ov < 0.8f || !same(mine.title, e.title, mySides)) return@forEach
+                    byEpg[id]?.forEach { out[it.url] = it }
+                }
+            }
+            val res = if (out.isEmpty()) emptyList() else listOf(cur) + out.values.take(12)
+            cache[key] = res
+            res
+        } catch (_: Exception) { emptyList() }
+    }
+}
+
+/** The SAME EVENT panel top right while the dock is open; only shown when there are real alternatives. */
+@Composable
+fun SameEventPanel(list: List<Channel>, playingUrl: String, onPick: (Channel) -> Unit) {
+    BoxWithConstraints(Modifier.fillMaxSize().padding(top = 28.dp, end = 36.dp), contentAlignment = Alignment.TopEnd) {
+        Column(Modifier.reveal().width((maxWidth * 0.30f).coerceIn(280.dp, 420.dp)).heightIn(max = maxHeight * 0.55f).clip(Rnd(16.dp))
+            .background(PanelBg).border(1.dp, PanelLine, Rnd(16.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            T(tr("Isti događaj").uppercase(), 13.sp, Color(0xFFB8BEC6), FontWeight.SemiBold, modifier = Modifier.padding(start = 8.dp, bottom = 2.dp))
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                itemsIndexed(list, key = { _, c -> c.url }) { _, c ->
+                    val playing = c.url == playingUrl
+                    Focusable(onClick = { if (!playing) onPick(c) }, shape = Rnd(10.dp), normal = Color.Transparent, focused = Color(0x33FFFFFF),
+                        focusBorderColor = Color(0xE6FFFFFF), zoom = 1f, modifier = Modifier.fillMaxWidth().height(48.dp)) { _ ->
+                        Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            ChannelLogo(c.logo, c.name)
+                            T(c.name.substringAfterLast('|').trim(), 14.sp, Color.White, if (playing) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
+                            if (playing) T(tr("Gledaš").uppercase(), 10.sp, Color(0xFFDDE1E6), FontWeight.Bold)
+                            qualityTag(c.name)?.let { q -> Box(Modifier.border(1.dp, Color(0x99FFFFFF), Rnd(5.dp)).padding(horizontal = 5.dp, vertical = 1.dp)) { T(q, 10.sp, Color.White, FontWeight.Bold) } }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

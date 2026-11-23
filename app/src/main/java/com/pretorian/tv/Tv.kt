@@ -179,7 +179,8 @@ suspend fun groupRows(ctx: android.content.Context): List<GRow> {
     val out = ArrayList<GRow>()
     // TV groups: Favorites (always), Recently watched (only when there is history), then the provider's groups as the playlist gives them
     out.add(GRow.Group(GroupRef(null, Category(FAV_PREFIX + Favs.mainId(ctx), tr("Favoriti")))))
-    if (Recent.list().isNotEmpty()) out.add(GRow.Group(GroupRef(null, Category(RECENT_GROUP, tr("Nedavno gledano")))))
+    // spec 09: Favourites and Recently watched are always the first two groups (each has its own empty state)
+    out.add(GRow.Group(GroupRef(null, Category(RECENT_GROUP, tr("Nedavno gledano")))))
     val pls = Store.actives(ctx)
     pls.forEachIndexed { _, p ->
         // several playlists: all folded until you open one (its groups are read only then)
@@ -680,6 +681,14 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
     var menuUrl by remember { mutableStateOf<String?>(null) }
     var favAsk by remember { mutableStateOf<Channel?>(null) }
     var favMove by remember { mutableStateOf<Channel?>(null) }
+    // spec 09 — Favourites edit mode: long OK enters it, OK picks up / drops a channel, ▲▼ move it (saved at once), Back leaves
+    var edit by remember { mutableStateOf(false) }
+    var picked by remember { mutableStateOf<String?>(null) }
+    var lastMoveAt by remember { mutableStateOf(0L) }
+    var recentAsk by remember { mutableStateOf<Channel?>(null) }
+    val favEditable = isFavGroup(g.cat.id)
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    androidx.activity.compose.BackHandler(enabled = edit) { picked = null; edit = false; listRev++ }
     val cWrap = remember { Wrap() }
     val cState = rememberLazyListState()
     val chFr = remember { FocusRequester() }
@@ -692,20 +701,34 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
             is Load.Ok -> {
                 val list = s.value
                 if (list.isEmpty()) {
-                    Message(if (isFav) "Nema favorita" else "Grupa je prazna",
-                        if (isFav) "Na kanalu drži OK da ga dodaš u favorite" else "Kanale možeš prebaciti ovamo preko opcija kanala")
+                    if (g.cat.id == RECENT_GROUP) Message("Još nema gledanih kanala.", "Kanali koje gledaš pojavit će se ovdje · Back za grupe")
+                    else Message(if (isFav) "Nema favorita" else "Grupa je prazna",
+                        if (isFav) "Dodaj kanal u favorite preko opcija kanala · Back za grupe" else "Kanale možeš prebaciti ovamo preko opcija kanala")
                 } else {
-                    // Recently watched: one direct action, no second question
-                    if (g.cat.id == RECENT_GROUP) Focusable(onClick = { Recent.clear(); onBackToGroups() }, shape = Rnd(12.dp), normal = Color.Transparent,
-                        focused = Dawn.pill, focusBorderColor = Color.Transparent, zoom = 1f,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp).height(44.dp).border(1.dp, Color(0x4DFFFFFF), Rnd(12.dp))) { f ->
-                        Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Ico(R.drawable.lc_trash_2, 16.dp, if (f) Dawn.onPill else C.Text)
-                            T("Obriši nedavno gledano", 14.sp, if (f) Dawn.onPill else C.Text, FontWeight.SemiBold)
-                        }
+                    if (edit) Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Ico(R.drawable.lc_hand_grab, 16.dp, Color.White)
+                        T(if (picked == null) "Uređivanje · OK uzmi kanal · Back gotovo" else "▲▼ pomjeri · OK spusti", 13.sp, Color(0xFFDDE1E6))
                     }
                     LazyColumn(
                         modifier = Modifier.focusGroup().onPreviewKeyEvent { e ->
+                            val pk = picked
+                            if (edit && pk != null && e.type == KeyEventType.KeyDown && (e.key == Key.DirectionUp || e.key == Key.DirectionDown)) {
+                                // move the picked-up channel one place per step; held keys at a steady pace; saved at once
+                                val now = System.currentTimeMillis()
+                                if (e.nativeKeyEvent.repeatCount > 0 && now - lastMoveAt < 130) return@onPreviewKeyEvent true
+                                lastMoveAt = now
+                                val i = list.indexOfFirst { it.url == pk }
+                                val d = if (e.key == Key.DirectionUp) -1 else 1
+                                if (i >= 0 && i + d in list.indices) {
+                                    Favs.move(favListId(g.cat.id), list[i], d)
+                                    val j = i + d
+                                    if (j < cState.firstVisibleItemIndex + 1 || j > cState.firstVisibleItemIndex + cState.layoutInfo.visibleItemsInfo.size - 2)
+                                        scope.launch { cState.animateScrollToItem((j - 3).coerceAtLeast(0)) }
+                                }
+                                return@onPreviewKeyEvent true
+                            }
+                            if (edit && e.key == Key.DirectionLeft) return@onPreviewKeyEvent true
                             if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { onBackToGroups(); true } else false
                         },
                         state = cState,
@@ -720,8 +743,10 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                 (TvMemory.group?.key == g.key && TvMemory.channel == i)
                             Focusable(
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp).height(50.dp).wrapKeys(i, list.size, cWrap)
-                                    .then(if (active) Modifier.border(1.dp, C.Green.copy(alpha = 0.48f), Rnd(12.dp)) else Modifier),
+                                    .then(if (active) Modifier.border(1.dp, C.Green.copy(alpha = 0.48f), Rnd(12.dp)) else Modifier)
+                                    .then(if (edit && picked == ch.url) Modifier.border(1.5.dp, Color.White, Rnd(12.dp)) else Modifier),
                                 onClick = {
+                                    if (edit) { picked = if (picked == ch.url) null else ch.url; return@Focusable }
                                     gate.run("c:${ch.url}", locked) {
                                         ovr.countWatch(ch)
                                         TvMemory.channel = i; TvMemory.group = g
@@ -735,16 +760,19 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                     }
                                 },
                                 onMenu = {
-                                    // never removes anything by itself (approved): in Favourites hold OK asks first and offers to move;
-                                    // elsewhere it only adds, and a channel already in Favourites asks before removing
-                                    if (isFav || isFavGroup(g.cat.id) || Favs.inAny(ctx, ch)) { menuUrl = ch.url; favAsk = ch }
+                                    // spec 09: in Favourites long OK only enters edit mode (removing is in the channel options);
+                                    // in Recently watched it offers Remove from history / Clear history
+                                    if (favEditable) {
+                                        if (!edit) { if (list.size > 1) { edit = true; picked = null } else android.widget.Toast.makeText(ctx, tr("Za premještanje trebaju bar dva kanala"), android.widget.Toast.LENGTH_SHORT).show() }
+                                    } else if (g.cat.id == RECENT_GROUP) { menuUrl = ch.url; recentAsk = ch }
+                                    else if (isFav || Favs.inAny(ctx, ch)) { menuUrl = ch.url; favAsk = ch }
                                     else {
                                         Favs.flip(ctx, ch)
                                         android.widget.Toast.makeText(ctx, tr("Dodano u favorite"), android.widget.Toast.LENGTH_SHORT).show()
                                         listRev++
                                     }
                                 },
-                                onFocus = { onFocusCh(ch) },
+                                onFocus = { if (!edit) onFocusCh(ch) },
                                 focusRequester = cWrap.requester(i, if (ch.url == menuUrl) chFr else null),
                                 normal = if (Look.dawn) Color.Transparent else if (active) C.Green.copy(alpha = 0.10f) else C.Card,
                                 focused = if (Look.dawn) Dawn.pill else null,
@@ -759,6 +787,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                     T(ch.name, 16.sp, if (f) Dawn.onPill else C.Text, if (f) FontWeight.SemiBold else FontWeight.Normal,
                                         maxLines = 1, modifier = Modifier.weight(1f))
                                     if (locked) Ico(R.drawable.lc_lock, 16.dp, C.Muted)
+                                    if (edit && picked == ch.url) Ico(R.drawable.lc_hand_grab, 16.dp, Color.White)
                                     // quality from the channel's own name (4K / UHD / FHD / HD / SD), never invented
                                     qualityTag(ch.name)?.let { q -> Box(Modifier.clip(Rnd(5.dp)).background(if (f) Color.White else Color(0x40FFFFFF)).padding(horizontal = 6.dp, vertical = 1.dp)) {
                                         T(q, 11.sp, if (f) Color(0xFF111113) else Color(0xFFDDE1E6), FontWeight.Bold) } }
@@ -798,6 +827,12 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                             favAsk = null; listRev++
                         }
                         OptionRow("Ne", R.drawable.lc_x) { favAsk = null }
+                    }
+                }
+                recentAsk?.let { ch ->
+                    Popup(ch.name, onDismiss = { recentAsk = null }, width = 460.dp) {
+                        OptionRow("Ukloni iz historije", R.drawable.lc_x) { Recent.remove(ch.url); recentAsk = null; listRev++ }
+                        OptionRow("Obriši historiju", R.drawable.lc_trash_2, color = C.Danger) { Recent.clear(); clearPlayerChannelHistory(); recentAsk = null; onBackToGroups() }
                     }
                 }
                 favMove?.let { ch ->

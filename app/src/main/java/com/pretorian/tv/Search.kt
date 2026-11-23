@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.size
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -167,8 +169,8 @@ fun SearchScreen(nav: Nav) {
     if (Look.age) { OnyxSearch(nav); return }
     val ctx = LocalContext.current
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
-    var q by remember { mutableStateOf("") }
-    var query by remember { mutableStateOf("") }
+    var q by remember { mutableStateOf(SearchSession.q) }
+    var query by remember { mutableStateOf(SearchSession.q.trim()) }
     var filter by remember { mutableStateOf("all") }
     var pick by remember { mutableStateOf<Hit?>(null) }
     val fr = remember { FocusRequester() }
@@ -196,68 +198,165 @@ fun SearchScreen(nav: Nav) {
     val shown = remember(hits, filter) {
         hits.filter { h -> when (filter) { "ch" -> h is Hit.Ch; "prog" -> h is Hit.Prog; "vod" -> h is Hit.Movie; "series" -> h is Hit.Show; else -> true } }
     }
-    // after "Done" on the keyboard: close it and go to the first result
-    LaunchedEffect(jump, shown.isNotEmpty()) { if (jump > 0 && shown.isNotEmpty()) firstFr.tryFocus() }
-    val loadingOf = mapOf("ch" to (chIdx is Load.Loading), "vod" to (vodIdx is Load.Loading), "series" to (serIdx is Load.Loading),
-        "prog" to (wantProgs && progIdx is Load.Loading))
+    // ---- Universal Search (spec 10): TV · Movies · Series · Sport · Settings, one shared history of 10, the engine above unchanged
+    val cat = SearchSession.cat
+    val catHits = remember(hits, cat) {
+        when (cat) { "tv" -> hits.filter { it is Hit.Ch } + hits.filter { it is Hit.Prog }; "vod" -> hits.filter { it is Hit.Movie }
+            "series" -> hits.filter { it is Hit.Show }; else -> emptyList() }
+    }
+    val setHits = remember(query, cat) { if (cat == "settings" && query.length >= 2) settingsSearch(query) else emptyList() }
+    val busy = when (cat) { "tv" -> chIdx is Load.Loading || (wantProgs && progIdx is Load.Loading); "vod" -> vodIdx is Load.Loading; "series" -> serIdx is Load.Loading; else -> false }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var favAsk by remember { mutableStateOf<Channel?>(null) }
+    @Suppress("UNUSED_VARIABLE") val fRev = Favs.rev
+    // a finished search goes into the history (opening a result or choosing a recent one), never each typed letter
+    fun done() { SearchHistory.add(query.ifBlank { q }) }
+    LaunchedEffect(q) { SearchSession.q = q }
 
-    Column(Modifier.fillMaxSize().padding(start = 28.dp, end = 28.dp, top = 22.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            T("Pretraga", 26.sp, C.Text, FontWeight.Bold)
-            Field("Traži kanal, film, seriju, emisiju ili broj", q, { q = it }, Modifier.weight(1f).focusRequester(fr), onDone = {
-                query = q.trim(); SearchHistory.add(q); keyboard?.hide(); jump++
-            })
+    Column(Modifier.fillMaxSize().padding(start = 34.dp, end = 34.dp, top = 10.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Ico(R.drawable.lc_search, 24.dp, Color.White); T("Pretraga", 24.sp, Color.White, FontWeight.Bold)
         }
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            val counts = mapOf("all" to hits.size, "ch" to hits.count { it is Hit.Ch }, "prog" to hits.count { it is Hit.Prog },
-                "vod" to hits.count { it is Hit.Movie }, "series" to hits.count { it is Hit.Show })
-            items(listOf("all" to "Sve", "ch" to "Kanali", "prog" to "Emisije", "vod" to "Filmovi", "series" to "Serije")) { (id, label) ->
-                val sel = filter == id
-                Focusable(onClick = { filter = id }, shape = Pill, normal = if (sel) C.Red else C.Card, focused = if (sel) C.Red else C.CardHi,
-                    zoom = 1.04f, modifier = Modifier.height(38.dp)) { _ ->
-                    T(tr(label) + " · " + (if (loadingOf[id] == true) "…" else "${counts[id] ?: 0}"), 14.sp, if (sel) C.OnRed else C.Text, FontWeight.SemiBold,
-                        modifier = Modifier.align(Alignment.Center).padding(horizontal = 14.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Field("Traži TV, filmove, serije, sport, postavke…", q, { q = it }, Modifier.weight(1f).focusRequester(fr), onDone = {
+                query = q.trim(); keyboard?.hide(); jump++
+            })
+            // X: clears only the query (the history stays)
+            Focusable(onClick = { q = ""; query = ""; SearchSession.q = ""; scope.launch { delay(50); fr.tryFocus() } }, shape = Rnd(12.dp), normal = Color(0x8C14181C),
+                focused = Dawn.pill, borderColor = Color(0x29FFFFFF), zoom = 1f, modifier = Modifier.size(48.dp)) { _ ->
+                Box(Modifier.align(Alignment.Center)) { Ico(R.drawable.lc_x, 20.dp, Color.White) }
+            }
+            Focusable(onClick = { SearchHistory.clear() }, shape = Rnd(12.dp), normal = Color(0x8C14181C), focused = Dawn.pill, borderColor = Color(0x29FFFFFF),
+                zoom = 1f, modifier = Modifier.height(48.dp)) { _ ->
+                Row(Modifier.align(Alignment.Center).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Ico(R.drawable.lc_trash_2, 16.dp, Color.White); T("Obriši historiju", 14.sp, Color.White)
                 }
             }
         }
-        val busy = loadingOf.values.any { it }
-        if (busy && nq.length >= 2) T(loadingOf.filter { it.value }.keys.joinToString(" · ") { tr(mapOf("ch" to "Kanali", "vod" to "Filmovi", "series" to "Serije", "prog" to "Emisije")[it]!!) } + " · " + tr("učitavam…"), 12.sp, C.Muted)
-        if (nq.length < 2) { SearchRecent { h -> q = h; query = h; jump++ }; Message("Upiši bar 2 slova", "Tastatura daljinskog ili Google TV aplikacija na telefonu") }
-        else if (shown.isEmpty() && !busy) Message("Ništa nije pronađeno")
-        else if (shown.isEmpty()) Loading("Tražim…")
-        else LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(bottom = 30.dp)) {
-            items(shown.size, key = { i -> shown[i].let { h -> when (h) { is Hit.Ch -> "c" + h.ch.url; is Hit.Prog -> "p" + h.ch.url + h.e.start; is Hit.Movie -> "m" + h.v.id; is Hit.Show -> "s" + h.s.id } } }) { i ->
-                val h = shown[i]
-                Focusable(modifier = Modifier.fillMaxWidth().height(64.dp), focusRequester = if (i == 0) firstFr else null, onClick = {
-                    when (h) { is Hit.Movie -> nav.push(Screen.MovieDetail(h.v)); is Hit.Show -> nav.push(Screen.SeriesDetail(h.s)); else -> pick = h }
-                }, onMenu = { pick = h }, normal = C.Card, zoom = 1.01f) { f ->
-                    Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        when (h) {
-                            is Hit.Ch -> { Ico(R.drawable.lc_tv, 18.dp, C.RedText); ChannelLogo(h.ch.logo, h.ch.name)
-                                Column(Modifier.weight(1f)) { T(h.ch.name, 15.sp, C.Text, FontWeight.SemiBold, maxLines = 1); T(tr("Kanal") + " ${h.ch.num}", 12.sp, C.Muted) } }
-                            is Hit.Prog -> { Ico(R.drawable.lc_clock, 18.dp, C.RedText)
-                                Column(Modifier.weight(1f)) {
-                                    T(h.e.title, 15.sp, C.Text, FontWeight.SemiBold, maxLines = 1)
-                                    T(h.e.times() + " · " + h.ch.name, 12.sp, C.Muted)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            listOf(Triple("tv", R.drawable.lc_tv, "TV"), Triple("vod", R.drawable.lc_film, "Filmovi"), Triple("series", R.drawable.lc_layers, "Serije"),
+                Triple("sport", R.drawable.lc_trophy, "Sport"), Triple("settings", R.drawable.lc_settings, "Postavke")).forEach { (id, icon, label) ->
+                val sel = cat == id
+                Focusable(onClick = { SearchSession.cat = id }, shape = Rnd(12.dp), normal = if (sel) Color(0x26FFFFFF) else Color(0x8C14181C), focused = Dawn.pill,
+                    borderColor = if (sel) Color(0xE6FFFFFF) else Color(0x29FFFFFF), zoom = 1f, modifier = Modifier.weight(1f).height(44.dp)) { _ ->
+                    Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Ico(icon, 18.dp, Color.White); T(tr(label).uppercase(), 14.sp, Color.White, if (sel) FontWeight.Bold else FontWeight.Medium)
+                    }
+                }
+            }
+        }
+        Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            // left: the last 10 searches (one history for all categories)
+            Column(Modifier.weight(0.34f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                val hist = remember(SearchHistory.rev) { SearchHistory.list() }
+                T(tr("Nedavne pretrage").uppercase() + " (${hist.size})", 13.sp, Color(0xFFB8BEC6), FontWeight.SemiBold)  // i18n-ignore
+                if (hist.isEmpty()) T("Nema nedavnih pretraga", 14.sp, C.Muted)
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    items(hist.size, key = { hist[it] }) { i ->
+                        val h = hist[i]
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Focusable(onClick = { q = h; query = h; SearchHistory.add(h); jump++ }, shape = Rnd(10.dp), normal = Color.Transparent, focused = Dawn.pill,
+                                zoom = 1f, modifier = Modifier.weight(1f).height(40.dp)) { _ ->
+                                Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Ico(R.drawable.lc_history, 16.dp, Color(0xFFB8BEC6)); T(h, 14.sp, Color.White, maxLines = 1)
                                 }
-                                if (h.e.start <= System.currentTimeMillis() && h.e.end > System.currentTimeMillis()) Badge(tr("UŽIVO"), C.Danger, androidx.compose.ui.graphics.Color.White)
-                                if (Reminders.has(h.e.title, h.e.start)) Ico(R.drawable.lc_bell, 15.dp, C.Amber) }
-                            is Hit.Movie -> { Ico(R.drawable.lc_film, 18.dp, C.RedText)
-                                Box(Modifier.width(34.dp).fillMaxHeight().padding(vertical = 4.dp).clip(Rnd(6.dp)).background(C.Tile)) {
-                                    if (h.v.poster != null) AsyncImage(model = h.v.poster, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
-                                Column(Modifier.weight(1f)) { T(h.v.name, 15.sp, C.Text, FontWeight.SemiBold, maxLines = 1); T("Film", 12.sp, C.Muted) } }
-                            is Hit.Show -> { Ico(R.drawable.lc_monitor, 18.dp, C.RedText)
-                                Box(Modifier.width(34.dp).fillMaxHeight().padding(vertical = 4.dp).clip(Rnd(6.dp)).background(C.Tile)) {
-                                    if (h.s.cover != null) AsyncImage(model = h.s.cover, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
-                                Column(Modifier.weight(1f)) { T(h.s.name, 15.sp, C.Text, FontWeight.SemiBold, maxLines = 1); T("Serija", 12.sp, C.Muted) } }
+                            }
+                            Focusable(onClick = { SearchHistory.remove(h) }, shape = Rnd(10.dp), normal = Color.Transparent, focused = Dawn.pill, zoom = 1f,
+                                modifier = Modifier.size(40.dp)) { _ -> Box(Modifier.align(Alignment.Center)) { Ico(R.drawable.lc_x, 15.dp, Color(0xFFB8BEC6)) } }
+                        }
+                    }
+                }
+            }
+            Box(Modifier.width(1.dp).fillMaxHeight().background(Color(0x1FFFFFFF)))
+            // right: results of the chosen category
+            Column(Modifier.weight(0.66f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                val catName = mapOf("tv" to "TV", "vod" to "Filmovi", "series" to "Serije", "sport" to "Sport", "settings" to "Postavke")[cat] ?: "TV"
+                val n = if (cat == "settings") setHits.size else catHits.size
+                if (nq.length >= 2) T(trf("%s rezultati za „%s“", tr(catName), query).uppercase() + " ($n)", 13.sp, Color(0xFFB8BEC6), FontWeight.SemiBold, maxLines = 1)  // i18n-ignore
+                when {
+                    nq.length < 2 -> T("Upiši bar 2 slova", 14.sp, C.Muted)
+                    cat == "sport" -> T("Pretraga sporta stiže s novim Sport modulom.", 14.sp, C.Muted)
+                    cat == "settings" && setHits.isEmpty() -> T(trf("Nema rezultata za „%s“", query), 14.sp, C.Muted)
+                    cat == "settings" -> LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(setHits.size) { i -> val (id, t, sub) = setHits[i]
+                            Focusable(onClick = { done(); SettingsNav.section = id; nav.push(Screen.Settings) }, focusRequester = if (i == 0) firstFr else null,
+                                shape = Rnd(12.dp), normal = Color(0x8C14181C), focused = Dawn.pill, borderColor = Color(0x1FFFFFFF), zoom = 1f, modifier = Modifier.fillMaxWidth().height(56.dp)) { _ ->
+                                Column(Modifier.align(Alignment.CenterStart).padding(horizontal = 16.dp)) { T(t, 15.sp, Color.White, FontWeight.SemiBold); T(sub, 12.sp, C.Muted, maxLines = 1) }
+                            }
+                        }
+                    }
+                    catHits.isEmpty() && busy -> Loading("Tražim…")
+                    catHits.isEmpty() -> T(trf("Nema rezultata za „%s“", query), 14.sp, C.Muted)
+                    else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(bottom = 30.dp)) {
+                        items(catHits.size, key = { i -> catHits[i].let { h -> when (h) { is Hit.Ch -> "c" + h.ch.url; is Hit.Prog -> "p" + h.ch.url + h.e.start; is Hit.Movie -> "m" + h.v.id; is Hit.Show -> "s" + h.s.id } } }) { i ->
+                            val h = catHits[i]
+                            Focusable(modifier = Modifier.fillMaxWidth().height(60.dp), focusRequester = if (i == 0) firstFr else null, onClick = {
+                                done()
+                                when (h) {
+                                    is Hit.Movie -> nav.push(Screen.MovieDetail(h.v)); is Hit.Show -> nav.push(Screen.SeriesDetail(h.s))
+                                    is Hit.Ch -> scope.launch { openInBrowser(ctx, nav, h.ch) }
+                                    else -> pick = h
+                                }
+                            }, onMenu = { if (h is Hit.Ch) favAsk = h.ch else pick = h }, shape = Rnd(12.dp), normal = Color(0x8C14181C), focused = Dawn.pill,
+                                borderColor = Color(0x1FFFFFFF), zoom = 1f) { _ ->
+                                Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                                    when (h) {
+                                        is Hit.Ch -> { ChannelLogo(h.ch.logo, h.ch.name)
+                                            T(h.ch.name, 15.sp, Color.White, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
+                                            qualityTag(h.ch.name)?.let { q2 -> T(q2, 11.sp, Color(0xFFDDE1E6), FontWeight.Bold) }
+                                            Ico(R.drawable.lc_star, 18.dp, if (Favs.inAny(ctx, h.ch)) C.Amber else Color(0x66FFFFFF)) }
+                                        is Hit.Prog -> { Ico(R.drawable.lc_clock, 18.dp, Color(0xFFB8BEC6))
+                                            Column(Modifier.weight(1f)) { T(h.e.title, 15.sp, Color.White, FontWeight.SemiBold, maxLines = 1); T(h.e.times() + " · " + h.ch.name, 12.sp, C.Muted) }
+                                            if (h.e.start <= System.currentTimeMillis() && h.e.end > System.currentTimeMillis()) Badge(tr("UŽIVO"), C.Danger, Color.White) }
+                                        is Hit.Movie -> { Box(Modifier.width(34.dp).fillMaxHeight().padding(vertical = 4.dp).clip(Rnd(6.dp)).background(C.Tile)) {
+                                                if (h.v.poster != null) AsyncImage(model = h.v.poster, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
+                                            T(h.v.name, 15.sp, Color.White, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f)) }
+                                        is Hit.Show -> { Box(Modifier.width(34.dp).fillMaxHeight().padding(vertical = 4.dp).clip(Rnd(6.dp)).background(C.Tile)) {
+                                                if (h.s.cover != null) AsyncImage(model = h.s.cover, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
+                                            T(h.s.name, 15.sp, Color.White, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f)) }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
         }
     }
+    LaunchedEffect(jump, catHits.isNotEmpty()) { if (jump > 0 && catHits.isNotEmpty()) firstFr.tryFocus() }
+    favAsk?.let { c ->
+        val on = Favs.inAny(ctx, c)
+        Popup(c.name, { favAsk = null }, width = 460.dp) {
+            OptionRow(if (on) "Ukloni iz favorita" else "Dodaj u favorite", R.drawable.lc_star) {
+                if (on) Favs.lists(ctx).forEach { l -> if (Favs.contains(l.id, c)) Favs.toggle(l.id, c) } else Favs.flip(ctx, c)
+                favAsk = null
+            }
+        }
+    }
     pick?.let { h -> HitActions(h, nav) { pick = null } }
-    LaunchedEffect(Unit) { fr.tryFocus() }
+    // a new Search starts empty with the keyboard on the field; coming back from a result keeps everything and no keyboard
+    LaunchedEffect(Unit) { if (SearchSession.q.isBlank()) fr.tryFocus() else { delay(80); firstFr.tryFocus() } }
+    @Suppress("UNUSED_VARIABLE") val unusedFilter = filter
+}
+
+/** The search session: a new Search from the menu starts empty on TV; Back from an opened result finds it as it was. */
+object SearchSession {
+    var q by mutableStateOf("")
+    var cat by mutableStateOf("tv")
+    fun reset() { q = ""; cat = "tv" }
+}
+
+/** Search → a TV result: its group opens in the channel browser on that channel (preview with 1× OK, full screen with 2× OK). */
+suspend fun openInBrowser(ctx: android.content.Context, nav: Nav, ch: Channel) {
+    val p = Store.byId(ctx, ch.pid) ?: Store.actives(ctx).firstOrNull() ?: return
+    val cat = try { Repo.liveGroups(p).firstOrNull { it.id == ch.group } } catch (_: Exception) { null }
+    if (cat == null) { playChannels(nav, listOf(ch), 0); return }
+    val g = GroupRef(p.id, cat)
+    val chs = try { channelsOf(ctx, g) } catch (_: Exception) { emptyList() }
+    val i = chs.indexOfFirst { it.url == ch.url }
+    if (i < 0) { playChannels(nav, listOf(ch), 0); return }
+    TvMemory.group = g; TvMemory.channel = i; TvMemory.restore = true
+    nav.push(Screen.Tv)
 }
 
 /** What you can do with a result: watch, favourites, show in guide, remind, hide, open. */
@@ -298,11 +397,11 @@ fun HitActions(h: Hit, nav: Nav, onDismiss: () -> Unit) {
 /** The last 10 searches of the chosen category (TV, Movies, Series, Sport, Settings), newest first. */
 object SearchHistory {
     var rev by androidx.compose.runtime.mutableIntStateOf(0)
-    private fun k() = "search_hist_" + (SearchMem.open ?: "tv")
+    private fun k() = "search_hist_all"
     fun list() = Prefs.str(k()).split('\n').filter { it.isNotBlank() }
     fun add(text: String) {
         val t = text.trim(); if (t.isEmpty()) return
-        Prefs.put(k(), (listOf(t) + list().filter { !it.equals(t, true) }).take(10).joinToString("\n")); rev++
+        Prefs.put(k(), (listOf(t) + list().filter { !it.trim().equals(t, true) }).take(10).joinToString("\n")); rev++
     }
     fun remove(text: String) { Prefs.put(k(), list().filter { it != text }.joinToString("\n")); rev++ }
     fun clear() { Prefs.put(k(), ""); rev++ }
