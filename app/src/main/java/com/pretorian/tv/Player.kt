@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import java.util.Locale
 import androidx.compose.foundation.layout.Column
+import androidx.compose.runtime.key
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -304,6 +305,12 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     // redesign (spec 03/04): the floating menu open in the film / series controls, a key tick for the 5 s auto-hide,
     // the Up Next choice (0 Play next, 1 Cancel autoplay) and a cancelled autoplay
     var vmenu by remember { mutableStateOf<String?>(null) }
+    // live TV (spec 07): ONE overlay state — none, channel info, the six actions, or exactly one floating panel
+    var lv by remember { mutableStateOf(LiveUi.NONE) }
+    val liveFrs = remember { LiveUi.ACTIONS.associate { it.first to FocusRequester() } }
+    val panelFr = remember { FocusRequester() }
+    var lastAct by remember { mutableStateOf("fav") }
+    var clearAsk by remember { mutableStateOf(false) }
     var keyTick by remember { mutableIntStateOf(0) }
     var upSel by remember { mutableIntStateOf(0) }
     var autoCancel by remember { mutableStateOf(false) }
@@ -492,6 +499,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             PlayerChannelHistory.add(c)
         }
         error = null; retried = false; showInfo = s.live; videoH = 0; autoCancel = false; upSel = 0
+        if (s.live && lv == LiveUi.NONE && prevIndex >= 0) lv = LiveUi.INFO
         val cur = items[index]
         AudioDelay.use(cur.url)   // sound delay kept for this channel / film
         // films and series only: the speed chosen on the movie / series view (never on live TV)
@@ -579,8 +587,9 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     }
     LaunchedEffect(index) { gaveUp = false; frozenMsg = false; if (!s.live) while (true) { delay(15_000); if (player.isPlaying) saveProgress(background = true) } }
 
-    BackHandler(enabled = dialog != null || side != null || resume != null || bar || (skipPill == "credits" && !autoCancel)) {
+    BackHandler(enabled = dialog != null || side != null || resume != null || bar || (skipPill == "credits" && !autoCancel) || (s.live && lv != LiveUi.NONE)) {
         when {
+            s.live && lv != LiveUi.NONE && dialog == null && side == null -> lv = LiveUi.back(lv)
             skipPill == "credits" && !autoCancel -> { autoCancel = true; skipPill = null }
             resume != null -> { resume = null; player.seekTo(0); player.play() }
             dialog != null -> dialog = null
@@ -620,20 +629,23 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             .onPreviewKeyEvent { e ->
                 // live TV: short OK pauses / plays, holding OK asks to add the channel to favourites
                 val okKey = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter
-                if (s.live && okKey && dialog == null && side == null && resume == null && !bar && error == null && digits.isEmpty() && favAsk == null) {
-                    if (e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount == 0) { okLong = false; return@onPreviewKeyEvent true }
+                // live TV (spec 07): short OK = channel info, long OK = the six actions
+                if (s.live && okKey && (lv == LiveUi.NONE || lv == LiveUi.INFO) && dialog == null && side == null && resume == null && !bar && error == null && digits.isEmpty() && favAsk == null) {
+                    if (e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount == 0) { okLong = false; keyTick++; return@onPreviewKeyEvent true }
                     if (e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount > 0) {
-                        if (!okLong) { okLong = true; items.getOrNull(index)?.channel?.let { favAsk = it } }
+                        if (!okLong) { okLong = true; lastAct = "fav"; lv = LiveUi.OPTIONS }
                         return@onPreviewKeyEvent true
                     }
                     if (e.type == KeyEventType.KeyUp) {
-                        if (!okLong) { if (player.isPlaying) player.pause() else player.play(); showInfo = true }
+                        if (!okLong) lv = if (lv == LiveUi.INFO) LiveUi.NONE else LiveUi.INFO
                         okLong = false
                         return@onPreviewKeyEvent true
                     }
                 }
                 if (e.type == KeyEventType.KeyDown) keyTick++
                 if (dialog != null || side != null || resume != null || bar || e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                // an open action bar or panel gets the keys itself (nothing reaches the player underneath)
+                if (s.live && lv != LiveUi.NONE && lv != LiveUi.INFO) return@onPreviewKeyEvent false
                 if (error != null && (e.key == Key.DirectionCenter || e.key == Key.Enter)) { error = null; retried = false; reconnect = 0; retryToken++; return@onPreviewKeyEvent true }
                 // live: numbers on the remote pick a channel; 0 alone goes back to the previous channel
                 val d = digitOf(e.key)
@@ -676,7 +688,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                     Key.Menu, Key.Info -> { dialog = "menu"; true }
                     Key.DirectionUp, Key.ChannelUp -> if (s.live && (e.key == Key.ChannelUp || Prefs.bool("zap_updown", true))) { index = (index - 1 + n) % n; true } else { showInfo = true; true }
                     // ▼ opens the channel options (the bar); CH− changes the channel
-                    Key.DirectionDown, Key.ChannelDown -> if (s.live && e.key == Key.ChannelDown) { index = (index + 1) % n; true }
+                    Key.DirectionDown, Key.ChannelDown -> if (s.live && (e.key == Key.ChannelDown || Prefs.bool("zap_updown", true))) { index = (index + 1) % n; true }
+                        else if (s.live) { lastAct = "fav"; lv = LiveUi.OPTIONS; true }
                         else { bar = true; showInfo = true; true }
                     // live with archive: ◀◀ goes 5 minutes back through the provider's archive, ▶▶ forward (back to live at the end)
                     Key.MediaRewind -> if (!s.live) { player.seekTo((player.currentPosition - step).coerceAtLeast(0)); showInfo = true; true }
@@ -686,7 +699,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                     Key.DirectionLeft -> if (!s.live) { player.seekTo((player.currentPosition - bwd).coerceAtLeast(0)); showInfo = true; true }
                         else { side = "channels"; showInfo = false; true }
                     Key.DirectionRight -> if (!s.live) { player.seekTo(player.currentPosition + fwd); showInfo = true; true }
-                        else { side = "epg"; showInfo = false; true }
+                        else { lastAct = LiveUi.EPG; lv = LiveUi.EPG; true }
                     Key.MediaPause, Key.MediaPlay -> { if (!s.live || Tech.livePause) { if (e.key == Key.MediaPause) player.pause() else player.play() }; showInfo = true
                         if (!s.live && e.key == Key.MediaPause) bar = true; true }
                     Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.MediaPlayPause -> {
@@ -980,7 +993,113 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 }
             }
         }
-        if (s.live && showInfo && side == null) {
+        // ---- live TV (spec 07): video only; short OK = info; long OK = six centred actions; panels centred and opening upward
+        if (s.live && side == null && error == null && lv != LiveUi.NONE) {
+            val ch = item.channel
+            LaunchedEffect(lv, keyTick) {
+                if (lv == LiveUi.INFO) { delay(5000); lv = LiveUi.NONE }
+                else if (lv == LiveUi.OPTIONS) { delay(8000); lv = LiveUi.NONE }
+            }
+            val liveEpg by androidx.compose.runtime.produceState<List<EpgItem>?>(null, item.url, lv == LiveUi.INFO || lv == LiveUi.EPG) {
+                value = if (p != null && ch != null) try { Repo.epg(p, ch, 24) } catch (_: Exception) { emptyList() } else emptyList()
+            }
+            val catchupOk = ch != null && Catchups.has(p, ch)
+            fun playArchive(e: EpgItem) {
+                val c = ch ?: return
+                val u = Catchups.url(p, c, e) ?: run { Toast.makeText(ctx, tr("Arhiva nije dostupna"), Toast.LENGTH_SHORT).show(); return }
+                lv = LiveUi.NONE
+                CatchupHist.add(CatchupHist.E(u, e.title, c, e.start, e.end, System.currentTimeMillis()))
+                // archive playback is its own (non-live) player; Back comes back to this channel
+                nav.push(Screen.Player(listOf(PlayItem(e.title, u, c.logo, c.name + " · " + e.times(), startAt = 0L)), 0, live = false))
+            }
+            fun tune(c: Channel) {
+                val i = items.indexOfFirst { it.url == c.url }
+                if (i >= 0) index = i else { items = listOf(PlayItem(c.name, c.url, c.logo, c.num.toString(), c)) + items.filterNot { it.url == c.url }; index = 0 }
+            }
+            if (lv == LiveUi.INFO) LiveInfoOverlay(item, ch?.num ?: (index + 1), if (videoH > 0) qualityLabel(videoH) else null, liveEpg)
+            else Column(Modifier.fillMaxSize().padding(bottom = 28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Bottom) {
+                key(lv) {
+                    when (lv) {
+                        LiveUi.EPG -> LiveEpgPanel(ch?.name ?: item.title, liveEpg, { e -> catchupOk && ch != null && !expired(ch, e.start) }, { e -> playArchive(e) }, panelFr)
+                        LiveUi.CATCHUP -> {
+                            val arch by load(ch?.url) { if (p != null && ch != null) archiveOf(p, ch) else emptyList() }
+                            LiveCatchupPanel(ch?.name ?: item.title, arch, { e -> playArchive(e) }, panelFr)
+                        }
+                        LiveUi.PICTURE -> LivePanel(tr("Slika"), R.drawable.lc_monitor, false, panelFr) {
+                            PICTURE_MODES.forEachIndexed { k, (i, label) ->
+                                LiveRow(tr(label), on = resize == i, fr = if (k == 0) panelFr else null) {
+                                    resize = i; ch?.let { Prefs.put("fmt_v2_" + it.url.hashCode(), i.toLong()) }; PreviewFmt.rev++
+                                }
+                            }
+                        }
+                        LiveUi.HISTORY -> LiveHistoryPanel(Recent.list().map { it.ch }.distinctBy { it.url }.take(10), { c -> lv = LiveUi.NONE; tune(c) }, { clearAsk = true }, panelFr)
+                        LiveUi.MORE -> LivePanel(tr("Više"), R.drawable.lc_more_horizontal, false, panelFr) {
+                            val auds = tracksOf(player, MC.TRACK_TYPE_AUDIO); val subs = tracksOf(player, MC.TRACK_TYPE_TEXT)
+                            var k = 0
+                            if (auds.size > 1) LiveRow(tr("Audio"), value = auds.firstOrNull { it.selected }?.label?.substringBefore(" · "), fr = if (k++ == 0) panelFr else null) { lv = LiveUi.MORE_AUDIO }
+                            if (subs.isNotEmpty()) LiveRow(tr("Titlovi"), fr = if (k++ == 0) panelFr else null) { lv = LiveUi.MORE_SUBS }
+                            LiveRow(tr("Informacije o streamu"), fr = if (k == 0) panelFr else null) { lv = LiveUi.MORE_INFO }
+                        }
+                        LiveUi.MORE_AUDIO -> LivePanel(tr("Audio"), R.drawable.lc_volume, false, panelFr) {
+                            tracksOf(player, MC.TRACK_TYPE_AUDIO).forEachIndexed { k, t ->
+                                LiveRow(t.label, on = t.selected, fr = if (k == 0) panelFr else null) {
+                                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setOverrideForType(TrackSelectionOverride(t.group.mediaTrackGroup, t.index)).build()
+                                    lv = LiveUi.MORE
+                                }
+                            }
+                        }
+                        LiveUi.MORE_SUBS -> LivePanel(tr("Titlovi"), R.drawable.lc_captions, false, panelFr) {
+                            // live TV: only the stream's own subtitles, no online search
+                            val subs = tracksOf(player, MC.TRACK_TYPE_TEXT)
+                            val off = player.trackSelectionParameters.disabledTrackTypes.contains(MC.TRACK_TYPE_TEXT) || subs.none { it.selected }
+                            LiveRow(tr("Isključeno"), on = off, fr = panelFr) {
+                                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, true).build(); lv = LiveUi.MORE
+                            }
+                            subTrackNames(subs).forEachIndexed { i, nm ->
+                                val t = subs[i]
+                                LiveRow(nm, on = !off && t.selected) {
+                                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false)
+                                        .setOverrideForType(TrackSelectionOverride(t.group.mediaTrackGroup, t.index)).build(); lv = LiveUi.MORE
+                                }
+                            }
+                        }
+                        LiveUi.MORE_INFO -> LivePanel(tr("Informacije o streamu"), R.drawable.lc_info, true, panelFr) {
+                            val v = player.videoFormat; val a = player.audioFormat
+                            val proto = when { item.url.contains(".m3u8") -> "HLS"; item.url.contains(".mpd") -> "DASH"; item.url.endsWith(".ts") || item.url.contains("/live/") -> "MPEG-TS"; else -> null }  // i18n-ignore
+                            val rows = listOfNotNull(
+                                tr("Kanal") to item.title,
+                                v?.let { tr("Rezolucija") to "${it.width}×${it.height}" },
+                                v?.sampleMimeType?.let { tr("Video kodek") to it.substringAfter('/').uppercase() },
+                                v?.frameRate?.takeIf { it > 0 }?.let { "FPS" to kotlin.math.round(it).toInt().toString() },  // i18n-ignore
+                                (v?.bitrate?.takeIf { it > 0 }?.toLong() ?: bitrate.takeIf { it > 0 })?.let { "Bitrate" to String.format(Locale.US, "%.1f Mbps", it / 1_000_000.0) },  // i18n-ignore
+                                a?.sampleMimeType?.let { tr("Audio kodek") to it.substringAfter('/').uppercase() },
+                                a?.channelCount?.takeIf { it > 0 }?.let { tr("Audio kanali") to (if (it >= 6) "5.1" else if (it == 1) "Mono" else "Stereo") },  // i18n-ignore
+                                proto?.let { tr("Protokol") to it },
+                                tr("Bafer") to trf("%s s", (player.totalBufferedDuration / 1000).coerceAtLeast(0)),
+                                tr("Stanje") to tr(if (buffering) "Učitava se" else if (player.isPlaying) "Reprodukcija" else "Pauzirano"),
+                            )
+                            rows.forEachIndexed { i, (k, v2) -> LiveRow(k, value = v2, fr = if (i == 0) panelFr else null) {} }
+                        }
+                        else -> {}
+                    }
+                }
+                if (lv != LiveUi.OPTIONS) Spacer(Modifier.height(14.dp))
+                @Suppress("UNUSED_VARIABLE") val favRev = Favs.rev
+                LiveActionBar(fav = ch != null && Favs.inAny(ctx, ch), catchupOk = catchupOk, frs = liveFrs) { id ->
+                    lastAct = id
+                    when (id) {
+                        "fav" -> ch?.let { c -> Toast.makeText(ctx, tr(if (Favs.flip(ctx, c)) "Dodano u favorite" else "Uklonjeno iz favorita"), Toast.LENGTH_SHORT).show() }
+                        LiveUi.CATCHUP -> if (!catchupOk) Toast.makeText(ctx, tr("Ovaj kanal nema arhivu"), Toast.LENGTH_SHORT).show() else lv = id
+                        else -> lv = id
+                    }
+                }
+            }
+        }
+        if (clearAsk) Popup(tr("Obrisati nedavno gledane kanale?"), { clearAsk = false }) {
+            OptionRow("Odustani", R.drawable.lc_x) { clearAsk = false }
+            OptionRow("Obriši sve", R.drawable.lc_trash_2, color = C.Danger) { Recent.clear(); PlayerChannelHistory.clear(); clearAsk = false }
+        }
+        if (s.live && showInfo && side == null && !LIVE_V2) {
             Box(Modifier.align(Alignment.BottomStart).fillMaxWidth()
                 .background(if (Look.overlay == 1) Brush.verticalGradient(listOf(C.OverlayBar, C.OverlayBar)) else Brush.verticalGradient(listOf(Color.Transparent, Color(0xE6000000))))
                 .padding(start = 48.dp, end = 48.dp, top = 70.dp, bottom = 34.dp)) {
@@ -1251,9 +1370,16 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         }
     }
 
-    LaunchedEffect(dialog, side, resume, bar) { if (dialog == null && side == null && resume == null && !bar) focus.tryFocus() }
-    LaunchedEffect(item.url) { resize = item.channel?.let { Prefs.long("fmt_v2_" + it.url.hashCode(), 0).toInt().coerceIn(0, FORMATS.lastIndex) } ?: resize }
+    LaunchedEffect(dialog, side, resume, bar, lv) {
+        if (dialog == null && side == null && resume == null && !bar && (lv == LiveUi.NONE || lv == LiveUi.INFO)) focus.tryFocus()
+        // a panel closed: the focus goes back to the icon that opened it
+        if (s.live && lv == LiveUi.OPTIONS) { delay(40); liveFrs[lastAct]?.tryFocus() }
+    }
+    LaunchedEffect(item.url) { resize = item.channel?.let { Prefs.long("fmt_v2_" + it.url.hashCode(), 0).toInt().coerceIn(0, 6) } ?: resize }
 }
+
+/** the redesigned live overlay (spec 07) replaces the old info box and option bar */
+const val LIVE_V2 = true
 
 internal val FORMATS = listOf("Zadano / automatski", "4:3", "16:9", "Prilagodi širinu", "Rastegni", "Zoom")
 

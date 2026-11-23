@@ -105,7 +105,7 @@ private fun Archive(c: Channel, day: Int, onDay: (Int) -> Unit, nav: Nav) {
 }
 
 /** Past shows of a channel that the provider keeps (its archive table, else the guide). */
-private suspend fun archiveOf(p: Playlist, ch: Channel): List<EpgItem> =
+internal suspend fun archiveOf(p: Playlist, ch: Channel): List<EpgItem> =
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             val x = Xtream(p)
             val now = System.currentTimeMillis()
@@ -213,7 +213,7 @@ object CatchupQ {
 }
 
 /** the archive of a channel only reaches back this far */
-private fun expired(ch: Channel, start: Long) = start < Sports.dayStart(-(ch.archive.coerceIn(1, 14) - 1))
+internal fun expired(ch: Channel, start: Long) = start < Sports.dayStart(-(ch.archive.coerceIn(1, 14) - 1))
 
 private sealed class Cu {
     object Menu : Cu()

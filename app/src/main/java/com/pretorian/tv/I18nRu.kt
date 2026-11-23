@@ -2643,4 +2643,16 @@ Rosulja|Морось
 Snijeg|Снег
 Pljusak|Ливень
 Grmljavina|Гроза
+Nema EPG podataka.|Нет данных телегида.
+Nazad na program|Назад к программе
+Historija – zadnjih 10 kanala|История – последние 10 каналов
+Još nema gledanih kanala.|Вы ещё не смотрели каналы.
+Audio kodek|Аудиокодек
+Audio kanali|Аудиоканалы
+Protokol|Протокол
+Bafer|Буфер
+Stanje|Состояние
+Učitava se|Загрузка
+Obrisati nedavno gledane kanale?|Очистить недавно просмотренные каналы?
+Historija|История
 """.trimIndent()

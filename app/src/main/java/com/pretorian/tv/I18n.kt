@@ -510,8 +510,8 @@ Ne radi na svim uređajima. Ako je box potpuno ugašen, podsjetnik ne može doć
 Tvoji podsjetnici|Your reminders|Deine Erinnerungen|Tvoji podsjetnici|Твоји подсетници|Твоите напомняния|Mementourile tale|Hatırlatıcıların|I tuoi promemoria|تذكيراتك
 Nema podsjetnika.|No reminders.|Keine Erinnerungen.|Nema podsjetnika.|Нема подсетника.|Няма напомняния.|Niciun memento.|Hatırlatıcı yok.|Nessun promemoria.|لا توجد تذكيرات.
 Obriši|Delete|Löschen|Obriši|Обриши|Изтрий|Șterge|Sil|Elimina|حذف
-Backup je spremljen|Backup saved|Backup gespeichert|Sigurnosna kopija je spremljenaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|Бекап је сачуван|Копието е запазено|Backup salvat|Yedek kaydedildi|Backup salvato|تم حفظ النسخة
-Backup nije spremljen|Backup not saved|Backup nicht gespeichert|Sigurnosna kopija nije spremljenaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|Бекап није сачуван|Копието не е запазено|Backup nesalvat|Yedek kaydedilmedi|Backup non salvato|لم تُحفظ النسخة
+Backup je spremljen|Backup saved|Backup gespeichert|Sigurnosna kopija je spremljenaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|Бекап је сачуван|Копието е запазено|Backup salvat|Yedek kaydedildi|Backup salvato|تم حفظ النسخة
+Backup nije spremljen|Backup not saved|Backup nicht gespeichert|Sigurnosna kopija nije spremljenaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|Бекап није сачуван|Копието не е запазено|Backup nesalvat|Yedek kaydedilmedi|Backup non salvato|لم تُحفظ النسخة
 Sve je vraćeno. PRETORIAN se ponovo pokreće.|Everything restored. PRETORIAN restarts.|Alles wiederhergestellt. PRETORIAN startet neu.|Sve je vraćeno. PRETORIAN se ponovo pokreće.|Све је враћено. PRETORIAN се поново покреће.|Всичко е възстановено. PRETORIAN се рестартира.|Totul a fost restaurat. PRETORIAN repornește.|Her şey geri yüklendi. PRETORIAN yeniden başlıyor.|Tutto ripristinato. PRETORIAN si riavvia.|تمت الاستعادة. يُعاد تشغيل PRETORIAN.
 Vraćanje nije uspjelo|Restore failed|Wiederherstellung fehlgeschlagen|Vraćanje nije uspjelo|Враћање није успело|Възстановяването не успя|Restaurarea a eșuat|Geri yükleme başarısız|Ripristino non riuscito|فشلت الاستعادة
 Backup i vraćanje|Backup and restore|Sichern und wiederherstellen|Sigurnosna kopija i vraćanje|Бекап и враћање|Резервно копие|Backup și restaurare|Yedekle ve geri yükle|Backup e ripristino|النسخ والاستعادة
@@ -2543,6 +2543,18 @@ Rosulja|Drizzle|Nieselregen|Rosulja|Росуља|Ръмеж|Burniță|Çisenti|P
 Snijeg|Snow|Schnee|Snijeg|Снег|Сняг|Ninsoare|Kar|Neve|ثلج
 Pljusak|Showers|Schauer|Pljusak|Пљусак|Превалявания|Averse|Sağanak|Rovesci|زخات
 Grmljavina|Thunderstorm|Gewitter|Grmljavina|Грмљавина|Гръмотевична буря|Furtună|Gök gürültülü fırtına|Temporale|عاصفة رعدية
+Nema EPG podataka.|No EPG data available.|Keine EPG-Daten verfügbar.|Nema EPG podataka.|Нема EPG података.|Няма EPG данни.|Nu există date EPG.|EPG verisi yok.|Nessun dato EPG disponibile.|لا توجد بيانات دليل البرامج.
+Nazad na program|Back to the guide|Zurück zum Programm|Natrag na program|Назад на програм|Назад към програмата|Înapoi la program|Rehbere dön|Torna alla guida|العودة إلى الدليل
+Historija – zadnjih 10 kanala|History – last 10 channels|Verlauf – letzte 10 Sender|Povijest – zadnjih 10 kanala|Историја – последњих 10 канала|История – последните 10 канала|Istoric – ultimele 10 canale|Geçmiş – son 10 kanal|Cronologia – ultimi 10 canali|السجل – آخر 10 قنوات
+Još nema gledanih kanala.|No channels watched yet.|Noch keine Sender angesehen.|Još nema gledanih kanala.|Још нема гледаних канала.|Все още няма гледани канали.|Încă nu ați urmărit canale.|Henüz izlenen kanal yok.|Nessun canale ancora guardato.|لم تتم مشاهدة أي قناة بعد.
+Audio kodek|Audio codec|Audio-Codec|Audio kodek|Аудио кодек|Аудио кодек|Codec audio|Ses kodeği|Codec audio|ترميز الصوت
+Audio kanali|Audio channels|Audiokanäle|Audio kanali|Аудио канали|Аудио канали|Canale audio|Ses kanalları|Canali audio|قنوات الصوت
+Protokol|Protocol|Protokoll|Protokol|Протокол|Протокол|Protocol|Protokol|Protocollo|البروتوكول
+Bafer|Buffer|Puffer|Međuspremnik|Бафер|Буфер|Buffer|Arabellek|Buffer|المخزن المؤقت
+Stanje|Status|Status|Stanje|Стање|Състояние|Stare|Durum|Stato|الحالة
+Učitava se|Loading|Wird geladen|Učitava se|Учитава се|Зарежда се|Se încarcă|Yükleniyor|Caricamento|جارٍ التحميل
+Obrisati nedavno gledane kanale?|Clear recently watched channels?|Zuletzt gesehene Sender löschen?|Obrisati nedavno gledane kanale?|Обрисати недавно гледане канале?|Изчистване на наскоро гледаните канали?|Ștergeți canalele vizionate recent?|Son izlenen kanallar silinsin mi?|Cancellare i canali visti di recente?|مسح القنوات التي شوهدت مؤخرًا؟
+Historija|History|Verlauf|Povijest|Историја|История|Istoric|Geçmiş|Cronologia|السجل
 Nepoznat jezik|Unknown language|Unbekannte Sprache|Nepoznat jezik|Непознат језик|Неизвестен език|Limbă necunoscută|Bilinmeyen dil|Lingua sconosciuta|لغة غير معروفة
 Prikaz liste kanala|Channel list style|Senderliste-Ansicht|Prikaz popisa kanala|Приказ листе канала|Изглед на списъка|Stil listă canale|Kanal listesi görünümü|Stile elenco canali|نمط قائمة القنوات
 u TV-u i u listi u playeru|in TV and in the list in the player|im TV und in der Liste im Player|u TV-u i na popisu u playeru|у ТВ-у и у листи у плејеру|в ТВ и в списъка в плейъра|în TV și în lista din player|TV'de ve oynatıcıdaki listede|in TV e nell'elenco del player|في التلفاز وفي قائمة المشغل

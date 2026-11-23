@@ -30,7 +30,7 @@ const val MI_PLAYBACK = "playback"
 const val MI_PICTURE = "picture"
 
 /** Picture formats of films and series (approved: exactly these five), mapped to the player's resize modes. */
-val PICTURE_MODES = listOf(0 to "Zadano", 3 to "Prilagodi", 5 to "Popuni", 4 to "Rastegni", 1 to "4:3")
+val PICTURE_MODES = listOf(0 to "Zadano", 6 to "Prilagodi", 5 to "Popuni", 4 to "Rastegni", 1 to "4:3")
 val SPEEDS = listOf(0.75f, 1f, 1.25f, 1.5f, 2f)
 val SLEEP_MIN = listOf(0, 15, 30, 60, 90)
 
