@@ -136,17 +136,20 @@ fun fallbackFor(key: String): Int = FALLBACKS[(key.hashCode() and 0x7fffffff) % 
 
 /** Picture that falls back to a landscape when there is no image or it fails to load. */
 @Composable
-fun OnyxImage(url: String?, key: String, modifier: Modifier = Modifier, maxW: Int = 360, scale: ContentScale = ContentScale.Crop, highQuality: Boolean = false, wide: Boolean = false) {
+fun OnyxImage(url: String?, key: String, modifier: Modifier = Modifier, maxW: Int = 360, scale: ContentScale = ContentScale.Crop, highQuality: Boolean = false, wide: Boolean = false,
+              align: androidx.compose.ui.Alignment = androidx.compose.ui.Alignment.Center, crossfade: Boolean = true) {
     val ctx = LocalContext.current
     val fb = painterResource(fallbackFor(key))
     if (url.isNullOrBlank()) Image(fb, null, modifier, contentScale = ContentScale.Crop)
     else {
         // never decode more pixels than the screen shows; Lite also uses half the memory per pixel
         val w = if (highQuality) maxW else if (Perf.lite || Lean.posters) maxW * 2 / 3 else maxW
-        val req = remember(url, w, wide) {
-            coil.request.ImageRequest.Builder(ctx).data(url).size(w, if (wide) w * 9 / 16 else w * 3 / 2).allowRgb565(!highQuality && (Perf.lite || Lean.posters)).crossfade(!highQuality).build()
+        val req = remember(url, w, wide, crossfade) {
+            coil.request.ImageRequest.Builder(ctx).data(url).size(w, if (wide) w * 9 / 16 else w * 3 / 2).allowRgb565(!highQuality && (Perf.lite || Lean.posters)).crossfade(!highQuality && crossfade).build()
         }
-        AsyncImage(model = req, contentDescription = null, contentScale = scale, modifier = modifier, error = fb, placeholder = fb)
+        // BUG 08: with crossfade the picture was sized against the placeholder (a big landscape drawable), so small posters came out tiny;
+        // without crossfade, or with no placeholder, it is always sized by the real picture
+        AsyncImage(model = req, contentDescription = null, contentScale = scale, alignment = align, modifier = modifier, error = fb, placeholder = if (crossfade) fb else null)
     }
 }
 

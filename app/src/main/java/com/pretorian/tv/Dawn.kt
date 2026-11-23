@@ -311,26 +311,35 @@ private fun NoteCenter(nav: Nav, onDismiss: () -> Unit) {
     }
 }
 
-/** Active playlist · expiry date · days left (green > 7, orange 3–7, red ≤ 2). Unknown expiry: only the name, no invented date. */
+/** The active playlist in every status bar (one shared piece): NAME [N DAYS]. Only the day count has a thin outline:
+ *  green ≥ 7, amber 3–6, red 0–2 or expired, neutral grey when the provider gives no date (never an invented number).
+ *  Name and expiry always come from the same active playlist; a long name is shortened, the day count never. */
 @Composable
-private fun PlaylistChip(p: Playlist, now: Long) {
+fun PlaylistStatus(p: Playlist, now: Long, modifier: Modifier = Modifier) {
     val sec = p.exp.toLongOrNull()?.takeIf { it > 0 }
-    val days = sec?.let { ((it * 1000 - now) / 86_400_000L).toInt() }
-    // BUG 06B: plain header text, no pill, no border, no background
-    Row(Modifier.height(40.dp).padding(horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        // one line (approved): Name · dd.MM.yyyy · X days left — green > 7, orange 3–7, red ≤ 2, gray when the provider gives no date
-        Ico(R.drawable.lc_list, 16.dp, C.Soft)
-        T(p.name, 14.sp, C.Text, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.widthIn(max = 180.dp))
-        T("·", 14.sp, C.Soft)
-        if (sec != null && days != null) {
-            T(SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date(sec * 1000)), 14.sp, C.Text)
-            T("·", 14.sp, C.Soft)
-            val col = when { days <= 2 -> Silver.Error; days <= 7 -> Silver.Warning; else -> Silver.Success }
-            T(if (days < 0) tr("Istekla") else trf("još %s dana", days), 14.sp, col, FontWeight.Bold)
-        } else T("Trajanje nepoznato", 14.sp, C.Muted)
+    // whole calendar days to the expiry day (midnight to midnight), so the number changes at midnight, not at an odd hour
+    val days = sec?.let { val day = 86_400_000L; val tz = java.util.TimeZone.getDefault()
+        ((it * 1000 + tz.getOffset(it * 1000)) / day - (now + tz.getOffset(now)) / day).toInt() }
+    val (label, line) = when {
+        days == null -> "—" to Color(0x80B0B8C4)  // i18n-ignore
+        days < 0 -> tr("Istekla").uppercase() to Color(0xFFE5484D)
+        else -> daysLabel(days) to when { days <= 2 -> Color(0xFFE5484D); days <= 6 -> Color(0xFFE5B54A); else -> Color(0xFF46A758) }
+    }
+    Row(modifier.height(40.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        T(p.name, 14.sp, Color(0xFFDDE1E6), FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f, fill = false).widthIn(max = 220.dp))
+        Box(Modifier.border(1.dp, line, Rnd(6.dp)).padding(horizontal = 8.dp, vertical = 2.dp)) { T(label, 13.sp, Color.White, FontWeight.SemiBold, maxLines = 1) }
     }
 }
+
+/** "59 DANA", "21 DAN", "1 DAY", "59 DAYS" — singular / plural by the app language */
+fun daysLabel(n: Int): String {
+    val slav = Look.lang in setOf("bs", "hr", "sr", "ru", "bg")
+    val one = if (slav) n % 10 == 1 && n % 100 != 11 else n == 1
+    return (if (one) trf("%s DAN", n) else trf("%s DANA", n))
+}
+
+@Composable
+private fun PlaylistChip(p: Playlist, now: Long) = PlaylistStatus(p, now)
 
 /** Preview area: the picture after the first OK, before that a calm box with a play mark. */
 @Composable

@@ -228,7 +228,7 @@ fun OnyxMovieDetail(v: Vod, nav: Nav) {
     // redesign spec 03: full picture, gradient from the left, breadcrumb, Watch/Resume · Trailer · My List,
     // progress only when started, then exactly four icons whose menus open upward
     Box(Modifier.fillMaxSize()) {
-        DetailBackdrop(m?.backdrop, v.poster, "bd:" + v.id, ready = meta !is Load.Loading)
+        DetailBackdrop(m?.backdrop ?: i?.backdrop?.takeIf { it.isNotBlank() }, v.poster, "bd:" + v.id, ready = meta !is Load.Loading && info !is Load.Loading)
         Column(Modifier.fillMaxSize().padding(start = 56.dp, end = 48.dp, top = 34.dp, bottom = 34.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             T(listOfNotNull(tr("Filmovi"), vodCrumb(false) ?: VodMemory.catOf[v.id], title).joinToString("  /  ").uppercase(), 13.sp, Silver.TextSoft, FontWeight.SemiBold)
             Spacer(Modifier.weight(1f))

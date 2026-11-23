@@ -40,6 +40,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.graphics.graphicsLayer
@@ -242,14 +244,23 @@ private fun VodGalleryBody(title: String, icon: Int, items: Load<List<VItem>>, m
     var focusIdx by remember { mutableStateOf(start) }
     val m by load(shown.name, shown.series, Prefs.tmdbKey) { Tmdb.find(shown.name, tv = shown.series) }
     val meta = (m as? Load.Ok)?.value
+    // BUG 10: without TMDB (no key in the build, or no match) the provider's own film info fills the hero: story, cast, director, picture
+    val prov by load(shown.id, meta == null && m !is Load.Loading) {
+        if (meta != null || shown.series) null else Store.byId(ctx, shown.pid)?.let { p -> try { Repo.movieInfo(p, shown.id) } catch (_: Exception) { null } }
+    }
+    val pi = (prov as? Load.Ok)?.value
     val gs = androidx.compose.foundation.lazy.grid.rememberLazyGridState(initialFirstVisibleItemIndex = (start / cols) * cols)
     val fr = remember { FocusRequester() }
     val watchFr = remember { FocusRequester() }
     var toWatch by remember { mutableStateOf(0) }
+    var lastPosterOk by remember { mutableStateOf(0L) }
+    var lastOpen by remember { mutableStateOf(0L) }
+    // one open per 1.5 s, whether it came from Watch or from a double OK: never two views from one gesture
+    fun openOnce() { val now = System.currentTimeMillis(); if (now - lastOpen > 1500) { lastOpen = now; shown.open(nav) } }
     LaunchedEffect(toWatch) { if (toWatch > 0) { delay(30); watchFr.tryFocus() } }
     Box(Modifier.fillMaxSize()) {
         // the confirmed title's landscape picture: its own 16:9 shape on the right (never a cropped portrait poster), fading into graphite
-        meta?.backdrop?.let { bd ->
+        (meta?.backdrop ?: pi?.backdrop?.takeIf { it.isNotBlank() })?.let { bd ->
             Box(Modifier.align(Alignment.TopEnd).fillMaxWidth(0.62f).aspectRatio(16f / 9f)) {
                 androidx.compose.animation.Crossfade(bd, label = "bd", animationSpec = androidx.compose.animation.core.tween(350)) { img ->
                     OnyxImage(img, "bd:" + img, Modifier.fillMaxSize(), maxW = 1280, scale = ContentScale.Fit, highQuality = true, wide = true)
@@ -262,16 +273,18 @@ private fun VodGalleryBody(title: String, icon: Int, items: Load<List<VItem>>, m
             // upper part: the confirmed title — only as tall as its content
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 T(titleCase(meta?.title ?: cleanTitle(shown.name).first), 30.sp, Color.White, FontWeight.Bold, maxLines = 1, modifier = Modifier.widthIn(max = 760.dp))
-                val facts = listOfNotNull(meta?.year?.take(4) ?: cleanTitle(shown.name).second, meta?.runtime, translated(meta?.genres)?.split(", ")?.take(2)?.joinToString(" · "))
+                val facts = listOfNotNull(meta?.year?.take(4) ?: pi?.year?.take(4) ?: cleanTitle(shown.name).second, meta?.runtime ?: pi?.duration?.ifBlank { null },
+                    translated(meta?.genres ?: pi?.genre)?.split(", ")?.take(2)?.joinToString(" · "))
                 if (facts.isNotEmpty()) T(facts.joinToString("  •  "), 14.sp, Silver.TextSoft)  // i18n-ignore
-                T(translated(meta?.overview) ?: "", 14.sp, Color(0xFFDDE1E6), maxLines = 2, modifier = Modifier.widthIn(max = 640.dp))
-                val dir = meta?.people?.firstOrNull { it.role == "Režija" }?.name
+                T(translated(meta?.overview ?: pi?.plot?.ifBlank { null }) ?: "", 14.sp, Color(0xFFDDE1E6), maxLines = 2, modifier = Modifier.widthIn(max = 640.dp))
+                val dir = meta?.people?.firstOrNull { it.role == "Režija" }?.name ?: pi?.director?.trim()?.ifBlank { null }
                 val cast = meta?.people?.filter { it.role != "Režija" && it.role != "Autor" }?.take(3)?.joinToString(", ") { it.name }?.ifBlank { null }
+                    ?: pi?.cast?.split(',')?.map { it.trim() }?.filter { it.isNotBlank() }?.take(3)?.joinToString(", ")?.ifBlank { null }
                 val credits = listOfNotNull(cast?.let { tr("Glumci") + ": " + it }, dir?.let { tr("Režija") + ": " + it })
                 if (credits.isNotEmpty()) T(credits.joinToString("   ·   "), 13.sp, Silver.TextSoft, maxLines = 1, modifier = Modifier.widthIn(max = 760.dp))  // i18n-ignore
                 Spacer(Modifier.height(4.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    HeroBtn("Gledaj", R.drawable.lc_play, primary = true, fr = watchFr) { shown.open(nav) }
+                    HeroBtn("Gledaj", R.drawable.lc_play, primary = true, fr = watchFr) { openOnce() }
                     HeroBtn("Trailer", R.drawable.ic_trailer_red, colored = true) { openTrailer(ctx, shown.name, meta?.trailerKey) }
                     val on = remember(MyList.rev, shown.id) { MyList.has(shown.kind, shown.id) }
                     HeroBtn(if (on) "Na mojoj listi" else "Moja lista", if (on) R.drawable.lc_check else R.drawable.lc_plus) { myListToggle(ctx, shown) }
@@ -292,18 +305,37 @@ private fun VodGalleryBody(title: String, icon: Int, items: Load<List<VItem>>, m
                 val cellH = posterH + titleH
                 val padPx = with(androidx.compose.ui.platform.LocalDensity.current) { padV.toPx() }
                 val spec = remember(padPx) { RowSnap(padPx) }
+                // BUG 07: the grid is two rows tall but only the first is shown, so the next row is always ready (▼ never waits
+                // for it to be built); held keys are paced (≈150 ms, then ≈100 ms) and extra repeats are dropped, so nothing
+                // queues up and the movement stops the moment the key is released
+                var lastMove by remember { mutableStateOf(0L) }
                 androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides spec) {
-                    LazyVerticalGrid(GridCells.Fixed(cols), state = gs, modifier = Modifier.fillMaxWidth().height(cellH + padV * 2).focusRestorer(),
+                  Box(Modifier.fillMaxWidth().height(cellH + padV * 2).clipToBounds()) {
+                    LazyVerticalGrid(GridCells.Fixed(cols), state = gs, modifier = Modifier.fillMaxWidth().wrapContentHeight(Alignment.Top, unbounded = true).height(cellH * 2 + padV * 4).focusRestorer()
+                        .onPreviewKeyEvent { e ->
+                            val dir = e.key == Key.DirectionUp || e.key == Key.DirectionDown || e.key == Key.DirectionLeft || e.key == Key.DirectionRight
+                            if (!dir || e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                            val now = System.currentTimeMillis()
+                            val rep = e.nativeKeyEvent.repeatCount
+                            if (rep == 0) { lastMove = now; return@onPreviewKeyEvent false }
+                            val gapMs = if (rep < 8) 150 else 100
+                            if (now - lastMove < gapMs) return@onPreviewKeyEvent true
+                            lastMove = now; false
+                        },
                         horizontalArrangement = Arrangement.spacedBy(gap), verticalArrangement = Arrangement.spacedBy(padV * 2),
-                        contentPadding = PaddingValues(top = padV, bottom = padV)) {
+                        contentPadding = PaddingValues(top = padV, bottom = cellH + padV * 3)) {
                         itemsIndexed(list, key = { _, it -> it.id + it.url }) { i, it ->
                             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
                                 PosterCell(it, Modifier.width(posterW).height(cellH), posterH, if (i == start) fr else null, onFocus = { mem[key] = i; focusIdx = i }) {
-                                    mem[key] = i; mem[key + ":c"] = i; shown = it; toWatch++
+                                    // BUG 09: a second OK on the same poster within ~400 ms = Watch (opens the title's view), once
+                                    val now = System.currentTimeMillis()
+                                    if (shown == it && now - lastPosterOk < 400) { lastPosterOk = 0L; openOnce() }
+                                    else { lastPosterOk = now; mem[key] = i; mem[key + ":c"] = i; shown = it; toWatch++ }
                                 }
                             }
                         }
                     }
+                  }
                 }
             }
         }
@@ -317,8 +349,8 @@ private fun VodGalleryBody(title: String, icon: Int, items: Load<List<VItem>>, m
 fun PosterCell(it: VItem, modifier: Modifier, posterH: androidx.compose.ui.unit.Dp, fr: FocusRequester?, onFocus: () -> Unit, onClick: () -> Unit) {
     val src = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val f by src.collectIsFocusedAsState()
-    val sc by androidx.compose.animation.core.animateFloatAsState(if (f) 1.08f else 1f, androidx.compose.animation.core.tween(220), label = "ps")
-    val lift by androidx.compose.animation.core.animateDpAsState(if (f) (-6).dp else 0.dp, androidx.compose.animation.core.tween(220), label = "pl")
+    val sc by androidx.compose.animation.core.animateFloatAsState(if (f) 1.08f else 1f, androidx.compose.animation.core.tween(120), label = "ps")
+    val lift by androidx.compose.animation.core.animateDpAsState(if (f) (-6).dp else 0.dp, androidx.compose.animation.core.tween(120), label = "pl")
     LaunchedEffect(f) { if (f) onFocus() }
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.fillMaxWidth().height(posterH)
@@ -328,7 +360,7 @@ fun PosterCell(it: VItem, modifier: Modifier, posterH: androidx.compose.ui.unit.
             .border(if (f) 1.5.dp else 1.dp, if (f) Color.White else Color(0x1FFFFFFF), Rnd(10.dp))
             .clickable(interactionSource = src, indication = null, onClick = onClick)) {
             // BUG 02C / 03B: the whole poster, centred, its own shape (no zoom); a quiet graphite plate fills any space left
-            OnyxImage(it.image, "p:" + it.id, Modifier.fillMaxSize(), maxW = 300, scale = ContentScale.Fit)
+            OnyxImage(it.image, "p:" + it.id, Modifier.fillMaxSize(), maxW = 300, scale = ContentScale.Crop, crossfade = false)
             if (it.image == null) T(cleanTitle(it.name).first, 13.sp, C.Text, FontWeight.SemiBold, maxLines = 3, modifier = Modifier.align(Alignment.Center).padding(8.dp))
             val r = it.rating?.replace(',', '.')?.toDoubleOrNull()?.takeIf { v -> v > 0.0 && v <= 10.0 }
             if (r != null) Row(Modifier.align(Alignment.TopStart).padding(6.dp).clip(Rnd(6.dp)).background(Color(0xCC0B0C0D)).padding(horizontal = 6.dp, vertical = 2.dp),
@@ -470,6 +502,6 @@ fun vodCrumb(series: Boolean): String? = when (val t = VodMemory.stack[if (serie
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 class RowSnap(private val padPx: Float) : androidx.compose.foundation.gestures.BringIntoViewSpec {
     override val scrollAnimationSpec: androidx.compose.animation.core.AnimationSpec<Float> =
-        androidx.compose.animation.core.tween(380, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+        androidx.compose.animation.core.tween(140, easing = androidx.compose.animation.core.FastOutSlowInEasing)
     override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float = offset - padPx
 }

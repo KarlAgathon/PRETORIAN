@@ -203,13 +203,14 @@ fun HomeV2(nav: Nav) {
         val rowH = H * 0.075f; val rowStep = H * 0.084f
         val bandTop = H * 0.03f; val bandH = H * 0.09f
 
-        // ---- wordmark (top of the navigation column, centred)
-        Column(Modifier.offset(navX, bandTop).width(navW).height(bandH), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            androidx.compose.material3.Text("MEDIA CENTER", maxLines = 1, softWrap = false,  // i18n-ignore
-                style = androidx.compose.ui.text.TextStyle(fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif, fontWeight = FontWeight.Light,
-                    fontSize = 19.sp, letterSpacing = 4.sp, color = Color(0xFFECEEF1)))
-            Spacer(Modifier.height(6.dp))
-            Box(Modifier.fillMaxWidth(0.9f).height(1.5.dp).background(Brush.horizontalGradient(listOf(Color(0x00FFFFFF), Color(0xE6FFFFFF), Color(0x00FFFFFF)))))
+        // ---- branding (final rule 12): only the Spartan helmet, lightly engraved into the graphite — no text, no line, no box.
+        // Two copies of the same static picture: a dark one 1 dp lower-right (the cut), the grey one on top at low opacity.
+        Box(Modifier.offset(navX, bandTop).width(navW).height(bandH), contentAlignment = Alignment.Center) {
+            val helmet = androidx.compose.ui.res.painterResource(R.drawable.pretorian_spartan_helmet)
+            androidx.compose.foundation.Image(helmet, null, Modifier.height(44.dp).offset(1.dp, 1.dp), contentScale = ContentScale.Fit, alpha = 0.45f,
+                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Color.Black, androidx.compose.ui.graphics.BlendMode.SrcIn))
+            androidx.compose.foundation.Image(helmet, null, Modifier.height(44.dp), contentScale = ContentScale.Fit, alpha = 0.34f,
+                colorFilter = androidx.compose.ui.graphics.ColorFilter.colorMatrix(androidx.compose.ui.graphics.ColorMatrix().apply { setToSaturation(0f) }))
         }
         // ---- status bar: same band as the wordmark, its right end (the bell) on the content's right edge
         HomeStatus(nav, Modifier.offset(cx, bandTop).width(cw).height(bandH))
@@ -356,15 +357,7 @@ private fun HomeStatus(nav: Nav, modifier: Modifier) {
         }
         val h24 = android.text.format.DateFormat.is24HourFormat(ctx)
         T(SimpleDateFormat(if (h24) "HH:mm" else "h:mm a", Locale.getDefault()).format(now), 14.sp, c)  // i18n-ignore
-        Store.actives(ctx).firstOrNull()?.let { p ->
-            dot()
-            val sec = p.exp.toLongOrNull()?.takeIf { it > 0 }
-            val expired = sec != null && sec * 1000 < now.time
-            val exp = sec?.let { SimpleDateFormat("MMMM yyyy", Locale(Look.lang)).format(Date(it * 1000)) }  // i18n-ignore
-            val state = tr(if (expired) "Istekla" else "Aktivna")
-            T(tr("Playlista") + ": " + state + (if (exp != null && !expired) " (" + trf("ističe %s", exp) + ")" else ""), 14.sp,
-                if (expired) Silver.Error else c, maxLines = 1)
-        }
+        Store.actives(ctx).firstOrNull()?.let { p -> dot(); PlaylistStatus(p, now.time) }
         Box(Modifier.padding(horizontal = 4.dp).width(1.dp).height(22.dp).background(Color(0x33FFFFFF)))
         NoteBell(nav)
     }
@@ -393,7 +386,8 @@ private fun HomeMediaCard(c: HomeCard, modifier: Modifier, big: Boolean, memKey:
     Focusable(onClick = { HomeMem.key = memKey; onOpen(c) }, onMenu = if (pr != null) ({ onMenu(pr) }) else null,
         onFocus = { HomeMem.key = memKey }, focusRequester = fr, shape = Rnd(16.dp), normal = Color(0x8C14181C), focused = Color(0x8C14181C),
         focusBorderColor = Color(0xF2FFFFFF), borderColor = Color(0x33FFFFFF), zoom = 1.03f, modifier = modifier) { _ ->
-        OnyxImage(meta?.backdrop ?: c.image, "hm:" + c.title + (meta?.backdrop != null), Modifier.fillMaxSize(), maxW = if (big) 1280 else 780)
+        // top-aligned crop: heads and faces stay, any excess goes off the bottom
+        OnyxImage(meta?.backdrop ?: c.image, "hm:" + c.title + (meta?.backdrop != null), Modifier.fillMaxSize(), maxW = if (big) 1280 else 780, align = Alignment.TopCenter, wide = meta?.backdrop != null)
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.40f to Color(0x00000000), 1f to Color(0xD9000000))))
         Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = if (big) 22.dp else 16.dp, vertical = if (big) 18.dp else 12.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)) {
