@@ -643,7 +643,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                         backArmed = false
                         when {
                             side != null -> { side = null; sideGroup = null }                                  // channel list → picture
-                            lv == LiveUi.OPTIONS && altFocused -> { liveFrs[lastAct]?.tryFocus() }              // SAME EVENT panel → dock
+                            lv == LiveUi.OPTIONS && altFocused -> { try { liveFrs[lastAct]?.requestFocus() } catch (_: Exception) {} }              // SAME EVENT panel → dock
                             lv == LiveUi.EPG && epgDirect -> { lv = LiveUi.NONE; epgDirect = false }           // ▶ EPG → picture
                             else -> lv = LiveUi.back(lv)                                                         // sub → More → dock → picture
                         }
