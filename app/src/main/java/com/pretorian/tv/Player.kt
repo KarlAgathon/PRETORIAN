@@ -298,7 +298,13 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     var subFile by remember { mutableStateOf(s.items.getOrNull(index)?.subFile) }
     // picture format: 0 Auto, 1 4:3, 2 16:9, 3 Fit, 4 Stretch, 5 Original — remembered per channel
     var resize by remember { mutableIntStateOf(0) }
-    LaunchedEffect(Unit) { if (!s.live) resize = Prefs.long("vod_fmt", 0).toInt() }
+    LaunchedEffect(Unit) { if (!s.live) resize = s.items.getOrNull(s.index)?.fmt?.takeIf { it >= 0 } ?: Prefs.long("vod_fmt", 0).toInt() }
+    // redesign (spec 03/04): the floating menu open in the film / series controls, a key tick for the 5 s auto-hide,
+    // the Up Next choice (0 Play next, 1 Cancel autoplay) and a cancelled autoplay
+    var vmenu by remember { mutableStateOf<String?>(null) }
+    var keyTick by remember { mutableIntStateOf(0) }
+    var upSel by remember { mutableIntStateOf(0) }
+    var autoCancel by remember { mutableStateOf(false) }
     val player = remember { Preview.stop(); buildPlayer(ctx) }
     val playerScope = rememberCoroutineScope()
     val mediaRequest = remember { PlaybackRequest() }
@@ -440,7 +446,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             override fun onPlaybackStateChanged(state: Int) {
                 buffering = state == Player.STATE_BUFFERING
                 if (state == Player.STATE_READY) { if (reconnect > 0) StreamLog.event("ok", items.getOrNull(index)?.title ?: ""); if (reconnect > 0) StreamLog.add(listOf(items.getOrNull(index)?.title ?: "", " · ", tr("radi ponovo ✓")).joinToString("")); error = null; reconnect = 0; readyOnce[0] = true }  // i18n-ignore
-                if (state == Player.STATE_ENDED && !s.live) { saveProgress(done = true); if (index < n - 1 && Prefs.bool("next_ep", true)) index++ }
+                if (state == Player.STATE_ENDED && !s.live) { saveProgress(done = true); if (index < n - 1 && Prefs.bool("next_ep", true) && !autoCancel) index++ }
             }
             override fun onIsPlayingChanged(isPlaying: Boolean) { playing = isPlaying }
             override fun onTracksChanged(tracks: Tracks) {
@@ -483,9 +489,11 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             try { Recent.add(c, g?.pid, g?.cat?.id ?: c.group, g?.cat?.name ?: c.group) } catch (_: Exception) {}
             PlayerChannelHistory.add(c)
         }
-        error = null; retried = false; showInfo = true; videoH = 0
+        error = null; retried = false; showInfo = s.live; videoH = 0; autoCancel = false; upSel = 0
         val cur = items[index]
         AudioDelay.use(cur.url)   // sound delay kept for this channel / film
+        // films and series only: the speed chosen on the movie / series view (never on live TV)
+        if (!s.live && index == s.index) player.setPlaybackSpeed(cur.speed.coerceIn(0.5f, 2f))
         if (cur.channel?.url != items.getOrNull(prevIndex)?.channel?.url) backupTried.clear()
         shiftFrom = 0L
         // a subtitle fixed with SYNC earlier for this film comes back by itself
@@ -569,8 +577,9 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     }
     LaunchedEffect(index) { gaveUp = false; frozenMsg = false; if (!s.live) while (true) { delay(15_000); if (player.isPlaying) saveProgress(background = true) } }
 
-    BackHandler(enabled = dialog != null || side != null || resume != null || bar) {
+    BackHandler(enabled = dialog != null || side != null || resume != null || bar || (skipPill == "credits" && !autoCancel)) {
         when {
+            skipPill == "credits" && !autoCancel -> { autoCancel = true; skipPill = null }
             resume != null -> { resume = null; player.seekTo(0); player.play() }
             dialog != null -> dialog = null
             bar -> { bar = false; showInfo = false }
@@ -580,6 +589,29 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         }
     }
 
+    val subsUi: @Composable (() -> Unit) -> Unit = { done -> SubsPanel(item, tracksOf(player, MC.TRACK_TYPE_TEXT), subFile, online = !s.live, onDismiss = done,
+            onOff = { subFile = null; player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, true).build(); done() },
+            onTrack = { t ->
+                // only one subtitle on screen: a downloaded file is taken out of the stream first, then the provider track is chosen
+                val lang = try { t.group.getTrackFormat(t.index).language } catch (_: Exception) { null }
+                if (subFile != null) {
+                    subFile = null
+                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().clearOverridesOfType(MC.TRACK_TYPE_TEXT)
+                        .setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false).setPreferredTextLanguage(lang).build()
+                    loadMedia(item, null, player.currentPosition)
+                } else player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false)
+                    .setOverrideForType(TrackSelectionOverride(t.group.mediaTrackGroup, t.index)).build()
+                done()
+            },
+            onFile = { path ->
+                subFile = path
+                // the downloaded file replaces the provider's subtitle (never both on screen)
+                val code = java.io.File(path).name.removeSuffix(".srt").substringAfterLast('.').takeIf { it.length in 2..3 }
+                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().clearOverridesOfType(MC.TRACK_TYPE_TEXT)
+                    .setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false).setPreferredTextLanguage(code).build()
+                loadMedia(item, path, player.currentPosition)
+                done()
+            }) }
     Box(
         Modifier.fillMaxSize().background(Color.Black)
             .focusRequester(focus)
@@ -598,6 +630,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                         return@onPreviewKeyEvent true
                     }
                 }
+                if (e.type == KeyEventType.KeyDown) keyTick++
                 if (dialog != null || side != null || resume != null || bar || e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 if (error != null && (e.key == Key.DirectionCenter || e.key == Key.Enter)) { error = null; retried = false; reconnect = 0; retryToken++; return@onPreviewKeyEvent true }
                 // live: numbers on the remote pick a channel; 0 alone goes back to the previous channel
@@ -614,13 +647,18 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 }
                 // series: OK on "Skip intro" / "Next episode" (the app remembers where they are in this series)
                 val ser = if (item.season != null) item.search else null
+                // Up Next (10 s): ◀ ▶ choose Play next / Cancel autoplay, OK does it, Back cancels
+                if (ser != null && skipPill == "credits" && (e.key == Key.DirectionLeft || e.key == Key.DirectionRight)) { upSel = 1 - upSel; return@onPreviewKeyEvent true }
+                if (ser != null && skipPill == "credits" && upSel == 1 && (e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter)) {
+                    autoCancel = true; skipPill = null; return@onPreviewKeyEvent true
+                }
                 if (ser != null && skipPill != null && (e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter)) {
                     val pos = player.currentPosition; val dur = player.duration; val mem = SkipMem.of(ser)
                     if (skipPill == "recap") {
                         // to the start of the intro if it is known (the recap is right before it), else 60 s on – remembered for the series
                         val to = if (mem.introEnd > 0 && mem.introStart > pos + 5_000L) mem.introStart else pos + 60_000L
                         SkipMem.learnRecap(ser, to); player.seekTo(to)
-                    } else if (skipPill == "intro") { if (mem.introEnd > 0) player.seekTo(mem.introEnd) else { SkipMem.learnIntro(ser, pos, pos + 85_000L); player.seekTo(pos + 85_000L) } }
+                    } else if (skipPill == "intro") { if (mem.introEnd > 0) player.seekTo(mem.introEnd) }
                     else { if (dur > 0 && mem.creditsLeft == 0L) SkipMem.learnCredits(ser, dur - pos); saveProgress(done = true); if (index < n - 1) index++ }
                     skipPill = null
                     return@onPreviewKeyEvent true
@@ -647,13 +685,15 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                         else { side = "channels"; showInfo = false; true }
                     Key.DirectionRight -> if (!s.live) { player.seekTo(player.currentPosition + fwd); showInfo = true; true }
                         else { side = "epg"; showInfo = false; true }
-                    Key.MediaPause, Key.MediaPlay -> { if (!s.live || Tech.livePause) { if (e.key == Key.MediaPause) player.pause() else player.play() }; showInfo = true; true }
+                    Key.MediaPause, Key.MediaPlay -> { if (!s.live || Tech.livePause) { if (e.key == Key.MediaPause) player.pause() else player.play() }; showInfo = true
+                        if (!s.live && e.key == Key.MediaPause) bar = true; true }
                     Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.MediaPlayPause -> {
                         if (s.live) {
                             if (e.key != Key.MediaPlayPause) { showInfo = true; bar = true }
                             else { if (Tech.livePause) { if (player.isPlaying) player.pause() else player.play() }; showInfo = true }
                         }
-                        else { if (player.isPlaying) player.pause() else player.play(); showInfo = true }
+                        else if (e.key == Key.MediaPlayPause) { if (player.isPlaying) { player.pause(); bar = true } else player.play(); showInfo = true }
+                        else { showInfo = true; bar = true }
                         true
                     }
                     else -> false
@@ -812,9 +852,10 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 if (mode != 2 && pill == null) {
                     if (mem.introEnd > 0 && pos >= mem.introStart && pos < mem.introEnd - 1500) {
                         if (mode == 1 && !autoDone) { autoDone = true; player.seekTo(mem.introEnd) } else pill = "intro"
-                    } else if (mem.introEnd == 0L && pos in 5_000L..180_000L) pill = "intro"
+                    }
+                    // approved: no guessed intro length — Skip intro only with a valid saved marker
                 }
-                if (Prefs.bool("skip_credits", true) && index < n - 1 && dur > 120_000L) {
+                if (Prefs.bool("next_ep", true) && !autoCancel && index < n - 1 && dur > 120_000L) {
                     val thr = if (mem.creditsLeft > 0) mem.creditsLeft else 40_000L
                     if (dur - pos in 1..thr) { pill = "credits"; if (creditsAt == 0L) creditsAt = System.currentTimeMillis() }
                     else creditsAt = 0L
@@ -824,7 +865,22 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             }
         }
         // "Skip intro" / "Next episode in 10 s" in the lower right corner
-        skipPill?.let { k ->
+        // Up Next (spec 04): 10 s card with Play next / Cancel autoplay; ◀ ▶ choose, OK does it, Back cancels
+        if (skipPill == "credits" && !autoCancel) Box(Modifier.fillMaxSize().padding(end = 48.dp, bottom = 56.dp), contentAlignment = Alignment.BottomEnd) {
+            val nx = items.getOrNull(index + 1)
+            Column(Modifier.widthIn(max = 420.dp).clip(Rnd(18.dp)).background(Color(0xE614181C)).border(1.dp, Color(0x29FFFFFF), Rnd(18.dp)).padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                T(trf("Sljedeća epizoda za %s s", creditsLeft10), 13.sp, Silver.TextSoft, FontWeight.SemiBold)
+                T(listOfNotNull(nx?.season?.let { sn -> nx.episode?.let { "S%02dE%02d".format(sn, it) } }, nx?.subtitle).joinToString(" — "), 17.sp, Color.White, FontWeight.Bold, maxLines = 2)  // i18n-ignore
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    listOf("Pusti sljedeću", "Otkaži automatsko").forEachIndexed { i, l ->
+                        Box(Modifier.clip(Rnd(20.dp)).background(if (upSel == i) Color.White else Color(0x1FFFFFFF)).border(1.dp, if (upSel == i) Color.White else Color(0x33FFFFFF), Rnd(20.dp))
+                            .padding(horizontal = 16.dp, vertical = 9.dp)) { T(l, 14.sp, if (upSel == i) Color(0xFF111113) else Color.White, FontWeight.SemiBold) }
+                    }
+                }
+            }
+        }
+        skipPill?.takeIf { it != "credits" }?.let { k ->
             Box(Modifier.fillMaxSize().padding(end = 40.dp, bottom = 90.dp), contentAlignment = Alignment.BottomEnd) {
                 Row(Modifier.clip(Pill).background(Color.White).padding(horizontal = 18.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -861,7 +917,68 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             }
         }
 
-        if (showInfo && side == null) {
+        // films and series (spec 03/04): video only while playing; OK or ▼ shows the controls without pausing,
+        // PAUSE shows the paused overlay; the four icons open their menus upward; 5 s without a key hides it again
+        if (!s.live && (showInfo || bar) && side == null && error == null) {
+            LaunchedEffect(bar, keyTick, playing, vmenu) { if (playing && vmenu == null) { delay(5000); bar = false; showInfo = false } }
+            val playFr = remember { FocusRequester() }
+            LaunchedEffect(bar) { if (bar) { delay(60); playFr.tryFocus() } }
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.40f to Color.Transparent, 1f to Color(0xE6000000))))
+            if (!playing) Box(Modifier.fillMaxSize().background(Color(0x59000000)))
+            Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = 56.dp, end = 56.dp, bottom = 34.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        if (!playing) T("Pauzirano", 14.sp, Silver.TextSoft, FontWeight.SemiBold)
+                        T(item.title, 28.sp, Color.White, FontWeight.Bold, maxLines = 1)
+                        if (item.subtitle != null) T(item.subtitle, 16.sp, Color(0xFFDDE1E6), maxLines = 1)
+                    }
+                }
+                if (duration > 0) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    T(fmt(position), 14.sp, Color.White)
+                    Box(Modifier.weight(1f).height(4.dp).clip(Rnd(2.dp)).background(Color(0x40FFFFFF))) {
+                        Box(Modifier.fillMaxWidth((position.toFloat() / duration).coerceIn(0f, 1f)).height(4.dp).background(Color.White))
+                    }
+                    T("−" + fmt((duration - position).coerceAtLeast(0)), 14.sp, Silver.TextSoft)  // i18n-ignore
+                }
+                if (bar) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        @Composable fun Ctl(icon: Int, big: Boolean = false, fr: FocusRequester? = null, label: String? = null, onClick: () -> Unit) {
+                            Focusable(onClick = onClick, focusRequester = fr, shape = androidx.compose.foundation.shape.CircleShape, normal = if (big) Color(0xF2FFFFFF) else Color(0x8C14181C),
+                                focused = if (big) Color.White else Dawn.pill, focusBorderColor = Color.White, borderColor = Color(0x29FFFFFF), zoom = 1.08f,
+                                modifier = Modifier.size(if (big) 66.dp else 54.dp)) { _ ->
+                                Box(Modifier.align(Alignment.Center), contentAlignment = Alignment.Center) {
+                                    Ico(icon, if (big) 30.dp else 24.dp, if (big) Color(0xFF111113) else Color.White)
+                                    if (label != null) T(label, 8.sp, Color.White, FontWeight.Bold)
+                                }
+                            }
+                        }
+                        Ctl(R.drawable.lc_rotate_ccw, label = Prefs.long("skip_back", 10).toString()) { player.seekTo((player.currentPosition - bwd).coerceAtLeast(0)) }
+                        Ctl(if (playing) R.drawable.lc_pause else R.drawable.lc_play, big = true, fr = playFr) { if (player.isPlaying) player.pause() else player.play() }
+                        Ctl(R.drawable.lc_rotate_cw, label = Prefs.long("skip_fwd", 10).toString()) { player.seekTo(player.currentPosition + fwd) }
+                    }
+                    Spacer(Modifier.weight(1f))
+                    val subT = tracksOf(player, MC.TRACK_TYPE_TEXT)
+                    MediaIconsRow(vmenu, { vmenu = it }, subsOn = subFile != null || (!player.trackSelectionParameters.disabledTrackTypes.contains(MC.TRACK_TYPE_TEXT) && subT.any { it.selected }),
+                        audioOn = false, playOn = player.playbackParameters.speed != 1f || Sleep.until > 0, picOn = resize > 0) { k ->
+                        when (k) {
+                            MI_SUBS -> subsUi { vmenu = null }
+                            MI_AUDIO -> Popup("Audio", { vmenu = null }) {
+                                val tracks = tracksOf(player, MC.TRACK_TYPE_AUDIO)
+                                if (tracks.isEmpty()) MenuRow(tr("Nije dostupno")) {}
+                                tracks.forEach { t -> MenuRow(t.label, on = t.selected) {
+                                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setOverrideForType(TrackSelectionOverride(t.group.mediaTrackGroup, t.index)).build()
+                                    vmenu = null } }
+                            }
+                            MI_PLAYBACK -> PlaybackMenu(player.playbackParameters.speed, { player.setPlaybackSpeed(it); vmenu = null },
+                                onStartOver = { player.seekTo(0); player.play(); vmenu = null },
+                                startOverLabel = if (item.season != null) "Pusti epizodu od početka" else "Pusti od početka", series = item.season != null, onDismiss = { vmenu = null })
+                            MI_PICTURE -> PictureMenu(resize, { resize = it; Prefs.put("vod_fmt", it.toLong()); vmenu = null }) { vmenu = null }
+                        }
+                    }
+                }
+            }
+        }
+        if (s.live && showInfo && side == null) {
             Box(Modifier.align(Alignment.BottomStart).fillMaxWidth()
                 .background(if (Look.overlay == 1) Brush.verticalGradient(listOf(C.OverlayBar, C.OverlayBar)) else Brush.verticalGradient(listOf(Color.Transparent, Color(0xE6000000))))
                 .padding(start = 48.dp, end = 48.dp, top = 70.dp, bottom = 34.dp)) {
@@ -1106,29 +1223,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             }
         }
         // one Subtitles menu everywhere (approved): Provider on top, Online below (films/series only), language + version only
-        "subs" -> SubsPanel(item, tracksOf(player, MC.TRACK_TYPE_TEXT), subFile, online = !s.live, onDismiss = { dialog = null },
-            onOff = { subFile = null; player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, true).build(); dialog = null },
-            onTrack = { t ->
-                // only one subtitle on screen: a downloaded file is taken out of the stream first, then the provider track is chosen
-                val lang = try { t.group.getTrackFormat(t.index).language } catch (_: Exception) { null }
-                if (subFile != null) {
-                    subFile = null
-                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().clearOverridesOfType(MC.TRACK_TYPE_TEXT)
-                        .setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false).setPreferredTextLanguage(lang).build()
-                    loadMedia(item, null, player.currentPosition)
-                } else player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false)
-                    .setOverrideForType(TrackSelectionOverride(t.group.mediaTrackGroup, t.index)).build()
-                dialog = null
-            },
-            onFile = { path ->
-                subFile = path
-                // the downloaded file replaces the provider's subtitle (never both on screen)
-                val code = java.io.File(path).name.removeSuffix(".srt").substringAfterLast('.').takeIf { it.length in 2..3 }
-                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().clearOverridesOfType(MC.TRACK_TYPE_TEXT)
-                    .setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false).setPreferredTextLanguage(code).build()
-                loadMedia(item, path, player.currentPosition)
-                dialog = null
-            })
+        "subs" -> subsUi { dialog = null }
         "sleep" -> Popup("Tajmer za spavanje", onDismiss = { dialog = null }) {
             T("Kad vrijeme istekne, gledanje stane i aplikacija se vrati na početnu.", 14.sp, C.Soft, maxLines = 3)
             OptionRow("Isključen", if (Sleep.until <= 0) R.drawable.lc_check else R.drawable.lc_moon, color = if (Sleep.until <= 0) C.Green else null) { Sleep.until = 0; dialog = null }

@@ -272,7 +272,7 @@ fun OnyxMovieDetail(v: Vod, nav: Nav) {
             MediaIconsRow(menu, { menu = it }, subsOn = choice.subFile != null || choice.sub != null, audioOn = choice.audio != null,
                 playOn = choice.speed != 1f || Sleep.until > 0, picOn = choice.fmt > 0) { k ->
                 when (k) {
-                    MI_SUBS -> FilmSubsPicker(v.name, (probe as? Load.Ok)?.value?.second ?: emptyList(), choice, onDismiss = { menu = null }) { c -> choice = c; menu = null }
+                    MI_SUBS -> FilmSubsPicker(v.name, (probe as? Load.Ok)?.value?.second ?: emptyList(), choice, onDismiss = { menu = null }, onPick = { c -> choice = c; menu = null })
                     MI_AUDIO -> AudioPicker(v.url, choice.audio?.title, onDismiss = { menu = null }) { t -> choice = choice.copy(audio = t); menu = null }
                     MI_PLAYBACK -> PlaybackMenu(choice.speed, { choice = choice.copy(speed = it); menu = null },
                         onStartOver = if (started) ({ menu = null; startOver() }) else null, onDismiss = { menu = null })
@@ -291,11 +291,16 @@ fun OnyxMovieDetail(v: Vod, nav: Nav) {
 @Composable
 fun MediaIconsRow(open: String?, setOpen: (String?) -> Unit, subsOn: Boolean, audioOn: Boolean, playOn: Boolean, picOn: Boolean,
                   menuOf: @Composable (String) -> Unit) {
+    val keys = listOf(MI_SUBS, MI_AUDIO, MI_PLAYBACK, MI_PICTURE)
+    val frs = remember { keys.map { FocusRequester() } }
+    var last by remember { mutableStateOf<String?>(null) }
+    // Back (or a choice) closes the menu and the focus goes back to its icon
+    LaunchedEffect(open) { if (open != null) last = open else last?.let { delay(60); frs[keys.indexOf(it)].tryFocus() } }
     Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
         listOf(Triple(MI_SUBS, R.drawable.lc_captions, "Titlovi") to subsOn, Triple(MI_AUDIO, R.drawable.lc_volume, "Audio") to audioOn,
             Triple(MI_PLAYBACK, R.drawable.lc_gauge2, "Reprodukcija") to playOn, Triple(MI_PICTURE, R.drawable.lc_rectangle_horizontal, "Slika") to picOn)
-            .forEach { (t, on) ->
-                MediaIcon(t.second, t.third, open == t.first, active = on, onClick = { setOpen(t.first) }) { menuOf(t.first) }
+            .forEachIndexed { i, (t, on) ->
+                MediaIcon(t.second, t.third, open == t.first, fr = frs[i], active = on, onClick = { setOpen(t.first) }) { menuOf(t.first) }
             }
     }
 }
@@ -395,7 +400,8 @@ fun OnyxSeriesDetail(s: SeriesItem, nav: Nav) {
         if (fromStart) Watch.remove(ctx, e.url)
         if (!Follow.isOn(s.id)) Follow.toggle(p.id, s, all.size)   // a series you watch is followed for new episodes
         SeriesJump.id = s.id; SeriesJump.season = e.season; SeriesJump.num = e.num   // Back from the player lands on this episode
-        val list = all.filter { it.season == e.season }
+        // the whole series in order: Auto Next goes on into the next season (never back to the first episode)
+        val list = all.sortedWith(compareBy({ it.season }, { it.num }))
         val pr = Watch.get(ctx, e.url)
         if (ExtPlayer.always) openExternalOrAsk(ctx, e.url, epTitle(e), if (fromStart) 0 else pr?.pos ?: 0) { ext = e }
         else nav.push(Screen.Player(itemsOf(list), list.indexOf(e).coerceAtLeast(0), live = false))
