@@ -3,7 +3,8 @@ name: Beta APK
 # Runs only when a branch redesign-beta/<n> is pushed (a manual start would need this file on main, which stays untouched;
 # tags cannot be pushed from the development session).
 # Builds the signed BETA APK (com.pretorian.tv.beta, installs next to Stable) and keeps it as a workflow artifact
-# for 14 days. Publishes nothing: no release, no update.json, main untouched.
+# for 14 days, and as a GitHub PRE-release "redesign-beta-<n>" (never "latest": Stable's updater ignores pre-releases
+# and reads only releases/latest/update.json). No update.json, main untouched.
 on:
   push:
     branches: ["redesign-beta/**"]
@@ -14,6 +15,8 @@ permissions:
 jobs:
   beta:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5
@@ -50,3 +53,11 @@ jobs:
           name: MediaCenterBeta-${{ github.run_number }}
           path: MediaCenterBeta-${{ github.run_number }}.apk
           retention-days: 14
+      - name: Pre-release for the owner's download (not latest, not Stable)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          N=${GITHUB_REF_NAME#redesign-beta/}
+          gh release create "redesign-beta-$N" "MediaCenterBeta-${{ github.run_number }}.apk" --repo "${{ github.repository }}" \
+            --target "${{ github.sha }}" --prerelease --latest=false --title "Media Center Beta $N (redesign, not Stable)" \
+            --notes "Beta package com.pretorian.tv.beta – installs next to Stable with its own data. Not a Stable release."
