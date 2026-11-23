@@ -408,152 +408,102 @@ fun OnyxSeriesDetail(s: SeriesItem, nav: Nav) {
     val today = remember { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date()) }  // i18n-ignore
     fun fmtDate(d: String?) = d?.let { try { java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.US).format(java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).parse(it)!!) } catch (e: Exception) { it } } ?: ""  // i18n-ignore
 
-    // one level at a time: the series page (picture, actions, seasons) › the episodes of one season
-    var epsOpen by remember { mutableStateOf(jump != null) }
+    // redesign spec 04: one view — picture, breadcrumb, Watch/Resume SxxEyy · Trailer · My List,
+    // SEASON N ▾ on the left and the four icons on the right right above ONE horizontal episode row
     var epMenu by remember { mutableStateOf<EpRow?>(null) }
-    val seasonFr = remember { FocusRequester() }
-    androidx.activity.compose.BackHandler(enabled = epsOpen) { epsOpen = false }
+    var menu by remember { mutableStateOf<String?>(null) }
     val weekAgo = remember { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date(System.currentTimeMillis() - 7 * 86_400_000L)) }  // i18n-ignore
     fun isNew(air: String?) = air != null && air >= weekAgo && air <= today
-    val seenAll = remember(all, Watch.rev) { all.count { Watch.get(ctx, it.url)?.watched == true } }
+    val wrap = remember(rows.size) { RowWrap(rows.size) }
     Box(Modifier.fillMaxSize().background(Color(0xFF0B0B0C))) {
-        Box(Modifier.fillMaxHeight(if (epsOpen) 1f else 0.8f).fillMaxWidth(if (epsOpen) 0.42f else 0.72f).align(if (epsOpen) Alignment.TopStart else Alignment.TopEnd)) {
-            OnyxImage(m?.backdrop ?: s.cover, "bd:" + s.id, Modifier.fillMaxSize(), maxW = 1280, scale = ContentScale.Crop, highQuality = true)
-            Box(Modifier.fillMaxSize().background(if (epsOpen) Brush.horizontalGradient(listOf(Color(0x330B0B0C), Color(0xFF0B0B0C)))
-                else Brush.horizontalGradient(listOf(Color(0xFF0B0B0C), Color(0x800B0B0C), Color(0x000B0B0C)))))
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.55f to Color(0x000B0B0C), 1f to Color(0xFF0B0B0C))))
-        }
-        if (!epsOpen) Column(Modifier.fillMaxSize().padding(start = 44.dp, end = 32.dp, top = 6.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            T(title, if (title.length > 26) 30.sp else 38.sp, C.Text, FontWeight.Bold, maxLines = 1, modifier = Modifier.widthIn(max = 760.dp).padding(top = 8.dp))
+        OnyxImage(m?.backdrop ?: s.cover, "bd:" + s.id, Modifier.fillMaxSize(), maxW = 1920, scale = ContentScale.Crop, highQuality = true)
+        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Color(0xF20B0B0C), 0.45f to Color(0xA60B0B0C), 0.8f to Color(0x1A0B0B0C), 1f to Color(0x000B0B0C))))
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.35f to Color(0x000B0B0C), 1f to Color(0xF20B0B0C))))
+        Column(Modifier.fillMaxSize().padding(start = 56.dp, end = 48.dp, top = 30.dp, bottom = 26.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            T(listOfNotNull(tr("Serije"), vodCrumb(true) ?: VodMemory.catOf[s.id], title).joinToString("  /  ").uppercase(), 13.sp, Silver.TextSoft, FontWeight.SemiBold)
+            Spacer(Modifier.weight(1f))
+            T(title, if (title.length > 26) 32.sp else 40.sp, Color.White, FontWeight.Bold, maxLines = 1, modifier = Modifier.widthIn(max = 760.dp))
             val needFree = m == null && meta !is Load.Loading
             val free by load(s.name, needFree) { if (needFree) FreeMeta.seriesFull(s.name) else null }
             val fr = (free as? Load.Ok)?.value
-            T(listOfNotNull(tr("Serija"), translated(m?.genres ?: fr?.genre)?.replace(", ", " • ")?.take(40), (m?.year ?: fr?.year)?.take(4)).joinToString("  •  "), 16.sp, C.Text)
-            T(listOfNotNull(if (seasons.size == 1) tr("1 sezona") else if (seasons.isNotEmpty()) trf("%s sezone", seasons.size) else null, if (all.isNotEmpty()) trf("%s epizoda", all.size) else null,
-                if (all.isNotEmpty()) trf("%s %% odgledano", seenAll * 100 / all.size) else null).joinToString("   "), 15.sp, C.Soft)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                val r = (m?.tmdbRating ?: s.rating?.replace(',', '.')?.toDoubleOrNull())?.takeIf { it > 0 }
+                if (r != null) T("★ " + String.format(java.util.Locale.US, "%.1f", r), 15.sp, Color(0xFFF5C518), FontWeight.SemiBold)  // i18n-ignore
+                T(listOfNotNull((m?.year ?: fr?.year)?.take(4), if (seasons.size == 1) tr("1 sezona") else if (seasons.isNotEmpty()) trf("%s sezone", seasons.size) else null,
+                    translated(m?.genres ?: fr?.genre)?.split(", ")?.take(3)?.joinToString(" · ")).joinToString("  •  "), 15.sp, Color(0xFFDDE1E6))  // i18n-ignore
+            }
             val story = listOfNotNull(m?.overview ?: s.plot?.ifBlank { null } ?: fr?.plot).firstOrNull()
-            T(translated(story) ?: if (free is Load.Loading) tr("Učitavam opis…") else " ", 15.sp, C.Soft, maxLines = 2, modifier = Modifier.widthIn(max = 660.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.padding(top = 4.dp)) {
+            T(translated(story) ?: if (free is Load.Loading) tr("Učitavam opis…") else " ", 15.sp, Color(0xFFDDE1E6), maxLines = 2, modifier = Modifier.widthIn(max = 660.dp))
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 val np = next?.let { Watch.get(ctx, it.url) }
-                val label = when {
-                    next == null -> tr("Gledaj")
-                    np?.started == true -> trf("Nastavi S%s E%s", next.season, next.num)
-                    else -> trf("Gledaj S%s E%s", next.season, next.num)
-                }
+                val code = next?.let { "S%02dE%02d".format(it.season, it.num) } ?: ""  // i18n-ignore
+                val label = when { next == null -> tr("Gledaj"); np?.started == true -> tr("Nastavi") + " " + code; else -> tr("Gledaj") + " " + code }
                 DetBtn(label, R.drawable.lc_play, primary = true, fr = playFr) { next?.let { playEp(it) } }
                 DetBtn(tr("Trailer"), R.drawable.ic_trailer_red, colored = true) { openTrailer(ctx, s.name, m?.trailerKey) }
                 val on = remember(MyList.rev) { MyList.has("series", s.id) }
-                DetBtn(tr(if (on) "U mojoj listi" else "Dodaj na moju listu"), if (on) R.drawable.lc_bookmark_filled else R.drawable.lc_bookmark, on = on) {
+                DetBtn(tr("Moja lista"), if (on) R.drawable.lc_check else R.drawable.lc_plus, on = on) {
                     myListToggle(ctx, VItem(s.id, s.name, s.cover, s.rating, "", true, p.id))
                 }
             }
-            // the season boxes sit right under the buttons with an even gap; no "Seasons" heading (approved)
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+                // SEASON N ▾ : the seasons and "mark season" in one menu that opens upward
+                Column {
+                    Focusable(onClick = { menu = "season" }, shape = Rnd(22.dp), normal = Color(0x8C14181C), focused = Dawn.pill, borderColor = Color(0x33FFFFFF),
+                        zoom = 1f, modifier = Modifier.height(44.dp)) { _ ->
+                        Row(Modifier.align(Alignment.Center).padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            T(trf("Sezona %s", cur).uppercase(), 15.sp, Color.White, FontWeight.SemiBold)
+                            Ico(R.drawable.lc_chevron_down, 16.dp, Color.White)
+                        }
+                    }
+                    if (menu == "season") androidx.compose.runtime.CompositionLocalProvider(LocalUpward provides true) {
+                        Popup("Sezone", { menu = null }) {
+                            seasons.forEach { n ->
+                                val count = all.count { it.season == n }
+                                val seen = all.count { it.season == n && Watch.get(ctx, it.url)?.watched == true }
+                                MenuRow(trf("Sezona %s", n), on = n == cur, sub = if (count > 0) trf("%s epizoda", count) + (if (seen == count) " · ✓" else "") else tr("uskoro")) {  // i18n-ignore
+                                    if (count > 0) { season = n; SeriesJump.id = ""; menu = null }
+                                }
+                            }
+                            val list = all.filter { it.season == cur }
+                            if (list.isNotEmpty()) {
+                                MenuHead(trf("Sezona %s", cur))
+                                val allSeen = list.all { Watch.get(ctx, it.url)?.watched == true }
+                                if (allSeen) MenuRow(tr("Označi sezonu kao negledanu")) { markSeason(cur, false); menu = null }
+                                else MenuRow(tr("Označi sezonu kao odgledanu")) { markSeason(cur, true); menu = null }
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+                MediaIconsRow(menu?.takeIf { it != "season" }, { menu = it }, subsOn = choice.subFile != null || choice.sub != null || choice.subOff, audioOn = choice.audio != null,
+                    playOn = choice.speed != 1f || Sleep.until > 0, picOn = choice.fmt > 0) { k ->
+                    val first = next ?: all.firstOrNull()
+                    when (k) {
+                        MI_SUBS -> FilmSubsPicker(s.name, emptyList(), choice, onDismiss = { menu = null }, onPick = { c -> choice = c; menu = null },
+                            season = first?.season, episode = first?.num)
+                        MI_AUDIO -> AudioPicker(first?.url ?: "", choice.audio?.title, onDismiss = { menu = null }) { t -> choice = choice.copy(audio = t); menu = null }
+                        MI_PLAYBACK -> PlaybackMenu(choice.speed, { choice = choice.copy(speed = it); menu = null },
+                            onStartOver = next?.let { e -> ({ menu = null; playEp(e, true) }) }, startOverLabel = "Pusti epizodu od početka", series = true, onDismiss = { menu = null })
+                        MI_PICTURE -> PictureMenu(if (choice.fmt < 0) Prefs.long("vod_fmt", 0).toInt() else choice.fmt, { choice = choice.copy(fmt = it); menu = null }) { menu = null }
+                    }
+                }
+            }
             when (val st = eps) {
                 is Load.Loading -> T("Učitavam epizode…", 15.sp, C.Soft)
                 is Load.Err -> T(tr("Epizode se nisu učitale") + ": " + st.message, 15.sp, C.Soft, maxLines = 2)
-                is Load.Ok -> if (all.isEmpty()) T("Nema epizoda", 15.sp, C.Soft) else {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(4.dp)) {
-                        items(seasons) { n ->
-                            val count = all.count { it.season == n }
-                            val seen = all.count { it.season == n && Watch.get(ctx, it.url)?.watched == true }
-                            val pct = if (count > 0) seen * 100 / count else 0
-                            val fresh = all.any { it.season == n && isNew(it.air) }
-                            Focusable(onClick = { season = n; epsOpen = true }, onMenu = { if (count > 0) seasonMenu = n },
-                                focusRequester = if (n == cur) seasonFr else null, shape = Rnd(16.dp), normal = Color(0xCC161618), focused = Color(0xCC161618),
-                                focusBorderColor = Color.White, zoom = 1.0f, modifier = Modifier.width(260.dp).height(104.dp).border(1.dp, Color(0x33FFFFFF), Rnd(16.dp))) { _ ->
-                                Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        T(trf("Sezona %s", n), 22.sp, C.Text, FontWeight.Bold, modifier = Modifier.weight(1f))
-                                        if (count > 0 && seen == count) Ico(R.drawable.lc_circle_check, 22.dp, C.Text)
-                                        else if (fresh) Box(Modifier.clip(Rnd(8.dp)).background(Color(0xF2F2F2F4)).padding(horizontal = 8.dp, vertical = 2.dp)) { T("NOVO", 12.sp, Color(0xFF111113), FontWeight.Bold) }
-                                    }
-                                    T(if (count > 0) trf("%s epizoda", count) else tr("uskoro"), 15.sp, C.Soft)
-                                    Spacer(Modifier.weight(1f))
-                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                        ThinBar(pct / 100f, Color.White, Modifier.weight(1f), 4.dp)
-                                        T("$pct%", 14.sp, C.Text)  // i18n-ignore
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        else Row(Modifier.fillMaxSize().padding(start = 40.dp, end = 32.dp, top = 6.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-            Column(Modifier.weight(0.36f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                T(title, 34.sp, C.Text, FontWeight.Bold, maxLines = 3)
-                T(trf("Sezona %s", cur) + "  •  " + trf("%s epizoda", all.count { it.season == cur }), 18.sp, C.Text)
-                Spacer(Modifier.weight(1f))
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Ico(R.drawable.lc_info, 16.dp, C.Soft); T("Drži OK za opis epizode", 14.sp, C.Soft)
-                }
-            }
-            Column(Modifier.weight(0.64f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                T("Sezona", 15.sp, C.Soft)
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    items(seasons) { n ->
-                        val count = all.count { it.season == n }
-                        val done = count > 0 && all.count { it.season == n && Watch.get(ctx, it.url)?.watched == true } == count
-                        val open = n == cur
-                        Focusable(onClick = { if (count > 0) season = n }, shape = Pill, normal = if (open) Color(0x59DADADE) else Color(0x1FFFFFFF), focused = Dawn.pill,
-                            focusBorderColor = Color.Transparent, zoom = 1f, modifier = Modifier.height(46.dp).width(104.dp)) { f ->
-                            Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                val fg = if (f) Dawn.onPill else if (count == 0) C.Muted else C.Text
-                                T("S$n", 17.sp, fg, FontWeight.Bold)  // i18n-ignore
-                                if (done) Ico(R.drawable.lc_check, 15.dp, fg) else if (count == 0) Ico(R.drawable.lc_lock, 14.dp, fg)
-                            }
-                        }
-                    }
-                }
-                key(Watch.rev, cur) {
-                    LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
-                        itemsIndexed(rows, key = { _, r -> "${r.season}_${r.num}_${r.e?.id}" }) { _, r ->
-                            val e = r.e
-                            val pr = e?.let { Watch.get(ctx, it.url) }
-                            val air = e?.air ?: r.t?.air
-                            val future = e == null && (r.t?.air == null || r.t.air > today)
-                            // the provider often says only "Episode 3": then the real name from TMDB
-                            val generic = Regex("^\\s*(episode|epizoda|ep\\.?|folge|e)\\s*\\d+\\s*$", RegexOption.IGNORE_CASE)
-                            val own = e?.let { episodeTitle(it.title, it.num) }
-                            val name = (own?.takeUnless { generic.matches(it) } ?: r.t?.name ?: own ?: trf("Epizoda %s", r.num))
-                            val isJump = jump != null && jump.first == r.season && jump.second == r.num
-                            Focusable(onClick = { if (e != null) playEp(e) else Toast.makeText(ctx, if (future) tr("Još nije izašla") else tr("Čeka se provider"), Toast.LENGTH_SHORT).show() },
-                                onMenu = { epDlg = r }, onFocus = { lastFocusNum = r.num }, focusRequester = if (isJump || (jump == null && r == rows.firstOrNull { it.e != null && Watch.get(ctx, it.e.url)?.watched != true })) jumpFr else null,
-                                shape = Rnd(14.dp), normal = Color(0x99161618), focused = Color(0x99161618), focusBorderColor = Color.White, zoom = 1f,
-                                modifier = Modifier.fillMaxWidth().height(74.dp)) { _ ->
-                                val img = e?.image ?: r.t?.still
-                                Row(Modifier.fillMaxSize().padding(start = if (img == null) 22.dp else 0.dp, end = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                                    // a picture only when the episode has one: no empty blurred boxes (approved)
-                                    if (img != null) Box(Modifier.fillMaxHeight().aspectRatio(16f / 9f).clip(Rnd(14.dp)).background(C.CardHi), contentAlignment = Alignment.Center) {
-                                        OnyxImage(img, e?.id ?: "${s.id}_${r.season}_${r.num}", Modifier.fillMaxSize(), maxW = 260)
-                                        if (e == null) Ico(R.drawable.lc_lock, 22.dp, Color.White)
-                                        else if (pr?.watched == true) Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(22.dp).clip(Rnd(11.dp)).background(Color.White), contentAlignment = Alignment.Center) {
-                                            Ico(R.drawable.lc_check, 14.dp, Dawn.onPill) }
-                                    }
-                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        // length known before watching: the provider's, else TMDB's, else what the player saw
-                                        val lenMin = (e?.durSec?.takeIf { it > 0 }?.div(60)) ?: r.t?.runtime?.takeIf { it > 0 } ?: pr?.dur?.takeIf { it > 0 }?.let { (it / 60_000).toInt() }
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            T("${r.num}. $name", 18.sp, if (e == null) C.Soft else C.Text, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
-                                            if (e != null && lenMin != null) T(trf("%s min", lenMin), 14.sp, C.Soft)
-                                        }
-                                        // the bar runs the whole width on every episode, also at 0 %
-                                        if (e != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                            ThinBar(pr?.fraction ?: 0f, Color.White, Modifier.weight(1f), 4.dp)
-                                            T(if (pr?.started == true) trf("još %s min", ((pr.dur - pr.pos) / 60_000).toInt().coerceAtLeast(1)) else "${((pr?.fraction ?: 0f) * 100).toInt()}%", 13.sp, C.Soft)  // i18n-ignore
-                                        }
-                                    }
-                                    when {
-                                        e == null && future -> T(air?.let { trf("Izlazi %s", fmtDate(it)) } ?: tr("Još nije izašla"), 15.sp, C.Soft)
-                                        e == null -> T("Čeka se provider", 15.sp, C.Soft)
-                                        pr?.watched == true -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                            Ico(R.drawable.lc_check, 16.dp, C.Text); T("Odgledano", 15.sp, C.Text) }
-                                        isNew(air) -> Box(Modifier.clip(Rnd(8.dp)).background(Color(0xF2F2F2F4)).padding(horizontal = 10.dp, vertical = 3.dp)) { T("NOVO", 13.sp, Color(0xFF111113), FontWeight.Bold) }
-                                        else -> {}
-                                    }
-                                }
+                is Load.Ok -> if (all.isEmpty()) T("Nema epizoda", 15.sp, C.Soft) else androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    val gap = 16.dp
+                    val w = (maxWidth - gap * 4) / 5
+                    key(Watch.rev, cur) {
+                        LazyRow(state = wrap.state, horizontalArrangement = Arrangement.spacedBy(gap), contentPadding = PaddingValues(vertical = 8.dp)) {
+                            itemsIndexed(rows, key = { _, r -> "${r.season}_${r.num}_${r.e?.id}" }) { i, r ->
+                                val isJump = jump != null && jump.first == r.season && jump.second == r.num
+                                val target = isJump || (jump == null && r == rows.firstOrNull { it.e != null && Watch.get(ctx, it.e.url)?.watched != true })
+                                EpisodeCard(r, s, w, if (target) jumpFr else wrap.fr(i), wrap.keys(i, scope), today, ::isNew, ::fmtDate,
+                                    onFocus = { lastFocusNum = r.num },
+                                    onPlay = { e -> playEp(e) }, onLong = { epDlg = r })
                             }
                         }
                     }
@@ -561,7 +511,6 @@ fun OnyxSeriesDetail(s: SeriesItem, nav: Nav) {
             }
         }
     }
-
     // ---- long OK on a season
     if (seasonMenu > 0) {
         val n = seasonMenu
@@ -590,17 +539,57 @@ fun OnyxSeriesDetail(s: SeriesItem, nav: Nav) {
         onMark = { e, on -> Watch.setWatched(ctx, e.url, epTitle(e), s.cover, on); epDlg = null },
         onExt = { e -> epDlg = null; ext = e }) }
     ext?.let { e -> ExternalPicker(e.url, epTitle(e), Watch.get(ctx, e.url)?.pos ?: 0, onDismiss = { ext = null }) }
-    var wasEps by remember { mutableStateOf(false) }
-    LaunchedEffect(eps is Load.Ok, rows.size, epsOpen, cur) {
+    LaunchedEffect(eps is Load.Ok, rows.size) {
         if (eps !is Load.Ok) return@LaunchedEffect
-        // back from the episodes: the focus goes to that season's card
-        if (!epsOpen && wasEps) { wasEps = false; delay(60); seasonFr.tryFocus(); return@LaunchedEffect }
-        wasEps = epsOpen
-        if (epsOpen) {
-            val idx = if (jump != null && jump.first == cur) rows.indexOfFirst { it.num == jump.second } else rows.indexOfFirst { it.e != null && Watch.get(ctx, it.e.url)?.watched != true }
-            if (idx >= 0) { listState.scrollToItem(idx); delay(80); if (jumpFr.tryFocus()) return@LaunchedEffect }
+        // back from the player: the focus waits on that episode; else on Watch
+        if (jump != null && jump.first == cur) {
+            val idx = rows.indexOfFirst { it.num == jump.second }
+            if (idx >= 0) { wrap.state.scrollToItem(idx); delay(80); if (jumpFr.tryFocus()) return@LaunchedEffect }
         }
-        playFr.tryFocus()
+        delay(60); playFr.tryFocus()
+    }
+    @Suppress("UNUSED_VARIABLE") val unusedEm = epMenu
+}
+
+/** One episode of the row: 16:9 picture (a clean numbered plate when there is none — never an empty blurred box),
+ *  "E01 — title", the state (✓ Watched / % watched / Not watched) and a thin white bar. Short OK plays, long OK = overlay. */
+@Composable
+private fun EpisodeCard(r: EpRow, s: SeriesItem, w: Dp, fr: FocusRequester?, keys: Modifier, today: String, isNew: (String?) -> Boolean, fmtDate: (String?) -> String,
+                        onFocus: () -> Unit, onPlay: (Episode) -> Unit, onLong: () -> Unit) {
+    val ctx = LocalContext.current
+    val e = r.e
+    val pr = e?.let { Watch.get(ctx, it.url) }
+    val future = e == null && (r.t?.air == null || r.t.air > today)
+    val generic = Regex("^\\s*(episode|epizoda|ep\\.?|folge|e)\\s*\\d+\\s*$", RegexOption.IGNORE_CASE)
+    val own = e?.let { episodeTitle(it.title, it.num) }
+    val name = own?.takeUnless { generic.matches(it) } ?: r.t?.name ?: own ?: trf("Epizoda %s", r.num)
+    val img = e?.image ?: r.t?.still
+    Column(Modifier.width(w), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        Focusable(onClick = { if (e != null) onPlay(e) else Toast.makeText(ctx, if (future) tr("Još nije izašla") else tr("Čeka se provider"), Toast.LENGTH_SHORT).show() },
+            onMenu = onLong, onFocus = onFocus, focusRequester = fr, shape = Rnd(12.dp), normal = Color(0xFF1B1C1E), focused = Color(0xFF1B1C1E),
+            focusBorderColor = Color.White, borderColor = Color(0x1FFFFFFF), zoom = 1.06f, modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).then(keys)) { _ ->
+            if (img != null) OnyxImage(img, e?.id ?: "${s.id}_${r.season}_${r.num}", Modifier.fillMaxSize(), maxW = 400)
+            else Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color(0xFF2A2C2F), Color(0xFF17181A)))), contentAlignment = Alignment.Center) {
+                T("E%02d".format(r.num), 30.sp, Color(0x99FFFFFF), FontWeight.Bold)  // i18n-ignore
+            }
+            if (e == null) Box(Modifier.fillMaxSize().background(Color(0x99000000)), contentAlignment = Alignment.Center) { Ico(R.drawable.lc_lock, 22.dp, Color.White) }
+            if (pr?.watched == true) Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(22.dp).clip(Pill).background(Color.White), contentAlignment = Alignment.Center) {
+                Ico(R.drawable.lc_check, 14.dp, Color(0xFF111113)) }
+            else if (e != null && isNew(e.air)) Box(Modifier.align(Alignment.TopEnd).padding(6.dp).clip(Rnd(6.dp)).background(Color.White).padding(horizontal = 6.dp, vertical = 1.dp)) {
+                T("NOVO", 11.sp, Color(0xFF111113), FontWeight.Bold) }
+            if (pr != null && pr.started) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Color(0x40FFFFFF))) {
+                Box(Modifier.fillMaxWidth(pr.fraction).fillMaxHeight().background(Color.White))
+            }
+        }
+        T("E%02d — ".format(r.num) + name, 14.sp, if (e == null) Silver.TextSoft else Color.White, FontWeight.SemiBold, maxLines = 1)  // i18n-ignore
+        val state = when {
+            e == null && future -> r.t?.air?.let { trf("Izlazi %s", fmtDate(it)) } ?: tr("Još nije izašla")
+            e == null -> tr("Čeka se provider")
+            pr?.watched == true -> "✓ " + tr("Odgledano")  // i18n-ignore
+            pr?.started == true -> trf("%s %% odgledano", (pr.fraction * 100).toInt())
+            else -> tr("Nije gledano")
+        }
+        T(state, 12.sp, Silver.TextSoft, maxLines = 1)
     }
 }
 
@@ -641,14 +630,13 @@ private fun EpisodeDialog(r: EpRow, title: String, s: SeriesItem, m: Meta?, fmtD
                     val free by load(s.name, r.season, r.num, needFree) { if (needFree) FreeMeta.episode(s.name, r.season, r.num) else null }
                     T(translated(e?.plot?.ifBlank { null } ?: r.t?.overview ?: (free as? Load.Ok)?.value) ?: tr(if (free is Load.Loading) "Učitavam opis…" else "Opis epizode nije dostupan."), 14.sp, C.Soft, maxLines = 5)
                     if (pr != null && pr.started) ThinBar(pr.fraction, LampYellow, Modifier.fillMaxWidth(), 3.dp)
-                    if (e != null) Row(Modifier.horizontalScroll(rememberScrollState()).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    // compact overlay (spec 04): WATCH / RESUME and only the relevant one of Mark watched / unwatched
+                    if (e != null) Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         val started = pr?.started == true
-                        DBtn(if (started) trf("Nastavi · još %s min", ((pr!!.dur - pr.pos) / 60_000).toInt().coerceAtLeast(1)) else tr("Pokreni"), primary = true, fr = first,
-                            lead = { c -> Ico(R.drawable.lc_play, 14.dp, c) }) { onPlay(e, false) }
-                        if (started || pr?.watched == true) DBtn(tr("Od početka"), lead = { c -> Ico(R.drawable.lc_rotate_ccw, 14.dp, c) }) { onPlay(e, true) }
-                        if (pr?.watched != true) DBtn(tr("Označi kao odgledano"), lead = { _ -> Lamp(LampGreen) }) { onMark(e, true) }
-                        if (pr != null) DBtn(tr("Označi kao negledano"), lead = { _ -> Lamp(LampRed) }) { onMark(e, false) }
-                        DBtn(tr("Eksterni plejer"), lead = { c -> Ico(R.drawable.lc_external_link, 14.dp, c) }) { onExt(e) }
+                        DetBtn(tr(if (started) "Nastavi" else "Gledaj"), R.drawable.lc_play, primary = true, fr = first) { onPlay(e, false) }
+                        if (pr?.watched == true) DetBtn(tr("Označi kao negledano"), R.drawable.lc_circle_slash) { onMark(e, false) }
+                        else DetBtn(tr("Označi kao odgledano"), R.drawable.lc_circle_check) { onMark(e, true) }
+                        @Suppress("UNUSED_VARIABLE") val x = onExt
                     } else DBtn(tr("Zatvori"), primary = true, fr = first) { onDismiss() }
                 }
             }
