@@ -36,7 +36,17 @@ object Favs {
             a = JSONArray().put(JSONObject().put("id", "main").put("name", "Favoriti"))
             Prefs.put(LISTS, a.toString())
         }
-        return (0 until a.length()).map { val o = a.getJSONObject(it); FavList(o.str("id"), o.str("name")) }
+        val all = (0 until a.length()).map { val o = a.getJSONObject(it); FavList(o.str("id"), o.str("name")) }
+        // owner (2.5.4): only ONE favourites list. Older extra lists are folded into the first; no channel is lost.
+        if (all.size > 1) {
+            val first = all.first()
+            val merged = all.flatMap { channels(it.id) }.distinctBy { it.url }
+            save(first.id, merged)
+            all.drop(1).forEach { Prefs.put("favch_${it.id}", "[]") }
+            saveLists(listOf(first))
+            return listOf(first)
+        }
+        return all
     }
 
     private fun saveLists(l: List<FavList>) {

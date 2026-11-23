@@ -169,6 +169,8 @@ fun DawnVod(nav: Nav, series: Boolean) {
                     val newAll = remember(NewContent.rev) { NewContent.count(kind) }
                     fun plus(n: Int) = if (n > 0) trf("+%s novih", n) else null
                     val fixed = listOf(
+                        // search only movies / only series (owner); one OK opens it
+                        BrowseRow("find", tr(if (series) "Traži serije" else "Traži filmove"), R.drawable.lc_search, direct = true) { openScopedSearch(nav, if (series) "series" else "vod") },
                         BrowseRow("cont", tr("Nastavi gledati"), R.drawable.lc_play) { stack.add(VL.Gallery(VG_CONT, tr("Nastavi gledati"), R.drawable.lc_play)) },
                         BrowseRow("new", tr("Nedavno dodano"), R.drawable.lc_clock, badge = plus(newAll)) { stack.add(VL.Gallery(VG_NEW, tr("Nedavno dodano"), R.drawable.lc_clock)) },
                         if (series) BrowseRow("stream", tr("Streaming"), R.drawable.lc_tv) { stack.add(VL.Streaming) }
@@ -186,6 +188,7 @@ fun DawnVod(nav: Nav, series: Boolean) {
                         art = if (series) R.drawable.pretorian_tv_camera else R.drawable.pretorian_film_reel,
                         panel = { r ->
                             val desc = when (r.id) {
+                                "find" -> if (series) "Traži samo serije iz tvoje playliste." else "Traži samo filmove iz tvoje playliste."
                                 "cont" -> if (series) "Serije koje si počeo gledati, od mjesta gdje si stao." else "Filmovi koje si počeo gledati, od mjesta gdje si stao."
                                 "new" -> if (series) "Najnovije serije u tvojoj playlisti." else "Najnoviji filmovi u tvojoj playlisti."
                                 "cinema" -> "Filmovi koji su sada u kinima, a nalaze se u tvojoj playlisti."
