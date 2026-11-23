@@ -234,6 +234,7 @@ fun DiagnosticsV2() {
     var logAll by remember { mutableStateOf(false) }
     var streamAll by remember { mutableStateOf(false) }
     var logExport by remember { mutableStateOf(false) }
+    var reportExport by remember { mutableStateOf(false) }
     val vpn = remember { NetInfo.vpn(ctx) }
     var testingNorm by remember { mutableStateOf(false) }
     var bypassErr by remember { mutableStateOf(false) }
@@ -282,6 +283,8 @@ fun DiagnosticsV2() {
                 }
                 SmallBtn(tr("↺ Resetuj sve")) { confirmAll = true }
             }
+            // A0: the safe TXT report for a phone (QR), instead of photos of the TV
+            SetRow("Izvezi izvještaj", "Siguran TXT izvještaj za telefon ili folder, bez lozinki", arrow = "›") { reportExport = true }
             val tv = Stats.sum("tv", period); val ser = Stats.sum("ser", period); val mov = Stats.sum("mov", period)
             val total = tv + ser + mov
             // ---- watched (two columns wide) and uptime
@@ -430,6 +433,7 @@ fun DiagnosticsV2() {
         } catch (e: Exception) { Toast.makeText(ctx, tr("U taj folder se ne može pisati. Izaberi drugi ili folder aplikacije."), Toast.LENGTH_LONG).show() }
         logExport = false
     }
+    if (reportExport) DiagExportDialog { reportExport = false }
     if (confirmAll) Popup("Resetuj sve brojače?", { confirmAll = false }) {
         OptionRow("Da, resetuj sve", R.drawable.lc_trash_2, color = C.Danger) { Stats.resetAll(); confirmAll = false; rev++ }
         OptionRow("Ne", R.drawable.lc_x) { confirmAll = false }

@@ -2764,4 +2764,17 @@ Traži serije|Поиск сериалов
 Traži filmove|Поиск фильмов
 Traži samo serije iz tvoje playliste.|Ищет только сериалы из твоего плейлиста.
 Traži samo filmove iz tvoje playliste.|Ищет только фильмы из твоего плейлиста.
+Izvezi izvještaj|Экспорт отчёта
+Siguran TXT izvještaj za telefon ili folder, bez lozinki|Безопасный TXT-отчёт для телефона или папки, без паролей
+Izvještaj nije napravljen: njegova sigurnost se ne može potvrditi.|Отчёт не создан: его безопасность не удаётся подтвердить.
+Pripremam izvještaj…|Готовлю отчёт…
+✓ Izvještaj je preuzet na telefon. Veza je zatvorena.|✓ Отчёт загружен на телефон. Соединение закрыто.
+Preuzimanje preko telefona nije dostupno bez kućne mreže. Spremi izvještaj u folder.|Загрузка на телефон требует домашней сети. Сохраните отчёт в папку.
+Skeniraj telefonom (ista kućna mreža) i preuzmi TXT.|Отсканируйте телефоном (та же домашняя сеть) и скачайте TXT.
+Link važi 5 minuta i za jedno preuzimanje. Back zatvara vezu.|Ссылка действует 5 минут и для одной загрузки. «Назад» закрывает её.
+Izvještaj sadrži tehničke podatke o uređaju i mreži, bez lozinki i ključeva.|Отчёт содержит технические данные об устройстве и сети, без паролей и ключей.
+Spremi u folder|Сохранить в папку
+Ovaj link više ne važi. Otvori ponovo „Izvezi izvještaj“ na TV-u.|Эта ссылка больше не действует. Снова откройте «Экспорт отчёта» на ТВ.
+Dijagnostički izvještaj (TXT), bez lozinki i ključeva. Link radi jednom.|Диагностический отчёт (TXT), без паролей и ключей. Ссылка работает один раз.
+Beta: ažuriranja su isključena|Бета: обновления отключены
 """.trimIndent()

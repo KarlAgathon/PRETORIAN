@@ -455,6 +455,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     DisposableEffect(Unit) {
         val l = object : Player.Listener {
             override fun onPlayerError(e: PlaybackException) {
+                DiagEvents.add("player", e.errorCodeName + ": " + (e.message ?: "") + " · " + (items.getOrNull(index)?.title ?: ""))  // i18n-ignore
                 // automatic recovery: up to 3 quiet tries (live and films), keeping the position of a film
                 if (Recover.on && reconnect < 4) { reconnect++; Stats.recovery(); StreamLog.event(if (reconnect == 1) "freeze" else "x", items.getOrNull(index)?.title ?: ""); StreamLog.event("try", items.getOrNull(index)?.title ?: ""); StreamLog.add(listOf(items.getOrNull(index)?.title ?: "", " · ", e.errorCodeName.removePrefix("ERROR_CODE_"), " · ", trf("spajam ponovo (%s/4)", reconnect)).joinToString("")); retryToken++ }  // i18n-ignore
                 else if (!Recover.on && s.live && reconnect < 3) { reconnect++; retryToken++ }

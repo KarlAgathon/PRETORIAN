@@ -52,9 +52,15 @@ object Secret {
 
 /** Removes passwords, tokens and usernames from text that may leave the box (crash files, logs, stream log). */
 object Redact {
-    private val QUERY = Regex("(?i)((?:password|pass|pwd|username|user|token|auth|key|mac)=)[^&\\s\"']+")
+    private val QUERY = Regex("(?i)((?:password|pass|pwd|username|user|token|auth|key|api_key|apikey|mac|sn|serial|device_id|device_id2|signature)=)[^&\\s\"']+")
     // Xtream paths: /live/<user>/<pass>/123.ts, /movie/<user>/<pass>/..., /series/<user>/<pass>/..., /timeshift/<user>/<pass>/...
     private val XTREAM = Regex("(?i)(/(?:live|movie|series|timeshift)/)[^/\\s]+/[^/\\s]+/")
     private val BASIC = Regex("(?i)(https?://)[^/\\s:@]+:[^/\\s@]+@")
-    fun text(s: String): String = s.replace(QUERY, "$1***").replace(XTREAM, "$1***/***/").replace(BASIC, "$1***:***@")
+    // Xtream links without a prefix: http://host:port/<user>/<pass>/<id>(.ts|.m3u8)
+    private val XTREAM_SHORT = Regex("(?i)(https?://[^/\\s]+/)[^/\\s]+/[^/\\s]+/(\\d+(?:\\.\\w{2,4})?)(?=[\\s\"'?]|$)")
+    private val BEARER = Regex("(?i)(authorization:\\s*\\w+\\s+|bearer\\s+)[A-Za-z0-9._~+/=-]+")
+    // Google API keys (Gemini) wherever they appear, also without "key="
+    private val GOOGLE_KEY = Regex("AIza[0-9A-Za-z_-]{30,}")
+    fun text(s: String): String = s.replace(QUERY, "$1***").replace(XTREAM, "$1***/***/").replace(XTREAM_SHORT, "$1***/***/$2")
+        .replace(BASIC, "$1***:***@").replace(BEARER, "$1***").replace(GOOGLE_KEY, "AIza***")
 }

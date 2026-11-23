@@ -10,3 +10,4 @@ logo
 
 open
 meteo
+txt

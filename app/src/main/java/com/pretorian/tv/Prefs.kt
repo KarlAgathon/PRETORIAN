@@ -19,6 +19,8 @@ object Prefs {
     fun ensure(c: Context) { if (!::sp.isInitialized) init(c.applicationContext) }
 
     fun str(k: String, d: String = ""): String = sp.getString(k, d) ?: d
+    /** every stored text value (diagnostics: to find secret values before a report leaves the box) */
+    fun allStrings(): List<Pair<String, String>> = sp.all.mapNotNull { (k, v) -> (v as? String)?.let { k to it } }
     fun put(k: String, v: String) = sp.edit().putString(k, v).apply()
     /** written at once: used while the app is crashing */
     fun putNow(k: String, v: String) { sp.edit().putString(k, v).commit() }

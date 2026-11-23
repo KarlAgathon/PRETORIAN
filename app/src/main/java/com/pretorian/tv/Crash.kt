@@ -36,7 +36,9 @@ object CrashLog {
     @Volatile var screen = ""
     fun archive(c: Context, kind: String, text: String) {
         try {
-            val d = dir(c) ?: return; d.mkdirs()
+            val d = dir(c) ?: return
+            if (!DiagSpace.ok(d.parentFile ?: d)) return   // A0: below 20 MB free nothing is written
+            d.mkdirs()
             File(d, kind + "_" + java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date()) + ".txt").writeText(Redact.text(text))  // i18n-ignore
             d.listFiles()?.sortedByDescending { it.lastModified() }?.drop(10)?.forEach { it.delete() }
         } catch (_: Throwable) {}
@@ -63,8 +65,9 @@ object CrashLog {
         override fun uncaughtException(t: Thread, e: Throwable) {
             try {
                 val sw = java.io.StringWriter(); e.printStackTrace(java.io.PrintWriter(sw))
-                val txt = header(app) + sw.toString().take(12000)
-                file(app).writeText(Redact.text(txt))
+                DiagEvents.add("crash", e.javaClass.name + ": " + e.message)  // i18n-ignore
+                val txt = header(app) + sw.toString().take(12000) + "\n\n== Recent events ==\n" + DiagEvents.lines().takeLast(60).joinToString("\n")  // i18n-ignore
+                if (DiagSpace.ok(app.filesDir)) file(app).writeText(Redact.text(txt))
                 archive(app, "crash", txt)
             } catch (_: Throwable) {}
             try { CrashGuard.record() } catch (_: Throwable) {}

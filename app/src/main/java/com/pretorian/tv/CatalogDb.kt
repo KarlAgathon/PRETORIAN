@@ -321,6 +321,7 @@ object Import {
 
     private fun fail(part: Part, e: Throwable) {
         part.state = 3; part.err = (e.message ?: e.javaClass.simpleName).take(160)
+        DiagEvents.add("playlist", part.label + ": " + part.err)  // i18n-ignore
         android.util.Log.w("PRETORIAN", "import " + part.label + ": " + part.err, e) // i18n-ignore
         NewContent.appCtx?.let { CrashLog.archive(it, "import", part.label + "\n" + android.util.Log.getStackTraceString(e)) } // i18n-ignore
     }
@@ -531,7 +532,7 @@ object GuideSync {
                 for (j in jobs(ctx)) {
                     if (!force && !stale(j.src)) continue
                     while (CrashLog.screen.startsWith("Player")) delay(60_000) // i18n-ignore
-                    try { GuideDb.download(j.src, j.url, j.channels); OwnGuide.drop(j.url) } catch (_: Throwable) {}
+                    try { GuideDb.download(j.src, j.url, j.channels); OwnGuide.drop(j.url) } catch (e: Throwable) { DiagEvents.add("epg", j.src + ": " + (e.message ?: e.javaClass.simpleName)) }  // i18n-ignore
                 }
                 ProgIndex.clear()
             } finally { lock.unlock() }
