@@ -185,7 +185,23 @@ fun OnyxSearch(nav: Nav) {
     val vodHits by hitsOf(vodIdx, 30)
     val serHits by hitsOf(serIdx, 30)
     val busy = chIdx is Load.Loading || vodIdx is Load.Loading || serIdx is Load.Loading
-    LaunchedEffect(jump, chHits.isNotEmpty() || vodHits.isNotEmpty() || serHits.isNotEmpty()) { if (jump > 0) firstFr.tryFocus() }
+    // focus moves to the results only right after Search/Done or a recent search, never while typing
+    val anyNow = androidx.compose.runtime.rememberUpdatedState(chHits.isNotEmpty() || vodHits.isNotEmpty() || serHits.isNotEmpty())
+    val qNow = androidx.compose.runtime.rememberUpdatedState(q)
+    LaunchedEffect(jump) {
+        if (jump == 0) return@LaunchedEffect
+        val at = qNow.value
+        repeat(50) { if (qNow.value != at) return@LaunchedEffect; if (anyNow.value) { firstFr.tryFocus(); return@LaunchedEffect }; delay(100) }
+    }
+    val only = SearchOnly.only
+    var favAsk by remember { mutableStateOf<Channel?>(null) }
+    fun longOk(h: Hit) {
+        // long OK on a channel: into Favourites at once; only removing asks
+        if (h is Hit.Ch) {
+            if (Favs.inAny(ctx, h.ch)) favAsk = h.ch
+            else { Favs.flip(ctx, h.ch); android.widget.Toast.makeText(ctx, tr("Dodano u favorite"), android.widget.Toast.LENGTH_SHORT).show() }
+        } else pick = h
+    }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 28.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         // the big search field, with the microphone
@@ -233,21 +249,22 @@ fun OnyxSearch(nav: Nav) {
         val tvList = chHits
         val movies = vodHits
         val shows = serHits
-        val setHits = remember(query) { SettingsSearchIndex.find(query) }
+        val setHits = remember(query, only) { if (only == null || only == "settings") SettingsSearchIndex.find(query) else emptyList() }
         if (!busy && tvList.isEmpty() && movies.isEmpty() && shows.isEmpty() && sportHits.isEmpty() && setHits.isEmpty()) { T("Ništa nije pronađeno", 15.sp, C.Soft); return@Column }
         // New Dawn: filters with counts on the left, one list of results on the right
         if (Look.dawn) {
-            DawnSearchResults(query, tvList, movies, shows, sportHits, setHits, firstFr,
+            DawnSearchResults(query, if (only == null || only == "tv") tvList else emptyList(), if (only == null || only == "vod") movies else emptyList(),
+                if (only == null || only == "series") shows else emptyList(), if (only == null) sportHits else emptyList(), setHits, firstFr,
                 onHit = { h -> when (h) { is Hit.Ch -> playChannels(nav, listOf(h.ch), 0); is Hit.Movie -> nav.push(Screen.MovieDetail(h.v)); is Hit.Show -> nav.push(Screen.SeriesDetail(h.s)); else -> pick = h } },
-                onMenu = { pick = it },
+                onMenu = { longOk(it) },
                 onSport = { e -> val ch = (e.channels + e.ai + e.maybe).firstOrNull(); if (ch != null) playMatch(nav, e, ch) else nav.push(Screen.Sports) },
                 onSetting = { h -> SettingsNav.section = h.id; nav.push(Screen.Settings) },
-                modifier = Modifier.fillMaxWidth().weight(1f).padding(bottom = 8.dp))
+                modifier = Modifier.fillMaxWidth().weight(1f).padding(bottom = 8.dp), only = only)
             if (busy) T(tr("učitavam…"), 11.sp, C.Muted)
             return@Column
         }
         // four columns side by side: the one you are in opens wide, the others get narrow
-        val cols = buildList {
+        val cols = if (only != null && only != "settings") listOf(only) else buildList {
             add("tv"); add("vod"); add("series"); add("sport")
         }
         var open by remember { mutableStateOf(SearchMem.open) }
@@ -268,7 +285,7 @@ fun OnyxSearch(nav: Nav) {
                     val f0 = if (c == firstCol) firstFr else null
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxSize()) {
                         when (c) {
-                            "tv" -> itemsIndexed(tvList) { i, h -> SearchRow(i, f0, big, onMenu = { pick = h }, onClick = {
+                            "tv" -> itemsIndexed(tvList) { i, h -> SearchRow(i, f0, big, onMenu = { longOk(h) }, onClick = {
                                 when (h) { is Hit.Ch -> playChannels(nav, listOf(h.ch), 0); else -> pick = h } }) { f ->
                                 when (h) {
                                     is Hit.Ch -> { ChannelLogo(h.ch, if (big) 34.dp else 26.dp, onLight = f)
@@ -306,6 +323,15 @@ fun OnyxSearch(nav: Nav) {
         if (busy) T(tr("učitavam…"), 11.sp, C.Muted)
     }
     pick?.let { h -> HitActions(h, nav) { pick = null } }
+    favAsk?.let { c ->
+        Popup(c.name, { favAsk = null }, width = 460.dp) {
+            T("Ukloniti kanal iz favorita?", 15.sp, C.Soft)
+            OptionRow("Da, ukloni", R.drawable.lc_star, color = C.Danger) {
+                Favs.flip(ctx, c); android.widget.Toast.makeText(ctx, tr("Uklonjeno iz favorita"), android.widget.Toast.LENGTH_SHORT).show(); favAsk = null
+            }
+            OptionRow("Ne", R.drawable.lc_x) { favAsk = null }
+        }
+    }
     LaunchedEffect(Unit) { if (!back) fr.tryFocus() }
 }
 

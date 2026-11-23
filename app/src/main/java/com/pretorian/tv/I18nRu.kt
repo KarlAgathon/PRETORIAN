@@ -2758,4 +2758,10 @@ Promijeni redoslijed|Изменить порядок
 OK uzmi · ▲ ▼ pomjeri · OK spusti|OK взять · ▲ ▼ переместить · OK опустить
 Vraćeno u favorite|Возвращено в избранное
 Uklonjeno · dugi OK vrati|Удалено · долгий OK вернёт
+Traži postavku|Поиск настройки
+Traži kanale|Поиск каналов
+Traži serije|Поиск сериалов
+Traži filmove|Поиск фильмов
+Traži samo serije iz tvoje playliste.|Ищет только сериалы из твоего плейлиста.
+Traži samo filmove iz tvoje playliste.|Ищет только фильмы из твоего плейлиста.
 """.trimIndent()

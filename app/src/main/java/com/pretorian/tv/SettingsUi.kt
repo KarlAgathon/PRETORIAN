@@ -605,6 +605,15 @@ fun SettingsScreen(nav: Nav) {
         Column(Modifier.width(railW).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 8.dp, top = 6.dp, bottom = 16.dp)
             .onFocusChanged { if (classic && it.hasFocus) Chrome.rail = 2 },
             verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            // search only inside Settings (owner)
+            Focusable(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), onClick = { openScopedSearch(nav, "settings") }, normal = Color.Transparent, focused = C.Red, zoom = 1f) { f ->
+                Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Box(Modifier.size(26.dp).clip(Rnd(8.dp)).background(if (f) C.OnRed.copy(alpha = 0.08f) else C.Card), contentAlignment = Alignment.Center) {
+                        Ico(R.drawable.lc_search, 14.dp, if (f) C.OnRed else C.Text)
+                    }
+                    if (!slim) T("Traži postavku", 14.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
+                }
+            }
             list.forEach { s ->
                 val sel = s.id == section
                 Focusable(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), onClick = { section = s.id; sub = null }, onFocus = { listFocused++ },

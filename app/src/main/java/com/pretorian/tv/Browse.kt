@@ -27,7 +27,7 @@ import androidx.compose.ui.unit.sp
 class BrowseRow(
     val id: String, val title: String, val icon: Int? = null, val ch: Channel? = null,
     val count: String? = null, val badge: String? = null, val gapBefore: Boolean = false,
-    val onLong: (() -> Unit)? = null, val open: () -> Unit,
+    val onLong: (() -> Unit)? = null, val direct: Boolean = false, val open: () -> Unit,
 )
 
 /**
@@ -59,7 +59,7 @@ fun TwoColBrowser(
             contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp, start = 4.dp, end = 4.dp)) {
             itemsIndexed(rows, key = { _, r -> r.id }) { i, r ->
                 if (r.gapBefore) Spacer(Modifier.height(14.dp))
-                Focusable(onClick = { sel = i; mem[key] = i; runCatching { btnFr.requestFocus() } }, onMenu = r.onLong,
+                Focusable(onClick = { sel = i; mem[key] = i; if (r.direct) r.open() else runCatching { btnFr.requestFocus() } }, onMenu = r.onLong,
                     onFocus = { sel = i; mem[key] = i }, focusRequester = rowFrs[i],
                     shape = Rnd(14.dp), normal = Color(0x8C171B22), focused = Color(0x40FFFFFF),
                     borderColor = Color(0x1FFFFFFF), focusBorderColor = Color(0xD9FFFFFF), zoom = 1f,

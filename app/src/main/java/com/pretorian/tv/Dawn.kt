@@ -501,20 +501,21 @@ private fun DawnTracks(type: Int, onDismiss: () -> Unit) {
 fun DawnSearchResults(
     query: String, tv: List<Hit>, movies: List<Hit>, shows: List<Hit>, sport: List<SportEvent>, settings: List<SettingHit>, first: FocusRequester,
     onHit: (Hit) -> Unit, onMenu: (Hit) -> Unit, onSport: (SportEvent) -> Unit, onSetting: (SettingHit) -> Unit, modifier: Modifier,
+    only: String? = null,
 ) {
     // one category at a time, never a mixed "all" list (approved decision): the last one is remembered
-    var filt by remember { mutableStateOf(SearchMem.open?.takeIf { it in listOf("tv", "vod", "series", "sport", "settings") } ?: "tv") }
+    var filt by remember { mutableStateOf(only ?: SearchMem.open?.takeIf { it in listOf("tv", "vod", "series", "sport", "settings") } ?: "tv") }
     LaunchedEffect(filt) { SearchMem.open = filt }
     // the chosen category has nothing for this word: show the first one that has results (the list on the left still shows all counts)
     val counts = listOf("tv" to tv.size, "vod" to movies.size, "series" to shows.size, "sport" to sport.size, "settings" to settings.size)
-    LaunchedEffect(query, counts) { if (counts.first { it.first == filt }.second == 0) counts.firstOrNull { it.second > 0 }?.let { filt = it.first } }
+    LaunchedEffect(query, counts) { if (only == null && counts.first { it.first == filt }.second == 0) counts.firstOrNull { it.second > 0 }?.let { filt = it.first } }
     val filters = listOf(
         Triple("tv", "TV", tv.size), Triple("vod", "Filmovi", movies.size),
         Triple("series", "Serije", shows.size), Triple("sport", "Sport", sport.size), Triple("settings", "Postavke", settings.size),
     )
     val icons = mapOf("tv" to R.drawable.lc_tv, "vod" to R.drawable.lc_film, "series" to R.drawable.lc_layers, "sport" to R.drawable.lc_trophy, "settings" to R.drawable.lc_settings)
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        Column(Modifier.width(270.dp).fillMaxHeight().dawnGlass().padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (only == null) Column(Modifier.width(270.dp).fillMaxHeight().dawnGlass().padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             filters.forEach { (id, label, n) ->
                 Focusable(onClick = { filt = id }, onFocus = { filt = id }, shape = Rnd(12.dp), normal = if (filt == id) Color(0x26FFFFFF) else Color.Transparent,
                     focused = Dawn.pill, focusBorderColor = Color.Transparent, zoom = 1f, modifier = Modifier.fillMaxWidth().height(50.dp)) { f ->

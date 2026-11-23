@@ -172,7 +172,7 @@ fun PretorianApp() {
                     }
                 }
             },
-            root = { s -> if (s != Screen.Search) SearchMem.clear(); stack.clear(); stack.add(Screen.Home); if (s != Screen.Home) stack.add(s) },
+            root = { s -> if (s != Screen.Search) SearchMem.clear() else SearchOnly.only = null; stack.clear(); stack.add(Screen.Home); if (s != Screen.Home) stack.add(s) },
             playlistsChanged = { Repo.clear(); version++ },
         )
     }

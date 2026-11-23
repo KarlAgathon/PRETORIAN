@@ -169,7 +169,9 @@ sealed class GRow {
     data class Sport(val dummy: Int = 0) : GRow()
     /** spec 15: Catch Up as a special TV group, right under Recently watched */
     data class Catchup(val dummy: Int = 0) : GRow()
-    val id get() = when (this) { is Group -> "g:" + ref.key; is Header -> "h:" + p.id; is NewFav -> "nf"; is NewGroup -> "ng:$pid"; is Sport -> "sport"; is Catchup -> "catchup" }
+    /** search only the channels (owner) */
+    data class Find(val dummy: Int = 0) : GRow()
+    val id get() = when (this) { is Group -> "g:" + ref.key; is Header -> "h:" + p.id; is NewFav -> "nf"; is NewGroup -> "ng:$pid"; is Sport -> "sport"; is Catchup -> "catchup"; is Find -> "find" }
 }
 
 internal fun groupFocusTarget(rows: List<GRow>, selected: GroupRef?): String? {
@@ -179,6 +181,7 @@ internal fun groupFocusTarget(rows: List<GRow>, selected: GroupRef?): String? {
 
 suspend fun groupRows(ctx: android.content.Context): List<GRow> {
     val out = ArrayList<GRow>()
+    out.add(GRow.Find())
     // TV groups: Favorites (always), Recently watched (only when there is history), then the provider's groups as the playlist gives them
     out.add(GRow.Group(GroupRef(null, Category(FAV_PREFIX + Favs.mainId(ctx), tr("Favoriti")))))
     // spec 09: Favourites and Recently watched are always the first two groups (each has its own empty state)
@@ -219,6 +222,7 @@ fun GroupColumn(
     onHeader: (Playlist) -> Unit, onNewFav: () -> Unit, onNewGroup: (String) -> Unit, onFocusRow: (String) -> Unit,
     onSport: () -> Unit = {},
     onCatchup: () -> Unit = {},
+    onFind: () -> Unit = {},
     extra: (@Composable () -> Unit)? = null, containVerticalFocus: Boolean = false, classicStyle: Boolean = false, fillWidth: Boolean = false,
 ) {
     val ctx = LocalContext.current
@@ -310,6 +314,15 @@ fun GroupColumn(
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                     Ico(R.drawable.lc_trophy, 18.dp, if (f) Dawn.onPill else C.Text)
                                     T("Sport", 18.sp, if (f) Dawn.onPill else C.Text, if (f) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, modifier = Modifier.weight(1f))
+                                }
+                            }
+                            is GRow.Find -> Focusable(modifier = rowModifier.height(48.dp), onClick = onFind, onFocus = { onFocusRow(r.id) },
+                                focusRequester = if (containVerticalFocus) null else fr, shape = Rnd(12.dp), normal = Color.Transparent,
+                                focused = Dawn.pill, focusBorderColor = Color.Transparent, zoom = 1f) { f ->
+                                Row(Modifier.fillMaxSize().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    Ico(R.drawable.lc_search, 18.dp, if (f) Dawn.onPill else C.Text)
+                                    T("Traži kanale", 18.sp, if (f) Dawn.onPill else C.Text, if (f) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, modifier = Modifier.weight(1f))
                                 }
                             }
                             is GRow.Catchup -> Focusable(modifier = rowModifier.height(48.dp), onClick = onCatchup, onFocus = { onFocusRow(r.id) },
@@ -496,7 +509,8 @@ private fun TvList(nav: Nav) {
                 onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
                 onHeader = { p -> TvFold.toggle(p.id); if (p.id in TvFold.open) Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
                 onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it },
-                onFocusRow = { st.focusKey = it }, onSport = { nav.push(Screen.Sports) }, onCatchup = { Preview.stop(); PreviewSel.ch = null; nav.push(Screen.Catchup) })
+                onFocusRow = { st.focusKey = it }, onSport = { nav.push(Screen.Sports) }, onCatchup = { Preview.stop(); PreviewSel.ch = null; nav.push(Screen.Catchup) },
+                onFind = { Preview.stop(); PreviewSel.ch = null; openScopedSearch(nav, "tv") })
         }
     } else {
         val g = st.group
@@ -907,27 +921,14 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
     }
 }
 
-/** Pick the favourites lists a channel is in. */
+/** One favourites list only (owner, 2.5.4): adding / removing happens at once, with a short note; no list to choose. */
 @Composable
 fun FavPicker(ch: Channel, onDismiss: () -> Unit) {
     val ctx = LocalContext.current
-    var rev by remember { mutableIntStateOf(0) }
-    var newList by remember { mutableStateOf(false) }
-    if (newList) { TextDialog("Nova lista favorita", "Naziv (npr. Moji, Supruga, Djeca, Sport)", onDismiss = { newList = false }) { n ->
-        if (n.isNotBlank()) { val l = Favs.addList(ctx, n); Favs.toggle(l.id, ch) }; newList = false; rev++ }; return }
-    key(rev) {
-        Popup(tr("Favoriti") + " · " + ch.name, onDismiss) {
-            Favs.lists(ctx).forEach { l ->
-                val inIt = Favs.contains(l.id, ch)
-                OptionRow("★ " + l.name, R.drawable.lc_star, selected = inIt, color = if (inIt) C.Amber else null) {
-                    Favs.toggle(l.id, ch)
-                    Toast.makeText(ctx, trf(if (inIt) "Uklonjeno iz liste %s" else "Dodano u listu %s", l.name), Toast.LENGTH_SHORT).show()
-                    rev++
-                }
-            }
-            OptionRow("Nova lista favorita", R.drawable.lc_plus) { newList = true }
-            OptionRow("Gotovo", R.drawable.lc_check) { onDismiss() }
-        }
+    LaunchedEffect(ch.url) {
+        val added = Favs.flip(ctx, ch)
+        Toast.makeText(ctx, tr(if (added) "Dodano u favorite" else "Uklonjeno iz favorita"), Toast.LENGTH_SHORT).show()
+        onDismiss()
     }
 }
 
@@ -1000,8 +1001,7 @@ fun ChannelOptions(g: GroupRef, ch: Channel, list: List<Channel>, groups: List<C
             OptionRow("Ukloni iz ove liste", R.drawable.lc_star) {
                 Favs.toggle(favId, ch); Toast.makeText(ctx, tr("Uklonjeno iz favorita"), Toast.LENGTH_SHORT).show(); onChanged(false, true)
             }
-            OptionRow("Liste favorita…", R.drawable.lc_list) { mode = "fav" }
-        } else OptionRow(if (Favs.inAny(ctx, ch)) "Liste favorita…" else "Dodaj u favorite", R.drawable.lc_star, color = C.Amber) {
+        } else OptionRow(if (Favs.inAny(ctx, ch)) "Ukloni iz favorita" else "Dodaj u favorite", R.drawable.lc_star, color = C.Amber) {
             val lists = Favs.lists(ctx)
             if (lists.size == 1 && !Favs.inAny(ctx, ch)) {
                 Favs.toggle(lists[0].id, ch); Toast.makeText(ctx, tr("Dodano u favorite"), Toast.LENGTH_SHORT).show(); onChanged(false, true)
