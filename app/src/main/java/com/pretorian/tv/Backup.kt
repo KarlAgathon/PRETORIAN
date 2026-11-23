@@ -240,7 +240,7 @@ object Backup {
         @Suppress("DEPRECATION")
         val dl = File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "MediaCenter")
         val dlBeta = File(dl.parentFile, Beta.folder)
-        (dl.listFiles().orEmpty() + (if (Beta.on) dlBeta.listFiles().orEmpty() else emptyArray())).filter { (it.name.startsWith("MediaCenter-backup") || it.name.startsWith(Beta.backupPrefix)) && seen.add("dl:" + it.name) }?.forEach { f -> out += Found("Download/MediaCenter", f.lastModified(), f.length()) { f.readText() } }
+        (dl.listFiles().orEmpty().toList() + (if (Beta.on) dlBeta.listFiles().orEmpty().toList() else emptyList<File>())).filter { (it.name.startsWith("MediaCenter-backup") || it.name.startsWith(Beta.backupPrefix)) && seen.add("dl:" + it.name) }?.forEach { f -> out += Found("Download/MediaCenter", f.lastModified(), f.length()) { f.readText() } }
         usbDirs().forEach { d ->
             listOf(d, File(d, "MediaCenter"), File(d, Beta.folder)).distinct().forEach { dir ->
                 dir.listFiles()?.filter { (it.name.startsWith("MediaCenter-backup") || it.name.startsWith(Beta.backupPrefix)) && it.name.endsWith(".json") }?.forEach { f -> out += Found("USB", f.lastModified(), f.length()) { f.readText() } }
