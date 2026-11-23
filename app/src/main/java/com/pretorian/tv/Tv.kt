@@ -847,7 +847,10 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                     TvFocus.toList = {
                         val i = list.indexOfFirst { it.url == PreviewSel.ch?.url }.takeIf { it >= 0 }
                             ?: list.indexOfFirst { it.url == lastUrl }.takeIf { it >= 0 } ?: 0
-                        if (list.isNotEmpty()) { cWrap.target = -1; cWrap.target = i }
+                        if (list.isNotEmpty()) {
+                            Chrome.inRail = false   // a stale "in the menu rail" mark must never block this
+                            cWrap.target = -1; cWrap.target = i
+                        }
                     }
                     onDispose { TvFocus.toList = null }
                 }
