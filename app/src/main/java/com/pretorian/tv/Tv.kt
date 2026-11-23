@@ -465,7 +465,11 @@ private fun TvList(nav: Nav) {
     LaunchedEffect(focusedCh) { val c = focusedCh ?: return@LaunchedEffect; delay(500); Dusk.set(c.logo, c.name) }
     // New Dawn: groups alone › channels alone with preview, now/next and options › full screen.
     // Back and ◀ go exactly one level out; at the groups they return to the menu (on TV).
-    BackHandler(enabled = st.groupMenu == null && inChannels) { PreviewSel.ch = null; Preview.stop(); backToGroups() }
+    BackHandler(enabled = st.groupMenu == null && inChannels) {
+        // Back in the options under the preview: first to the channel list, the next Back to the groups
+        val toList = TvFocus.toList
+        if (TvFocus.inDock && toList != null) toList() else { PreviewSel.ch = null; Preview.stop(); backToGroups() }
+    }
     LaunchedEffect(inChannels, st.group?.key) {
         Dawn.crumb = if (inChannels) st.group?.cat?.name ?: "" else ""
         if (!inChannels) Dawn.pos = ""
@@ -694,6 +698,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
     var menuUrl by remember { mutableStateOf<String?>(null) }
     var favAsk by remember { mutableStateOf<Channel?>(null) }
     var favMove by remember { mutableStateOf<Channel?>(null) }
+    var lastUrl by remember { mutableStateOf<String?>(null) }
     /** after a channel left the list: the row that took its place gets the focus */
     var refocusAt by remember { mutableIntStateOf(-1) }
     // spec 09 — Favourites edit mode: long OK enters it, OK picks up / drops a channel, ▲▼ move it (saved at once), Back leaves
@@ -797,7 +802,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                         listRev++
                                     }
                                 },
-                                onFocus = { if (!edit) onFocusCh(ch) },
+                                onFocus = { lastUrl = ch.url; if (!edit) onFocusCh(ch) },
                                 focusRequester = cWrap.requester(i, if (ch.url == menuUrl) chFr else null),
                                 normal = if (Look.dawn) Color.Transparent else if (active) C.Green.copy(alpha = 0.10f) else C.Card,
                                 focused = if (Look.dawn) Dawn.pill else null,
@@ -822,6 +827,15 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                             }
                         }
                     }
+                }
+                // the options under the preview come back here explicitly: the channel in the preview, else the last row, else the first
+                DisposableEffect(list) {
+                    TvFocus.toList = {
+                        val i = list.indexOfFirst { it.url == PreviewSel.ch?.url }.takeIf { it >= 0 }
+                            ?: list.indexOfFirst { it.url == lastUrl }.takeIf { it >= 0 } ?: 0
+                        if (list.isNotEmpty()) { cWrap.target = -1; cWrap.target = i }
+                    }
+                    onDispose { TvFocus.toList = null }
                 }
                 LaunchedEffect(list) {
                     if (TvMemory.group?.key == g.key && TvMemory.channel > list.lastIndex) TvMemory.channel = list.lastIndex.coerceAtLeast(0)
@@ -1386,4 +1400,11 @@ fun rememberFrozen(key: String, raw: List<Channel>): List<Channel> {
     }
     holder[0] = out
     return out
+}
+
+
+/** Focus between the channel list and the options under the preview (TV browser). */
+object TvFocus {
+    @Volatile var toList: (() -> Unit)? = null
+    var inDock by mutableStateOf(false)
 }

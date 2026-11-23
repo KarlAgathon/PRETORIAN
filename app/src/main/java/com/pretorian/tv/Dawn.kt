@@ -1,5 +1,6 @@
 package com.pretorian.tv
 
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -386,14 +387,20 @@ fun DawnOptions(ch: Channel?, nav: Nav, modifier: Modifier) {
     fun toast(t: String) = android.widget.Toast.makeText(ctx, tr(t), android.widget.Toast.LENGTH_SHORT).show()
     // actions that need a picture work on the channel in the preview (after the first OK)
     fun live(): Boolean = (PreviewSel.ch != null && Preview.player != null).also { if (!it) toast("Prvo pritisni OK na kanalu za pregled.") }
-    Row(modifier.dawnGlass(14.dp).padding(5.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        @Composable fun Opt(icon: Int, tint: Color? = null, onClick: () -> Unit) {
-            Focusable(modifier = Modifier.weight(1f).fillMaxHeight(), onClick = onClick, shape = Rnd(10.dp), normal = Color.Transparent,
+    // the way back to the channel list is explicit: ◀ on the first icon (or Back) goes to the channel in the preview
+    Row(modifier.dawnGlass(14.dp).padding(5.dp).onFocusChanged { TvFocus.inDock = it.hasFocus }, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        @Composable fun Opt(icon: Int, tint: Color? = null, first: Boolean = false, onClick: () -> Unit) {
+            Focusable(modifier = Modifier.weight(1f).fillMaxHeight().then(if (!first) Modifier else Modifier.onPreviewKeyEvent { e ->
+                if (e.key == androidx.compose.ui.input.key.Key.DirectionLeft) {
+                    if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) TvFocus.toList?.invoke()
+                    TvFocus.toList != null
+                } else false
+            }), onClick = onClick, shape = Rnd(10.dp), normal = Color.Transparent,
                 focused = Dawn.pill, focusBorderColor = Color.Transparent, zoom = 1.0f) { f ->
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Ico(icon, 26.dp, if (f && tint == null) Dawn.onPill else tint ?: C.Text) }
             }
         }
-        Opt(if (paused) R.drawable.lc_play else R.drawable.lc_pause) {
+        Opt(if (paused) R.drawable.lc_play else R.drawable.lc_pause, first = true) {
             if (live()) Preview.player?.let { p -> if (p.isPlaying) { p.pause(); paused = true } else { p.play(); paused = false } }
         }
         val on = ch != null && Favs.inAny(ctx, ch)
