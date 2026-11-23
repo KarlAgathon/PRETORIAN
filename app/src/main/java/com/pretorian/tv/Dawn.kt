@@ -337,36 +337,25 @@ fun DawnPreview(modifier: Modifier) {
     }
 }
 
-/** Now and next of a channel, with a progress line, under the preview. */
+/** Now and next of a channel under the preview (approved TV browser): big name, NOW with a thin bar, NEXT — no box. */
 @Composable
 fun DawnNowNext(ch: Channel?, modifier: Modifier) {
     val ctx = LocalContext.current
-    Column(modifier.dawnGlass(14.dp)) {
-        if (ch == null) { Box(Modifier.fillMaxWidth().padding(16.dp)) { T("Stani na kanal da vidiš program", 14.sp, C.Muted) }; return@Column }
+    Column(modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        if (ch == null) { T("Stani na kanal da vidiš program", 14.sp, C.Muted); return@Column }
         val st by load(ch.url, EpgShift.rev) { Store.byId(ctx, ch.pid)?.let { Repo.epg(it, ch, 3) } ?: emptyList() }
         val list = (st as? Load.Ok)?.value.orEmpty()
         val t = System.currentTimeMillis()
         val cur = list.firstOrNull { it.start <= t && it.end > t }
         val next = list.firstOrNull { it.start > t }
-        Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            T(ch.name, 18.sp, Color.White, FontWeight.Bold)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                T(cur?.title ?: if (st is Load.Loading) tr("Učitavam program…") else "", 14.sp, C.Soft, modifier = Modifier.weight(1f))
-                if (cur != null) T(cur.times(), 14.sp, C.Soft)
+        T(ch.name.uppercase(), 22.sp, Color.White, FontWeight.Bold)
+        if (cur != null) {
+            T(tr("Sada").uppercase() + " — " + cur.times() + " • " + cur.title, 15.sp, Color.White, FontWeight.SemiBold)  // i18n-ignore
+            Box(Modifier.fillMaxWidth().height(3.dp).clip(Rnd(2.dp)).background(Color(0x33FFFFFF))) {
+                Box(Modifier.fillMaxWidth(cur.progress()).height(3.dp).background(Color(0xFFE6E8EB)))
             }
-            if (cur != null) Box(Modifier.padding(top = 6.dp).fillMaxWidth().height(4.dp).clip(Rnd(2.dp)).background(Color(0x33FFFFFF))) {
-                Box(Modifier.fillMaxWidth(cur.progress()).height(4.dp).background(C.Progress))
-            }
-        }
-        if (next != null) {
-            Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0x1FFFFFFF)))
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                T("Slijedi:", 14.sp, C.Soft)
-                T(next.title, 14.sp, Color.White, FontWeight.Medium, modifier = Modifier.weight(1f))
-                T(next.times(), 14.sp, C.Soft)
-            }
-        }
+        } else if (st is Load.Loading) T("Učitavam program…", 14.sp, C.Soft)
+        if (next != null) T(tr("Zatim").uppercase() + " — " + SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(next.start)) + " • " + next.title, 14.sp, Color(0xFFB8BEC6))  // i18n-ignore
     }
 }
 

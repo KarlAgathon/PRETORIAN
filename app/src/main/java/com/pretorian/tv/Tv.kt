@@ -491,7 +491,7 @@ private fun TvList(nav: Nav) {
         }
         Row(Modifier.fillMaxSize().padding(start = 34.dp, end = 34.dp, top = 6.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             // ◀ from the preview or the options comes back to the same channel, never to the one that happens to sit beside them
-            Box(Modifier.weight(0.40f).fillMaxHeight().focusRestorer().focusGroup().dawnGlass().padding(vertical = 4.dp)) {
+            Box(Modifier.weight(0.46f).fillMaxHeight().focusRestorer().focusGroup().padding(vertical = 4.dp)) {
                 if (g != null) key(g.key, st.rev) {
                     ChannelList(g, nav, st.gate, rows, enterTick, onFocusCh = { focusedCh = it },
                         onBackToGroups = { PreviewSel.ch = null; Preview.stop(); backToGroups() }, onChanged = { st.rev++ }, focusOnStart = true)
@@ -499,7 +499,7 @@ private fun TvList(nav: Nav) {
             }
             // one fixed layout for every channel (approved): picture, programme box and icons are always the same size
             // and exactly as wide as each other, with or without a programme guide
-            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(0.60f).fillMaxHeight(), contentAlignment = Alignment.TopCenter) {
+            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(0.54f).fillMaxHeight(), contentAlignment = Alignment.TopCenter) {
                 val infoH = 112.dp; val optH = 64.dp; val gaps = 20.dp
                 val w = minOf(maxWidth, (maxHeight - infoH - optH - gaps) * 16f / 9f)
                 Column(Modifier.width(w).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -750,12 +750,15 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                             ) { f ->
                                 Row(Modifier.fillMaxSize().clipToBounds().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    T("%03d".format(ch.num), 15.sp, if (f) Dawn.onPill else C.Soft,
-                                        modifier = Modifier.width(34.dp))
+                                    T("%02d".format(ch.num), 16.sp, if (f) Color.White else C.Soft,
+                                        modifier = Modifier.width(36.dp))
                                     ChannelLogo(ch.logo, ch.name)
                                     T(ch.name, 16.sp, if (f) Dawn.onPill else C.Text, if (f) FontWeight.SemiBold else FontWeight.Normal,
                                         maxLines = 1, modifier = Modifier.weight(1f))
                                     if (locked) Ico(R.drawable.lc_lock, 16.dp, C.Muted)
+                                    // quality from the channel's own name (4K / UHD / FHD / HD / SD), never invented
+                                    qualityTag(ch.name)?.let { q -> Box(Modifier.clip(Rnd(5.dp)).background(if (f) Color.White else Color(0x40FFFFFF)).padding(horizontal = 6.dp, vertical = 1.dp)) {
+                                        T(q, 11.sp, if (f) Color(0xFF111113) else Color(0xFFDDE1E6), FontWeight.Bold) } }
                                     if (active) Dot(C.Green, 8.dp)
                                 }
                             }
@@ -1284,3 +1287,6 @@ fun Bell(count: Int) {
         T(if (count > 99) "99" else "$count", 10.sp, Color.White, FontWeight.Bold)
     }
 }
+
+/** "HRT 1 FHD" → "FHD": the quality written in the channel's name, or null. */
+fun qualityTag(name: String): String? = Regex("\\b(4K|UHD|FHD|HD|SD)\\b", RegexOption.IGNORE_CASE).find(name)?.value?.uppercase()

@@ -1,3 +1,18 @@
+Media Center 2.4.2 – Live TV
+
+• Full screen means full screen: only the picture while you watch
+• Short OK: a compact channel box (number, logo, name, quality, time, NOW with a thin bar, NEXT); it hides after 5 s
+• Long OK: six small actions centred at the bottom – Favourites · EPG · Picture · Catch-up · History · More
+• Every panel opens upward above the actions, centred on the screen; only one at a time; the channel box hides while a panel is open
+• Favourites: one press adds or removes the channel
+• EPG: about three programmes at a time, NOW marked; OK shows the details and "Watch from the start" when the archive really has it
+• Picture: Default, Fit, Fill, Stretch, 4:3 – applied at once, kept per channel
+• Catch-up: the channel's archived shows (Today / Yesterday / weekday · time — title); OK plays it; greyed out when the channel has no archive
+• History: the last 10 channels in one row that goes round, Clear history with a question; the same list as Home and TV
+• More: Audio and Subtitles (only when the stream has them, no online search on live TV) and Stream information
+• ▲ ▼ change channel, ◀ channel list, ▶ EPG; Back always goes one step back and the focus returns to its icon
+• TV channel list: two-digit numbers, the quality from the channel name (HD, FHD, SD…), no box around the list; under the preview the channel name, NOW with a bar and NEXT
+
 Media Center 2.4.1 – new Home
 
 • Home uses the approved room picture (concrete room, light from above, the helmet on the stone) on every screen
