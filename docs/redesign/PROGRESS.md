@@ -35,5 +35,10 @@ Checkpoints are branches `checkpoint/<phase>` that are never moved (tags cannot 
 - Focus, scroll and Back behaviour can only be confirmed on the Mi Box (no UI tests yet).
 - Old-style controls inside pages (switches, drop-downs, sliders) keep their 2.6.0 look until phases E–G.
 
+## Beta 1 (A0 + A)
+- Built from `28de23c` (branch `redesign-beta/1`), pre-release `redesign-beta-1` (not latest; Stable's updater ignores pre-releases), file `MediaCenterBeta-1.apk`.
+- APK check (static): package `com.pretorian.tv.beta`, label "Media Center Beta", versionName `2.6.0-beta.2`, versionCode 900002, FileProvider `com.pretorian.tv.beta.files` (Stable: `com.pretorian.tv.files`), same signing certificate as Stable → installs next to Stable with separate data.
+- Side-by-side install on the Mi Box: NOT TESTED (owner).
+
 ## Next
 Beta 1 (A0 + A, built from branch `redesign-beta/1`) → owner Mi Box test → only then Phase B.
