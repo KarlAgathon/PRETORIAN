@@ -479,7 +479,7 @@ private val SECTIONS2 = listOf(
     Section("appearance", R.drawable.lc_languages, "Izgled i jezik", "Jezik, veličina teksta, Lite / Full"),
     Section("home", R.drawable.lc_house, "Početna i navigacija", "Pokretanje s boxom, rad u pozadini, mreža"),
     Section("privacy", R.drawable.lc_shield_check, "Roditeljska kontrola", "PIN i skrivene kategorije"),
-    Section("sportscenter", R.drawable.lc_trophy, "Sportski centar", "Država, timovi i obavještenja"),
+    Section("sportscenter", R.drawable.lc_trophy, "Sport", "Sportovi, timovi, takmičenja i obavještenja"),
     Section("notify", R.drawable.lc_bell, "Obavještenja i podsjetnici", "Emisije i utakmice"),
     Section("system", R.drawable.lc_settings, "Sistem i održavanje", "Uređaj, backup, ažuriranje, dijagnostika"),
 )
@@ -666,7 +666,7 @@ fun SettingsScreen(nav: Nav) {
                     "player" -> PlayerV2 { sub = it }
                     "look" -> AppearanceV2()
                     "language" -> LanguageV2()
-                    "sports" -> SportV2()
+                    "sports" -> SportV3()
                     "reminders" -> RemindersV2(nav)
                     "notifications" -> NotificationsV2()
                     "diagnostics" -> DiagnosticsV2()

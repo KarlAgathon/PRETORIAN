@@ -21,7 +21,7 @@ import java.util.TimeZone
 
 /* ============================================================== model */
 
-data class Team(val name: String, val abbr: String, val logo: String?, val color: Color?, val color2: Color?, val score: String?)
+data class Team(val name: String, val abbr: String, val logo: String?, val color: Color?, val color2: Color?, val score: String?, val id: String = "")
 
 data class SportEvent(
     val id: String,
@@ -120,13 +120,7 @@ object Sports {
     val BIG = listOf("WC", "EURO", "UNL", "WCQ", "UCL", "UEL", "UECL", "PL", "LL", "BL", "SA", "L1", "NBA", "F1", "ATP", "WTA")
     val REGION_LEAGUES = listOf("BIH", "SRB", "HNL", "BL2", "AUT", "SUI")
     /** competitions you follow: chosen competitions (all when none chosen) on the chosen continents */
-    fun activeLeagues(): List<League> {
-        val raw = Prefs.str("sport_leagues", BIG.joinToString(","))
-        val sel = raw.split(',').filter { it.isNotBlank() }.toSet()
-        val cont = Prefs.str("sport_cont", "eu").split(',').map { if (it == "am") "na" else it }.toSet() + "world"
-        val followed = Prefs.str("sm_follow_leagues").split('|').toSet()
-        return LEAGUES.filter { it.name in followed || ((sel.isEmpty() || it.abbr in sel) && contOf(it) in cont) }
-    }
+    fun activeLeagues(): List<League> = SportPrefs.leagues()
     /** favourite teams, written in Settings (comma separated) */
     fun teams(): List<String> = Prefs.str("sport_teams").split(',').map { norm(it.trim()) }.filter { it.length >= 3 }
     fun isFav(ev: SportEvent): Boolean { val t = teams(); if (t.isEmpty()) return false
@@ -195,7 +189,7 @@ object Sports {
         }
         return Team(name, t?.str("abbreviation")?.ifBlank { null } ?: name.take(3).uppercase(),
             t?.str("logo")?.ifBlank { null } ?: a?.optJSONObject("flag")?.str("href")?.ifBlank { null },
-            t?.str("color")?.let { color(it) }, t?.str("alternateColor")?.let { color(it) }, score)
+            t?.str("color")?.let { color(it) }, t?.str("alternateColor")?.let { color(it) }, score, t?.str("id") ?: a?.str("id") ?: "")
     }
 
     private fun parseCompetition(lg: League, e: JSONObject, comp: JSONObject, title: String): SportEvent? {
@@ -540,6 +534,26 @@ object Sports {
             if (text.isNotBlank()) out.add(listOf(clock, text).filter { it.isNotBlank() }.joinToString("  "))
         }
         out.take(30)
+    }
+
+    /** Team statistics of one match from ESPN's summary (possession, shots, corners …): label → (home, away). Empty when ESPN has none. */
+    suspend fun stats(ev: SportEvent): List<Triple<String, String, String>> = withContext(Dispatchers.IO) {
+        val lg = LEAGUES.firstOrNull { ev.id.startsWith(it.path + "/") } ?: return@withContext emptyList()
+        val id = ev.id.substringAfterLast('/')
+        val o = try { JSONObject(http("https://site.api.espn.com/apis/site/v2/sports/${lg.path}/summary?event=$id")) } catch (e: Exception) { return@withContext emptyList() }
+        val teams = o.optJSONObject("boxscore")?.optJSONArray("teams") ?: return@withContext emptyList()
+        if (teams.length() < 2) return@withContext emptyList()
+        fun map(i: Int): Map<String, String> {
+            val t = teams.optJSONObject(i) ?: return emptyMap()
+            val st = t.optJSONArray("statistics") ?: return emptyMap()
+            return (0 until st.length()).mapNotNull { st.optJSONObject(it) }.associate { it.str("name") to it.str("displayValue") }
+        }
+        // ESPN lists the home team second in the box score of football; match by team id when it is there
+        val t0 = teams.optJSONObject(0)?.optJSONObject("team")?.str("id") ?: ""
+        val (h, a) = if (ev.home?.id?.isNotBlank() == true && ev.home.id != t0) map(1) to map(0) else map(0) to map(1)
+        val want = listOf("possessionPct" to "Posjed lopte", "shotsOnTarget" to "Udarci u okvir", "totalShots" to "Udarci", "wonCorners" to "Korneri",
+            "foulsCommitted" to "Prekršaji", "offsides" to "Ofsajdi")  // i18n-ignore
+        want.mapNotNull { (k, label) -> val x = h[k]; val y = a[k]; if (x.isNullOrBlank() || y.isNullOrBlank()) null else Triple(label, x, y) }
     }
 
     /* ---------------------------------------------------------------- matching */

@@ -331,6 +331,9 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     val bwd = Prefs.long("skip_back", 10) * 1000L
     val focus = remember { FocusRequester() }
     val item = items.getOrElse(index) { items.first() }
+    // spec 16: Match Follow needs to know what is being watched (context filter, same-match check)
+    LaunchedEffect(item.url) { PlayCtx.kind = if (s.live) "live" else if (item.season != null) "series" else "movie"; PlayCtx.chUrl = if (s.live) item.url else null }
+    DisposableEffect(Unit) { onDispose { PlayCtx.kind = null; PlayCtx.chUrl = null } }
     val p = item.channel?.let { Store.byId(ctx, it.pid) } ?: Store.ownerOf(ctx, item.url) ?: Store.active(ctx)
 
     /** audio / built-in subtitle picked on the movie page, applied when the stream's tracks are known */

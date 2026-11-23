@@ -297,7 +297,7 @@ fun PretorianApp() {
                                 Screen.AddPlaylist -> AddPlaylistScreen(nav)
                                 is Screen.MovieDetail -> MovieDetailScreen(top.vod, nav)
                                 is Screen.SeriesDetail -> SeriesDetailScreen(top.item, nav)
-                                Screen.Sports -> SportMixScreen(nav)
+                                Screen.Sports -> SportDashboard(nav)
                                 Screen.Search -> SearchScreen(nav)
                                 Screen.Catchup -> CatchupScreen(nav)
                                 is Screen.Player -> {}
@@ -317,7 +317,7 @@ fun PretorianApp() {
             ImportDialog()
             UpdateAskDialog(nav)
             CrashGuardDialog(nav)
-            GoalNoteOverlay()
+            MatchFollowOverlay()
         }
     }
     }
