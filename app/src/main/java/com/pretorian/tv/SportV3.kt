@@ -10,6 +10,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
@@ -433,6 +435,41 @@ fun SportDashboard(nav: Nav) {
 
 private fun hm(t: Long) = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(t))  // i18n-ignore
 
+/** a team name with a thin bar in its own colour */
+@Composable
+private fun TeamLine(t: Team, f: Boolean) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(Modifier.size(4.dp, 16.dp).background(t.color ?: Color(0x33FFFFFF), Rnd(2.dp)))
+        T(t.name, 16.sp, Color.White, if (f) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1)
+    }
+}
+
+/** red LIVE label with a softly beating dot */
+@Composable
+private fun LivePill(text: String, size: Int) {
+    val pulse = androidx.compose.animation.core.rememberInfiniteTransition(label = "live")
+    val a by pulse.animateFloat(1f, 0.25f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(900),
+        androidx.compose.animation.core.RepeatMode.Reverse), label = "dot")
+    Row(Modifier.clip(Rnd(6.dp)).background(Color(0xFFC62828)).padding(horizontal = 8.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Box(Modifier.size(7.dp).graphicsLayer { alpha = a }.background(Color.White, androidx.compose.foundation.shape.CircleShape))
+        T(text, size.sp, Color.White, FontWeight.Bold)
+    }
+}
+
+/** the score lights up for a moment when it changes while you look at it (a goal) */
+@Composable
+private fun ScoreFlash(id: String, score: String) {
+    var last by remember(id) { mutableStateOf(score) }
+    val glow = remember(id) { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(score) {
+        if (score != last) { last = score; glow.snapTo(1f); glow.animateTo(0f, androidx.compose.animation.core.tween(1600)) }
+    }
+    Box(Modifier.clip(Rnd(10.dp)).background(Color.White.copy(alpha = 0.22f * glow.value)).padding(horizontal = 10.dp)) {
+        T(score, 44.sp, Color.White, FontWeight.Bold)
+    }
+}
+
 /** "LIVE · 68'", "Danas · 20:45", "Sutra · 20:45", "Uto · 21:00", or the final state */
 private fun stateLine(e: SportEvent): String = when {
     e.live -> tr("UŽIVO") + (e.clock?.ifBlank { null }?.let { " · $it" } ?: "")
@@ -455,16 +492,15 @@ private fun MatchRow3(e: SportEvent, current: Boolean, followed: Boolean, fr: Fo
                 e.home?.let { Crest(it, 26.dp) }; e.away?.let { Crest(it, 26.dp) }
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                T(e.league.ifBlank { e.leagueAbbr }, 12.sp, Color(0xFF8A929C), FontWeight.SemiBold)
+                T(flagEmoji(e.country) + "  " + e.league.ifBlank { e.leagueAbbr }, 12.sp, Color(0xFF8A929C), FontWeight.SemiBold, maxLines = 1)
                 if (e.home != null && e.away != null) {
-                    T(e.home.name, 16.sp, Color.White, if (f) FontWeight.SemiBold else FontWeight.Normal)
-                    T(e.away.name, 16.sp, Color.White, if (f) FontWeight.SemiBold else FontWeight.Normal)
+                    TeamLine(e.home, f); TeamLine(e.away, f)
                 } else T(e.title, 16.sp, Color.White, FontWeight.SemiBold, maxLines = 2)
             }
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (followed) Ico(R.drawable.lc_bell, 14.dp, Color(0xFFD9DDE3))
-                    if (e.live) Box(Modifier.clip(Rnd(6.dp)).background(Color(0xFFC62828)).padding(horizontal = 7.dp, vertical = 2.dp)) { T(stateLine(e), 12.sp, Color.White, FontWeight.Bold) }
+                    if (e.live) LivePill(stateLine(e), 12)
                     else T(stateLine(e), 13.sp, Color(0xFFB0B8C4))
                 }
                 if (e.state != "pre" && e.home?.score != null) T((e.home.score ?: "") + " – " + (e.away?.score ?: ""), 18.sp, Color.White, FontWeight.Bold)
@@ -480,14 +516,17 @@ private fun MatchHeader3(e: SportEvent) {
         Spacer(Modifier.height(10.dp))
         if (e.home != null && e.away != null) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) { Crest(e.home, 64.dp); Spacer(Modifier.height(6.dp)); T(e.home.name, 17.sp, Color.White, FontWeight.SemiBold) }
+                val nat = SportPrefs.isNational(e.leagueAbbr)
+                if (e.sport == "football") TeamKit(e.home, nat, 78.dp)
+                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) { Crest(e.home, 64.dp); Spacer(Modifier.height(6.dp)); T(e.home.name, 17.sp, Color.White, FontWeight.SemiBold, maxLines = 1) }
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    if (e.live) Box(Modifier.clip(Rnd(6.dp)).background(Color(0xFFC62828)).padding(horizontal = 9.dp, vertical = 2.dp)) { T(tr("UŽIVO"), 13.sp, Color.White, FontWeight.Bold) }
+                    if (e.live) LivePill(tr("UŽIVO"), 13)
                     if (e.state == "pre") T(hm(e.start), 40.sp, Color.White, FontWeight.Bold)
-                    else T((e.home.score ?: "–") + " – " + (e.away.score ?: "–"), 44.sp, Color.White, FontWeight.Bold)
+                    else ScoreFlash(e.id, (e.home.score ?: "–") + " – " + (e.away.score ?: "–"))
                     T(if (e.state == "pre") stateLine(e) else (e.clock ?: ""), 15.sp, Color(0xFFC9CED6))
                 }
-                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) { Crest(e.away, 64.dp); Spacer(Modifier.height(6.dp)); T(e.away.name, 17.sp, Color.White, FontWeight.SemiBold) }
+                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) { Crest(e.away, 64.dp); Spacer(Modifier.height(6.dp)); T(e.away.name, 17.sp, Color.White, FontWeight.SemiBold, maxLines = 1) }
+                if (e.sport == "football") TeamKit(e.away, nat, 78.dp)
             }
         } else {
             T(e.title, 24.sp, Color.White, FontWeight.Bold, maxLines = 2)
@@ -499,7 +538,7 @@ private fun MatchHeader3(e: SportEvent) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                 listOf("h", "a").forEach { side ->
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        ev.filter { it.side == side }.takeLast(4).forEach { d -> DetailLine(d, if (side == "h") e.home?.name else e.away?.name) }
+                        ev.filter { it.side == side }.takeLast(4).forEach { d -> DetailLine(d, if (side == "h") e.home?.name else e.away?.name, (if (side == "h") e.home else e.away)?.color) }
                     }
                 }
             }
@@ -508,12 +547,14 @@ private fun MatchHeader3(e: SportEvent) {
 }
 
 @Composable
-private fun DetailLine(d: MatchDetail, team: String?) {
+private fun DetailLine(d: MatchDetail, team: String?, color: Color? = null) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Box(Modifier.size(4.dp, 18.dp).background(color ?: Color(0x33FFFFFF), Rnd(2.dp)))
         when {
-            d.kind.startsWith("red") -> Box(Modifier.size(10.dp, 14.dp).background(Color(0xFFD32F2F), Rnd(2.dp)))
-            d.kind.startsWith("yellow") -> Box(Modifier.size(10.dp, 14.dp).background(Color(0xFFFBC02D), Rnd(2.dp)))
-            else -> T("⚽", 13.sp, Color.White)  // i18n-ignore
+            d.kind.startsWith("red") -> Box(Modifier.size(11.dp, 15.dp).background(Color(0xFFD32F2F), Rnd(2.dp)))
+            d.kind.startsWith("yellow") -> Box(Modifier.size(11.dp, 15.dp).background(Color(0xFFFBC02D), Rnd(2.dp)))
+            d.kind == "penalty" -> T("◎", 15.sp, Color.White)  // i18n-ignore
+            else -> T("⚽", 14.sp, Color.White)  // i18n-ignore
         }
         T(d.minute, 14.sp, Color(0xFFC9CED6), modifier = Modifier.width(44.dp))
         val what = when {
@@ -570,7 +611,7 @@ private fun ColumnScope.MatchLower3(e: SportEvent, nav: Nav, tick: Int) {
                     }
                     if (evs.isNotEmpty()) Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         T(tr("DOGAĐAJI"), 13.sp, Color.White, FontWeight.Bold)
-                        evs.takeLast(5).reversed().forEach { d -> DetailLine(d, if (d.side == "h") e.home?.name else e.away?.name) }
+                        evs.takeLast(5).reversed().forEach { d -> DetailLine(d, if (d.side == "h") e.home?.name else e.away?.name, (if (d.side == "h") e.home else e.away)?.color) }
                     }
                 }
             }
@@ -618,7 +659,7 @@ private fun BroadcastRow3(c: Channel, sure: Boolean, onPlay: () -> Unit) {
 /** Where the user is watching now (set by the player): "live", "movie", "series" or null; the live channel's url. */
 object PlayCtx { @Volatile var kind: String? = null; @Volatile var chUrl: String? = null }
 
-data class MatchNote(val head: String, val line: String?, val teams: String, val score: String?)
+data class MatchNote(val head: String, val line: String?, val teams: String, val score: String?, val kind: String = "", val team: Team? = null, val side: String? = null)
 
 object FollowWatch {
     val queue = mutableStateListOf<MatchNote>()
@@ -673,28 +714,53 @@ object FollowWatch {
         val line = d?.let { listOfNotNull(it.player.ifBlank { null }, it.minute.ifBlank { null }?.let { m -> if (m.endsWith("'")) m else "$m'" }).joinToString(" · ").ifBlank { null } }
         val teams = (e.home?.name ?: e.title) + (e.away?.let { " – " + it.name } ?: "")
         val score = if (e.home?.score != null && e.away?.score != null) e.home.score + " : " + e.away.score else null
-        queue.add(MatchNote(head, line, teams, score))
+        val team = when (d?.side) { "h" -> e.home; "a" -> e.away; else -> null }
+        queue.add(MatchNote(head, line, teams, score, kind, team, d?.side))
     }
 }
 
-/** The Match Follow note: top right, a few seconds, never takes focus, never pauses anything. */
+/** The Match Follow note: top right, a few seconds, never takes focus, never pauses anything.
+ *  A goal shows the ball and the scoring team's crest and colour; cards show the card; half-time a clock; the end a flag. */
 @Composable
 fun MatchFollowOverlay() {
     val n = FollowWatch.queue.firstOrNull() ?: return
-    LaunchedEffect(n) { delay(SportPrefs.dur * 1000L); if (FollowWatch.queue.isNotEmpty()) FollowWatch.queue.removeAt(0) }
+    val slide = remember(n) { androidx.compose.animation.core.Animatable(1f) }
+    LaunchedEffect(n) {
+        slide.animateTo(0f, androidx.compose.animation.core.tween(320, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+        delay(SportPrefs.dur * 1000L)
+        slide.animateTo(1f, androidx.compose.animation.core.tween(240))
+        if (FollowWatch.queue.isNotEmpty()) FollowWatch.queue.removeAt(0)
+    }
+    val accent = n.team?.color ?: when (n.kind) { "yellow" -> Color(0xFFFBC02D); "red" -> Color(0xFFD32F2F); else -> Color(0x80FFFFFF) }
     Box(Modifier.fillMaxSize().padding(top = 28.dp, end = 34.dp), contentAlignment = Alignment.TopEnd) {
-        Column(Modifier.width(440.dp).clip(Rnd(18.dp)).background(Color(0xE6151920)).border(1.dp, Color(0x59FFFFFF), Rnd(18.dp)).padding(horizontal = 20.dp, vertical = 14.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Ico(R.drawable.lc_trophy, 18.dp, Color.White); T(tr("SPORT · PRAĆENJE UTAKMICE"), 13.sp, Color(0xFFD9DDE3), FontWeight.SemiBold)
-            }
-            Box(Modifier.fillMaxWidth().padding(vertical = 8.dp).height(1.dp).background(Color(0x26FFFFFF)))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    T(n.head, 26.sp, Color.White, FontWeight.Bold)
-                    n.line?.let { T(it, 16.sp, Color.White, FontWeight.SemiBold) }
-                    T(n.teams, 15.sp, Color(0xFFB0B8C4))
+        Row(Modifier.width(470.dp).graphicsLayer { translationX = slide.value * 520.dp.toPx(); alpha = 1f - slide.value }
+            .clip(Rnd(18.dp)).background(Color(0xEB151920)).border(1.dp, Color(0x59FFFFFF), Rnd(18.dp))) {
+            Box(Modifier.width(6.dp).height(132.dp).background(accent))
+            Column(Modifier.weight(1f).padding(start = 16.dp, end = 18.dp, top = 12.dp, bottom = 12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Ico(R.drawable.lc_trophy, 16.dp, Color.White); T(tr("SPORT · PRAĆENJE UTAKMICE"), 12.sp, Color(0xFFD9DDE3), FontWeight.SemiBold)
                 }
-                n.score?.let { T(it, 34.sp, Color.White, FontWeight.Bold) }
+                Box(Modifier.fillMaxWidth().padding(vertical = 7.dp).height(1.dp).background(Color(0x26FFFFFF)))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // what happened, as a picture
+                    Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+                        when (n.kind) {
+                            "goal", "goalpen" -> T("⚽", 34.sp, Color.White)  // i18n-ignore
+                            "yellow" -> Box(Modifier.size(26.dp, 36.dp).background(Color(0xFFFBC02D), Rnd(4.dp)))
+                            "red" -> Box(Modifier.size(26.dp, 36.dp).background(Color(0xFFD32F2F), Rnd(4.dp)))
+                            "pen" -> T("◎", 32.sp, Color.White)  // i18n-ignore
+                            "ht" -> Ico(R.drawable.lc_clock, 32.dp, Color.White)
+                            else -> T("🏁", 30.sp, Color.White)  // i18n-ignore
+                        }
+                    }
+                    Column(Modifier.weight(1f)) {
+                        T(n.head, 24.sp, Color.White, FontWeight.Bold)
+                        n.line?.let { T(it, 15.sp, Color.White, FontWeight.SemiBold, maxLines = 1) }
+                        T(n.teams, 14.sp, Color(0xFFB0B8C4), maxLines = 1)
+                    }
+                    n.team?.let { Crest(it, 36.dp) }
+                    n.score?.let { T(it, 32.sp, Color.White, FontWeight.Bold) }
+                }
             }
         }
     }

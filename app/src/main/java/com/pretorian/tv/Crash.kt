@@ -107,8 +107,13 @@ fun CrashDialog() {
     val t = text ?: return
     Popup("Aplikacija se prošli put srušila", { text = null }, width = 900.dp) {
         T("Slikaj ovaj ekran i pošalji ga, da se greška može popraviti.", 14.sp, C.Soft)
-        Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
-            T(t, 11.sp, C.Muted)
+        // the few lines that name the error and where it happened, readable on one photo
+        val lines = t.lines()
+        val key = (lines.take(2) +
+            lines.filter { it.contains("Exception") || it.contains("Error") || it.startsWith("Caused by") }.take(3) +
+            lines.filter { it.contains("com.pretorian") }.take(4)).distinct()  // i18n-ignore
+        Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+            key.forEach { T(it.trim(), 13.sp, C.Text, maxLines = 3) }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button("Zatvori", R.drawable.lc_x, primary = true) { text = null }

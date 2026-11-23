@@ -297,7 +297,13 @@ fun SearchScreen(nav: Nav) {
                                     is Hit.Ch -> scope.launch { openInBrowser(ctx, nav, h.ch) }
                                     else -> pick = h
                                 }
-                            }, onMenu = { if (h is Hit.Ch) favAsk = h.ch else pick = h }, shape = Rnd(12.dp), normal = Color(0x8C14181C), focused = Dawn.pill,
+                            }, onMenu = {
+                                // long OK on a channel: added to Favourites at once; only removing asks
+                                if (h is Hit.Ch) {
+                                    if (Favs.inAny(ctx, h.ch)) favAsk = h.ch
+                                    else { Favs.flip(ctx, h.ch); android.widget.Toast.makeText(ctx, tr("Dodano u favorite"), android.widget.Toast.LENGTH_SHORT).show() }
+                                } else pick = h
+                            }, shape = Rnd(12.dp), normal = Color(0x8C14181C), focused = Dawn.pill,
                                 borderColor = Color(0x1FFFFFFF), zoom = 1f) { _ ->
                                 Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                                     when (h) {
@@ -339,10 +345,15 @@ fun SearchScreen(nav: Nav) {
     favAsk?.let { c ->
         val on = Favs.inAny(ctx, c)
         Popup(c.name, { favAsk = null }, width = 460.dp) {
-            OptionRow(if (on) "Ukloni iz favorita" else "Dodaj u favorite", R.drawable.lc_star) {
-                if (on) Favs.lists(ctx).forEach { l -> if (Favs.contains(l.id, c)) Favs.toggle(l.id, c) } else Favs.flip(ctx, c)
-                favAsk = null
-            }
+            if (on) {
+                T("Ukloniti kanal iz favorita?", 15.sp, C.Soft)
+                OptionRow("Da, ukloni", R.drawable.lc_star, color = C.Danger) {
+                    Favs.lists(ctx).forEach { l -> if (Favs.contains(l.id, c)) Favs.toggle(l.id, c) }
+                    android.widget.Toast.makeText(ctx, tr("Uklonjeno iz favorita"), android.widget.Toast.LENGTH_SHORT).show()
+                    favAsk = null
+                }
+                OptionRow("Ne", R.drawable.lc_x) { favAsk = null }
+            } else OptionRow("Dodaj u favorite", R.drawable.lc_star) { Favs.flip(ctx, c); favAsk = null }
         }
     }
     pick?.let { h -> HitActions(h, nav) { pick = null } }

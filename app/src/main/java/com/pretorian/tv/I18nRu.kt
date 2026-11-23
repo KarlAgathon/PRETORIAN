@@ -2754,4 +2754,6 @@ Pregledaj filmove u ovoj kategoriji.|Просмотреть фильмы это�
 Klub|Клуб
 reprezentacija i lige|сборная и лиги
 nema zakazanih utakmica|нет запланированных матчей
+Promijeni redoslijed|Изменить порядок
+OK uzmi · ▲ ▼ pomjeri · OK spusti|OK взять · ▲ ▼ переместить · OK опустить
 """.trimIndent()

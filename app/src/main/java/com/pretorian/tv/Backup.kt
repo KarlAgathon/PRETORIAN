@@ -266,6 +266,7 @@ object Backup {
 /** Optional: wakes the box for a reminder (works only where Android allows it). */
 class ReminderReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
+        Prefs.ensure(ctx)
         try {
             ctx.startActivity(Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
         } catch (_: Exception) {}

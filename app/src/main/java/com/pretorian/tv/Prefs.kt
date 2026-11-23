@@ -15,6 +15,8 @@ import java.security.SecureRandom
 object Prefs {
     private lateinit var sp: SharedPreferences
     fun init(c: Context) { sp = c.getSharedPreferences("pretorian", Context.MODE_PRIVATE) }
+    /** for receivers and services that can start before the app (e.g. "install finished" after an update) */
+    fun ensure(c: Context) { if (!::sp.isInitialized) init(c.applicationContext) }
 
     fun str(k: String, d: String = ""): String = sp.getString(k, d) ?: d
     fun put(k: String, v: String) = sp.edit().putString(k, v).apply()

@@ -25,6 +25,7 @@ object General {
 /** Opens PRETORIAN when the box starts (only when chosen; some Android TV versions do not allow it). */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
+        Prefs.ensure(ctx)
         if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
         val on = ctx.getSharedPreferences("pretorian", Context.MODE_PRIVATE).getBoolean("gen_boot", false)
         if (!on) return

@@ -694,6 +694,8 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
     var menuUrl by remember { mutableStateOf<String?>(null) }
     var favAsk by remember { mutableStateOf<Channel?>(null) }
     var favMove by remember { mutableStateOf<Channel?>(null) }
+    /** after a channel left the list: the row that took its place gets the focus */
+    var refocusAt by remember { mutableIntStateOf(-1) }
     // spec 09 — Favourites edit mode: long OK enters it, OK picks up / drops a channel, ▲▼ move it (saved at once), Back leaves
     var edit by remember { mutableStateOf(false) }
     var picked by remember { mutableStateOf<String?>(null) }
@@ -775,8 +777,9 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                 onMenu = {
                                     // spec 09: in Favourites long OK only enters edit mode (removing is in the channel options);
                                     // in Recently watched it offers Remove from history / Clear history
+                                    // in Favourites long OK offers: Remove from favourites · Change the order
                                     if (favEditable) {
-                                        if (!edit) { if (list.size > 1) { edit = true; picked = null } else android.widget.Toast.makeText(ctx, tr("Za premještanje trebaju bar dva kanala"), android.widget.Toast.LENGTH_SHORT).show() }
+                                        if (!edit) { menuUrl = ch.url; favAsk = ch }
                                     } else if (g.cat.id == RECENT_GROUP) { menuUrl = ch.url; recentAsk = ch }
                                     else if (isFav || Favs.inAny(ctx, ch)) { menuUrl = ch.url; favAsk = ch }
                                     else {
@@ -811,6 +814,8 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                     }
                 }
                 LaunchedEffect(list) {
+                    if (TvMemory.group?.key == g.key && TvMemory.channel > list.lastIndex) TvMemory.channel = list.lastIndex.coerceAtLeast(0)
+                    if (refocusAt >= 0 && list.isNotEmpty()) { val t = refocusAt.coerceIn(0, list.lastIndex); refocusAt = -1; cWrap.target = t }
                     // back from the player: focus the channel that was playing (once)
                     if (TvMemory.restore && TvMemory.channel >= 0) { TvMemory.restore = false; cWrap.target = TvMemory.channel.coerceAtMost(list.lastIndex) }
                 }
@@ -832,6 +837,19 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                 favAsk?.let { ch ->
                     val inFavList = isFav || isFavGroup(g.cat.id)
                     Popup(ch.name, onDismiss = { favAsk = null }, width = 460.dp) {
+                        if (favEditable) {
+                            // inside a favourites list: no second question, the focus moves to the neighbour
+                            OptionRow("Ukloni iz favorita", R.drawable.lc_star, color = C.Danger) {
+                                val at = list.indexOfFirst { it.url == ch.url }
+                                Favs.toggle(favListId(g.cat.id), ch)
+                                android.widget.Toast.makeText(ctx, tr("Uklonjeno iz favorita"), android.widget.Toast.LENGTH_SHORT).show()
+                                menuUrl = null; favAsk = null; refocusAt = at.coerceAtLeast(0); listRev++
+                            }
+                            if (list.size > 1) OptionRow("Promijeni redoslijed", R.drawable.lc_hand_grab, sub = "OK uzmi · ▲ ▼ pomjeri · OK spusti") {
+                                favAsk = null; edit = true; picked = ch.url
+                            }
+                            return@Popup
+                        }
                         if (inFavList && list.size > 1) OptionRow("Pomjeri", R.drawable.lc_hand_grab, sub = "▲ ▼ pa OK") { favAsk = null; favMove = ch }
                         T("Ukloniti kanal iz favorita?", 15.sp, C.Soft)
                         OptionRow("Da, ukloni", R.drawable.lc_star, color = C.Danger) {
