@@ -74,59 +74,11 @@ fun Modifier.dawnGlass(r: Dp = 18.dp): Modifier = this.clip(Rnd(r)).background(S
 fun Modifier.glassCard(r: Dp = 16.dp): Modifier = this.clip(Rnd(r)).background(Color(0x8C14181C)).border(1.dp, Color(0x1FFFFFFF), Rnd(r))
 
 
-/** Concrete gallery (redesign v2.0): dark raw-concrete room, light shafts from ceiling slits, a soft floor,
- *  and a faint helmet mark. Drawn, not a picture: sharp on every screen. */
+/** The approved PRETORIAN ROOM (spec 06): a static image of the dark concrete room with the helmet, centre-cropped, never stretched. */
 @Composable
 fun DawnBackground() {
-    val grain = remember {
-        val r = java.util.Random(7L)
-        List(900) { floatArrayOf(r.nextFloat(), r.nextFloat(), r.nextFloat()) }
-    }
-    Canvas(Modifier.fillMaxSize()) {
-        val w = size.width; val h = size.height
-        // walls: warm graphite concrete, lighter in the middle of the back wall
-        drawRect(Brush.verticalGradient(0f to Color(0xFF2A2B2D), 0.55f to Color(0xFF1C1D1F), 1f to Color(0xFF0E0F10), startY = 0f, endY = h))
-        drawRect(Brush.radialGradient(listOf(Color(0x33C8CCD2), Color(0x00C8CCD2)), center = Offset(w * 0.58f, h * 0.42f), radius = w * 0.55f))
-        // back wall panel lines (formwork joints)
-        val joint = Color(0x14000000)
-        for (i in 1..5) drawRect(joint, topLeft = Offset(w * (0.18f + i * 0.14f), h * 0.08f), size = Size(1.2f, h * 0.62f))
-        drawRect(joint, topLeft = Offset(w * 0.18f, h * 0.36f), size = Size(w * 0.82f, 1.2f))
-        // concrete grain
-        grain.forEach { g ->
-            drawRect(if (g[2] > 0.5f) Color(0x0AFFFFFF) else Color(0x10000000), topLeft = Offset(g[0] * w, g[1] * h * 0.72f), size = Size(2f + g[2] * 3f, 2f + g[2] * 2f))
-        }
-        // light shafts from ceiling slits
-        listOf(0.46f to 0.10f, 0.66f to 0.08f, 0.84f to 0.07f).forEach { (x, sw) ->
-            val top = w * x; val bw = w * sw
-            drawPath(Path().apply {
-                moveTo(top, 0f); lineTo(top + bw * 0.35f, 0f); lineTo(top + bw * 0.2f + w * 0.08f, h * 0.74f); lineTo(top - w * 0.04f, h * 0.74f); close()
-            }, Brush.verticalGradient(listOf(Color(0x1FEDEFF2), Color(0x05EDEFF2)), startY = 0f, endY = h * 0.74f))
-            drawRect(Color(0x66F4F5F7), topLeft = Offset(top, 0f), size = Size(bw * 0.35f, 3f))
-        }
-        // floor: polished concrete with a soft reflection
-        drawRect(Brush.verticalGradient(0f to Color(0xFF1A1B1C), 0.08f to Color(0xFF232426), 1f to Color(0xFF0A0A0B), startY = h * 0.72f, endY = h),
-            topLeft = Offset(0f, h * 0.72f), size = Size(w, h * 0.28f))
-        drawRect(Color(0x22FFFFFF), topLeft = Offset(0f, h * 0.72f), size = Size(w, 1.2f))
-        listOf(0.5f, 0.7f, 0.88f).forEach { x ->
-            drawRect(Brush.radialGradient(listOf(Color(0x18EDEFF2), Color(0x00EDEFF2)), center = Offset(w * x, h * 0.80f), radius = w * 0.12f))
-        }
-        // faint helmet watermark on the right
-        val u = h / 720f; val cx = w * 0.80f; val cy = h * 0.40f
-        drawPath(Path().apply {
-            moveTo(cx - 70 * u, cy + 90 * u)
-            cubicTo(cx - 95 * u, cy, cx - 85 * u, cy - 110 * u, cx, cy - 120 * u)
-            cubicTo(cx + 85 * u, cy - 110 * u, cx + 95 * u, cy, cx + 70 * u, cy + 90 * u)
-            lineTo(cx + 26 * u, cy + 90 * u); lineTo(cx + 22 * u, cy + 10 * u); lineTo(cx + 8 * u, cy - 10 * u)
-            lineTo(cx + 8 * u, cy + 95 * u); lineTo(cx - 8 * u, cy + 95 * u); lineTo(cx - 8 * u, cy - 10 * u)
-            lineTo(cx - 22 * u, cy + 10 * u); lineTo(cx - 26 * u, cy + 90 * u); close()
-        }, Color(0x0DFFFFFF))
-        drawPath(Path().apply {
-            moveTo(cx - 10 * u, cy - 120 * u); cubicTo(cx - 30 * u, cy - 190 * u, cx + 90 * u, cy - 200 * u, cx + 130 * u, cy - 140 * u)
-            cubicTo(cx + 80 * u, cy - 160 * u, cx + 30 * u, cy - 150 * u, cx + 10 * u, cy - 118 * u); close()
-        }, Color(0x0AFFFFFF))
-        // vignette
-        drawRect(Brush.radialGradient(listOf(Color(0x00000000), Color(0x99000000)), center = Offset(w * 0.55f, h * 0.45f), radius = w * 0.78f))
-    }
+    androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.pretorian_room), null, Modifier.fillMaxSize(),
+        contentScale = androidx.compose.ui.layout.ContentScale.Crop)
 }
 
 private data class DawnItem(val screen: Screen, val icon: Int, val label: String, val badge: Int = 0, val kind: String? = null, val go: (() -> Unit)? = null)

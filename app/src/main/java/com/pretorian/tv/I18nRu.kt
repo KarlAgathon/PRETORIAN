@@ -2631,4 +2631,16 @@ Pusti epizodu od početka|Начать серию сначала
 Pusti sljedeću|Следующая серия
 Otkaži automatsko|Отменить автовоспроизведение
 Veličina teksta, vrijeme i performanse|Размер текста, погода и производительность
+Pretežno vedro|Преимущественно ясно
+Djelimično oblačno|Переменная облачность
+Oblačno|Облачно
+Kiša|Дождь
+Nedavno dodani filmovi|Недавно добавленные фильмы
+Nedavno dodani TV kanali|Недавно добавленные ТВ-каналы
+Vedro|Ясно
+Magla|Туман
+Rosulja|Морось
+Snijeg|Снег
+Pljusak|Ливень
+Grmljavina|Гроза
 """.trimIndent()

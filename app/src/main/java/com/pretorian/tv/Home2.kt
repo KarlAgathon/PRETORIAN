@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -81,6 +83,12 @@ object Weather {
             }
         } catch (_: Exception) { emptyList() }
     }
+    /** WMO weather code → a short condition (Open-Meteo) */
+    fun condition(): String = when (code) {
+        0 -> "Vedro"; 1 -> "Pretežno vedro"; 2 -> "Djelimično oblačno"; 3 -> "Oblačno"; 45, 48 -> "Magla"
+        51, 53, 55, 56, 57 -> "Rosulja"; 61, 63, 65, 66, 67 -> "Kiša"; 71, 73, 75, 77 -> "Snijeg"
+        80, 81, 82 -> "Pljusak"; 85, 86 -> "Snijeg"; 95, 96, 99 -> "Grmljavina"; else -> ""
+    }
     fun icon(): Int = when (code) {
         0, 1 -> R.drawable.lc_sun
         else -> R.drawable.lc_cloud
@@ -113,15 +121,27 @@ fun WeatherPlaceRow() {
     }
 }
 
-/* ------------------------------------------------------------------ Home v2.0 */
+/* ------------------------------------------------------------------ Home (final spec 06) */
+
+/** The element of Home that had the focus: Back from a section, a title or the player lands on it again. */
+object HomeMem { var key: String? = null }
 
 private data class NavItem(val screen: Screen, val icon: Int, val label: String, val badge: Int = 0, val kind: String? = null)
 
-/** Home (spec 01 v2.0): wordmark and one navigation column on the left (nothing below it),
- *  status bar on the right, then Continue Watching (0–3 cards) and Recently Watched TV (whole tiles only). */
+/** One card of the upper section: a title in Continue Watching (with real progress) or a recently added film (no progress). */
+private class HomeCard(val title: String, val series: Boolean, val image: String?, val pr: Progress?, val row: CatalogDb.Row?)
+
+/**
+ * Home (final spec 06): the PRETORIAN ROOM background, a strict two-column layout — wordmark and navigation on the left
+ * (nothing under Settings), status bar, the upper media section (Continue Watching, else Recently added movies; 1 / 2 / 3
+ * cards in one fixed frame) and the TV row (Recently watched TV, else Recently added TV channels; whole tiles only) on the right.
+ * All positions are fractions of the screen, so the alignments hold on every TV.
+ */
 @Composable
 fun HomeV2(nav: Nav) {
     @Suppress("UNUSED_VARIABLE") val r = NewContent.rev + Follow.rev + Watch.rev + Recent.rev
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
     val items = listOf(
         NavItem(Screen.Search, R.drawable.lc_search, "Pretraga"),
         NavItem(Screen.Home, R.drawable.lc_house, "Početna"),
@@ -129,55 +149,148 @@ fun HomeV2(nav: Nav) {
         NavItem(Screen.Movies, R.drawable.lc_film, "Filmovi", NewContent.count("vod"), "vod"),
         NavItem(Screen.Series, R.drawable.lc_layers, "Serije", NewContent.count("series") + Follow.fresh().size, "series"),
         NavItem(Screen.Sports, R.drawable.lc_trophy, "Sport"),
-        NavItem(Screen.Catchup, R.drawable.lc_history, "Catch-up"),
         NavItem(Screen.Settings, R.drawable.lc_settings, "Postavke", if (Updater.available != null) 1 else 0, "system"),
     )
-    val frs = remember { items.map { FocusRequester() } }
+    val frs = remember { HashMap<String, FocusRequester>() }
+    fun fr(k: String) = frs.getOrPut(k) { FocusRequester() }
     var clear by remember { mutableStateOf<NavItem?>(null) }
+    var menu by remember { mutableStateOf<Progress?>(null) }
     DisposableEffect(Unit) { onDispose { Chrome.inRail = false } }
-    LaunchedEffect(Unit) {
-        val i = items.indexOfFirst { it.screen == (Dawn.last ?: Screen.Home) }.let { if (it < 0) 1 else it }
-        delay(120); frs[i].tryFocus()
-    }
     LaunchedEffect(Unit) { Weather.refresh() }
+
+    // ---- upper section: Continue Watching (one card per series), else the newest films of the catalogue
+    val p = remember { Store.active(ctx) }
+    val cont = remember(Watch.rev) {
+        Watch.continueList(ctx).filter { !ContinueHidden.hidden(it.url, it.ts) }.distinctBy { it.series ?: it.url }.take(3)
+    }
+    val newest by produceState(emptyList<CatalogDb.Row>(), p?.id, Import.finished, cont.isEmpty()) {
+        value = if (p == null || cont.isNotEmpty()) emptyList() else withContext(Dispatchers.IO) {
+            val rows = CatalogDb.newest(p.id, "vod", 40)
+            val ok = Parental.catalog(p, "vod", rows.map { JSONObject().put("c", it.c).put("n", it.n).put("id", it.id) }).map { it.optString("id") }.toSet()
+            rows.filter { it.id in ok }.take(3)
+        }
+    }
+    val cards = if (cont.isNotEmpty()) cont.map { HomeCard(it.series ?: it.title, it.series != null, it.poster, it, null) }
+                else newest.map { HomeCard(it.n, false, it.i, null, it) }
+    val upperTitle = if (cont.isNotEmpty()) "Nastavi gledati" else "Nedavno dodani filmovi"
+
+    // ---- lower section: recently watched channels, else the newest channels of the playlist
+    val recent = remember(Recent.rev) { Recent.list().map { it.ch to it.pid }.distinctBy { it.first.url } }
+    val newCh by produceState(emptyList<Channel>(), p?.id, recent.isEmpty()) {
+        value = if (p == null || recent.isNotEmpty()) emptyList() else try {
+            val all = Repo.allChannels(p)
+            // the newest first: the highest stream id; a list without ids (M3U) in reverse import order
+            if (all.isNotEmpty() && all.all { it.id.toLongOrNull() != null }) all.sortedByDescending { it.id.toLong() }.take(16) else all.reversed().take(16)
+        } catch (_: Exception) { emptyList() }
+    }
+    val tiles: List<Pair<Channel, String?>> = if (recent.isNotEmpty()) recent else newCh.map { it to p?.id }
+    val lowerTitle = if (recent.isNotEmpty()) "Nedavno gledani TV kanali" else "Nedavno dodani TV kanali"
+
+    // ---- first focus: the element that had it before, else Home
+    LaunchedEffect(cards.size, tiles.size) {
+        delay(140)
+        val k = HomeMem.key?.takeIf { it in frs } ?: "nav:1"
+        frs[k]?.tryFocus()
+    }
+
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val navW = (maxWidth * 0.17f).coerceIn(200.dp, 300.dp)
-        val mh = maxHeight
-        Row(Modifier.fillMaxSize().padding(start = 40.dp, end = 48.dp, top = 28.dp, bottom = 32.dp), horizontalArrangement = Arrangement.spacedBy(36.dp)) {
-            // left: wordmark + navigation
-            Column(Modifier.width(navW).fillMaxHeight().onFocusChanged { Chrome.inRail = it.hasFocus }) {
-                Box(Modifier.height(46.dp).padding(start = 14.dp), contentAlignment = Alignment.CenterStart) {
-                    T("MEDIA CENTER", 19.sp, Color.White, FontWeight.Bold)  // i18n-ignore
+        val W = maxWidth; val H = maxHeight
+        val navX = W * 0.025f; val navW = W * 0.145f
+        val cx = W * 0.19f; val cw = W * 0.97f - cx
+        val headTop = H * 0.165f; val headH = H * 0.07f
+        val cardsTop = H * 0.245f; val cardsH = H * 0.44f
+        val tvHeadTop = H * 0.715f; val tilesTop = H * 0.785f; val tilesMaxH = H * 0.13f
+        val rowH = H * 0.075f; val rowStep = H * 0.084f
+        val bandTop = H * 0.03f; val bandH = H * 0.09f
+
+        // ---- wordmark (top of the navigation column, centred)
+        Column(Modifier.offset(navX, bandTop).width(navW).height(bandH), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            androidx.compose.material3.Text("MEDIA CENTER", maxLines = 1, softWrap = false,  // i18n-ignore
+                style = androidx.compose.ui.text.TextStyle(fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif, fontWeight = FontWeight.Light,
+                    fontSize = 19.sp, letterSpacing = 4.sp, color = Color(0xFFECEEF1)))
+            Spacer(Modifier.height(6.dp))
+            Box(Modifier.fillMaxWidth(0.9f).height(1.5.dp).background(Brush.horizontalGradient(listOf(Color(0x00FFFFFF), Color(0xE6FFFFFF), Color(0x00FFFFFF)))))
+        }
+        // ---- status bar: same band as the wordmark, its right end (the bell) on the content's right edge
+        HomeStatus(nav, Modifier.offset(cx, bandTop).width(cw).height(bandH))
+
+        // ---- navigation: SEARCH centred on the heading band, HOME's top on the cards' top
+        Column(Modifier.offset(navX, 0.dp).width(navW).fillMaxHeight().onFocusChanged { Chrome.inRail = it.hasFocus }) {
+            items.forEachIndexed { i, it ->
+                val top = if (i == 0) headTop + (headH - rowH) / 2 else cardsTop + rowStep * (i - 1)
+                val prevBottom = if (i == 0) 0.dp else if (i == 1) headTop + (headH - rowH) / 2 + rowH else cardsTop + rowStep * (i - 2) + rowH
+                Spacer(Modifier.height((top - prevBottom).coerceAtLeast(0.dp)))
+                val key = "nav:$i"
+                Focusable(
+                    modifier = Modifier.fillMaxWidth().height(rowH),
+                    onClick = {
+                        HomeMem.key = key
+                        if (it.screen == Screen.Home) return@Focusable
+                        Chrome.inRail = false; Dawn.last = it.screen; nav.root(it.screen)
+                    },
+                    onMenu = if (it.badge > 0 && it.kind != null && it.kind != "system") ({ clear = it }) else null,
+                    onFocus = { HomeMem.key = key },
+                    focusRequester = fr(key), shape = Rnd(12.dp), normal = Color.Transparent, focused = Dawn.pill, zoom = 1f,
+                ) { f ->
+                    val on = f || it.screen == Screen.Home
+                    Row(Modifier.fillMaxSize().padding(start = 14.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Ico(it.icon, 21.dp, if (on) Color.White else Color(0xFFB8BEC6))
+                        T(tr(it.label).uppercase(), 15.sp, if (on) Color.White else Color(0xFFB8BEC6), if (f) FontWeight.SemiBold else FontWeight.Normal,
+                            modifier = Modifier.weight(1f))
+                        if (it.badge > 0) Box(Modifier.size(7.dp).clip(Pill).background(Color.White))
+                    }
+                    // the small white mark near the right inner edge of the focused entry
+                    if (f) Box(Modifier.align(Alignment.CenterEnd).padding(end = 7.dp).width(2.dp).fillMaxHeight(0.42f).clip(Pill).background(Color.White))
                 }
-                Spacer(Modifier.height(28.dp))
-                val rowH = ((mh - 28.dp - 32.dp - 46.dp - 28.dp - 6.dp * (items.size - 1)) / items.size).coerceIn(34.dp, 52.dp)
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items.forEachIndexed { i, it ->
-                        Focusable(
-                            modifier = Modifier.fillMaxWidth().height(rowH),
-                            onClick = {
-                                if (it.screen == Screen.Home) return@Focusable
-                                Chrome.inRail = false; Dawn.last = it.screen; nav.root(it.screen)
-                            },
-                            onMenu = if (it.badge > 0 && it.kind != null && it.kind != "system") ({ clear = it }) else null,
-                            focusRequester = frs[i], shape = Rnd(rowH / 2), normal = Color.Transparent, focused = Dawn.pill, zoom = 1f,
-                        ) { f ->
-                            Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                Ico(it.icon, 24.dp, if (f || it.screen == Screen.Home) Color.White else Silver.TextSoft)
-                                T(it.label, 17.sp, if (f || it.screen == Screen.Home) Color.White else Silver.TextSoft,
-                                    if (f) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
-                                if (it.badge > 0) Box(Modifier.size(8.dp).clip(Pill).background(Color.White))
-                            }
+            }
+        }
+
+        // ---- upper media section (fixed frame; hidden with its heading when there is nothing real to show)
+        if (cards.isNotEmpty()) {
+            Box(Modifier.offset(cx, headTop).width(cw).height(headH), contentAlignment = Alignment.CenterStart) {
+                T(tr(upperTitle).uppercase(), 19.sp, Color(0xFFE6E8EB), FontWeight.Medium)
+            }
+            val gap = 12.dp
+            Row(Modifier.offset(cx, cardsTop).width(cw).height(cardsH), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                val click: (HomeCard) -> Unit = { c -> openHomeCard(ctx, nav, c.pr, c.row) }
+                when (cards.size) {
+                    1 -> HomeMediaCard(cards[0], Modifier.fillMaxSize(), true, "card:0", fr("card:0"), click) { menu = it }
+                    2 -> {
+                        HomeMediaCard(cards[0], Modifier.weight(0.6f).fillMaxHeight(), true, "card:0", fr("card:0"), click) { menu = it }
+                        HomeMediaCard(cards[1], Modifier.weight(0.4f).fillMaxHeight(), false, "card:1", fr("card:1"), click) { menu = it }
+                    }
+                    else -> {
+                        HomeMediaCard(cards[0], Modifier.weight(0.6f).fillMaxHeight(), true, "card:0", fr("card:0"), click) { menu = it }
+                        Column(Modifier.weight(0.4f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(gap)) {
+                            HomeMediaCard(cards[1], Modifier.weight(1f).fillMaxWidth(), false, "card:1", fr("card:1"), click) { menu = it }
+                            HomeMediaCard(cards[2], Modifier.weight(1f).fillMaxWidth(), false, "card:2", fr("card:2"), click) { menu = it }
                         }
                     }
                 }
             }
-            // right: status bar, continue watching, recently watched TV
-            Column(Modifier.weight(1f).fillMaxHeight()) {
-                HomeStatus(nav, Modifier.fillMaxWidth().height(46.dp))
-                Spacer(Modifier.height(28.dp))
-                HomeContent(nav, Modifier.weight(1f).fillMaxWidth())
+        }
+
+        // ---- TV row: whole tiles only, same left and right edges as the cards
+        if (tiles.isNotEmpty()) {
+            Box(Modifier.offset(cx, tvHeadTop).width(cw).height(H * 0.06f), contentAlignment = Alignment.CenterStart) {
+                T(tr(lowerTitle).uppercase(), 17.sp, Color(0xFFE6E8EB), FontWeight.Medium)
+            }
+            val gap = 10.dp
+            val n = ((cw + gap) / (76.dp + gap)).toInt().coerceIn(3, 14).coerceAtMost(tiles.size.coerceAtLeast(1))
+            val slots = ((cw + gap) / (76.dp + gap)).toInt().coerceIn(3, 14)
+            val tw = (cw - gap * (slots - 1)) / slots
+            val th = (tw * 0.7f).coerceAtMost(tilesMaxH)
+            Row(Modifier.offset(cx, tilesTop).width(cw), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                val list = tiles.take(n).map { it.first }
+                tiles.take(n).forEachIndexed { i, (ch, _) ->
+                    val key = "tile:$i"
+                    Focusable(onClick = { HomeMem.key = key; playChannels(nav, list, i) }, onFocus = { HomeMem.key = key }, focusRequester = fr(key),
+                        shape = Rnd(12.dp), normal = Color(0x8C14181C), focused = Color(0xB314181C), focusBorderColor = Color(0xE6FFFFFF),
+                        borderColor = Color(0x1FFFFFFF), zoom = 1.06f, modifier = Modifier.width(tw).height(th)) { _ ->
+                        HomeTile(ch)
+                    }
+                }
             }
         }
     }
@@ -186,92 +299,6 @@ fun HomeV2(nav: Nav) {
             OptionRow("Obriši obavještenja", R.drawable.lc_trash_2) {
                 if (item.kind == "series") { NewContent.clear("series"); Follow.clearFresh() } else if (item.kind != null) NewContent.clear(item.kind)
                 clear = null
-            }
-        }
-    }
-}
-
-/** weather • time • playlist status | bell — aligned to the right edge of the content. */
-@Composable
-private fun HomeStatus(nav: Nav, modifier: Modifier) {
-    val ctx = LocalContext.current
-    var now by remember { mutableStateOf(Date()) }
-    LaunchedEffect(Unit) { while (true) { now = Date(); delay(15_000) } }
-    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.End)) {
-        val dot: @Composable () -> Unit = { T("•", 15.sp, Silver.TextSoft) }
-        Weather.temp?.let { t ->
-            Ico(Weather.icon(), 18.dp, Color.White)
-            T("$t°", 16.sp, Color.White, FontWeight.SemiBold)  // i18n-ignore
-            dot()
-        }
-        T(SimpleDateFormat("HH:mm", Locale.getDefault()).format(now), 16.sp, Color.White, FontWeight.SemiBold)
-        Store.actives(ctx).firstOrNull()?.let { p ->
-            dot()
-            val sec = p.exp.toLongOrNull()?.takeIf { it > 0 }
-            val days = sec?.let { ((it * 1000 - now.time) / 86_400_000L).toInt() }
-            T(p.name, 15.sp, Silver.TextSoft, maxLines = 1, modifier = Modifier.padding(end = 0.dp))
-            if (days != null) {
-                val col = when { days <= 2 -> Silver.Error; days <= 7 -> Silver.Warning; else -> Silver.TextSoft }
-                T(if (days < 0) tr("Istekla") else trf("još %s dana", days), 15.sp, col)
-            }
-        }
-        Box(Modifier.width(1.dp).height(20.dp).background(Silver.Border))
-        NoteBell(nav)
-    }
-}
-
-@Composable
-private fun HomeContent(nav: Nav, modifier: Modifier) {
-    val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val cont = remember(Watch.rev) { Watch.continueList(ctx).filter { !ContinueHidden.hidden(it.url, it.ts) }.take(3) }
-    val recent = remember(Recent.rev) { Recent.list() }
-    var menu by remember { mutableStateOf<Progress?>(null) }
-    BoxWithConstraints(modifier) {
-        val h = maxHeight
-        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            if (cont.isNotEmpty()) {
-                T("Nastavi gledati", 18.sp, Color.White, FontWeight.SemiBold)
-                val cardH = if (recent.isEmpty()) h - 40.dp else (h * 0.56f)
-                Row(Modifier.fillMaxWidth().height(cardH), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    val open: (Progress) -> Unit = { resumeContinue(ctx, nav, it, false) }
-                    when (cont.size) {
-                        1 -> ContinueCard(cont[0], Modifier.fillMaxSize(), true, open) { menu = it }
-                        2 -> {
-                            ContinueCard(cont[0], Modifier.weight(0.6f).fillMaxHeight(), true, open) { menu = it }
-                            ContinueCard(cont[1], Modifier.weight(0.4f).fillMaxHeight(), false, open) { menu = it }
-                        }
-                        else -> {
-                            ContinueCard(cont[0], Modifier.weight(0.6f).fillMaxHeight(), true, open) { menu = it }
-                            Column(Modifier.weight(0.4f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                                ContinueCard(cont[1], Modifier.weight(1f).fillMaxWidth(), false, open) { menu = it }
-                                ContinueCard(cont[2], Modifier.weight(1f).fillMaxWidth(), false, open) { menu = it }
-                            }
-                        }
-                    }
-                }
-                Spacer(Modifier.height(8.dp))
-            }
-            if (recent.isNotEmpty()) {
-                T("Nedavno gledani TV kanali", 18.sp, Color.White, FontWeight.SemiBold)
-                BoxWithConstraints(Modifier.fillMaxWidth()) {
-                    val gap = 16.dp
-                    val tileW = if (cont.isEmpty()) 220.dp else 170.dp
-                    val n = ((maxWidth + gap) / (tileW + gap)).toInt().coerceAtLeast(1)
-                    val w = (maxWidth - gap * (n - 1)) / n
-                    Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-                        recent.take(n).forEach { it ->
-                            Focusable(onClick = { scope.launch { val pid = it.pid; if (pid != null) playInGroup(ctx, nav, it.ch, pid) else playChannels(nav, listOf(it.ch), 0) } },
-                                shape = Rnd(14.dp), normal = Color(0x8C14181C), focused = Color(0x8C14181C), focusBorderColor = Color.White, borderColor = Color(0x1FFFFFFF),
-                                zoom = 1.05f, modifier = Modifier.width(w).height(w * 0.6f)) { f ->
-                                RecentTile(it.ch, f)
-                            }
-                        }
-                    }
-                }
-            }
-            if (cont.isEmpty() && recent.isEmpty()) Box(Modifier.fillMaxSize().glassCard(), contentAlignment = Alignment.Center) {
-                T("Ovdje će se pojaviti ono što gledaš.", 16.sp, Silver.TextSoft)
             }
         }
     }
@@ -286,39 +313,103 @@ private fun HomeContent(nav: Nav, modifier: Modifier) {
             }
         }
     }
+    @Suppress("UNUSED_VARIABLE") val sc = scope
 }
 
+/** OK on a Home card opens the title's own view (never plays at once): a recently added film → its movie view;
+ *  Continue Watching → the movie / series view with Resume (the series view waits on that episode). */
+private fun openHomeCard(ctx: android.content.Context, nav: Nav, pr: Progress?, row: CatalogDb.Row?) {
+    VodMemory.stack.remove("vod"); VodMemory.stack.remove("series")
+    if (row != null) { nav.push(Screen.MovieDetail(Vod(row.id, row.n, row.i, row.r, row.u))); return }
+    pr ?: return
+    val pid = pr.pid.ifBlank { Store.active(ctx)?.id ?: "" }
+    val name = pr.series ?: pr.title
+    val words = Sports.norm(cleanTitle(name).first).split(' ').filter { it.length >= 2 }.take(3)
+    val hits = try { CatalogDb.search(listOf(pid), if (pr.series != null) "series" else "vod", words, 60) } catch (_: Exception) { emptyList() }
+    if (pr.series != null) {
+        val h = hits.firstOrNull { it.n == pr.series } ?: hits.firstOrNull { cleanTitle(it.n).first.equals(cleanTitle(pr.series).first, true) }
+        if (h != null) {
+            if (pr.season != null && pr.episode != null) { SeriesJump.id = h.id; SeriesJump.season = pr.season; SeriesJump.num = pr.episode }
+            nav.push(Screen.SeriesDetail(SeriesItem(h.id, h.n, h.i, null, h.r))); return
+        }
+    } else {
+        val h = hits.firstOrNull { it.u == pr.url } ?: hits.firstOrNull { it.n == pr.title }
+        if (h != null) { nav.push(Screen.MovieDetail(Vod(h.id, h.n, h.i, h.r, h.u.ifBlank { pr.url }))); return }
+    }
+    // the title is no longer in the catalogue: resume it directly
+    resumeContinue(ctx, nav, pr, false)
+}
+
+/** weather icon + temperature + condition • time • Playlist: status (Exp. …) | bell */
 @Composable
-private fun RecentTile(ch: Channel, f: Boolean) {
-    var failed by remember(ch.logo) { mutableStateOf(ch.logo.isNullOrBlank()) }
-    Box(Modifier.fillMaxSize().padding(14.dp), contentAlignment = Alignment.Center) {
-        if (!failed) AsyncImage(model = ch.logo, contentDescription = ch.name, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(), onError = { failed = true })
-        else T(shortName(ch.name), 18.sp, if (f) Color.White else Silver.TextSoft, FontWeight.Bold, maxLines = 2)
+private fun HomeStatus(nav: Nav, modifier: Modifier) {
+    val ctx = LocalContext.current
+    var now by remember { mutableStateOf(Date()) }
+    LaunchedEffect(Unit) { while (true) { now = Date(); delay(15_000) } }
+    val c = Color(0xFFDDE1E6)
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)) {
+        val dot: @Composable () -> Unit = { T("•", 14.sp, Silver.TextSoft) }  // i18n-ignore
+        Weather.temp?.let { t ->
+            Ico(Weather.icon(), 18.dp, Color.White)
+            T(t.toString() + "°C " + tr(Weather.condition()), 14.sp, c, maxLines = 1)
+            dot()
+        }
+        val h24 = android.text.format.DateFormat.is24HourFormat(ctx)
+        T(SimpleDateFormat(if (h24) "HH:mm" else "h:mm a", Locale.getDefault()).format(now), 14.sp, c)  // i18n-ignore
+        Store.actives(ctx).firstOrNull()?.let { p ->
+            dot()
+            val sec = p.exp.toLongOrNull()?.takeIf { it > 0 }
+            val expired = sec != null && sec * 1000 < now.time
+            val exp = sec?.let { SimpleDateFormat("MMMM yyyy", Locale(Look.lang)).format(Date(it * 1000)) }  // i18n-ignore
+            val state = tr(if (expired) "Istekla" else "Aktivna")
+            T(tr("Playlista") + ": " + state + (if (exp != null && !expired) " (" + trf("ističe %s", exp) + ")" else ""), 14.sp,
+                if (expired) Silver.Error else c, maxLines = 1)
+        }
+        Box(Modifier.padding(horizontal = 4.dp).width(1.dp).height(22.dp).background(Color(0x33FFFFFF)))
+        NoteBell(nav)
     }
 }
 
-/** "HRT 1 HD" → "HRT 1"; the short channel name in capitals for a tile without a logo. */
+@Composable
+private fun HomeTile(ch: Channel) {
+    var failed by remember(ch.logo) { mutableStateOf(ch.logo.isNullOrBlank()) }
+    Box(Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
+        if (!failed) AsyncImage(model = ch.logo, contentDescription = ch.name, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(), onError = { failed = true })
+        // no logo: the channel's name in clean white text (never a broken image or a TV icon)
+        else T(ch.name.substringAfterLast('|').trim().ifBlank { ch.name }, 12.sp, Color.White, FontWeight.SemiBold, maxLines = 2, align = androidx.compose.ui.text.style.TextAlign.Center)
+    }
+}
+
+/** "HRT 1 HD" → "HRT 1"; the short channel name in capitals. */
 fun shortName(n: String): String = n.substringAfterLast('|').substringAfterLast(':').trim()
     .replace(Regex("\\b(FHD|UHD|HD|SD|4K|HEVC|H265|RAW)\\b", RegexOption.IGNORE_CASE), "").trim().uppercase().ifBlank { "TV" }
 
 @Composable
-private fun ContinueCard(pr: Progress, modifier: Modifier, big: Boolean, onOpen: (Progress) -> Unit, onMenu: (Progress) -> Unit) {
-    val series = pr.series != null
-    val name = cleanTitle(pr.series ?: pr.title).first
-    val backdrop by produceState<String?>(null, pr.url) { value = try { Tmdb.find(pr.series ?: pr.title, series)?.backdrop } catch (_: Exception) { null } }
-    Focusable(onClick = { onOpen(pr) }, onMenu = { onMenu(pr) }, shape = Rnd(16.dp), normal = Color(0x8C14181C), focused = Color(0x8C14181C),
-        focusBorderColor = Color.White, borderColor = Color(0x1FFFFFFF), zoom = 1.03f, modifier = modifier) { _ ->
-        OnyxImage(backdrop ?: pr.poster, "cwh:" + pr.url + (backdrop != null), Modifier.fillMaxSize(), maxW = if (big) 1280 else 780)
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.35f to Color(0x00000000), 1f to Color(0xE6000000))))
-        Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            T(name, if (big) 22.sp else 17.sp, Color.White, FontWeight.Bold, maxLines = 1)
-            val line = listOfNotNull(
-                if (pr.season != null && pr.episode != null) "S%02dE%02d".format(pr.season, pr.episode) else null,  // i18n-ignore
-                if (pr.dur > 0) trf("još %s min", ((pr.dur - pr.pos) / 60_000).toInt().coerceAtLeast(1)) else null,
-            ).joinToString("  •  ")  // i18n-ignore
-            if (line.isNotBlank()) T(line, 14.sp, Silver.TextSoft, maxLines = 1)
-            Box(Modifier.fillMaxWidth().height(3.dp).clip(Rnd(2.dp)).background(Color(0x40FFFFFF))) {
-                Box(Modifier.fillMaxWidth(pr.fraction.coerceAtLeast(0.02f)).fillMaxHeight().background(Color.White))
+private fun HomeMediaCard(c: HomeCard, modifier: Modifier, big: Boolean, memKey: String, fr: FocusRequester, onOpen: (HomeCard) -> Unit, onMenu: (Progress) -> Unit) {
+    val pr = c.pr
+    val meta by produceState<Meta?>(null, c.title) { value = try { Tmdb.find(c.title, c.series) } catch (_: Exception) { null } }
+    val (name, y0) = cleanTitle(c.title)
+    val year = meta?.year?.take(4) ?: y0
+    Focusable(onClick = { HomeMem.key = memKey; onOpen(c) }, onMenu = if (pr != null) ({ onMenu(pr) }) else null,
+        onFocus = { HomeMem.key = memKey }, focusRequester = fr, shape = Rnd(16.dp), normal = Color(0x8C14181C), focused = Color(0x8C14181C),
+        focusBorderColor = Color(0xF2FFFFFF), borderColor = Color(0x33FFFFFF), zoom = 1.03f, modifier = modifier) { _ ->
+        OnyxImage(meta?.backdrop ?: c.image, "hm:" + c.title + (meta?.backdrop != null), Modifier.fillMaxSize(), maxW = if (big) 1280 else 780)
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.40f to Color(0x00000000), 1f to Color(0xD9000000))))
+        Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = if (big) 22.dp else 16.dp, vertical = if (big) 18.dp else 12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            T((titleCase(meta?.title ?: name) + (if (year != null && !c.series) " ($year)" else "")).uppercase(), if (big) 22.sp else 16.sp, Color.White, FontWeight.Medium, maxLines = 1)
+            val rating = (meta?.tmdbRating ?: c.row?.r?.replace(',', '.')?.toDoubleOrNull())?.takeIf { it > 0 }?.let { "★ " + String.format(Locale.US, "%.1f", it) }  // i18n-ignore
+            val genre = translated(meta?.genres)?.split(", ")?.take(2)?.joinToString(" / ")
+            val line = if (c.series) listOfNotNull(
+                if (pr?.season != null && pr.episode != null) "S%dE%d".format(pr.season, pr.episode) else null, if (big) genre else null, rating)  // i18n-ignore
+            else listOfNotNull(if (big) year else null, if (big) meta?.runtime else null, genre, rating)
+            if (line.isNotEmpty()) T(line.joinToString(" • "), if (big) 14.sp else 12.sp, Color(0xFFDDE1E6), maxLines = 1)  // i18n-ignore
+            // real progress only (Continue Watching); recently added films have none
+            if (pr != null && pr.dur > 0) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 4.dp)) {
+                Box(Modifier.weight(1f).height(3.dp).clip(Rnd(2.dp)).background(Color(0x40FFFFFF))) {
+                    Box(Modifier.fillMaxWidth(pr.fraction.coerceAtLeast(0.02f)).fillMaxHeight().background(Color(0xFFF2F3F5)))
+                }
+                T(trf("još %s min", ((pr.dur - pr.pos) / 60_000).toInt().coerceAtLeast(1)), 12.sp, Color(0xFFDDE1E6))
             }
         }
     }

@@ -636,3 +636,5 @@ bd
 ps
 pl
 subpick_film_
+h:mm a
+°C 

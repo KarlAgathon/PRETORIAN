@@ -161,6 +161,18 @@ object CatalogDb {
         }
     }
 
+    /** the newest titles of a playlist: the provider gives no reliable "added" date in the catalog, so the
+     *  documented fallback is the highest stream id first (Xtream gives new titles ever higher ids) */
+    fun newest(pl: String, kind: String, limit: Int): List<Row> = try {
+        val d = db()
+        if (d == null) emptyList() else d.rawQuery("SELECT pl, id, c, n, i, r, u, k FROM items WHERE pl=? AND kind=? ORDER BY CAST(id AS INTEGER) DESC LIMIT $limit", arrayOf(pl, kind)).use { c -> // i18n-ignore
+            val out = ArrayList<Row>()
+            while (c.moveToNext()) out += Row(c.getString(0) ?: "", c.getString(1) ?: "", c.getString(2) ?: "", c.getString(3) ?: "",
+                c.getString(4)?.ifBlank { null }, c.getString(5)?.ifBlank { null }, c.getString(6) ?: "", c.getString(7) ?: "")
+            out
+        }
+    } catch (_: Throwable) { emptyList() }
+
     /** fills the search key of rows saved by older versions, a little at a time, never while the app starts */
     fun backfill() {
         bg.launch {

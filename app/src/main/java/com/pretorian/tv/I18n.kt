@@ -510,8 +510,8 @@ Ne radi na svim uređajima. Ako je box potpuno ugašen, podsjetnik ne može doć
 Tvoji podsjetnici|Your reminders|Deine Erinnerungen|Tvoji podsjetnici|Твоји подсетници|Твоите напомняния|Mementourile tale|Hatırlatıcıların|I tuoi promemoria|تذكيراتك
 Nema podsjetnika.|No reminders.|Keine Erinnerungen.|Nema podsjetnika.|Нема подсетника.|Няма напомняния.|Niciun memento.|Hatırlatıcı yok.|Nessun promemoria.|لا توجد تذكيرات.
 Obriši|Delete|Löschen|Obriši|Обриши|Изтрий|Șterge|Sil|Elimina|حذف
-Backup je spremljen|Backup saved|Backup gespeichert|Sigurnosna kopija je spremljenaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|Бекап је сачуван|Копието е запазено|Backup salvat|Yedek kaydedildi|Backup salvato|تم حفظ النسخة
-Backup nije spremljen|Backup not saved|Backup nicht gespeichert|Sigurnosna kopija nije spremljenaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|Бекап није сачуван|Копието не е запазено|Backup nesalvat|Yedek kaydedilmedi|Backup non salvato|لم تُحفظ النسخة
+Backup je spremljen|Backup saved|Backup gespeichert|Sigurnosna kopija je spremljenaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|Бекап је сачуван|Копието е запазено|Backup salvat|Yedek kaydedildi|Backup salvato|تم حفظ النسخة
+Backup nije spremljen|Backup not saved|Backup nicht gespeichert|Sigurnosna kopija nije spremljenaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|Бекап није сачуван|Копието не е запазено|Backup nesalvat|Yedek kaydedilmedi|Backup non salvato|لم تُحفظ النسخة
 Sve je vraćeno. PRETORIAN se ponovo pokreće.|Everything restored. PRETORIAN restarts.|Alles wiederhergestellt. PRETORIAN startet neu.|Sve je vraćeno. PRETORIAN se ponovo pokreće.|Све је враћено. PRETORIAN се поново покреће.|Всичко е възстановено. PRETORIAN се рестартира.|Totul a fost restaurat. PRETORIAN repornește.|Her şey geri yüklendi. PRETORIAN yeniden başlıyor.|Tutto ripristinato. PRETORIAN si riavvia.|تمت الاستعادة. يُعاد تشغيل PRETORIAN.
 Vraćanje nije uspjelo|Restore failed|Wiederherstellung fehlgeschlagen|Vraćanje nije uspjelo|Враћање није успело|Възстановяването не успя|Restaurarea a eșuat|Geri yükleme başarısız|Ripristino non riuscito|فشلت الاستعادة
 Backup i vraćanje|Backup and restore|Sichern und wiederherstellen|Sigurnosna kopija i vraćanje|Бекап и враћање|Резервно копие|Backup și restaurare|Yedekle ve geri yükle|Backup e ripristino|النسخ والاستعادة
@@ -2531,6 +2531,18 @@ Pusti epizodu od početka|Restart episode|Folge neu starten|Pokreni epizodu od p
 Pusti sljedeću|Play next|Nächste abspielen|Pokreni sljedeću|Пусти следећу|Пусни следващия|Redă următorul|Sonrakini oynat|Riproduci successivo|تشغيل التالي
 Otkaži automatsko|Cancel autoplay|Autoplay abbrechen|Otkaži automatsko|Откажи аутоматско|Откажи автоматичното|Anulează redarea automată|Otomatik oynatmayı iptal et|Annulla riproduzione automatica|إلغاء التشغيل التلقائي
 Veličina teksta, vrijeme i performanse|Text size, weather and performance|Textgröße, Wetter und Leistung|Veličina teksta, vrijeme i performanse|Величина текста, време и перформансе|Размер на текста, време и производителност|Mărimea textului, vremea și performanță|Yazı boyutu, hava durumu ve performans|Dimensione del testo, meteo e prestazioni|حجم النص والطقس والأداء
+Pretežno vedro|Mostly clear|Überwiegend klar|Pretežno vedro|Претежно ведро|Предимно ясно|Predominant senin|Çoğunlukla açık|Prevalentemente sereno|صافٍ في الغالب
+Djelimično oblačno|Partly cloudy|Teilweise bewölkt|Djelomično oblačno|Делимично облачно|Частично облачно|Parțial noros|Parçalı bulutlu|Parzialmente nuvoloso|غائم جزئيًا
+Oblačno|Cloudy|Bewölkt|Oblačno|Облачно|Облачно|Noros|Bulutlu|Nuvoloso|غائم
+Kiša|Rain|Regen|Kiša|Киша|Дъжд|Ploaie|Yağmur|Pioggia|مطر
+Nedavno dodani filmovi|Recently added movies|Kürzlich hinzugefügte Filme|Nedavno dodani filmovi|Недавно додати филмови|Наскоро добавени филми|Filme adăugate recent|Son eklenen filmler|Film aggiunti di recente|أفلام أضيفت مؤخرًا
+Nedavno dodani TV kanali|Recently added TV channels|Kürzlich hinzugefügte TV-Sender|Nedavno dodani TV kanali|Недавно додати ТВ канали|Наскоро добавени ТВ канали|Canale TV adăugate recent|Son eklenen TV kanalları|Canali TV aggiunti di recente|قنوات تلفزيونية أضيفت مؤخرًا
+Vedro|Clear|Klar|Vedro|Ведро|Ясно|Senin|Açık|Sereno|صافٍ
+Magla|Fog|Nebel|Magla|Магла|Мъгла|Ceață|Sis|Nebbia|ضباب
+Rosulja|Drizzle|Nieselregen|Rosulja|Росуља|Ръмеж|Burniță|Çisenti|Pioviggine|رذاذ
+Snijeg|Snow|Schnee|Snijeg|Снег|Сняг|Ninsoare|Kar|Neve|ثلج
+Pljusak|Showers|Schauer|Pljusak|Пљусак|Превалявания|Averse|Sağanak|Rovesci|زخات
+Grmljavina|Thunderstorm|Gewitter|Grmljavina|Грмљавина|Гръмотевична буря|Furtună|Gök gürültülü fırtına|Temporale|عاصفة رعدية
 Nepoznat jezik|Unknown language|Unbekannte Sprache|Nepoznat jezik|Непознат језик|Неизвестен език|Limbă necunoscută|Bilinmeyen dil|Lingua sconosciuta|لغة غير معروفة
 Prikaz liste kanala|Channel list style|Senderliste-Ansicht|Prikaz popisa kanala|Приказ листе канала|Изглед на списъка|Stil listă canale|Kanal listesi görünümü|Stile elenco canali|نمط قائمة القنوات
 u TV-u i u listi u playeru|in TV and in the list in the player|im TV und in der Liste im Player|u TV-u i na popisu u playeru|у ТВ-у и у листи у плејеру|в ТВ и в списъка в плейъра|în TV și în lista din player|TV'de ve oynatıcıdaki listede|in TV e nell'elenco del player|في التلفاز وفي قائمة المشغل
