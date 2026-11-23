@@ -54,7 +54,7 @@ internal fun sportsFilter(event: SportEvent, teams: Set<String>, countries: Set<
     (leagues.isEmpty() || event.league in leagues)
 
 private const val ALL_MATCHES = "all"
-private const val CACHED_SCORE = "cached"
+internal const val CACHED_SCORE = "cached"
 
 /** Your teams (long OK on a match adds them): shown on top of Sport, and a goal of theirs pops up anywhere in the app. */
 object MyTeams {

@@ -2672,4 +2672,83 @@ Uređivanje · OK uzmi kanal · Back gotovo|Редактирование · OK �
 ▲▼ pomjeri · OK spusti|▲▼ переместить · OK отпустить
 Za premještanje trebaju bar dva kanala|Для перемещения нужно не менее двух каналов
 Ukloni iz historije|Удалить из истории
+%s h %s min|%s ч %s мин
+U toku · gledaj od početka|В эфире · смотреть с начала
+Pregledaj arhivu|Открыть архив
+NASTAVI GLEDATI|ПРОДОЛЖИТЬ ПРОСМОТР
+Započetih emisija: %s|Начатых передач: %s
+Emisije iz arhive koje nisi dogledao, od mjesta gdje si stao.|Недосмотренные передачи из архива, с места остановки.
+IZABRANI KANAL|ВЫБРАННЫЙ КАНАЛ
+Arhiva dostupna · %s dana|Архив доступен · %s дн.
+Lista emisija trenutno nije dostupna.|Список передач сейчас недоступен.
+Nema emisija u arhivi|В архиве нет передач
+Catch Up|Catch Up
+Catch-Up nije dostupan za ovaj kanal|Catch-Up недоступен для этого канала
+Sportovi, timovi, takmičenja i obavještenja|Виды спорта, команды, турниры и уведомления
+Šta pratiš u Sportu i kako ti javlja|Что ты отслеживаешь в Спорте и как получаешь уведомления
+glavni filter, više izbora|главный фильтр, несколько вариантов
+traži i dodaj (prednost na listi)|найти и добавить (приоритет в списке)
+Reprezentacija|Сборная
+traži i dodaj reprezentacije|найти и добавить сборные
+traži i dodaj klubove i timove|найти и добавить клубы и команды
+traži i dodaj lige i turnire|найти и добавить лиги и турниры
+Obavještenja · praćenje utakmica|Уведомления · отслеживание матчей
+Trajanje prikaza|Длительность показа
+Ne uznemiravaj|Не беспокоить
+nijedno obavještenje o utakmicama|без уведомлений о матчах
+Prikaži tokom|Показывать во время
+Događaji|События
+Pretraga trenutno nije dostupna|Поиск сейчас недоступен
+Traži…|Поиск…
+Nema rezultata!|Нет результатов!
+Upiši ime i izaberi rezultat.|Введи название и выбери результат.
+IZABRANO|ВЫБРАНО
+Nijedan sport nije izabran|Не выбран ни один вид спорта
+Izaberi sportove u Postavke › Sport|Выбери виды спорта в Настройки › Спорт
+Trenutno nema utakmica|Сейчас нет матчей
+Za izabrane sportove danas i narednih dana nema utakmica|Для выбранных видов спорта сегодня и в ближайшие дни нет матчей
+UTAKMICE|МАТЧИ
+uživo i uskoro|в прямом эфире и скоро
+Ne prati ovu utakmicu|Не следить за матчем
+Kraj|Конец
+Žuti karton|Жёлтая карточка
+Penal|Пенальти
+Gol (penal)|Гол (пенальти)
+Autogol|Автогол
+GLEDAJ OVU UTAKMICU|СМОТРЕТЬ ЭТОТ МАТЧ
+U tvojoj listi: %s|В твоём списке: %s
+još: %s|ещё: %s
+Nije pronađen kanal s prenosom|Канал с трансляцией не найден
+U tvojoj listi kanala trenutno nema potvrđenog prenosa ove utakmice.|В твоём списке каналов сейчас нет подтверждённой трансляции этого матча.
+MOGUĆI PRENOS · NIJE POTVRĐENO|ВОЗМОЖНАЯ ТРАНСЛЯЦИЯ · НЕ ПОДТВЕРЖДЕНО
+PRENOSE I · NISU U TVOJOJ LISTI|ТАКЖЕ ТРАНСЛИРУЮТ · НЕТ В ТВОЁМ СПИСКЕ
+STATISTIKA|СТАТИСТИКА
+DOGAĐAJI|СОБЫТИЯ
+GOL!|ГОЛ!
+GOL! (penal)|ГОЛ! (пенальти)
+ŽUTI KARTON|ЖЁЛТАЯ КАРТОЧКА
+PENAL|ПЕНАЛЬТИ
+POLUVRIJEME|ПЕРЕРЫВ
+KRAJ UTAKMICE|КОНЕЦ МАТЧА
+SPORT · PRAĆENJE UTAKMICE|СПОРТ · ОТСЛЕЖИВАНИЕ МАТЧА
+Kartoni (žuti / crveni)|Карточки (жёлтые / красные)
+Posjed lopte|Владение мячом
+Udarci u okvir|Удары в створ
+Udarci|Удары
+Korneri|Угловые
+Prekršaji|Фолы
+Ofsajdi|Офсайды
++%s novih|+%s новых
+Pregledaj kategoriju|Открыть категорию
+Naslova: %s|Названий: %s
+KATEGORIJA|КАТЕГОРИЯ
+Serije koje si počeo gledati, od mjesta gdje si stao.|Сериалы, которые ты начал смотреть, с места остановки.
+Filmovi koje si počeo gledati, od mjesta gdje si stao.|Фильмы, которые ты начал смотреть, с места остановки.
+Najnovije serije u tvojoj playlisti.|Новейшие сериалы в твоём плейлисте.
+Najnoviji filmovi u tvojoj playlisti.|Новейшие фильмы в твоём плейлисте.
+Filmovi koji su sada u kinima, a nalaze se u tvojoj playlisti.|Фильмы, которые сейчас в кино и есть в твоём плейлисте.
+Serije po streaming servisima, iz tvoje playliste.|Сериалы по стриминговым сервисам из твоего плейлиста.
+Naslovi koje si sačuvao za kasnije.|Названия, сохранённые на потом.
+Pregledaj serije u ovoj kategoriji.|Просмотреть сериалы этой категории.
+Pregledaj filmove u ovoj kategoriji.|Просмотреть фильмы этой категории.
 """.trimIndent()
