@@ -487,7 +487,21 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             }
         }
         player.addListener(l); player.addAnalyticsListener(a)
+        // owner: no background play. Home / another app → the position is saved and playback stops at once;
+        // back in the app: live TV starts again on the same channel, a film or episode waits paused where it was.
+        val life = (ctx as? androidx.lifecycle.LifecycleOwner)?.lifecycle
+        val lo = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            try {
+                when (e) {
+                    androidx.lifecycle.Lifecycle.Event.ON_STOP -> { saveProgress(); player.pause(); if (s.live) player.stop() }
+                    androidx.lifecycle.Lifecycle.Event.ON_START -> if (s.live && player.playbackState == Player.STATE_IDLE && player.mediaItemCount > 0) { player.prepare(); player.play() }
+                    else -> {}
+                }
+            } catch (_: Exception) {}
+        }
+        life?.addObserver(lo)
         onDispose {
+            life?.removeObserver(lo)
             mediaRequest.begin()
             saveProgress(); player.removeListener(l); player.removeAnalyticsListener(a); player.release()
             Afr.reset(ctx as? android.app.Activity); AudioDelay.us = 0L
