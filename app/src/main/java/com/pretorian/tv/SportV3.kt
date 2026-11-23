@@ -86,29 +86,39 @@ object SportPrefs {
     fun eventOn(k: String) = k in csv("sp3_events", "goal,cards,pen,ht,ft")
     fun setEvents(s: Set<String>) { Prefs.put("sp3_events", if (s.isEmpty()) "-" else s.joinToString(",")); rev++ }
 
-    private fun changed() { rev++; Sports.lastCombined.clear(); SportCache.clear() }
+    private fun changed() { rev++; Sports.lastCombined.clear(); SportCache.clear(); FavNext.clear() }
 
     /** competitions that are fetched: the big ones of the chosen sports plus everything the preferences point at */
     fun leagues(): List<League> {
         val sp = sports()
         val comps = comps().toSet(); val cs = countries().toSet()
         val favL = favs().filter { it.sport in sp }.map { it.league }.toSet()
-        val nat = nations().any { it.sport in sp }
+        val favC = favs().mapNotNull { it.id.removePrefix("cc:").takeIf { _ -> it.id.startsWith("cc:") } }.toSet()
+        val nat = nations().any { it.sport in sp } || favC.isNotEmpty() || favs().any { it.league in NATIONAL }
         return Sports.LEAGUES.filter { it.sport in sp }.filter { l ->
-            l.abbr in Sports.BIG || l.abbr in comps || countryOf(l.path) in cs || l.abbr in favL || (nat && l.abbr in NATIONAL)
+            l.abbr in Sports.BIG || l.abbr in comps || countryOf(l.path) in cs || countryOf(l.path) in favC || l.abbr in favL || (nat && l.abbr in NATIONAL)
         }
     }
 
-    /** lower = higher on the dashboard: your favourites, national teams, competitions, countries; preference, never exclusion */
-    fun rank(e: SportEvent): Int {
+    /** Strict order on the dashboard (owner's rule): 0 favourites · 1 followed matches · 2 national teams · 3 competitions ·
+     *  4 countries · 5 everything else. A preference, never an exclusion. */
+    fun tier(e: SportEvent): Int {
         val ids = setOfNotNull(e.home?.id?.ifBlank { null }, e.away?.id?.ifBlank { null })
-        var r = 0
-        if (favs().any { it.sport == e.sport && it.id in ids }) r -= 400
-        if (e.leagueAbbr in NATIONAL && nations().any { it.sport == e.sport && it.id in ids }) r -= 300
-        if (e.leagueAbbr in comps()) r -= 200
-        if (e.country in countries() || countries().any { c -> countryName(c, Locale.ENGLISH).let { n -> n.equals(e.home?.name, true) || n.equals(e.away?.name, true) } }) r -= 100
-        return r
+        val names = setOfNotNull(e.home?.name, e.away?.name).map { nameKey(it) }.toSet()
+        val fav = favs().filter { it.sport == e.sport }
+        if (fav.any { f ->
+                if (f.id.startsWith("cc:")) { val c = f.id.removePrefix("cc:"); countryKey(c) in names || e.country == c }
+                else f.id in ids || (f.league in NATIONAL && nameKey(f.name) in names)
+            }) return 0
+        if (MatchFollow.has(e.id)) return 1
+        if (nations().any { n -> n.sport == e.sport && (n.id in ids || nameKey(n.name) in names) }) return 2
+        if (e.leagueAbbr in comps()) return 3
+        if (countries().any { c -> e.country == c || countryKey(c) in names }) return 4
+        return 5
     }
+    /** "Bosnia-Herzegovina" and "Bosnia and Herzegovina" are the same team */
+    fun nameKey(s: String) = Sports.norm(s).replace(" and ", " ").replace("&", " ").replace(Regex("[^a-z]"), "")
+    fun countryKey(code: String) = nameKey(countryName(code, Locale.ENGLISH))
     fun isNational(abbr: String) = abbr in NATIONAL
 }
 
@@ -143,6 +153,41 @@ object SportCatalog {
         val sem = kotlinx.coroutines.sync.Semaphore(4)
         ls.map { l -> async { sem.acquire(); try { try { teams(l) } catch (e: Exception) { emptyList() } } finally { sem.release() } } }.awaitAll().flatten()
     }
+}
+
+/** The next matches of your favourites and national teams, even weeks ahead (each team's own schedule), kept for 6 hours. */
+object FavNext {
+    private var at = 0L; private var key = ""
+    private var cached: Pair<List<SportEvent>, List<String>> = emptyList<SportEvent>() to emptyList()
+    suspend fun load(): Pair<List<SportEvent>, List<String>> {
+        val sp = SportPrefs.sports()
+        val picks = (SportPrefs.favs() + SportPrefs.nations()).filter { it.sport in sp }.distinctBy { it.sport + it.id }
+        val k = picks.joinToString { it.sport + it.id } + sp
+        if (k == key && System.currentTimeMillis() - at < 6 * 3600_000L) return cached
+        val natL = Sports.LEAGUES.filter { SportPrefs.isNational(it.abbr) }
+        val natTeams = if (picks.any { it.id.startsWith("cc:") }) SportCatalog.many(natL) else emptyList()
+        val now = System.currentTimeMillis()
+        val out = ArrayList<SportEvent>(); val none = ArrayList<String>()
+        coroutineScope {
+            picks.map { t -> async {
+                val evs = try {
+                    when {
+                        t.id.startsWith("cc:") -> {
+                            val team = natTeams.firstOrNull { SportPrefs.nameKey(it.name) == SportPrefs.countryKey(t.id.removePrefix("cc:")) }
+                            if (team == null) emptyList() else natL.flatMap { Sports.teamNext(it, team.id) }
+                        }
+                        SportPrefs.isNational(t.league) -> natL.flatMap { Sports.teamNext(it, t.id) }
+                        else -> Sports.LEAGUES.firstOrNull { it.abbr == t.league }?.let { Sports.teamNext(it, t.id) } ?: emptyList()
+                    }
+                } catch (e: Exception) { emptyList() }
+                val next = evs.filter { it.state != "post" && it.start > now - 3 * 3600_000L }.distinctBy { it.id }.sortedBy { it.start }.take(2)
+                t.name to next
+            } }.map { it.await() }.forEach { (n, l) -> if (l.isEmpty()) none += n else out += l }
+        }
+        cached = out.distinctBy { it.id } to none; key = k; at = System.currentTimeMillis()
+        return cached
+    }
+    fun clear() { key = "" }
 }
 
 /* ============================================================== Settings › Sport */
@@ -198,8 +243,15 @@ private fun SportPicker(kind: String, onClose: () -> Unit) {
                     "comp" -> Sports.LEAGUES.filter { it.sport in sp }.map { Opt(it.abbr, it.name, SportPrefs.SUPPORTED.firstOrNull { s -> s.first == it.sport }?.second?.let { s -> tr(s) }) }
                     "nation" -> if ("football" !in sp) emptyList() else
                         SportCatalog.many(Sports.LEAGUES.filter { it.sport == "football" && SportPrefs.isNational(it.abbr) }).distinctBy { it.id }.map { Opt(it.id, it.name, null, it) }
-                    else -> SportCatalog.many(Sports.LEAGUES.filter { it.sport in sp && !SportPrefs.isNational(it.abbr) && it.sport != "f1" && it.sport != "tennis" })
-                        .distinctBy { it.sport + it.id }.map { t -> Opt(t.id, t.name, Sports.LEAGUES.firstOrNull { it.abbr == t.league }?.name, t) }
+                    else -> {
+                        val clubs = SportCatalog.many(Sports.LEAGUES.filter { it.sport in sp && !SportPrefs.isNational(it.abbr) && it.sport != "f1" && it.sport != "tennis" })
+                            .distinctBy { it.sport + it.id }.map { t -> Opt(t.id, t.name, (Sports.LEAGUES.firstOrNull { it.abbr == t.league }?.name ?: "") + " · " + tr("Klub"), t) }
+                        val nats = if ("football" !in sp) emptyList() else SportCatalog.many(Sports.LEAGUES.filter { it.sport == "football" && SportPrefs.isNational(it.abbr) })
+                            .distinctBy { it.id }.map { Opt(it.id, it.name, tr("Reprezentacija"), it) }
+                        val lands = if ("football" !in sp) emptyList() else Locale.getISOCountries().map { c -> c.lowercase() }.map { c ->
+                            Opt("cc:$c", countryName(c), tr("Država") + " · " + tr("reprezentacija i lige"), TeamPick("cc:$c", countryName(c), null, "football", "")) }
+                        lands + nats + clubs
+                    }
                 }
             })
         } catch (e: Exception) { Load.Err(e.message ?: tr("Pretraga trenutno nije dostupna")) }
@@ -303,8 +355,11 @@ fun SportDashboard(nav: Nav) {
         val g = try { withContext(Dispatchers.IO) { Sports.guide(ctx, Store.actives(ctx)) } } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { return@LaunchedEffect }
         if (g !== SportCache.guide) { SportCache.guide = g; SportCache.guideRev++ }
     }
-    val all = remember(today, soon, sports) {
-        (today.orEmpty() + soon.orEmpty()).filter { !it.fromGuide && it.sport in sports && (it.state != "post" || System.currentTimeMillis() - it.start < 4 * 3600_000L) }
+    val favNext by produceState<Pair<List<SportEvent>, List<String>>>(emptyList<SportEvent>() to emptyList(), SportPrefs.rev, sports) {
+        value = try { FavNext.load() } catch (e: Exception) { emptyList<SportEvent>() to emptyList() }
+    }
+    val all = remember(today, soon, sports, favNext) {
+        (today.orEmpty() + soon.orEmpty() + favNext.first).filter { !it.fromGuide && it.sport in sports && (it.state != "post" || System.currentTimeMillis() - it.start < 4 * 3600_000L) }
             .groupBy { it.id }.values.map { v -> v.maxBy { it.observedAt } }
     }
     val fixtures = remember(all) { all.map { e -> e.copy(state = "", clock = null, details = emptyList(), observedAt = 0, stage = "", halftime = null,
@@ -316,7 +371,7 @@ fun SportDashboard(nav: Nav) {
     val list = remember(all, matched, SportPrefs.rev, MatchFollow.rev) {
         val byId = matched.associateBy { it.id }
         all.map { e -> val m = byId[e.id]; if (m == null || m.start != e.start) e else e.copy(channels = m.channels, ai = m.ai, maybe = m.maybe) }
-            .sortedWith(compareBy({ if (it.live) 0 else if (it.state == "pre") 1 else 2 }, { SportPrefs.rank(it) }, { if (it.state == "post") -it.start else it.start }))
+            .sortedWith(compareBy({ SportPrefs.tier(it) }, { if (it.live) 0 else if (it.state == "pre") 1 else 2 }, { if (it.state == "post") -it.start else it.start }))
     }
     var confirmed by remember { mutableStateOf(SportsMemory.evId) }
     var menu by remember { mutableStateOf<SportEvent?>(null) }
@@ -337,6 +392,10 @@ fun SportDashboard(nav: Nav) {
                         T(tr("UTAKMICE"), 18.sp, Color.White, FontWeight.Bold); T(tr("uživo i uskoro"), 14.sp, Color(0xFF9AA3AF))
                     }
                     LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
+                        if (favNext.second.isNotEmpty()) item(key = "none") {
+                            T(favNext.second.joinToString(", ") + ": " + tr("nema zakazanih utakmica"), 13.sp, Color(0xFF9AA3AF), maxLines = 2,
+                                modifier = Modifier.padding(start = 6.dp, bottom = 2.dp))
+                        }
                         itemsIndexed(list, key = { _, e -> e.id }) { _, e ->
                             val fr = frs.getOrPut(e.id) { FocusRequester() }
                             MatchRow3(e, e.id == cur?.id, MatchFollow.has(e.id), fr, onMenu = { menu = e }) { confirmed = e.id; SportsMemory.evId = e.id }
@@ -396,7 +455,7 @@ private fun MatchRow3(e: SportEvent, current: Boolean, followed: Boolean, fr: Fo
                 e.home?.let { Crest(it, 26.dp) }; e.away?.let { Crest(it, 26.dp) }
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                T(e.leagueAbbr.ifBlank { e.league }, 11.sp, Color(0xFF8A929C), FontWeight.SemiBold)
+                T(e.league.ifBlank { e.leagueAbbr }, 12.sp, Color(0xFF8A929C), FontWeight.SemiBold)
                 if (e.home != null && e.away != null) {
                     T(e.home.name, 16.sp, Color.White, if (f) FontWeight.SemiBold else FontWeight.Normal)
                     T(e.away.name, 16.sp, Color.White, if (f) FontWeight.SemiBold else FontWeight.Normal)
