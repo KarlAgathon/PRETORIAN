@@ -1,3 +1,13 @@
+Media Center 2.4.1 – new Home
+
+• Home uses the approved room picture (concrete room, light from above, the helmet on the stone) on every screen
+• Two strict columns: wordmark and navigation on the left (Search, Home, TV, Movies, Series, Sport, Settings – nothing below), all content on the right
+• Status bar: weather with condition, time (12/24 h like the device), playlist status and expiry, bell – on the same line as the wordmark
+• Upper section: Continue Watching (one card per series) or, before you watch anything, the newest films of your playlist; 1 card fills the frame, 2 = 60/40, 3 = one big + two stacked; progress only when real
+• OK on a card opens the film or series view (Resume there); it never starts playing by itself
+• TV row: recently watched channels or, before that, the newest channels; only whole tiles, logos in their own shape, the channel name when there is no logo; Back from a channel returns to Home on the same tile
+• Home remembers where the focus was when you come back
+
 Media Center 2.4.0 – new look (part 1: Home, Movies, Series, player)
 
 • New look: a concrete gallery room with soft light shafts, glass panels with a thin line, white text; the focus is a soft white pill with a white border
