@@ -361,19 +361,20 @@ object SameEvent {
 @Composable
 fun SameEventPanel(list: List<Channel>, playingUrl: String, onPick: (Channel) -> Unit) {
     BoxWithConstraints(Modifier.fillMaxSize().padding(top = 28.dp, end = 36.dp), contentAlignment = Alignment.TopEnd) {
-        Column(Modifier.reveal().width((maxWidth * 0.30f).coerceIn(280.dp, 420.dp)).heightIn(max = maxHeight * 0.55f).clip(Rnd(16.dp))
-            .background(PanelBg).border(1.dp, PanelLine, Rnd(16.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        // owner: lighter glass, wider, whole names and the quality visible
+        Column(Modifier.reveal().width((maxWidth * 0.40f).coerceIn(380.dp, 620.dp)).heightIn(max = maxHeight * 0.60f).clip(Rnd(16.dp))
+            .background(Color(0x8C0E1116)).border(1.dp, PanelLine, Rnd(16.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             T(tr("Isti događaj").uppercase(), 13.sp, Color(0xFFB8BEC6), FontWeight.SemiBold, modifier = Modifier.padding(start = 8.dp, bottom = 2.dp))
             LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 itemsIndexed(list, key = { _, c -> c.url }) { _, c ->
                     val playing = c.url == playingUrl
                     Focusable(onClick = { if (!playing) onPick(c) }, shape = Rnd(10.dp), normal = Color.Transparent, focused = Color(0x33FFFFFF),
-                        focusBorderColor = Color(0xE6FFFFFF), zoom = 1f, modifier = Modifier.fillMaxWidth().height(48.dp)) { _ ->
-                        Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        focusBorderColor = Color(0xE6FFFFFF), zoom = 1f, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { _ ->
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             ChannelLogo(c.logo, c.name)
-                            T(c.name.substringAfterLast('|').trim(), 14.sp, Color.White, if (playing) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
+                            T(c.name.substringAfterLast('|').trim(), 15.sp, Color.White, if (playing) FontWeight.SemiBold else FontWeight.Normal, maxLines = 2, modifier = Modifier.weight(1f))
                             if (playing) T(tr("Gledaš").uppercase(), 10.sp, Color(0xFFDDE1E6), FontWeight.Bold)
-                            qualityTag(c.name)?.let { q -> Box(Modifier.border(1.dp, Color(0x99FFFFFF), Rnd(5.dp)).padding(horizontal = 5.dp, vertical = 1.dp)) { T(q, 10.sp, Color.White, FontWeight.Bold) } }
+                            qualityTag(c.name)?.let { q -> Box(Modifier.border(1.dp, Color(0xCCFFFFFF), Rnd(5.dp)).padding(horizontal = 7.dp, vertical = 2.dp)) { T(q, 12.sp, Color.White, FontWeight.Bold) } }
                         }
                     }
                 }

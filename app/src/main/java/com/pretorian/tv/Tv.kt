@@ -1287,7 +1287,19 @@ fun PreviewBox(ch: Channel?, modifier: Modifier) {
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) { failed = true }
         }
         player.addListener(l)
-        onDispose { player.removeListener(l); if (Preview.player === player) Preview.player = null; player.release() }
+        // no background play: the preview stops when the app leaves the screen and starts again when it comes back
+        val life = (ctx as? androidx.lifecycle.LifecycleOwner)?.lifecycle
+        val lo = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            try {
+                when (e) {
+                    androidx.lifecycle.Lifecycle.Event.ON_STOP -> { player.pause(); player.stop() }
+                    androidx.lifecycle.Lifecycle.Event.ON_START -> if (player.mediaItemCount > 0 && player.playbackState == androidx.media3.common.Player.STATE_IDLE) { player.prepare(); player.play() }
+                    else -> {}
+                }
+            } catch (_: Exception) {}
+        }
+        life?.addObserver(lo)
+        onDispose { life?.removeObserver(lo); player.removeListener(l); if (Preview.player === player) Preview.player = null; player.release() }
     }
     LaunchedEffect(ch?.url) {
         ready = false; failed = false
