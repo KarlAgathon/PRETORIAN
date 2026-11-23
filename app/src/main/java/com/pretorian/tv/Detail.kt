@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -227,9 +228,7 @@ fun OnyxMovieDetail(v: Vod, nav: Nav) {
     // redesign spec 03: full picture, gradient from the left, breadcrumb, Watch/Resume · Trailer · My List,
     // progress only when started, then exactly four icons whose menus open upward
     Box(Modifier.fillMaxSize().background(Color(0xFF0B0B0C))) {
-        OnyxImage(m?.backdrop ?: v.poster, "bd:" + v.id, Modifier.fillMaxSize(), maxW = 1920, scale = ContentScale.Crop, highQuality = true)
-        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Color(0xF20B0B0C), 0.42f to Color(0xB30B0B0C), 0.75f to Color(0x260B0B0C), 1f to Color(0x000B0B0C))))
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.55f to Color(0x000B0B0C), 1f to Color(0xD90B0B0C))))
+        DetailBackdrop(m?.backdrop, v.poster, "bd:" + v.id, ready = meta !is Load.Loading)
         Column(Modifier.fillMaxSize().padding(start = 56.dp, end = 48.dp, top = 34.dp, bottom = 34.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             T(listOfNotNull(tr("Filmovi"), vodCrumb(false) ?: VodMemory.catOf[v.id], title).joinToString("  /  ").uppercase(), 13.sp, Silver.TextSoft, FontWeight.SemiBold)
             Spacer(Modifier.weight(1f))
@@ -422,9 +421,7 @@ fun OnyxSeriesDetail(s: SeriesItem, nav: Nav) {
     fun isNew(air: String?) = air != null && air >= weekAgo && air <= today
     val wrap = remember(rows.size) { RowWrap(rows.size) }
     Box(Modifier.fillMaxSize().background(Color(0xFF0B0B0C))) {
-        OnyxImage(m?.backdrop ?: s.cover, "bd:" + s.id, Modifier.fillMaxSize(), maxW = 1920, scale = ContentScale.Crop, highQuality = true)
-        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Color(0xF20B0B0C), 0.45f to Color(0xA60B0B0C), 0.8f to Color(0x1A0B0B0C), 1f to Color(0x000B0B0C))))
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.35f to Color(0x000B0B0C), 1f to Color(0xF20B0B0C))))
+        DetailBackdrop(m?.backdrop, s.cover, "bd:" + s.id, ready = meta !is Load.Loading)
         Column(Modifier.fillMaxSize().padding(start = 56.dp, end = 48.dp, top = 30.dp, bottom = 26.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             T(listOfNotNull(tr("Serije"), vodCrumb(true) ?: VodMemory.catOf[s.id], title).joinToString("  /  ").uppercase(), 13.sp, Silver.TextSoft, FontWeight.SemiBold)
             Spacer(Modifier.weight(1f))
@@ -503,7 +500,16 @@ fun OnyxSeriesDetail(s: SeriesItem, nav: Nav) {
                     val gap = 16.dp
                     val w = (maxWidth - gap * 4) / 5
                     key(Watch.rev, cur) {
-                        LazyRow(state = wrap.state, horizontalArrangement = Arrangement.spacedBy(gap), contentPadding = PaddingValues(vertical = 8.dp)) {
+                        // the focused card grows 6 % and has a 1.5 dp border: the row gets that room on every side
+                        // (content padding) and is widened by the same amount to both sides, so the cards still line up
+                        // with SEASON ▾ and the icons and nothing is clipped on the first frame
+                        val room = w * 0.04f + 4.dp
+                        LazyRow(state = wrap.state, horizontalArrangement = Arrangement.spacedBy(gap), contentPadding = PaddingValues(horizontal = room, vertical = 10.dp),
+                            modifier = Modifier.layout { m, c ->
+                                val px = room.roundToPx()
+                                val pl = m.measure(c.copy(minWidth = c.maxWidth + 2 * px, maxWidth = c.maxWidth + 2 * px))
+                                layout(c.maxWidth, pl.height) { pl.place(-px, 0) }
+                            }) {
                             itemsIndexed(rows, key = { _, r -> "${r.season}_${r.num}_${r.e?.id}" }) { i, r ->
                                 val isJump = jump != null && jump.first == r.season && jump.second == r.num
                                 val target = isJump || (jump == null && r == rows.firstOrNull { it.e != null && Watch.get(ctx, it.e.url)?.watched != true })
@@ -648,5 +654,28 @@ private fun EpisodeDialog(r: EpRow, title: String, s: SeriesItem, m: Meta?, fmtD
             }
         }
         LaunchedEffect(Unit) { delay(60); first.tryFocus() }
+    }
+}
+
+/**
+ * Background of the movie / series view (approved): the landscape picture sits on the right (≈ 72 % of the width, full height,
+ * aspect kept), so its subject is right of centre; the left text zone runs from black to charcoal and fades out before it.
+ * Only a portrait poster: it stays whole at its own shape on the right, never stretched over the screen.
+ * While the picture is still being looked up nothing is drawn, so the poster never flashes in as a wrong background.
+ */
+@Composable
+fun DetailBackdrop(backdrop: String?, poster: String?, key: String, ready: Boolean) {
+    val base = Color(0xFF0B0B0C)
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+        if (backdrop != null) Box(Modifier.align(Alignment.TopEnd).fillMaxHeight().width(maxWidth * 0.72f)) {
+            OnyxImage(backdrop, key, Modifier.fillMaxSize(), maxW = 1920, scale = ContentScale.Crop, highQuality = true)
+            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to base, 0.30f to base.copy(alpha = 0.55f), 0.62f to base.copy(alpha = 0.12f), 1f to Color.Transparent)))
+        } else if (ready && poster != null) Box(Modifier.align(Alignment.TopEnd).fillMaxHeight().aspectRatio(2f / 3f)) {
+            OnyxImage(poster, key + ":p", Modifier.fillMaxSize(), maxW = 780, scale = ContentScale.Crop, highQuality = true)
+            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to base, 0.45f to base.copy(alpha = 0.35f), 1f to Color.Transparent)))
+        }
+        // the dark text zone on the left: darkest at the edge, no visible line, no box behind the text
+        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to base, 0.28f to base.copy(alpha = 0.94f), 0.46f to base.copy(alpha = 0.55f), 0.64f to Color.Transparent)))
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.5f to Color.Transparent, 1f to base.copy(alpha = 0.92f))))
     }
 }
