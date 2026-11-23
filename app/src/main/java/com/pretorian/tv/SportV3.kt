@@ -466,7 +466,7 @@ private fun ScoreFlash(id: String, score: String) {
         if (score != last) { last = score; glow.snapTo(1f); glow.animateTo(0f, androidx.compose.animation.core.tween(1600)) }
     }
     Box(Modifier.clip(Rnd(10.dp)).background(Color.White.copy(alpha = 0.22f * glow.value)).padding(horizontal = 10.dp)) {
-        T(score, 44.sp, Color.White, FontWeight.Bold)
+        T(score, 36.sp, Color.White, FontWeight.Bold, maxLines = 1)
     }
 }
 
@@ -517,16 +517,16 @@ private fun MatchHeader3(e: SportEvent) {
         if (e.home != null && e.away != null) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 val nat = SportPrefs.isNational(e.leagueAbbr)
-                if (e.sport == "football") TeamKit(e.home, nat, 78.dp)
+                if (e.sport == "football") TeamKit(e.home, nat, 64.dp)
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) { Crest(e.home, 64.dp); Spacer(Modifier.height(6.dp)); T(e.home.name, 17.sp, Color.White, FontWeight.SemiBold, maxLines = 1) }
-                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(Modifier.widthIn(min = 150.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     if (e.live) LivePill(tr("UŽIVO"), 13)
-                    if (e.state == "pre") T(hm(e.start), 40.sp, Color.White, FontWeight.Bold)
+                    if (e.state == "pre") T(hm(e.start), 34.sp, Color.White, FontWeight.Bold, maxLines = 1)
                     else ScoreFlash(e.id, (e.home.score ?: "–") + " – " + (e.away.score ?: "–"))
                     T(if (e.state == "pre") stateLine(e) else (e.clock ?: ""), 15.sp, Color(0xFFC9CED6))
                 }
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) { Crest(e.away, 64.dp); Spacer(Modifier.height(6.dp)); T(e.away.name, 17.sp, Color.White, FontWeight.SemiBold, maxLines = 1) }
-                if (e.sport == "football") TeamKit(e.away, nat, 78.dp)
+                if (e.sport == "football") TeamKit(e.away, nat, 64.dp)
             }
         } else {
             T(e.title, 24.sp, Color.White, FontWeight.Bold, maxLines = 2)
@@ -569,7 +569,8 @@ private fun DetailLine(d: MatchDetail, team: String?, color: Color? = null) {
 @Composable
 private fun ColumnScope.MatchLower3(e: SportEvent, nav: Nav, tick: Int) {
     val sure = e.channels.distinctBy { it.url }
-    val maybe = (e.ai + e.maybe).distinctBy { it.url }.filter { m -> sure.none { it.url == m.url } }
+    // owner: only confirmed broadcasts (TV guide) and ESPN's stations; no guesses by channel name
+    val maybe = emptyList<Channel>()
     val mine = (sure + maybe).map { Sports.norm(it.name) }
     val external = e.tv.filter { n -> val k = Sports.norm(n); mine.none { it.contains(k) || k.contains(it) } }.distinct().take(6)
     val stats by produceState(emptyList<Triple<String, String, String>>(), e.id, tick / 2, e.state) {
