@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
@@ -665,22 +666,63 @@ private fun EpisodeDialog(r: EpRow, title: String, s: SeriesItem, m: Meta?, fmtD
  * picture is still being looked up, so no wrong picture flashes in.
  */
 @Composable
-fun DetailBackdrop(backdrop: String?, poster: String?, key: String, ready: Boolean, widthFrac: Float = 0.80f) {
+fun DetailBackdrop(backdrop: String?, poster: String?, key: String, ready: Boolean) {
+    // Spec 14: one cinematic backdrop for every movie and series, whatever category it came from.
+    // The landscape picture fills the screen (Crop, never stretched), kept to the right and a little above centre;
+    // a portrait "backdrop" or a failed load falls back to the poster on the right (whole, not stretched) or plain graphite.
     val base = GRAPHITE
-    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
-        if (backdrop != null) {
-            val w = minOf(maxWidth * widthFrac, maxHeight * 16f / 9f)
-            Box(Modifier.align(Alignment.CenterEnd).width(w).aspectRatio(16f / 9f)) {
-                OnyxImage(backdrop, key, Modifier.fillMaxSize(), maxW = 1920, scale = ContentScale.Fit, highQuality = true, wide = true)
-                Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to base, 0.28f to base.copy(alpha = 0.45f), 0.55f to Color.Transparent)))
-                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to base.copy(alpha = 0.85f), 0.18f to Color.Transparent, 0.70f to Color.Transparent, 1f to base)))
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var state by remember(backdrop) { mutableStateOf(if (backdrop == null) 2 else 0) }   // 0 loading · 1 shown · 2 no backdrop
+    var bright by remember(backdrop) { mutableStateOf(0f) }
+    val alpha by androidx.compose.animation.core.animateFloatAsState(if (state == 1) 1f else 0f, androidx.compose.animation.core.tween(280), label = "bd")
+    Box(Modifier.fillMaxSize().background(base)) {
+        if (backdrop != null && state != 2) {
+            val w = if (Perf.lite) 1280 else 1920
+            val req = remember(backdrop, w) {
+                coil.request.ImageRequest.Builder(ctx).data(backdrop).size(w, w * 9 / 16).allowHardware(false).memoryCacheKey("bdfull:$backdrop").build()
             }
-        } else if (ready && poster != null) Box(Modifier.align(Alignment.CenterEnd).fillMaxHeight().aspectRatio(2f / 3f)) {
+            AsyncImage(model = req, contentDescription = null, contentScale = ContentScale.Crop,
+                alignment = androidx.compose.ui.BiasAlignment(1f, -0.3f),
+                modifier = Modifier.fillMaxSize().graphicsLayer { this.alpha = alpha },
+                onSuccess = { r ->
+                    val d = r.result.drawable
+                    val iw = d.intrinsicWidth; val ih = d.intrinsicHeight
+                    if (iw <= 0 || ih <= 0 || iw.toFloat() / ih < 1.25f) state = 2
+                    else {
+                        state = 1
+                        val bmp = (d as? android.graphics.drawable.BitmapDrawable)?.bitmap
+                        if (bmp != null) scope.launch(kotlinx.coroutines.Dispatchers.Default) { bright = leftLuma(bmp) }
+                    }
+                },
+                onError = { state = 2 })
+        }
+        if (state == 2 && ready && poster != null) Box(Modifier.align(Alignment.CenterEnd).fillMaxHeight().aspectRatio(2f / 3f)) {
             OnyxImage(poster, key + ":p", Modifier.fillMaxSize(), maxW = 780, scale = ContentScale.Fit, highQuality = true)
             Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to base, 0.45f to base.copy(alpha = 0.35f), 1f to Color.Transparent)))
         }
-        // the dark text zone on the left: darkest at the edge, no visible line, no box behind the text
-        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to base, 0.26f to base.copy(alpha = 0.92f), 0.44f to base.copy(alpha = 0.5f), 0.62f to Color.Transparent)))
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.55f to Color.Transparent, 1f to base.copy(alpha = 0.92f))))
+        // left text zone: darkest at the edge, fading out before the middle; brighter pictures get a deeper shade
+        val k = ((bright - 0.30f) / 0.35f).coerceIn(0f, 1f)
+        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(
+            0f to base.copy(alpha = 0.96f),
+            0.30f to base.copy(alpha = 0.84f + 0.10f * k),
+            0.48f to base.copy(alpha = 0.45f + 0.25f * k),
+            0.66f to base.copy(alpha = 0.08f * k),
+            0.80f to Color.Transparent)))
+        // top: a light shade for the breadcrumb and status; bottom: buttons, icons and episodes stay readable
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to base.copy(alpha = 0.55f), 0.16f to Color.Transparent,
+            0.55f to Color.Transparent, 1f to base.copy(alpha = 0.90f))))
     }
 }
+
+/** Average brightness (0..1) of the left 45 % of a picture, from a tiny copy: one cheap measurement per title. */
+private fun leftLuma(b: android.graphics.Bitmap): Float = try {
+    val s = android.graphics.Bitmap.createScaledBitmap(b, 48, 27, true)
+    var sum = 0f; var n = 0
+    for (y in 0 until 27) for (x in 0 until 22) {
+        val c = s.getPixel(x, y)
+        sum += (0.2126f * ((c shr 16) and 255) + 0.7152f * ((c shr 8) and 255) + 0.0722f * (c and 255)) / 255f; n++
+    }
+    if (s !== b) s.recycle()
+    sum / n
+} catch (e: Exception) { 0f }

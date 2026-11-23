@@ -54,7 +54,7 @@ internal fun sportsFilter(event: SportEvent, teams: Set<String>, countries: Set<
     (leagues.isEmpty() || event.league in leagues)
 
 private const val ALL_MATCHES = "all"
-private const val CACHED_SCORE = "cached"
+internal const val CACHED_SCORE = "cached"
 
 /** Your teams (long OK on a match adds them): shown on top of Sport, and a goal of theirs pops up anywhere in the app. */
 object MyTeams {
@@ -160,6 +160,8 @@ object GoalNote {
     fun ended(id: String) = endedAt.containsKey(id)
     fun idOf(noteId: String) = noteId.split(':').getOrNull(1) ?: ""
     fun check(evs: List<SportEvent>) {
+        // spec 16: followed matches give only the small overlay (FollowWatch), never a bell note
+        FollowWatch.check(evs)
         val mine = MyTeams.list(); val ms = MatchFollow.list()
         if (mine.isEmpty() && ms.isEmpty()) { hot = false; followed.clear(); return }
         val dayNow = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date())
@@ -180,13 +182,15 @@ object GoalNote {
             val team = mine.any { it.equals(h.name, true) || it.equals(a.name, true) }
             if (!team && e.id !in ms) return@forEach
             if (e.live) anyLive = true
+            if (!team) return@forEach
             val name = h.name + " – " + a.name
             val sc = (h.score ?: "–") + ":" + (a.score ?: "–")
             val board = h.name + " " + sc + " " + a.name
             if (team && e.state == "pre" && java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date(e.start)) == today)
                 send("today", e, "🕘 " + tr("Danas igra tvoj tim") + " · " + name + " · " +
                     java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(e.start)), "sp:${e.id}:today")  // i18n-ignore
-            if (e.stale || e.state == CACHED_SCORE || e.fromGuide) return@forEach
+            // favourite teams only get the "plays today" note; in-match events belong to Match Follow (spec 16)
+            if (true) return@forEach
             val reds = e.details.count { it.kind.startsWith("red") }
             val ph = phase(e)
             val penalties = e.details.count { it.kind.contains("_pen") || it.kind == "penalty" }

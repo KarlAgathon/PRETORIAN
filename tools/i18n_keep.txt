@@ -639,3 +639,9 @@ subpick_film_
 h:mm a
 °C 
 %02d
+yellow
+ht
+ft
+sp3_countries
+goal,cards,pen,ht,ft
+stream

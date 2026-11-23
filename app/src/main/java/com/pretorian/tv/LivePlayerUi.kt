@@ -242,27 +242,6 @@ fun LiveEpgPanel(chName: String, epg: List<EpgItem>?, canFromStart: (EpgItem) ->
 }
 
 /** Floating Catch-up: the archived shows of the channel (newest first), day · time — title; OK plays it from its start. */
-@Composable
-fun LiveCatchupPanel(chName: String, list: Load<List<EpgItem>>, onPlay: (EpgItem) -> Unit, first: FocusRequester) {
-    LivePanel(tr("Catch-up") + " — " + chName.uppercase(), R.drawable.lc_rotate_ccw, true, first) {
-        when (list) {
-            is Load.Loading -> LiveRow(tr("Učitavam arhivu…"), fr = first) {}
-            is Load.Err -> LiveRow(tr("Arhiva nije dostupna"), sub = list.message, fr = first) {}
-            is Load.Ok -> {
-                val now = System.currentTimeMillis()
-                val past = list.value.filter { it.end <= now }.sortedByDescending { it.start }
-                if (past.isEmpty()) LiveRow(tr("Arhiva nije dostupna"), fr = first) {}
-                else LazyColumn(Modifier.fillMaxWidth().height(210.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    itemsIndexed(past) { i, e ->
-                        LiveRow(dayLabel(e.start) + " · " + SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(e.start)) + " — " + e.title,  // i18n-ignore
-                            sub = e.desc?.ifBlank { null }, fr = if (i == 0) first else null) { onPlay(e) }
-                    }
-                }
-            }
-        }
-    }
-}
-
 /** "Danas", "Jučer" or the weekday. */
 fun dayLabel(t: Long): String {
     val d0 = Sports.dayStart(0)
