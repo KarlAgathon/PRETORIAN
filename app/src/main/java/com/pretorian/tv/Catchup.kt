@@ -44,53 +44,7 @@ import java.util.Locale
 /** Catch-up: channels that keep an archive at the provider, the days back, and the past shows to play. */
 @Composable
 fun CatchupScreen(nav: Nav) {
-    if (Look.dawn) { DawnCatchup(nav); return }
-    val ctx = LocalContext.current
-    val chans by load(Unit) {
-        Store.actives(ctx).filter { it.type == SourceType.XTREAM || (it.type == SourceType.M3U && Tech.m3uCatchup) }
-            .flatMap { p -> try { Repo.allChannels(p).filter { Catchups.has(p, it) } } catch (e: Exception) { emptyList() } }
-            .distinctBy { it.url }
-    }
-    var q by remember { mutableStateOf("") }
-    var ch by remember { mutableStateOf<Channel?>(null) }
-    var day by remember { mutableIntStateOf(0) }
-    val first = remember { FocusRequester() }
-    Row(Modifier.fillMaxSize()) {
-        Column(Modifier.width(320.dp).fillMaxHeight().padding(start = 16.dp, end = 10.dp, top = 22.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            T("Catch-up", 26.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 6.dp))
-            T("Kanali s arhivom", 13.sp, C.Muted, modifier = Modifier.padding(start = 6.dp))
-            Field("Traži kanal", q, { q = it }, Modifier.fillMaxWidth())
-            when (val s = chans) {
-                is Load.Loading -> Loading("Učitavam kanale…")
-                is Load.Err -> Message("Greška", s.message)
-                is Load.Ok -> {
-                    val list = s.value.filter { q.isBlank() || Sports.norm(it.name).contains(Sports.norm(q)) }
-                    if (s.value.isEmpty()) Message("Nijedan kanal nema arhivu", "Provider ne nudi catch-up za tvoje kanale")
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
-                        itemsIndexed(list, key = { _, c -> c.url }) { i, c ->
-                            val sel = ch?.url == c.url
-                            Focusable(modifier = Modifier.fillMaxWidth().height(Rows.channel), onClick = { ch = c; day = 0 }, onFocus = { ch = c },
-                                focusRequester = if (i == 0) first else null, normal = if (sel) C.CardFocus else C.Card, zoom = 1.01f) { f ->
-                                Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    ChannelLogo(c.logo, c.name)
-                                    T(c.name, 14.sp, if (f || sel) C.Text else C.Soft, if (sel) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
-                                    T(trf("%s d", c.archive), 11.sp, C.RedText)
-                                }
-                            }
-                        }
-                    }
-                    LaunchedEffect(list.isNotEmpty()) { if (list.isNotEmpty()) first.tryFocus() }
-                }
-            }
-        }
-        Box(Modifier.width(1.dp).fillMaxHeight().background(C.Line))
-        Box(Modifier.weight(1f).fillMaxHeight().padding(start = 20.dp, end = 24.dp, top = 22.dp)) {
-            val c = ch
-            if (c == null) Message("Izaberi kanal", "Emisije iz arhive možeš gledati i kad su prošle")
-            else Archive(c, day, { day = it }, nav)
-        }
-    }
+    DawnCatchup(nav)
 }
 
 @Composable
@@ -202,16 +156,6 @@ object CatchupHist {
     fun open(ctx: android.content.Context): List<Pair<E, Progress>> = all().mapNotNull { e -> Watch.get(ctx, e.url)?.takeIf { it.started }?.let { e to it } }
 }
 
-/** Last 10 Catch-up searches. */
-object CatchupQ {
-    var rev by mutableIntStateOf(0)
-    fun list(): List<String> = Prefs.str("cu_q").split('\n').filter { it.isNotBlank() }
-    private fun save(l: List<String>) { Prefs.put("cu_q", l.take(10).joinToString("\n")); rev++ }
-    fun add(q: String) = save(listOf(q) + list().filter { !it.equals(q, true) })
-    fun remove(q: String) = save(list().filter { it != q })
-    fun clear() = save(emptyList())
-}
-
 /** the archive of a channel only reaches back this far */
 internal fun expired(ch: Channel, start: Long) = start < Sports.dayStart(-(ch.archive.coerceIn(1, 14) - 1))
 
@@ -224,8 +168,6 @@ private sealed class Cu {
     data class Archive(val ch: Channel) : Cu()
     val key get() = when (this) { Menu -> "m"; Continue -> "c"; Groups -> "g"; Search -> "s"; is Channels -> "ch:$pid:${cat.id}"; is Archive -> "a:${ch.url}" }
 }
-
-private data class CuData(val chans: List<Channel>, val groups: List<Pair<String, Category>>)
 
 /** Catch-up: Continue watching · Groups · Search; every level replaces the one before, Back goes exactly one level out. */
 @Composable
@@ -372,128 +314,4 @@ internal fun CuContinue(mem: HashMap<String, Int>, key: String, nav: Nav) {
         })
     }
     pick?.let { e -> CuActions(e.ch, EpgItem(e.title, null, e.start, e.end, null, true), nav, onRemove = { CatchupHist.remove(e.url) }) { pick = null } }
-}
-
-@Composable
-private fun CuArchive(ch: Channel, mem: HashMap<String, Int>, key: String, nav: Nav) {
-    val ctx = LocalContext.current
-    val p = Store.byId(ctx, ch.pid)
-    val list by load(ch.url) { if (p == null) emptyList() else archiveOf(p, ch) }
-    @Suppress("UNUSED_VARIABLE") val wr = Watch.rev
-    var day by remember { mutableIntStateOf(mem[key + ":day"] ?: 0) }
-    var q by remember { mutableStateOf("") }
-    var pick by remember { mutableStateOf<EpgItem?>(null) }
-    CuPanel(wide = true) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.padding(horizontal = 6.dp)) {
-            ChannelLogo(ch.logo, ch.name)
-            T(ch.name, 20.sp, C.Text, FontWeight.Bold, modifier = Modifier.weight(1f))
-            T(trf("Arhiva: %s dana", ch.archive.coerceIn(1, 14)), 13.sp, C.Soft)
-        }
-        // days: the oldest on the left, today on the right
-        val days = (0 until ch.archive.coerceIn(1, 14)).toList().reversed()
-        val dState = androidx.compose.foundation.lazy.rememberLazyListState()
-        LaunchedEffect(Unit) { dState.scrollToItem(days.indexOf(day).coerceAtLeast(0)) }
-        LazyRow(state = dState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(days) { d ->
-                val sel = d == day
-                val label = when (d) { 0 -> tr("Danas"); 1 -> tr("Jučer"); else -> SimpleDateFormat("EEE", Locale(Look.lang)).format(Date(Sports.dayStart(-d))) }
-                Focusable(onClick = { day = d; mem[key + ":day"] = d; mem[key] = 0 }, shape = Rnd(10.dp), normal = if (sel) Color(0xD9DADADE) else Color.Transparent, focused = Dawn.pill,
-                    focusBorderColor = Color.Transparent, zoom = 1f, modifier = Modifier.width(112.dp).height(48.dp).border(1.dp, Color(0x4DFFFFFF), Rnd(10.dp))) { f ->
-                    val fg = if (f || sel) Dawn.onPill else Color.White
-                    Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-                        T(label, 13.sp, fg, FontWeight.SemiBold); T(SimpleDateFormat("d. MMM", Locale(Look.lang)).format(Date(Sports.dayStart(-d))), 12.sp, fg)
-                    }
-                }
-            }
-        }
-        CuSearchField("Traži emisije…", q) { q = it }
-        when (val s = list) {
-            is Load.Loading -> Loading("Učitavam arhivu…")
-            is Load.Err -> Message("Arhiva nije dostupna", s.message)
-            is Load.Ok -> {
-                val now = System.currentTimeMillis()
-                val from = Sports.dayStart(-day); val to = Sports.dayStart(-day + 1)
-                // a search looks through every day of the archive; without it only the chosen day
-                val items = s.value.filter { it.end <= now && it.archived && !expired(ch, it.start) &&
-                    (if (q.isBlank()) it.start in from until to else Sports.norm(it.title).contains(Sports.norm(q))) }.sortedBy { it.start }
-                if (items.isEmpty()) Message(if (q.isBlank()) "Nema emisija u arhivi za ovaj dan" else "Nema rezultata", if (q.isBlank()) "Izaberi drugi dan gore" else null)
-                else CuList(mem, key + ":" + day + ":" + q, items.map { e ->
-                    val pr = Catchups.url(p, ch, e)?.let { Watch.get(ctx, it) }?.takeIf { it.started || it.watched }
-                    CuItem(e.title, icon = R.drawable.lc_history,
-                        sub = (if (q.isBlank()) "" else SimpleDateFormat("EEE d. MMM · ", Locale(Look.lang)).format(Date(e.start))) + e.times() + " · " + trf("%s min", ((e.end - e.start) / 60_000).toInt()),
-                        trailing = pr?.let { if (it.watched) "✓" else "${(it.fraction * 100).toInt()}%" }, progress = pr?.takeIf { !it.watched }?.fraction) { pick = e }
-                })
-            }
-        }
-    }
-    pick?.let { e -> CuActions(ch, e, nav) { pick = null } }
-}
-
-/** One search for Catch-up: channel names and show titles of the archive, best matches first, with the last 10 searches. */
-@Composable
-private fun CuSearch(chans: List<Channel>, mem: HashMap<String, Int>, key: String, nav: Nav, onChannel: (Channel) -> Unit) {
-    val ctx = LocalContext.current
-    @Suppress("UNUSED_VARIABLE") val r = CatchupQ.rev
-    var q by remember { mutableStateOf(mem.keys.firstOrNull { it.startsWith("q=") }?.removePrefix("q=") ?: "") }
-    var ask by remember { mutableStateOf(false) }
-    var clear by remember { mutableStateOf(false) }
-    var pick by remember { mutableStateOf<Pair<Channel, EpgItem>?>(null) }
-    fun run(t: String) { mem.keys.removeAll { it.startsWith("q=") }; q = t; if (t.isNotBlank()) { mem["q=$t"] = 0; CatchupQ.add(t) } }
-    // shows: searched in the guide kept on the box (past days as long as the archive goes back), every archive channel, no provider requests
-    val shows by load(q) {
-        if (q.isEmpty()) emptyList() else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            val byEpg = chans.filter { !it.epg.isNullOrBlank() }.groupBy { it.epg!!.lowercase() }
-            val srcs = chans.map { it.pid }.distinct().mapNotNull { Store.byId(ctx, it) }
-                .flatMap { p -> listOf(GuideDb.srcOf(p)) + EpgSources.urls(p.id).map { GuideDb.srcOf(it) } }.distinct()
-            val maxDays = chans.maxOfOrNull { it.archive }?.coerceIn(1, 14) ?: 7
-            val n = Sports.norm(q)
-            GuideDb.searchPast(srcs, q, System.currentTimeMillis() - maxDays * 86_400_000L)
-                .flatMap { pr -> byEpg[pr.channel.lowercase()].orEmpty().map { c -> c to pr } }
-                .filter { (c, pr) -> !expired(c, pr.start) && Sports.norm(pr.title).contains(n) }
-                .distinctBy { (c, pr) -> c.url + pr.start }
-                .sortedByDescending { it.second.start }
-                .map { (c, pr) -> c to EpgItem(pr.title, pr.desc, pr.start, pr.end, null, true) }
-        }
-    }
-    CuPanel(wide = true) {
-        Focusable(onClick = { ask = true }, onMenu = { run("") }, shape = Pill, normal = Color.Transparent, focused = Dawn.pill, focusBorderColor = Color.Transparent,
-            zoom = 1f, modifier = Modifier.fillMaxWidth().height(46.dp).border(1.dp, Color(0x4DFFFFFF), Pill)) { f ->
-            Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Ico(R.drawable.lc_search, 18.dp, if (f) Dawn.onPill else Color.White)
-                T(q.ifBlank { tr("Pretraži Catch-up…") }, 16.sp, if (f) Dawn.onPill else if (q.isBlank()) C.Soft else C.Text, maxLines = 1)
-            }
-        }
-        if (q.isBlank()) {
-            val hist = CatchupQ.list()
-            if (hist.isEmpty()) Message("Traži kanal ili emisiju", "Na primjer naziv kanala ili emisije iz arhive.")
-            else {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp)) {
-                    T("Nedavne pretrage", 14.sp, C.Soft, FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                    T("Drži OK za brisanje jedne", 12.sp, C.Muted)
-                }
-                CuList(mem, key + ":h", hist.map { h -> CuItem(h, icon = R.drawable.lc_history, onLong = { CatchupQ.remove(h) }) { run(h) } } +
-                    CuItem("Obriši historiju pretrage", icon = R.drawable.lc_trash_2) { clear = true })
-            }
-        } else {
-            val n = Sports.norm(q)
-            fun score(t: String): Int { val x = Sports.norm(t); return when { x == n -> 0; x.startsWith(n) -> 1; x.split(' ').any { it.startsWith(n) } -> 2; else -> 3 } }
-            val chHits = chans.filter { Sports.norm(it.name).contains(n) }.sortedBy { score(it.name) }
-            val showHits = ((shows as? Load.Ok)?.value ?: emptyList()).sortedWith(compareBy<Pair<Channel, EpgItem>> { score(it.second.title) }.thenByDescending { it.second.start })
-            val items = chHits.map { c -> CuItem(c.name, ch = c, sub = tr("Kanal"), trailing = trf("%sd", c.archive.coerceAtMost(14))) { onChannel(c) } } +
-                showHits.take(100).map { (c, e) -> CuItem(e.title, icon = R.drawable.lc_history,
-                    sub = tr("Emisija") + " · " + c.name + " · " + SimpleDateFormat("EEE d. MMM HH:mm", Locale(Look.lang)).format(Date(e.start))) { pick = c to e } }
-            if (items.isEmpty() && shows is Load.Loading) Loading("Tražim u arhivi…")
-            else if (items.isEmpty()) Message("Nema rezultata", "Probaj drugi naziv.")
-            else {
-                if (shows is Load.Loading) T("Tražim još u arhivi…", 12.sp, C.Muted, modifier = Modifier.padding(horizontal = 8.dp))
-                CuList(mem, key + ":r:" + q, items)
-            }
-        }
-    }
-    if (ask) TextDialog("Pretraži Catch-up", "", q, onDismiss = { ask = false }, onChange = { q = it.trim() }) { t -> ask = false; run(t.trim()) }
-    if (clear) Popup("Obriši historiju pretrage?", { clear = false }) {
-        OptionRow("Obriši", R.drawable.lc_trash_2) { CatchupQ.clear(); clear = false }
-        OptionRow("Odustani", R.drawable.lc_x) { clear = false }
-    }
-    pick?.let { (c, e) -> CuActions(c, e, nav) { pick = null } }
 }

@@ -246,7 +246,7 @@ fun GroupColumn(
                     contentPadding = PaddingValues(bottom = 16.dp, top = 1.dp),
                 ) {
                     itemsIndexed(list, key = { _, r -> r.id }) { i, r ->
-                        if (Look.dawn && r is GRow.Group && r.ref.pid != null && list.getOrNull(i - 1).let { it !is GRow.Group || it.ref.pid == null })
+                        if (r is GRow.Group && r.ref.pid != null && list.getOrNull(i - 1).let { it !is GRow.Group || it.ref.pid == null })
                             Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0x33FFFFFF)))
                                 T("GRUPE PROVAJDERA", 11.sp, C.Muted, FontWeight.SemiBold)
@@ -264,29 +264,23 @@ fun GroupColumn(
                                 val locked = g.pid?.let { Ovr(ctx, it).isLocked("live", g.cat.id) } ?: false
                                 val shape = Rnd(12.dp)
                                 Focusable(
-                                    modifier = (if (Look.dawn) rowModifier.height(48.dp) else rowModifier).then(if (Look.groupFrame && !Look.dawn) Modifier.border(if (selected) 1.5.dp else 1.dp,
-                                        C.Red.copy(alpha = if (selected) 0.9f else 0.28f), shape) else Modifier),
+                                    modifier = rowModifier.height(48.dp),
                                     shape = shape,
                                     onClick = { onOpen(g) },
                                     onFocus = { onFocusRow(r.id); onFocusGroup(g) },
                                     onMenu = if (g.pid == null || g.cat.id == ALL_GROUP) null else ({ onMenu(g) }),
                                     focusRequester = if (containVerticalFocus) null else fr,
-                                    normal = if (Look.dawn) Color.Transparent else if (selected) C.Red.copy(alpha = 0.28f) else Color.Transparent,
-                                    focused = if (Look.dawn) Dawn.pill else null,
-                                    focusBorderColor = if (Look.dawn) Color.Transparent else null,
+                                    normal = Color.Transparent,
+                                    focused = Dawn.pill,
+                                    focusBorderColor = Color.Transparent,
                                     zoom = 1.0f,
                                 ) { gf ->
-                                    Row(Modifier.fillMaxSize().padding(horizontal = if (Look.dawn) 20.dp else 12.dp), verticalAlignment = Alignment.CenterVertically,
+                                    Row(Modifier.fillMaxSize().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        if (Look.dawn) {
-                                            val fg = if (gf) Dawn.onPill else C.Text
-                                            Ico(when { g.pid == null && g.cat.id == RECENT_GROUP -> R.drawable.lc_history; g.pid == null -> R.drawable.lc_star; else -> R.drawable.lc_tv }, 18.dp, fg)
-                                            T(g.cat.name, 18.sp, fg, if (gf) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, modifier = Modifier.weight(1f))
-                                            Ico(R.drawable.lc_chevron_right, 16.dp, if (gf) fg else C.Muted)
-                                        } else {
-                                        if (selected) Dot(C.Red, 7.dp)
-                                        if (width > 100.dp) T(g.cat.name, if (classicStyle) 13.sp else Rows.font, if (selected) C.Text else C.Soft, if (selected) FontWeight.Bold else FontWeight.Normal, maxLines = 1, modifier = Modifier.weight(1f)) else Ico(R.drawable.lc_layers, 18.dp, if (selected) C.Text else C.Muted)
-                                        }
+                                        val fg = if (gf) Dawn.onPill else C.Text
+                                        Ico(when { g.pid == null && g.cat.id == RECENT_GROUP -> R.drawable.lc_history; g.pid == null -> R.drawable.lc_star; else -> R.drawable.lc_tv }, 18.dp, fg)
+                                        T(g.cat.name, 18.sp, fg, if (gf) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, modifier = Modifier.weight(1f))
+                                        Ico(R.drawable.lc_chevron_right, 16.dp, if (gf) fg else C.Muted)
                                         if (locked) Ico(R.drawable.lc_lock, 15.dp, C.Muted)
                                     }
                                 }
@@ -671,32 +665,6 @@ private fun FavListOptions(g: GroupRef, onDismiss: () -> Unit, onChanged: (Boole
     }
 }
 
-/** Play [list] from [index], with the preview stopped first (one connection at a time). */
-/** Plays a channel so that Back lands in TV, inside the channel's own group, on that channel. */
-suspend fun openInGroup(ctx: android.content.Context, nav: Nav, ch: Channel) {
-    val p = Store.byId(ctx, ch.pid) ?: Store.active(ctx) ?: run { playChannels(nav, listOf(ch), 0); return }
-    val cat = try { Repo.liveGroups(p).firstOrNull { it.id == ch.group } } catch (e: Exception) { null } ?: Category(ch.group, ch.group)
-    val g = GroupRef(p.id, cat)
-    val chs = try { channelsOf(ctx, g) } catch (e: Exception) { emptyList() }
-    val i = chs.indexOfFirst { it.url == ch.url }
-    if (i < 0) { playChannels(nav, listOf(ch), 0); return }
-    TvMemory.group = g; TvMemory.channel = i; TvMemory.restore = true; TvMemory.preview = chs[i]
-    nav.root(Screen.Tv); playChannels(nav, chs, i)
-}
-
-/** Plays a channel from Home so that Back lands in TV, inside the channel's own group, on that channel. */
-suspend fun playInGroup(ctx: android.content.Context, nav: Nav, ch: Channel, pid: String) {
-    val p = Store.byId(ctx, pid)
-    val cat = p?.let { try { Repo.liveGroups(it).firstOrNull { c -> c.id == ch.group } } catch (e: Exception) { null } }
-    if (p == null || cat == null) { playChannels(nav, listOf(ch), 0); return }
-    val g = GroupRef(p.id, cat)
-    val chs = try { channelsOf(ctx, g) } catch (e: Exception) { emptyList() }
-    val i = chs.indexOfFirst { it.url == ch.url }
-    if (i < 0) { playChannels(nav, listOf(ch), 0); return }
-    TvMemory.group = g; TvMemory.channel = i; TvMemory.restore = true; TvMemory.preview = chs[i]
-    nav.root(Screen.Tv); playChannels(nav, chs, i)
-}
-
 fun playChannels(nav: Nav, list: List<Channel>, index: Int) {
     Preview.stop()
     nav.push(Screen.Player(list.map { PlayItem(it.name, it.url, it.logo, "${it.num}", it) }, index, live = true))
@@ -818,10 +786,10 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                 },
                                 onFocus = { lastUrl = ch.url; if (!edit) onFocusCh(ch) },
                                 focusRequester = cWrap.requester(i, if (ch.url == menuUrl) chFr else null),
-                                normal = if (Look.dawn) Color.Transparent else if (active) C.Green.copy(alpha = 0.10f) else C.Card,
-                                focused = if (Look.dawn) Dawn.pill else null,
-                                focusBorderColor = if (Look.dawn) Color.Transparent else null,
-                                zoom = if (Look.dawn) 1.0f else 1.01f,
+                                normal = Color.Transparent,
+                                focused = Dawn.pill,
+                                focusBorderColor = Color.Transparent,
+                                zoom = 1.0f,
                             ) { f ->
                                 Row(Modifier.fillMaxSize().clipToBounds().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1090,189 +1058,7 @@ fun NoPlaylist(nav: Nav) {
 /** Settings › Groups and channels: order, names, hidden and locked groups for TV, movies and series. */
 @Composable
 fun GroupManager(nav: Nav) {
-    if (Look.age) { BulkEditor(nav); return }
-    val ctx = LocalContext.current
-    val p = remember { PlEdit.id?.let { id -> Store.playlists(ctx).firstOrNull { it.id == id } } ?: Store.active(ctx) } ?: run { NoPlaylist(nav); return }
-    val ovr = remember(p.id) { Ovr(ctx, p.id) }
-    var tab by remember { mutableIntStateOf(0) }
-    var rev by remember { mutableIntStateOf(0) }
-    var pickMany by remember { mutableStateOf(false) }   // OK only shows or hides the group
-    // the rest of the app is refreshed once, when you leave this screen (refreshing at once rebuilt this screen and lost your place)
-    val changed = remember { booleanArrayOf(false) }
-    DisposableEffect(Unit) { onDispose { if (changed[0]) nav.playlistsChanged() } }
-    var chGroup by remember { mutableStateOf<Category?>(null) }      // Channels tab: the group whose channels you edit
-    val kind = listOf("live", "vod", "series", "live")[tab]
-    val st by load(p.id, kind, rev, keep = true) {
-        val raw = when (kind) { "live" -> Repo.liveGroups(p); "vod" -> Repo.vodGroups(p); else -> Repo.seriesGroups(p) }
-        ovr.groups(kind, raw, all = true)
-    }
-    val chSt by load(p.id, chGroup?.id, rev, keep = true) {
-        val g = chGroup ?: return@load emptyList<Channel>()
-        if (g.id.startsWith("my_")) ovr.channels(g.id, emptyList(), all = true) else ovr.channels(g.id, Repo.channels(p, g.id), all = true)
-    }
-    var menu by remember { mutableStateOf<Category?>(null) }
-    var chMenu by remember { mutableStateOf<Channel?>(null) }
-    var lastId by remember { mutableStateOf<String?>(null) }
-    var refocus by remember { mutableIntStateOf(0) }
-    val rowFr = remember { FocusRequester() }
-    val listState = rememberLazyListState()
-    var newGroup by remember { mutableStateOf(false) }
-    var reset by remember { mutableStateOf(false) }
-    var posFor by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
-
-    // carrying: the picked row moves with ▲ ▼ (hold = faster), OK puts it down, Back puts it back
-    var carry by remember { mutableStateOf<String?>(null) }
-    val carryList = remember { androidx.compose.runtime.mutableStateListOf<String>() }
-    var carryStart by remember { mutableStateOf<List<String>>(emptyList()) }
-    val chanMode = tab == 3 && chGroup != null
-    val groups = (st as? Load.Ok)?.value ?: emptyList()
-    val chans = (chSt as? Load.Ok)?.value ?: emptyList()
-    val ids: List<String> = if (chanMode) chans.map { it.url } else groups.map { it.id }
-    val shownIds: List<String> = if (carry != null) carryList.toList() else ids
-    fun save(order: List<String>) {
-        if (chanMode) ovr.setChannelOrder(chGroup!!.id, order) else ovr.setGroupOrder(kind, order)
-        rev++; changed[0] = true
-    }
-    fun pick(id: String) { carryList.clear(); carryList.addAll(ids); carryStart = ids; carry = id; lastId = id }
-    fun moveTo(id: String, to: Int) {
-        val l = ids.toMutableList(); val i = l.indexOf(id); if (i < 0) return
-        l.removeAt(i); l.add(to.coerceIn(0, l.size), id); save(l); lastId = id
-        scope.launch { delay(150); listState.scrollToItem(if (to < 5) 0 else (to - 3).coerceAtMost((l.size - 1).coerceAtLeast(0))); refocus++ }
-    }
-    BackHandler(enabled = carry != null) { carry = null }
-    BackHandler(enabled = carry == null && tab == 3 && chGroup != null) { chGroup = null }
-
-    Column(Modifier.fillMaxSize().onPreviewKeyEvent { e ->
-        val id = carry ?: return@onPreviewKeyEvent false
-        if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent e.key in listOf(Key.DirectionUp, Key.DirectionDown, Key.DirectionCenter, Key.Enter)
-        val rep = e.nativeKeyEvent.repeatCount
-        val step = when { rep > 30 -> 10; rep > 10 -> 3; else -> 1 }
-        when (e.key) {
-            Key.DirectionUp, Key.DirectionDown -> {
-                val i = carryList.indexOf(id); val j = (i + if (e.key == Key.DirectionUp) -step else step).coerceIn(0, carryList.lastIndex)
-                if (i >= 0 && j != i) { carryList.removeAt(i); carryList.add(j, id); scope.launch { listState.scrollToItem(if (j < 5) 0 else j - 3) } }
-                true
-            }
-            Key.DirectionCenter, Key.Enter -> { save(carryList.toList()); carry = null; refocus++; true }
-            else -> true
-        }
-    }, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (carry != null) {
-            // while carrying, the top folds into one line so the list gets the whole screen
-            val pos = carryList.indexOf(carry) + 1
-            val nm = if (chanMode) chans.firstOrNull { it.url == carry }?.name else groups.firstOrNull { it.id == carry }?.name
-            Row(Modifier.fillMaxWidth().clip(Rnd(12.dp)).background(C.Amber.copy(alpha = 0.15f)).padding(horizontal = 14.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Ico(R.drawable.lc_hand_grab, 18.dp, C.Amber)
-                T(trf("Pomjeraš: %s · pozicija %s / %s", nm ?: "", pos, carryList.size), 15.sp, C.Text, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
-                T("▲ ▼ · OK spusti · Nazad vrati", 13.sp, C.Amber, maxLines = 1)
-            }
-        } else {
-            T(tr("Grupe i kanali") + " · ${p.name}", 22.sp, C.Text, FontWeight.Bold, maxLines = 1)
-            T("OK na grupi ili kanalu: uzmi i pomjeri, na vrh, na kraj, naziv, sakrivanje, PIN.", 13.sp, C.Muted, maxLines = 2)
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Segmented(listOf("TV", "Filmovi", "Serije", "Kanali"), tab) { tab = it; chGroup = null; carry = null; pickMany = false }
-                if (tab == 0 && !pickMany) Button("Nova grupa", R.drawable.lc_plus) { newGroup = true }
-            }
-            if (tab != 3 && pickMany) Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Button("Gotovo", R.drawable.lc_check, primary = true) { pickMany = false }
-                Button("Sakrij sve", R.drawable.lc_eye_off) { ovr.setHidden(kind, groups.map { it.id }, true); rev++; changed[0] = true }
-                Button("Prikaži sve", R.drawable.lc_eye) { ovr.setHidden(kind, groups.map { it.id }, false); rev++; changed[0] = true }
-                val vis = groups.count { !ovr.isHidden(kind, it.id) }
-                T(trf("Vidljivo: %s od %s · OK = prikaži/sakrij", vis, groups.size), 13.sp, C.Soft, maxLines = 1, modifier = Modifier.weight(1f))
-            }
-            else Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (tab != 3) Button("Sakrij / prikaži više", R.drawable.lc_eye_off) { pickMany = true; carry = null }
-                if (tab == 0 || tab == 3) Button("Vrati sakrivene kanale", R.drawable.lc_eye) { ovr.unhideAllChannels(); rev++; changed[0] = true }
-                Button("Vrati sve izmjene", R.drawable.lc_rotate_ccw) { reset = true }
-                if (chanMode) T("›  " + chGroup!!.name, 15.sp, C.Soft, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
-            }
-        }
-        when {
-            st is Load.Loading || (chanMode && chSt is Load.Loading && chans.isEmpty()) -> Loading()
-            st is Load.Err -> Message("Greška", (st as Load.Err).message)
-            else -> LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(5.dp), contentPadding = PaddingValues(bottom = 30.dp)) {
-                itemsIndexed(shownIds, key = { _, k -> k }) { i, k ->
-                    val g = if (chanMode) null else groups.firstOrNull { it.id == k }
-                    val ch = if (chanMode) chans.firstOrNull { it.url == k } else null
-                    val name = g?.name ?: ch?.name ?: k
-                    val hidden = if (g != null) ovr.isHidden(kind, g.id) else ch?.let { ovr.isChHidden(it) } == true
-                    val locked = if (g != null) ovr.isLocked(kind, g.id) else ch?.let { ovr.isChLocked(it) } == true
-                    val carried = carry == k
-                    Focusable(modifier = Modifier.fillMaxWidth().height(if (carry != null) 42.dp else Rows.channel - 4.dp)
-                        .then(if (carried) Modifier.border(2.dp, C.Amber, Rnd(14.dp)) else Modifier),
-                        onClick = {
-                            if (carry != null) return@Focusable
-                            lastId = k
-                            if (pickMany && g != null) { ovr.toggleHidden(kind, g.id); rev++; changed[0] = true; return@Focusable }
-                            if (tab == 3 && !chanMode) { chGroup = g; lastId = null } else if (ch != null) chMenu = ch else menu = g
-                        },
-                        onMenu = { if (carry == null) { lastId = k; if (ch != null) chMenu = ch else if (g != null && tab != 3) menu = g } },
-                        focusRequester = if (k == lastId) rowFr else null,
-                        normal = if (carried) C.Amber.copy(alpha = 0.18f) else C.Card, zoom = if (carried) 1.03f else 1.01f) { _ ->
-                        Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            T("${i + 1}", 12.sp, C.Muted, modifier = Modifier.width(34.dp))
-                            if (carried) Ico(R.drawable.lc_hand_grab, 18.dp, C.Amber)
-                            if (pickMany && g != null) Box(Modifier.size(24.dp).clip(Rnd(6.dp)).background(if (hidden) Color.Transparent else C.Green)
-                                .border(2.dp, if (hidden) C.Muted else C.Green, Rnd(6.dp)), contentAlignment = Alignment.Center) {
-                                if (!hidden) Ico(R.drawable.lc_check, 16.dp, Color.White)
-                            }
-                            if (ch != null) ChannelLogo(ch.logo, ch.name)
-                            T(name, 15.sp, if (hidden) C.Muted else C.Text, FontWeight.Medium, maxLines = 1, modifier = Modifier.weight(1f))
-                            if (g != null && g.id.startsWith("my_")) Chip("MOJA", C.CardFocus, C.RedText)
-                            if (hidden) Ico(R.drawable.lc_eye_off, 16.dp, C.Muted)
-                            if (locked) Ico(R.drawable.lc_lock, 16.dp, C.Muted)
-                            if (tab == 3 && !chanMode) Ico(R.drawable.lc_chevron_right, 16.dp, C.Muted)
-                        }
-                    }
-                }
-            }
-        }
-    }
-    menu?.let { g ->
-        GroupOptions(kind, g, ovr, groups, onDismiss = { menu = null; refocus++ },
-            onPick = { menu = null; pick(g.id) }, onTop = { menu = null; moveTo(g.id, 0) }, onBottom = { menu = null; moveTo(g.id, groups.size) },
-            onPosition = { menu = null; posFor = g.id }) { close ->
-            rev++
-            if (close) { menu = null; refocus++ }
-        }
-    }
-    chMenu?.let { c ->
-        val gid = chGroup?.id ?: ""
-        val pos = chans.indexOfFirst { it.url == c.url }
-        Popup(c.name, { chMenu = null; refocus++ }) {
-            if (pos >= 0) T("${pos + 1} / ${chans.size}", 13.sp, C.Muted)
-            OptionRow("Uzmi i pomjeri", R.drawable.lc_hand_grab, sub = "▲ ▼ pa OK", color = C.Amber) { chMenu = null; pick(c.url) }
-            OptionRow("Na sam vrh", R.drawable.lc_chevrons_up) { chMenu = null; moveTo(c.url, 0) }
-            OptionRow("Na sam kraj", R.drawable.lc_chevrons_down) { chMenu = null; moveTo(c.url, chans.size) }
-            OptionRow("Na poziciju…", R.drawable.lc_hash) { chMenu = null; posFor = c.url }
-            OptionRow(if (ovr.isChHidden(c)) "Prikaži kanal" else "Sakrij kanal", R.drawable.lc_eye_off) { ovr.toggleChHidden(c); chMenu = null; rev++; changed[0] = true }
-            OptionRow(if (ovr.isChLocked(c)) "Otključaj (ukloni PIN)" else "Zaključaj PIN-om (4 broja)", R.drawable.lc_lock) {
-                if (Lock.hasPin()) { ovr.toggleChLocked(c); chMenu = null; rev++ } else Toast.makeText(ctx, tr("Prvo postavi PIN: Postavke › Roditelji"), Toast.LENGTH_LONG).show()
-            }
-            if (gid.isNotEmpty()) T(" ", 4.sp, C.Muted)
-        }
-    }
-    posFor?.let { id ->
-        TextDialog("Na poziciju…", trf("Broj od 1 do %s", ids.size), onDismiss = { posFor = null }) { v ->
-            v.trim().toIntOrNull()?.let { moveTo(id, it - 1) }; posFor = null
-        }
-    }
-    LaunchedEffect(refocus) {
-        if (refocus == 0 || lastId == null) return@LaunchedEffect
-        delay(120)
-        val idx = shownIds.indexOf(lastId)
-        if (idx >= 0 && listState.layoutInfo.visibleItemsInfo.none { it.index == idx }) listState.scrollToItem((idx - 3).coerceAtLeast(0))
-        rowFr.tryFocus()
-    }
-    if (newGroup) TextDialog("Nova grupa", "Naziv", onDismiss = { newGroup = false }) { n -> if (n.isNotBlank()) ovr.addGroup(n); newGroup = false; rev++ }
-    if (reset) Popup("Vratiti sve izmjene?", onDismiss = { reset = false }) {
-        T("Briše tvoj redoslijed, nazive, sakrivene i zaključane grupe i kanale, i tvoje grupe za ovu playlistu.", 14.sp, C.Soft, maxLines = 3)
-        OptionRow("Da, vrati kako je bilo", R.drawable.lc_rotate_ccw, color = C.Danger) { ovr.resetAll(); reset = false; rev++; changed[0] = true }
-        OptionRow("Odustani", R.drawable.lc_x) { reset = false }
-    }
+    BulkEditor(nav)
 }
 
 /** Small live picture of a channel; registers with [Preview] so the player can stop it first. */

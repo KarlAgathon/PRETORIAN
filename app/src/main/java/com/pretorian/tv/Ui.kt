@@ -421,23 +421,6 @@ fun TextDialog(title: String, label: String, initial: String = "", onDismiss: ()
     LaunchedEffect(Unit) { try { fr.requestFocus() } catch (_: Exception) {} }
 }
 
-/** two fields: name and link (EPG sources) */
-@Composable
-fun NameLinkDialog(title: String, name0: String = "", link0: String = "", onDismiss: () -> Unit, onOk: (String, String) -> Unit) {
-    var name by remember { mutableStateOf(name0) }
-    var link by remember { mutableStateOf(link0) }
-    val fr = remember { FocusRequester() }
-    Popup(title, onDismiss, width = 640.dp) {
-        Field("Naziv", name, { name = it }, Modifier.fillMaxWidth().focusRequester(fr))
-        Field("Link (http://…/epg.xml ili .xml.gz)", link, { link = it }, Modifier.fillMaxWidth(), KeyboardType.Uri, onDone = { onOk(name.trim(), link.trim()) })
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button("Spremi", R.drawable.lc_check, primary = true) { onOk(name.trim(), link.trim()) }
-            Button("Odustani", R.drawable.lc_x) { onDismiss() }
-        }
-    }
-    LaunchedEffect(Unit) { try { fr.requestFocus() } catch (_: Exception) {} }
-}
-
 /**
  * 4-digit PIN with an on-screen keypad (Google TV remotes have no number keys).
  * [onPin] returns an error text, or null when the PIN was accepted.
@@ -521,19 +504,6 @@ fun WrapEffect(w: Wrap, state: androidx.compose.foundation.lazy.LazyListState) {
         w.target = -1
     }
 }
-
-@Composable
-fun WrapEffectGrid(w: Wrap, state: androidx.compose.foundation.lazy.grid.LazyGridState) {
-    LaunchedEffect(w.target) {
-        val t = w.target
-        if (t < 0) return@LaunchedEffect
-        state.scrollToItem(t)
-        kotlinx.coroutines.delay(80)
-        if (!Chrome.inRail) try { w.fr.requestFocus() } catch (_: Exception) {}
-        w.target = -1
-    }
-}
-
 
 /** The one on/off switch of the whole app: green with a white knob = on, grey = off; [height] follows the row it sits in. */
 @Composable

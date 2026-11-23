@@ -47,10 +47,6 @@ import kotlinx.coroutines.launch
 private val LampGreen = Color(0xFF3DDC84)
 private val LampYellow = Color(0xFFFFC53D)
 private val LampRed = Color(0xFFFF5A5F)
-private val LampBlue = Silver.TextSoft
-private val LampGrey = Color(0xFF8A8F9E)
-private val LampAmber = Color(0xFFFFB02E)
-
 /** Which series page should open on which episode (from Home, a note, or after the player). */
 object SeriesJump { var id = ""; var season = -1; var num = -1 }
 
@@ -79,14 +75,6 @@ private fun Lamp(c: Color, size: Dp = 10.dp) {
     Box(Modifier.size(size).clip(CircleShape).background(c))
 }
 
-/** Small red-and-black play mark for the Trailer button. */
-@Composable
-private fun TubeMark() {
-    Box(Modifier.width(22.dp).height(15.dp).clip(Rnd(4.dp)).background(Color(0xFFFF0033)), contentAlignment = Alignment.Center) {
-        Ico(R.drawable.lc_play, 9.dp, Color.White)
-    }
-}
-
 /** Pill button with any leading mark. */
 @Composable
 private fun DBtn(text: String, primary: Boolean = false, fr: FocusRequester? = null, lead: (@Composable (Color) -> Unit)? = null, onClick: () -> Unit) {
@@ -104,16 +92,6 @@ private fun DBtn(text: String, primary: Boolean = false, fr: FocusRequester? = n
 @Composable
 private fun DBadge(t: String, bg: Color = Color(0xB3000000), fg: Color = Color.White) {
     Box(Modifier.clip(Rnd(6.dp)).background(bg).padding(horizontal = 6.dp, vertical = 2.dp)) { T(t, 10.sp, fg, FontWeight.Bold) }
-}
-
-/** Poster with the rating in the corner and the quality marks. */
-@Composable
-private fun BigPoster(url: String?, key: String, rating: String?, marks: List<String>, w: Dp) {
-    Box(Modifier.width(w).aspectRatio(2f / 3f).clip(Rnd(16.dp)).border(1.dp, C.Line, Rnd(16.dp))) {
-        OnyxImage(url, key, Modifier.fillMaxSize(), maxW = 900, scale = androidx.compose.ui.layout.ContentScale.Fit, highQuality = true)
-        if (marks.isNotEmpty()) Row(Modifier.align(Alignment.TopStart).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) { marks.forEach { DBadge(it) } }
-        rating?.let { Box(Modifier.align(Alignment.TopEnd).padding(8.dp)) { DBadge("★ $it", fg = Color(0xFFFFC941)) } }
-    }
 }
 
 @Composable
@@ -136,61 +114,6 @@ private fun Cast(people: List<Person>) {
 }
 
 
-
-fun platformOf(id: String, m: Meta?) = Platforms.norm(VodMemory.catOf[id]) ?: m?.studio
-
-/** The streaming platform as a coloured chip: from the provider category name, else what TMDB says; nothing when unknown. */
-@Composable
-private fun PlatformChip(id: String, m: Meta?, size: androidx.compose.ui.unit.TextUnit, name: String = "", tv: Boolean = false) {
-    // TMDB does not know it: ask the AI once (when a key is set); nothing is shown when it is not sure either
-    val ai by load(id, m?.studio, name) { if (platformOf(id, m) == null && m != null && name.isNotBlank()) SportsAI.platform(cleanTitle(name).first, m.year, tv) else null }
-    val label = platformOf(id, m) ?: (ai as? Load.Ok)?.value ?: return
-    Box(Modifier.clip(Rnd(5.dp)).background(Color(Platforms.color(label))).padding(horizontal = 7.dp, vertical = 2.dp)) {
-        T(label.uppercase(), size, Color.White, FontWeight.ExtraBold)  // i18n-ignore
-    }
-}
-
-/* ============================================================== film page */
-
-/** Language name of a track in the app language ("Engleski"), null when the stream does not say. */
-fun trackLang(f: androidx.media3.common.Format): String? = iso2(f.language)?.let { c ->
-    java.util.Locale(c).getDisplayLanguage(java.util.Locale(Look.lang)).replaceFirstChar { it.uppercase() }.ifBlank { null } }
-
-/** "Engleski (5.1)", "Njemački (Stereo)"; unknown language: "Audio providera". */
-fun audioText(l: List<androidx.media3.common.Format>): String {
-    if (l.isEmpty()) return tr("Audio providera")
-    return l.take(2).joinToString(", ") { f ->
-        val ch = when { f.channelCount >= 8 -> "7.1"; f.channelCount >= 6 -> "5.1"; f.channelCount == 2 -> "Stereo"; else -> null }  // i18n-ignore
-        (trackLang(f) ?: tr("Audio providera")) + (ch?.let { " ($it)" } ?: "")
-    } + if (l.size > 2) " +${l.size - 2}" else ""  // i18n-ignore
-}
-
-/** Provider subtitles: none / one language / two–three / "Više". */
-fun providerSubsText(l: List<androidx.media3.common.Format>): String {
-    val langs = l.map { trackLang(it) ?: tr("Nepoznat") }.distinct()
-    return when { langs.isEmpty() -> tr("Nema"); langs.size <= 3 -> langs.joinToString(", "); else -> tr("Više") }
-}
-
-@Composable
-private fun InfoCell(icon: Int, label: String, value: String, modifier: Modifier) {
-    Row(modifier.padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Ico(icon, 22.dp, C.Text)
-        Column { T(label, 14.sp, C.Text, FontWeight.Bold, maxLines = 1); T(value, 14.sp, C.Soft, maxLines = 2) }
-    }
-}
-
-/** Audio / Subtitles on the film page: a real option button (icon, short label, value), OK opens the details. */
-@Composable
-private fun InfoBtn(icon: Int, label: String, value: String, modifier: Modifier, onClick: () -> Unit) {
-    Focusable(onClick = onClick, shape = Rnd(12.dp), normal = Color(0x14FFFFFF), focused = Dawn.pill, focusBorderColor = Color.Transparent,
-        zoom = 1f, modifier = modifier.heightIn(min = 64.dp).border(1.dp, Color(0x66FFFFFF), Rnd(12.dp))) { f ->
-        val fg = if (f) Dawn.onPill else Color.White
-        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Ico(icon, 20.dp, fg)
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) { T(label, 14.sp, fg, FontWeight.Bold, maxLines = 1); T(value, 13.sp, if (f) fg else C.Soft, maxLines = 1) }
-        }
-    }
-}
 
 /**
  * Film page (approved): big picture, poster, title, 4K/HDR · year · length · genres, story, exactly three actions
@@ -303,13 +226,6 @@ fun MediaIconsRow(open: String?, setOpen: (String?) -> Unit, subsOn: Boolean, au
                 MediaIcon(t.second, t.third, open == t.first, fr = frs[i], active = on, onClick = { setOpen(t.first) }) { menuOf(t.first) }
             }
     }
-}
-
-/** "Engleski – verzija 1" from a downloaded file named "Title (V1).en.srt" */
-fun subFileLabel(name: String): String {
-    val code = name.removeSuffix(".srt").substringAfterLast('.')
-    val v = Regex("\\(V(\\d+)\\)").find(name)?.groupValues?.get(1) ?: "1"
-    return trf("%s – verzija %s", Langs.label(code), v)
 }
 
 /** Film page › Subtitles: one list, one press (approved) — Provider tracks, a line, then online versions per chosen language. */

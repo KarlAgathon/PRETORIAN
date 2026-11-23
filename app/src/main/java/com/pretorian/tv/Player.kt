@@ -1437,8 +1437,6 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
 /** the redesigned live overlay (spec 07) replaces the old info box and option bar */
 const val LIVE_V2 = true
 
-internal val FORMATS = listOf("Zadano / automatski", "4:3", "16:9", "Prilagodi širinu", "Rastegni", "Zoom")
-
 /** Live TV: exactly six actions in one row (approved): Pause · Favorite · EPG · Format · Archive · Settings (gear). */
 @Composable
 private fun ChannelOptionsBar(favOn: Boolean, playing: Boolean, onAction: (String) -> Unit) {
@@ -1516,39 +1514,6 @@ private fun VodBar7(playing: Boolean, onAction: (String) -> Unit) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Ico(icon, 28.dp, if (f) Dawn.onPill else Color.White)
                     if (id == "back" || id == "fwd") T(Prefs.long(if (id == "back") "skip_back" else "skip_fwd", 10).toString(), 9.sp, if (f) Dawn.onPill else Color.White, FontWeight.Bold)  // i18n-ignore
-                }
-            }
-        }
-    }
-    LaunchedEffect(Unit) { delay(80); first.tryFocus() }
-}
-
-@Composable
-private fun VodPlayerBar(live: Boolean, playing: Boolean, hasChannel: Boolean, favOn: Boolean, hasSubs: Boolean, subsOn: Boolean, audioCount: Int, format: String,
-                      onPause: () -> Unit, onLong: (String) -> Unit, onAction: (String) -> Unit, rewind: Boolean = false, behind: Boolean = false) {
-    val first = remember { FocusRequester() }
-    data class B(val id: String, val label: String, val icon: Int, val tint: Color? = null)
-    val list = buildList {
-        add(B("pause", if (playing) "Pauza" else "Pusti", if (playing) R.drawable.lc_pause else R.drawable.lc_play))
-        // channels with archive: back in time without ◀◀ keys on the remote, and straight back to live
-        if (live && rewind) add(B("rew", "◀◀ 5 min", R.drawable.lc_rotate_ccw))
-        if (live && rewind && behind) add(B("tolive", "Uživo", R.drawable.lc_radio, Color(0xFFEF4444)))
-        if (live && hasChannel) add(B("fav", "Favorit", R.drawable.lc_star, if (favOn) Color(0xFFFBBF24) else null))
-        if (hasSubs || !live) add(B("subs", "Titlovi", R.drawable.lc_captions, if (subsOn) Color(0xFF22C55E) else null))
-        if (audioCount > 1) add(B("audio", "Audio", R.drawable.lc_volume))
-        add(B("format", format, R.drawable.lc_maximize))
-        if (live) { add(B("epg", "Vodič", R.drawable.lc_calendar_clock)); add(B("channels", "Grupa", R.drawable.lc_list)) }
-        add(B("menu", "Više", R.drawable.lc_layout_grid))
-    }
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        list.forEachIndexed { i, b ->
-            Focusable(onClick = { if (b.id == "pause") onPause() else onAction(b.id) }, onMenu = if (b.id == "fav" || b.id == "subs") ({ onLong(b.id) }) else null,
-                focusRequester = if (i == 0) first else null,
-                normal = Color(0x33FFFFFF), focused = C.Red, shape = Rnd(12.dp), zoom = 1.05f, modifier = Modifier.height(42.dp)) { f ->
-                Row(Modifier.align(Alignment.Center).padding(horizontal = 11.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    // an "on" button keeps its colour also with focus (dark amber on the yellow focus, so it stays visible)
-                    Ico(b.icon, 17.dp, if (b.tint != null && f) Color(0xFF92400E) else b.tint ?: if (f) C.OnRed else Color.White)
-                    T(b.label, 13.sp, if (f) C.OnRed else Color.White, FontWeight.SemiBold, maxLines = 1)
                 }
             }
         }

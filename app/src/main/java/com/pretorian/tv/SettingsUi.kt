@@ -66,27 +66,8 @@ private data class Section(val id: String, val icon: Int, val title: String, val
 
 
 
-@Composable
-private fun Page(title: String, sub: String? = null, content: @Composable () -> Unit) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        T(title, 22.sp, C.Text, FontWeight.Bold)
-        if (sub != null) T(sub, 13.sp, C.Muted, maxLines = 2)
-        content()
-    }
-}
-
-@Composable
-private fun Label(text: String) = T(text, 13.sp, C.Muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp))
-
-/* ---------------------------------------------------------------- playlists */
-
 /** Playlist being edited in "Add playlist" (null = a new one). */
 object EditPlaylist { var target: Playlist? = null }
-
-/** remembers an opened playlist page while you are in Settings */
-object PlNav { var open: String? = null }
-
-
 
 /** The same ▲ ▼ buttons everywhere something is reordered (Home rows, playlists, EPG…): grey at the top / bottom,
  *  the focus stays on the button of the moved item, so it follows the row. */
@@ -397,7 +378,7 @@ fun AddPlaylistScreen(nav: Nav) {
                     }
                 }
                 if (Store.playlists(ctx).isNotEmpty()) Button("Odustani", R.drawable.lc_x) { EditPlaylist.target = null; nav.back() }
-                else if (Look.age) Button("Nazad", R.drawable.lc_x) { Welcome.tab = -1 }
+                else Button("Nazad", R.drawable.lc_x) { Welcome.tab = -1 }
             }
         }
         Column(Modifier.width(290.dp).padding(top = 4.dp).clip(Rnd(16.dp)).background(Color(0x14FFFFFF)).border(1.dp, Silver.Border, Rnd(16.dp)).padding(18.dp),
@@ -454,16 +435,6 @@ fun setAppLang(ctx: android.content.Context, code: String) {
 
 /* ---------------------------------------------------------------- update + about */
 
-
-internal val COUNTRIES = listOf("" to "Automatski (po uređaju)", "DE" to "Njemačka", "AT" to "Austrija", "CH" to "Švicarska", "BA" to "Bosna i Hercegovina",
-    "RS" to "Srbija", "HR" to "Hrvatska", "ME" to "Crna Gora", "SI" to "Slovenija", "MK" to "Sjeverna Makedonija", "GB" to "Velika Britanija",
-    "IT" to "Italija", "ES" to "Španija", "FR" to "Francuska", "TR" to "Turska", "US" to "SAD")
-
-
-
-
-
-/* ================================================================ Settings in the new look (0.7.0) */
 
 /** Osnovno shows only what everyone needs; Napredno shows everything. */
 /** Every option is always there (Lite only saves the box, it hides nothing); only simple mode has no Settings. */
@@ -586,7 +557,7 @@ fun SettingsScreen(nav: Nav) {
     // the section names always stay readable (approved): the rail only gets a little narrower inside a page
     val railW by androidx.compose.animation.core.animateDpAsState(if (inPage) 236.dp else 270.dp, label = "rail")
     val slim = false
-    val classic = Look.layout == 0 || Look.dawn
+    val classic = true
     LaunchedEffect(classic, inPage) {
         if (classic) {
             Chrome.driven = true
@@ -912,108 +883,6 @@ fun SetSlider(title: String, sub: String?, value: Int, min: Int, max: Int, step:
 
 internal fun csv(k: String, def: String) = Prefs.str(k, def).split(',').filter { it.isNotBlank() }
 private fun onOff(b: Boolean) = if (b) 0 else 1
-private val ON_OFF = listOf("Uključeno", "Isključeno")
-
-/* ---------------------------------------------------------------- Playliste */
-
-@Composable
-private fun PlaylistsV2(nav: Nav, openSub: (String) -> Unit) {
-    val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var list by remember { mutableStateOf(Store.playlists(ctx)) }
-    var busy by remember { mutableStateOf(false) }
-    var menu by remember { mutableStateOf<Playlist?>(null) }
-    var del by remember { mutableStateOf<Playlist?>(null) }
-    var pinDel by remember { mutableStateOf<Playlist?>(null) }
-    fun refresh() { list = Store.playlists(ctx); Repo.clear(); nav.playlistsChanged() }
-    // back from Groups and channels / EPG of a playlist: its menu opens again
-    LaunchedEffect(Unit) { PlMenu.open?.let { id -> menu = list.firstOrNull { it.id == id }; PlMenu.open = null } }
-    val on = list.count { it.active }
-    SetPage("Playliste", if (list.isEmpty()) null else trf("Aktivne: %s od %s", on, list.size)) {
-        T("OK na imenu: meni · desno: uključi/isključi · ▲ ▼ redoslijed", 11.sp, C.Muted)
-        list.forEachIndexed { i, pl ->
-            val sec = pl.exp.toLongOrNull()
-            val sub = (when (pl.type) { SourceType.XTREAM -> "Xtream"; SourceType.STALKER -> "Stalker"; else -> "M3U" }) +  // i18n-ignore
-                (if (sec != null && sec > 0) " · " + trf(if (Store.expired(pl)) "istekla %s" else "ističe %s", java.text.SimpleDateFormat("dd.MM.yy", java.util.Locale.getDefault()).format(java.util.Date(sec * 1000))) else "")
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                PillRow("pl:${pl.id}", pl.name, sub, pl.active, titleColor = if (Store.expired(pl)) C.Amber else null, modifier = Modifier.weight(1f),
-                    onToggle = { Store.activate(ctx, pl.id); refresh() }) { menu = pl }
-                UpDown("pl:${pl.id}", i, list.lastIndex) { d -> Store.movePlaylist(ctx, pl.id, d); refresh() }
-            }
-        }
-        if (on > 0) SetRow("⏻  " + tr("Ugasi sve"), "nijedna playlista neće biti aktivna", arrow = "") { Store.setAll(ctx, false); refresh() }  // i18n-ignore
-        SetRow("+  " + tr("Dodaj playlistu"), "Xtream, M3U link ili fajl") { EditPlaylist.target = null; nav.push(Screen.AddPlaylist) }
-        SetRow("EPG izvori", "svi izvori TV programa", "● " + trf("%s aktivna", EpgSources.list().count { it.on }), valueColor = C.Green) { PlEdit.id = null; openSub("epg") }
-        if (list.isNotEmpty()) {
-            // refresh now: everything read again from the server, its group order taken, TV and Home load again
-            fun refreshAll() {
-                if (busy) return
-                busy = true
-                Repo.dropCatalogs(); Sports.lastCombined.clear()
-                if (ServerOrder.on) Store.playlists(ctx).forEach { Ovr(ctx, it.id).takeServerOrder() }
-                scope.launch {
-                    val updated = Store.playlists(ctx).map { pl -> try { if (pl.type == SourceType.XTREAM) pl.copy(exp = Repo.test(pl)) else { Repo.test(pl); pl } } catch (e: Exception) { pl } }
-                    Store.savePlaylists(ctx, updated); list = updated
-                    Prefs.put("auto_refresh_at", System.currentTimeMillis())
-                    updated.filter { it.active && it.type == SourceType.XTREAM }.forEach { CatalogDb.refreshLater(it, "vod"); CatalogDb.refreshLater(it, "series") }
-                    GuideSync.later(ctx, force = true)
-                    EpgSources.list().filter { it.on }.forEach { try { EpgSources.refresh(it) } catch (_: Exception) {} }
-                    nav.playlistsChanged()
-                    busy = false; Toast.makeText(ctx, tr("Osvježeno"), Toast.LENGTH_SHORT).show()
-                }
-            }
-            SetRow(if (busy) "Osvježavam…" else "Osvježi sada", "kanali, grupe, filmovi, serije, EPG — sa servera") { refreshAll() }
-            var arRev by remember { mutableIntStateOf(0) }
-            key(arRev) {
-                SetDrop("Osvježi samo", "playliste i EPG, bez čekanja ujutro", listOf("Osvježi sada") + AutoRefresh.OPTIONS, AutoRefresh.mode + 1) {
-                    if (it == 0) refreshAll() else Prefs.put("auto_refresh", (it - 1).toLong()); arRev++ }
-                SetSwitch("Raspored grupa sa servera", "osvježavanje preuzme redoslijed grupa i kanala sa servera (npr. IPTV Editor); sakrivene grupe ostaju sakrivene", ServerOrder.on) { Prefs.put("srv_order", it); arRev++ }
-                val shifts = (-3..3).toList()
-                SetDrop("Pomak TV programa (EPG)", "ako program kasni ili žuri", shifts.map { if (it == 0) tr("Bez pomaka") else (if (it > 0) "+" else "") + it + " h" },  // i18n-ignore
-                    shifts.indexOf(EpgShift.hours).coerceAtLeast(3)) { Prefs.put("epg_shift", shifts[it].toLong()); Repo.clear(); arRev++ }
-            }
-        }
-    }
-    // the playlist's own menu: edit, on/off, its groups and channels, its EPG, refresh, delete
-    menu?.let { pl0 ->
-        val pl = list.firstOrNull { it.id == pl0.id } ?: pl0
-        Popup(pl.name, { menu = null; SetFocus.tick++ }) {
-            OptionRow("Uredi (naziv, link, korisnik, lozinka)", R.drawable.lc_pencil) { menu = null; EditPlaylist.target = pl; nav.push(Screen.AddPlaylist) }
-            Focusable(onClick = { Store.activate(ctx, pl.id); refresh() }, shape = Rnd(12.dp), normal = Color.Transparent, focused = C.Red, zoom = 1f,
-                modifier = Modifier.fillMaxWidth().height(52.dp)) { f ->
-                Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Ico(R.drawable.lc_check, 18.dp, if (f) C.OnRed else C.Text)
-                    T(if (pl.active) "Aktivna" else "Isključena", 15.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                    Toggle(pl.active, f, height = 24.dp)
-                }
-            }
-            OptionRow("📂  " + tr("Grupe i kanali"), null, sub = tr("pomjeri, sakrij, zaključaj PIN-om")) { menu = null; PlEdit.id = pl.id; PlMenu.open = pl.id; openSub("groups") }  // i18n-ignore
-            OptionRow("📺  " + tr("EPG ove playliste"), null, sub = tr("izvori, zadani, uključi/ugasi")) { menu = null; PlEdit.id = pl.id; PlMenu.open = pl.id; openSub("epg") }  // i18n-ignore
-            OptionRow("Osvježi", R.drawable.lc_refresh_cw, sub = tr("kanali, filmovi i serije")) {
-                menu = null; Repo.dropCatalogs()
-                if (ServerOrder.on) Ovr(ctx, pl.id).takeServerOrder()
-                scope.launch {
-                    val up = try { if (pl.type == SourceType.XTREAM) pl.copy(exp = Repo.test(pl)) else { Repo.test(pl); pl } } catch (e: Exception) { pl }
-                    Store.savePlaylists(ctx, Store.playlists(ctx).map { if (it.id == up.id) up else it }); refresh()
-                    Toast.makeText(ctx, tr("Osvježeno"), Toast.LENGTH_SHORT).show()
-                }
-            }
-            OptionRow("Obriši", R.drawable.lc_trash_2, color = C.Danger) { menu = null; if (Prefs.bool("pin_delpl") && Lock.hasPin()) pinDel = pl else del = pl }
-        }
-    }
-    pinDel?.let { pl -> PinDialog(pl.name, tr("Unesi PIN"), onDismiss = { pinDel = null }) { pin -> val e = Lock.check(pin); if (e == null) { pinDel = null; del = pl }; e } }
-    del?.let { pl ->
-        Popup(trf("Obrisati %s?", pl.name), { del = null; SetFocus.tick++ }) {
-            OptionRow("Obriši", R.drawable.lc_trash_2, color = C.Danger) {
-                val rest = Store.playlists(ctx).filter { it.id != pl.id }
-                Watch.removePlaylist(ctx, pl.id); Store.savePlaylists(ctx, rest)
-                del = null; refresh()
-            }
-            OptionRow("Odustani", R.drawable.lc_x) { del = null }
-        }
-    }
-}
-
 @Composable
 private fun PlaylistsListV2(nav: Nav) {
     val ctx = LocalContext.current
@@ -1249,121 +1118,6 @@ private fun PlayerV2(openSub: (String) -> Unit) {
 /* ---------------------------------------------------------------- Sport */
 
 @Composable
-private fun SportChip(label: String, on: Boolean, onClick: () -> Unit) {
-    val id = "sc:$label"
-    Focusable(onClick = { SetFocus.last = id; SetFocus.pending = true; onClick() }, onFocus = { SetFocus.last = id }, focusRequester = setFocusFr(id),
-        shape = Pill, normal = if (on) Color(0xFF16A34A) else Color.Transparent, focused = C.Red, zoom = 1.05f,
-        modifier = Modifier.height(34.dp).border(1.dp, if (on) Color(0xFF16A34A) else C.Line, Pill)) { f ->
-        T((if (on) "✓ " else "") + tr(label), 13.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, modifier = Modifier.align(Alignment.Center).padding(horizontal = 14.dp))
-    }
-}
-
-@Composable
-private fun CheckRow(label: String, on: Boolean, onClick: () -> Unit) {
-    val id = "cr:$label"
-    Focusable(onClick = { SetFocus.last = id; SetFocus.pending = true; onClick() }, onFocus = { SetFocus.last = id }, focusRequester = setFocusFr(id),
-        shape = Rnd(8.dp), normal = Color.Transparent, focused = C.CardHi, zoom = 1f, modifier = Modifier.fillMaxWidth().height(30.dp)) { _ ->
-        Row(Modifier.fillMaxSize().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Box(Modifier.size(18.dp).clip(Rnd(5.dp)).background(if (on) Color(0xFF16A34A) else Color.Transparent)
-                .border(1.5.dp, if (on) Color(0xFF16A34A) else C.Muted, Rnd(5.dp)), contentAlignment = Alignment.Center) { if (on) Ico(R.drawable.lc_check, 12.dp, Color.White) }
-            T(label, 13.sp, if (on) C.Text else C.Soft, maxLines = 1)
-        }
-    }
-}
-
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-@Composable
-private fun SportV2() {
-    var rev by remember { mutableIntStateOf(0) }
-    var more by remember { mutableStateOf(false) }
-    var teamDlg by remember { mutableStateOf(false) }
-    var leaguesDlg by remember { mutableStateOf(false) }
-    var adv by remember { mutableStateOf(false) }
-    val main = listOf("football" to "Fudbal", "basketball" to "Košarka", "tennis" to "Tenis", "volleyball" to "Odbojka")
-    val others = (Sports.SPORTS + Sports.MORE_SPORTS).filter { o -> main.none { it.first == o.first } }
-    fun changed() { Sports.lastCombined.clear(); SportCache.clear(); rev++ }
-    val raw = Prefs.str("sport_leagues", Sports.BIG.joinToString(","))
-    val allL = Sports.LEAGUES.map { it.abbr }
-    val onL: Set<String> = when (raw) { "-" -> emptySet(); "" -> allL.toSet(); else -> raw.split(',').filter { it.isNotBlank() }.toSet() }
-    fun saveL(x: Set<String>) { Prefs.put("sport_leagues", if (x.isEmpty()) "-" else if (x.size == allL.size) "" else x.joinToString(",")); changed() }
-    // simple outside, complex inside (approved): one column of five rows, everything else under "Napredno"
-    key(rev) {
-        SetPage("Sportski centar", "Šta pratiš u Sportu") {
-            val en = csv("sport_enabled", "football").toMutableSet()
-            val allSports = Sports.SPORTS + Sports.MORE_SPORTS
-            SetMulti("Sport", null, allSports.map { it.second }, allSports.indices.filter { allSports[it].first in en }.toSet(), none = true) { s2 ->
-                Prefs.remove("sm_sports"); Prefs.put("sport_enabled", (if (s2.isEmpty()) setOf(0) else s2).sorted().joinToString(",") { allSports[it].first }); changed()
-            }
-            // my country also gives my national team, my region and the home league by itself
-            val picked = Prefs.str("sport_country").split(',').filter { it.isNotBlank() }.toSet()
-            val opts = COUNTRIES.drop(1)
-            SetMulti("Moja država", "reprezentacija, regija i domaća liga idu same", opts.map { it.second }, opts.indices.filter { opts[it].first in picked }.toSet(), all = false,
-                note = tr("Ništa označeno = automatski (po uređaju)")) { s2 ->
-                val codes = s2.sorted().map { opts[it].first }
-                Prefs.put("sport_country", codes.joinToString(","))
-                if (Prefs.str("sport_nations").isBlank()) Prefs.put("sport_nations", codes.filter { it in MyTeams.NATIONS }.joinToString(","))
-                MyTeams.rev++; changed()
-            }
-            val teams = Prefs.str("sport_teams").split(',').map { it.trim() }.filter { it.isNotBlank() }
-            SetRow("Moji timovi", "uvijek na vrhu, s obavještenjima", if (teams.isEmpty()) tr("＋ Dodaj") else trf("%s tima", teams.size)) { teamDlg = true }
-            val preset = when (onL) { Sports.BIG.toSet() -> 0; (Sports.BIG + Sports.REGION_LEAGUES).toSet() -> 1; allL.toSet() -> 2; else -> 3 }
-            SetDrop("Takmičenja", null, listOf("Velika takmičenja", "Velika + moja regija", "Sva", "Prilagođeno…"), preset) {
-                when (it) { 0 -> saveL(Sports.BIG.toSet()); 1 -> saveL((Sports.BIG + Sports.REGION_LEAGUES).toSet()); 2 -> saveL(allL.toSet()); else -> leaguesDlg = true }
-            }
-            SetRow("Napredno", "kontinenti, reprezentacije, osvježavanje, izvori", if (adv) "▲" else "▼", arrow = "") { adv = !adv }
-            if (adv) {
-                val conts = Sports.CONTINENTS
-                val cOn = csv("sport_cont", "eu").map { if (it == "am") "na" else it }
-                SetMulti("Kontinenti", "svjetska takmičenja uvijek", conts.map { it.second }, conts.indices.filter { conts[it].first in cOn }.toSet(), all = false) { s2 ->
-                    Prefs.put("sport_cont", (if (s2.isEmpty()) setOf(0) else s2).sorted().joinToString(",") { conts[it].first }); changed()
-                }
-                val nOpts = COUNTRIES.drop(1).filter { it.first in MyTeams.NATIONS }
-                val nOn = Prefs.str("sport_nations").split(',').filter { it.isNotBlank() }.toSet()
-                SetMulti("Moje reprezentacije", "igraju prve u Sportu", nOpts.map { it.second }, nOpts.indices.filter { nOpts[it].first in nOn }.toSet(), all = false) { s2 ->
-                    Prefs.put("sport_nations", s2.sorted().joinToString(",") { nOpts[it].first }); MyTeams.rev++; changed()
-                }
-                SetSwitch("Automatski prati", "timove i reprezentacije", MyTeams.auto) { Prefs.put("sa_auto", it); MyTeams.rev++; rev++ }
-                SetSwitch("Utakmice danas na Početnoj", null, HomeRows.isOn("today")) { HomeRows.setOn("today", it); rev++ }
-                SetSwitch("Pratiš · uživo na Početnoj", null, HomeRows.isOn("follow")) { HomeRows.setOn("follow", it); rev++ }
-                SetDrop("Osvježavanje", "dok je Sport otvoren", listOf("Svake minute", "Svake 3 min", "Svakih 5 min"),
-                    listOf(1, 3, 5).indexOf(Prefs.str("sport_refresh", "1").toIntOrNull() ?: 1).coerceAtLeast(0)) { Prefs.put("sport_refresh", listOf(1, 3, 5)[it].toString()); rev++ }
-                SetDrop("Mala slika utakmice", null, listOf("Na OK", "Isključena"), if (Prefs.bool("sport_preview", true)) 0 else 1) { Prefs.put("sport_preview", it == 0); rev++ }
-                val srcKeys = listOf("sport_src_rights", "sport_src_espn")
-                SetMulti("Ko prenosi", "tvoji TV kanali uvijek", listOf("Prava po ligi", "ESPN"),
-                    srcKeys.indices.filter { Prefs.bool(srcKeys[it], true) }.toSet(), all = false) { s2 -> srcKeys.forEachIndexed { i, k -> Prefs.put(k, i in s2) }; changed() }
-                var afDlg by remember { mutableStateOf(false) }
-                SetRow("API-Football ključ", "brži rezultati uživo", if (ApiFootball.on) tr("upisan") else tr("nema"), valueColor = if (ApiFootball.on) C.Green else null) { afDlg = true }
-                if (afDlg) TextDialog("API-Football ključ", "ključ s dashboard.api-football.com", ApiFootball.key, onDismiss = { afDlg = false; SetFocus.tick++ }) { v ->
-                    ApiFootball.key = v; afDlg = false; SportCache.clear(); rev++ }
-            }
-        }
-    }
-    // the full competition list only when you ask for it ("Prilagođeno…")
-    if (leaguesDlg) Popup("Takmičenja", { leaguesDlg = false; SetFocus.tick++ }, width = 620.dp) {
-        val en = csv("sport_enabled", "football")
-        val groups = Sports.LEAGUE_GROUPS.filter { (_, abbrs) -> abbrs.any { a -> Sports.LEAGUES.firstOrNull { it.abbr == a }?.sport in en } }
-        var cur by remember { mutableStateOf(onL) }
-        groups.forEach { (title, abbrs) ->
-            Kicker(tr(title), modifier = Modifier.padding(top = 6.dp))
-            abbrs.forEach { a ->
-                val lg = Sports.LEAGUES.firstOrNull { it.abbr == a } ?: return@forEach
-                CheckRow(tr(lg.name), a in cur) { cur = if (a in cur) cur - a else cur + a }
-            }
-        }
-        Button("Gotovo", R.drawable.lc_check, primary = true) { saveL(cur); leaguesDlg = false; SetFocus.tick++ }
-    }
-    if (more) Popup("Ostali sportovi", { more = false; SetFocus.tick++ }) {
-        val en = csv("sport_enabled", "football").toMutableSet()
-        others.forEach { (id, label) ->
-            CheckRow(tr(label), id in en) { if (id in en) en.remove(id) else en.add(id); Prefs.put("sport_enabled", en.joinToString(",")); Sports.lastCombined.clear(); more = false; rev++ }
-        }
-    }
-    if (teamDlg) FavTeamsDialog { teamDlg = false; Sports.lastCombined.clear(); rev++; SetFocus.tick++ }
-}
-
-/* ---------------------------------------------------------------- Podsjetnici */
-
-@Composable
 private fun RemindersV2(nav: Nav) {
     var rev by remember { mutableIntStateOf(0) }
     var menu by remember { mutableStateOf<Reminder?>(null) }
@@ -1547,28 +1301,6 @@ private fun ParentalV2() {
 
 
 /* ---------------------------------------------------------------- Način rada */
-
-@Composable
-private fun ModeV2() {
-    SetPage("Način rada", "Osnovno pokazuje samo najvažnije. Napredno pokazuje sve postavke.") {
-        listOf(false to ("Osnovno" to "Samo najvažnije postavke: playliste, jezik, jednostavni mod, ažuriranje"),
-            true to ("Napredno" to "Sve postavke: izgled, plejer, sport, podsjetnici, backup, profili")).forEach { (adv, t) ->
-            val on = SetMode.advanced == adv
-            Focusable(modifier = Modifier.fillMaxWidth().height(70.dp).border(if (on) 2.dp else 1.dp, if (on) C.Text else C.Line, Rnd(14.dp)),
-                onClick = { SetMode.set(adv) }, shape = Rnd(14.dp), normal = if (on) C.CardHi else C.Rail, focused = C.Red, zoom = 1.01f) { f ->
-                Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Lamp(on)
-                    Column(Modifier.weight(1f)) {
-                        T(t.first, 16.sp, if (f) C.OnRed else C.Text, FontWeight.Bold)
-                        T(t.second, 11.sp, if (f) C.OnRed.copy(alpha = 0.65f) else C.Muted, maxLines = 2)
-                    }
-                }
-            }
-        }
-    }
-}
-
-/* ---------------------------------------------------------------- Ažuriranje */
 
 @Composable
 private fun VerBox(modifier: Modifier, label: String, value: String, color: Color, icon: Int, stable: Boolean = false) {
@@ -1790,11 +1522,4 @@ private fun AppearanceV2() {
             T(when { Perf.mode == 1 -> "Izabrano ručno."; Perf.mode == 2 -> "Izabrano ručno."; Perf.lite -> "Automatski: uređaj ima manje od 3 GB RAM-a ili nižu ocjenu."; else -> "Automatski: uređaj je dovoljno jak." }, 12.sp, C.Muted, maxLines = 2)
         }
     }
-}
-
-/** Search › Settings: the real settings pages whose name or description matches (id, title, description). */
-fun settingsSearch(q: String): List<Triple<String, String, String>> {
-    val n = Sports.norm(q)
-    return SETTINGS_LINKS.values.flatten().distinctBy { it.id }.map { Triple(it.id, tr(it.title), tr(it.sub)) }
-        .filter { (_, t, sub) -> Sports.norm(t).contains(n) || Sports.norm(sub).contains(n) }
 }

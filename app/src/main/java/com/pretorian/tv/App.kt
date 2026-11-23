@@ -158,7 +158,7 @@ fun PretorianApp() {
         mutableStateListOf<Screen>(if (!Onboard.done(ctx)) Screen.AddPlaylist else Screen.Home)
     }
     var version by remember { mutableIntStateOf(0) }
-    LaunchedEffect(Look.layout) { Chrome.rail = if (Look.layout == 0) 2 else 3 }
+    LaunchedEffect(Unit) { Chrome.rail = 3 }
     val nav = remember {
         Nav(
             push = { stack.add(it) },
@@ -405,11 +405,6 @@ fun openNote(nav: Nav, n: Note) {
 
 
 
-
-fun fmtTime(ms: Long): String {
-    val s = ms / 1000
-    return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, (s % 3600) / 60, s % 60) else "%d:%02d".format(s / 60, s % 60)
-}
 
 /** "Window at start": the new version asks once when PRETORIAN opens. */
 object UpdateAsk { var show by mutableStateOf(false) }

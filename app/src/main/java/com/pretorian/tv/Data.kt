@@ -730,9 +730,6 @@ object Repo {
     }
 }
 
-/** M3U text from a link, or from a file copied in from USB ("file://…"). */
-fun m3uText(url: String): String = if (url.startsWith("file://")) java.io.File(url.removePrefix("file://")).readText() else Net.get(url)
-
 /** Quality written in a title ("4K", "FHD", "UHD", "HD", "SD"), or null. */
 private val QUALITY_4K = Regex("\\b(4K|UHD|2160P?)\\b")
 private val QUALITY_FHD = Regex("\\b(FHD|1080P?)\\b")

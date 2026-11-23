@@ -52,20 +52,6 @@ private fun LangRow(l: Lang?, title: String, sub: String?, badge: String?, selec
     }
 }
 
-/** Pick one language by flag and name. [auto] adds a first row "same as app language". */
-@Composable
-fun LangPicker(title: String, current: String, langs: List<Lang> = Langs.APP, auto: Boolean = false,
-               onDismiss: () -> Unit, onPick: (String) -> Unit) {
-    val first = remember { FocusRequester() }
-    Popup(title, onDismiss, width = 600.dp) {
-        if (auto) LangRow(null, "Kao jezik aplikacije", Langs.label(Look.lang), null, current == "auto", first) { onPick("auto") }
-        langs.forEachIndexed { i, l ->
-            LangRow(l, l.native, Langs.label(l.code), null, current == l.code, if (!auto && i == 0) first else null) { onPick(l.code) }
-        }
-    }
-    LaunchedEffect(Unit) { first.tryFocus() }
-}
-
 /** Pick several languages in order: the first one clicked is the most wanted. */
 @Composable
 fun LangOrderPicker(title: String, current: List<String>, langs: List<Lang> = Langs.MEDIA, onDismiss: () -> Unit, onSave: (List<String>) -> Unit) {

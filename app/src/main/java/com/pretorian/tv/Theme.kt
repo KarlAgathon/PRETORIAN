@@ -18,29 +18,12 @@ import androidx.compose.ui.unit.dp
  */
 object Look {
     const val theme = "silver"
-    const val accent = 0
-    const val shade = 0
     const val opacity = 85
-    const val tileSize = 1
-    var posterSize by mutableIntStateOf(1)     // 0 small, 1 medium, 2 large (internal: Lite may use small)
-    const val tileStyle = 4
     const val mostWatched = true
     const val overlay = 0
-    const val preview = true
-    /** the small live picture starts only after OK (focus never plays anything) */
-    const val previewMode = 1
-    const val menuOpacity = 94
     const val rowSize = 1
     var lang by mutableStateOf("en")           // app language
-    const val corner = 0
-    const val groupFrame = false
     const val resBadge = 1
-    const val bigText = false
-    /** one layout: one level on the screen at a time */
-    const val layout = 3
-    const val wave = false
-    const val age = true
-    const val dawn = true
     const val uiScale = 0
 
     private fun sp(c: Context) = c.getSharedPreferences("pretorian", Context.MODE_PRIVATE)
@@ -128,12 +111,6 @@ object C {
     val Overlay get() = Color(0xF0141416)
     /** player info bar background */
     val OverlayBar get() = Color(0x99000000)
-}
-
-/** Focus strength, fixed (kept for older screens). */
-object FocusCard {
-    const val pct = 100
-    @Suppress("UNUSED_PARAMETER") fun set(p: Int) {}
 }
 
 fun Rnd(d: androidx.compose.ui.unit.Dp): androidx.compose.ui.graphics.Shape = androidx.compose.foundation.shape.RoundedCornerShape(d)
