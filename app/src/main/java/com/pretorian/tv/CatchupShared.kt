@@ -245,6 +245,8 @@ fun LiveCatchupPanel(ch: Channel?, p: Playlist?, chName: String, list: Load<List
                         CuProgRow(it, pr, if (i == 0) first else null, rowH, onLong = null) { onPlay(it.e) }
                     }
                 }
+                // the loading row that held the focus is gone now: give it to the newest show
+                LaunchedEffect(Unit) { delay(60); first.tryFocus() }
             }
         }
     }
