@@ -227,7 +227,7 @@ fun OnyxMovieDetail(v: Vod, nav: Nav) {
     var menu by remember { mutableStateOf<String?>(null) }
     // redesign spec 03: full picture, gradient from the left, breadcrumb, Watch/Resume · Trailer · My List,
     // progress only when started, then exactly four icons whose menus open upward
-    Box(Modifier.fillMaxSize().background(Color(0xFF0B0B0C))) {
+    Box(Modifier.fillMaxSize()) {
         DetailBackdrop(m?.backdrop, v.poster, "bd:" + v.id, ready = meta !is Load.Loading)
         Column(Modifier.fillMaxSize().padding(start = 56.dp, end = 48.dp, top = 34.dp, bottom = 34.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             T(listOfNotNull(tr("Filmovi"), vodCrumb(false) ?: VodMemory.catOf[v.id], title).joinToString("  /  ").uppercase(), 13.sp, Silver.TextSoft, FontWeight.SemiBold)
@@ -420,7 +420,7 @@ fun OnyxSeriesDetail(s: SeriesItem, nav: Nav) {
     val weekAgo = remember { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date(System.currentTimeMillis() - 7 * 86_400_000L)) }  // i18n-ignore
     fun isNew(air: String?) = air != null && air >= weekAgo && air <= today
     val wrap = remember(rows.size) { RowWrap(rows.size) }
-    Box(Modifier.fillMaxSize().background(Color(0xFF0B0B0C))) {
+    Box(Modifier.fillMaxSize()) {
         DetailBackdrop(m?.backdrop, s.cover, "bd:" + s.id, ready = meta !is Load.Loading)
         Column(Modifier.fillMaxSize().padding(start = 56.dp, end = 48.dp, top = 30.dp, bottom = 26.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             T(listOfNotNull(tr("Serije"), vodCrumb(true) ?: VodMemory.catOf[s.id], title).joinToString("  /  ").uppercase(), 13.sp, Silver.TextSoft, FontWeight.SemiBold)
@@ -658,24 +658,29 @@ private fun EpisodeDialog(r: EpRow, title: String, s: SeriesItem, m: Meta?, fmtD
 }
 
 /**
- * Background of the movie / series view (approved): the landscape picture sits on the right (≈ 72 % of the width, full height,
- * aspect kept), so its subject is right of centre; the left text zone runs from black to charcoal and fades out before it.
- * Only a portrait poster: it stays whole at its own shape on the right, never stretched over the screen.
- * While the picture is still being looked up nothing is drawn, so the poster never flashes in as a wrong background.
+ * Background of the movie / series view (BUG 01B / 02A / 03C): the landscape backdrop keeps its own 16:9 shape
+ * (no zoom, no stretching, nothing cut off) and sits on the right, vertically centred, so its subject is right of centre;
+ * its edges fade into the Pure Graphite base, and the left text zone stays dark. A portrait poster is never used
+ * as a wide background: then the whole poster stands on the right in its own shape. Nothing is drawn while the
+ * picture is still being looked up, so no wrong picture flashes in.
  */
 @Composable
-fun DetailBackdrop(backdrop: String?, poster: String?, key: String, ready: Boolean) {
-    val base = Color(0xFF0B0B0C)
+fun DetailBackdrop(backdrop: String?, poster: String?, key: String, ready: Boolean, widthFrac: Float = 0.80f) {
+    val base = GRAPHITE
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
-        if (backdrop != null) Box(Modifier.align(Alignment.TopEnd).fillMaxHeight().width(maxWidth * 0.72f)) {
-            OnyxImage(backdrop, key, Modifier.fillMaxSize(), maxW = 1920, scale = ContentScale.Crop, highQuality = true)
-            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to base, 0.30f to base.copy(alpha = 0.55f), 0.62f to base.copy(alpha = 0.12f), 1f to Color.Transparent)))
-        } else if (ready && poster != null) Box(Modifier.align(Alignment.TopEnd).fillMaxHeight().aspectRatio(2f / 3f)) {
-            OnyxImage(poster, key + ":p", Modifier.fillMaxSize(), maxW = 780, scale = ContentScale.Crop, highQuality = true)
+        if (backdrop != null) {
+            val w = minOf(maxWidth * widthFrac, maxHeight * 16f / 9f)
+            Box(Modifier.align(Alignment.CenterEnd).width(w).aspectRatio(16f / 9f)) {
+                OnyxImage(backdrop, key, Modifier.fillMaxSize(), maxW = 1920, scale = ContentScale.Fit, highQuality = true, wide = true)
+                Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to base, 0.28f to base.copy(alpha = 0.45f), 0.55f to Color.Transparent)))
+                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to base.copy(alpha = 0.85f), 0.18f to Color.Transparent, 0.70f to Color.Transparent, 1f to base)))
+            }
+        } else if (ready && poster != null) Box(Modifier.align(Alignment.CenterEnd).fillMaxHeight().aspectRatio(2f / 3f)) {
+            OnyxImage(poster, key + ":p", Modifier.fillMaxSize(), maxW = 780, scale = ContentScale.Fit, highQuality = true)
             Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to base, 0.45f to base.copy(alpha = 0.35f), 1f to Color.Transparent)))
         }
         // the dark text zone on the left: darkest at the edge, no visible line, no box behind the text
-        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to base, 0.28f to base.copy(alpha = 0.94f), 0.46f to base.copy(alpha = 0.55f), 0.64f to Color.Transparent)))
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.5f to Color.Transparent, 1f to base.copy(alpha = 0.92f))))
+        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to base, 0.26f to base.copy(alpha = 0.92f), 0.44f to base.copy(alpha = 0.5f), 0.62f to Color.Transparent)))
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.55f to Color.Transparent, 1f to base.copy(alpha = 0.92f))))
     }
 }

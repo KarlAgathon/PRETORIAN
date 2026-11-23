@@ -136,15 +136,15 @@ fun fallbackFor(key: String): Int = FALLBACKS[(key.hashCode() and 0x7fffffff) % 
 
 /** Picture that falls back to a landscape when there is no image or it fails to load. */
 @Composable
-fun OnyxImage(url: String?, key: String, modifier: Modifier = Modifier, maxW: Int = 360, scale: ContentScale = ContentScale.Crop, highQuality: Boolean = false) {
+fun OnyxImage(url: String?, key: String, modifier: Modifier = Modifier, maxW: Int = 360, scale: ContentScale = ContentScale.Crop, highQuality: Boolean = false, wide: Boolean = false) {
     val ctx = LocalContext.current
     val fb = painterResource(fallbackFor(key))
     if (url.isNullOrBlank()) Image(fb, null, modifier, contentScale = ContentScale.Crop)
     else {
         // never decode more pixels than the screen shows; Lite also uses half the memory per pixel
         val w = if (highQuality) maxW else if (Perf.lite || Lean.posters) maxW * 2 / 3 else maxW
-        val req = remember(url, w) {
-            coil.request.ImageRequest.Builder(ctx).data(url).size(w, w * 3 / 2).allowRgb565(!highQuality && (Perf.lite || Lean.posters)).crossfade(!highQuality).build()
+        val req = remember(url, w, wide) {
+            coil.request.ImageRequest.Builder(ctx).data(url).size(w, if (wide) w * 9 / 16 else w * 3 / 2).allowRgb565(!highQuality && (Perf.lite || Lean.posters)).crossfade(!highQuality).build()
         }
         AsyncImage(model = req, contentDescription = null, contentScale = scale, modifier = modifier, error = fb, placeholder = fb)
     }

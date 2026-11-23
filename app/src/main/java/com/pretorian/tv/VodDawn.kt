@@ -226,7 +226,7 @@ private fun VodGalleryLevel(p: Playlist, series: Boolean, g: VL.Gallery, mem: Ha
  * the lower ~60 % rows of six whole 2:3 posters with the title below and the rating on the poster.
  * Watch opens the single movie / series view; Back leaves the category (one level).
  */
-@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun VodGalleryBody(title: String, icon: Int, items: Load<List<VItem>>, mem: HashMap<String, Int>, key: String, nav: Nav, empty: String) {
     val ctx = LocalContext.current
@@ -248,49 +248,60 @@ private fun VodGalleryBody(title: String, icon: Int, items: Load<List<VItem>>, m
     var toWatch by remember { mutableStateOf(0) }
     LaunchedEffect(toWatch) { if (toWatch > 0) { delay(30); watchFr.tryFocus() } }
     Box(Modifier.fillMaxSize()) {
-        // the confirmed title's picture behind the upper part, fading into the room
-        Box(Modifier.fillMaxWidth(0.7f).fillMaxHeight(0.62f).align(Alignment.TopEnd)) {
-            androidx.compose.animation.Crossfade(meta?.backdrop ?: shown.image, label = "bd", animationSpec = androidx.compose.animation.core.tween(350)) { img ->
-                OnyxImage(img, "bd:" + img, Modifier.fillMaxSize(), maxW = 1280, scale = ContentScale.Crop, highQuality = true)
-            }
-            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xFF151617), Color(0x99151617), Color(0x00151617)))))
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.45f to Color(0x00151617), 1f to Color(0xFF151617))))
-        }
-        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 0.dp)) {
-            val gap = 18.dp
-            val posterW = (maxWidth - gap * (cols - 1)) / cols
-            val posterH = posterW * 1.5f
-            val cellH = posterH + 34.dp
-            val upperH = (maxHeight * 0.40f).coerceAtLeast(200.dp)
-            Column(Modifier.fillMaxSize()) {
-                // upper part: the confirmed title
-                Column(Modifier.fillMaxWidth().height(upperH), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                    T(titleCase(meta?.title ?: cleanTitle(shown.name).first), 32.sp, Color.White, FontWeight.Bold, maxLines = 1, modifier = Modifier.widthIn(max = 760.dp))
-                    val facts = listOfNotNull(meta?.year?.take(4) ?: cleanTitle(shown.name).second, meta?.runtime, translated(meta?.genres)?.split(", ")?.take(2)?.joinToString(" · "))
-                    if (facts.isNotEmpty()) T(facts.joinToString("  •  "), 15.sp, Silver.TextSoft)  // i18n-ignore
-                    T(translated(meta?.overview) ?: "", 15.sp, Color(0xFFDDE1E6), maxLines = 2, modifier = Modifier.widthIn(max = 640.dp))
-                    val dir = meta?.people?.firstOrNull { it.role == "Režija" }?.name
-                    val cast = meta?.people?.filter { it.role != "Režija" && it.role != "Autor" }?.take(3)?.joinToString(", ") { it.name }?.ifBlank { null }
-                    if (cast != null) T(tr("Glumci") + ": " + cast, 13.sp, Silver.TextSoft, maxLines = 1, modifier = Modifier.widthIn(max = 640.dp))
-                    if (dir != null) T(tr("Režija") + ": " + dir, 13.sp, Silver.TextSoft, maxLines = 1)
-                    Spacer(Modifier.weight(1f))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        HeroBtn("Gledaj", R.drawable.lc_play, primary = true, fr = watchFr) { shown.open(nav) }
-                        HeroBtn("Trailer", R.drawable.ic_trailer_red, colored = true) { openTrailer(ctx, shown.name, meta?.trailerKey) }
-                        val on = remember(MyList.rev, shown.id) { MyList.has(shown.kind, shown.id) }
-                        HeroBtn(if (on) "Na mojoj listi" else "Moja lista", if (on) R.drawable.lc_check else R.drawable.lc_plus) { myListToggle(ctx, shown) }
-                        Spacer(Modifier.weight(1f))
-                        T("${focusIdx + 1} / ${list.size}", 14.sp, Silver.TextSoft, modifier = Modifier.align(Alignment.Bottom))  // i18n-ignore
-                    }
-                    Spacer(Modifier.height(14.dp))
+        // the confirmed title's landscape picture: its own 16:9 shape on the right (never a cropped portrait poster), fading into graphite
+        meta?.backdrop?.let { bd ->
+            Box(Modifier.align(Alignment.TopEnd).fillMaxWidth(0.62f).aspectRatio(16f / 9f)) {
+                androidx.compose.animation.Crossfade(bd, label = "bd", animationSpec = androidx.compose.animation.core.tween(350)) { img ->
+                    OnyxImage(img, "bd:" + img, Modifier.fillMaxSize(), maxW = 1280, scale = ContentScale.Fit, highQuality = true, wide = true)
                 }
-                // lower part: rows of six posters; the row slides smoothly, the next row peeks in
-                LazyVerticalGrid(GridCells.Fixed(cols), state = gs, modifier = Modifier.fillMaxWidth().weight(1f).focusRestorer(),
-                    horizontalArrangement = Arrangement.spacedBy(gap), verticalArrangement = Arrangement.spacedBy(10.dp),
-                    contentPadding = PaddingValues(top = 12.dp, bottom = 40.dp)) {
-                    itemsIndexed(list, key = { _, it -> it.id + it.url }) { i, it ->
-                        PosterCell(it, Modifier.width(posterW).height(cellH), posterH, if (i == start) fr else null, onFocus = { mem[key] = i; focusIdx = i }) {
-                            mem[key] = i; mem[key + ":c"] = i; shown = it; toWatch++
+                Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to GRAPHITE, 0.35f to GRAPHITE.copy(alpha = 0.55f), 0.7f to GRAPHITE.copy(alpha = 0f))))
+                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.40f to GRAPHITE.copy(alpha = 0f), 1f to GRAPHITE)))
+            }
+        }
+        Column(Modifier.fillMaxSize().padding(start = 12.dp, end = 12.dp, top = 4.dp)) {
+            // upper part: the confirmed title — only as tall as its content
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                T(titleCase(meta?.title ?: cleanTitle(shown.name).first), 30.sp, Color.White, FontWeight.Bold, maxLines = 1, modifier = Modifier.widthIn(max = 760.dp))
+                val facts = listOfNotNull(meta?.year?.take(4) ?: cleanTitle(shown.name).second, meta?.runtime, translated(meta?.genres)?.split(", ")?.take(2)?.joinToString(" · "))
+                if (facts.isNotEmpty()) T(facts.joinToString("  •  "), 14.sp, Silver.TextSoft)  // i18n-ignore
+                T(translated(meta?.overview) ?: "", 14.sp, Color(0xFFDDE1E6), maxLines = 2, modifier = Modifier.widthIn(max = 640.dp))
+                val dir = meta?.people?.firstOrNull { it.role == "Režija" }?.name
+                val cast = meta?.people?.filter { it.role != "Režija" && it.role != "Autor" }?.take(3)?.joinToString(", ") { it.name }?.ifBlank { null }
+                val credits = listOfNotNull(cast?.let { tr("Glumci") + ": " + it }, dir?.let { tr("Režija") + ": " + it })
+                if (credits.isNotEmpty()) T(credits.joinToString("   ·   "), 13.sp, Silver.TextSoft, maxLines = 1, modifier = Modifier.widthIn(max = 760.dp))  // i18n-ignore
+                Spacer(Modifier.height(4.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    HeroBtn("Gledaj", R.drawable.lc_play, primary = true, fr = watchFr) { shown.open(nav) }
+                    HeroBtn("Trailer", R.drawable.ic_trailer_red, colored = true) { openTrailer(ctx, shown.name, meta?.trailerKey) }
+                    val on = remember(MyList.rev, shown.id) { MyList.has(shown.kind, shown.id) }
+                    HeroBtn(if (on) "Na mojoj listi" else "Moja lista", if (on) R.drawable.lc_check else R.drawable.lc_plus) { myListToggle(ctx, shown) }
+                    Spacer(Modifier.weight(1f))
+                    T("${focusIdx + 1} / ${list.size}", 14.sp, Silver.TextSoft, modifier = Modifier.align(Alignment.Bottom))  // i18n-ignore
+                }
+            }
+            // lower part (BUG 02B / 03A): the poster size comes from the height that is really left, so one whole row
+            // (poster, title, focus border) always fits; the grid is exactly one row tall and every ▲ ▼ glides a whole row
+            // into the same place — never a half row, never a poster under the hints
+            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
+                val gap = 18.dp
+                val padV = 14.dp
+                val titleH = 30.dp
+                val byWidth = (maxWidth - gap * (cols - 1)) / cols * 1.5f
+                val posterH = minOf(byWidth, maxHeight - padV * 2 - titleH).coerceAtLeast(90.dp)
+                val posterW = posterH / 1.5f
+                val cellH = posterH + titleH
+                val padPx = with(androidx.compose.ui.platform.LocalDensity.current) { padV.toPx() }
+                val spec = remember(padPx) { RowSnap(padPx) }
+                androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides spec) {
+                    LazyVerticalGrid(GridCells.Fixed(cols), state = gs, modifier = Modifier.fillMaxWidth().height(cellH + padV * 2).focusRestorer(),
+                        horizontalArrangement = Arrangement.spacedBy(gap), verticalArrangement = Arrangement.spacedBy(padV * 2),
+                        contentPadding = PaddingValues(top = padV, bottom = padV)) {
+                        itemsIndexed(list, key = { _, it -> it.id + it.url }) { i, it ->
+                            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+                                PosterCell(it, Modifier.width(posterW).height(cellH), posterH, if (i == start) fr else null, onFocus = { mem[key] = i; focusIdx = i }) {
+                                    mem[key] = i; mem[key + ":c"] = i; shown = it; toWatch++
+                                }
+                            }
                         }
                     }
                 }
@@ -316,7 +327,8 @@ fun PosterCell(it: VItem, modifier: Modifier, posterH: androidx.compose.ui.unit.
             .background(Color(0xFF1B1C1E))
             .border(if (f) 1.5.dp else 1.dp, if (f) Color.White else Color(0x1FFFFFFF), Rnd(10.dp))
             .clickable(interactionSource = src, indication = null, onClick = onClick)) {
-            OnyxImage(it.image, "p:" + it.id, Modifier.fillMaxSize(), maxW = 300)
+            // BUG 02C / 03B: the whole poster, centred, its own shape (no zoom); a quiet graphite plate fills any space left
+            OnyxImage(it.image, "p:" + it.id, Modifier.fillMaxSize(), maxW = 300, scale = ContentScale.Fit)
             if (it.image == null) T(cleanTitle(it.name).first, 13.sp, C.Text, FontWeight.SemiBold, maxLines = 3, modifier = Modifier.align(Alignment.Center).padding(8.dp))
             val r = it.rating?.replace(',', '.')?.toDoubleOrNull()?.takeIf { v -> v > 0.0 && v <= 10.0 }
             if (r != null) Row(Modifier.align(Alignment.TopStart).padding(6.dp).clip(Rnd(6.dp)).background(Color(0xCC0B0C0D)).padding(horizontal = 6.dp, vertical = 2.dp),
@@ -450,4 +462,14 @@ private fun StreamingGrid(mem: HashMap<String, Int>, onPick: (Service) -> Unit) 
 /** The category the title was opened from (for the breadcrumb of the movie / series view). */
 fun vodCrumb(series: Boolean): String? = when (val t = VodMemory.stack[if (series) "series" else "vod"]?.lastOrNull()) {
     is VL.Gallery -> t.title; is VL.Svc -> t.s.name; VL.Streaming -> "Streaming"; else -> null
+}
+
+
+/** ▲ ▼ in the poster gallery: the focused row always lands with its top at the same place (one row per step, animated),
+ *  instead of the default "scroll as little as possible", which left rows half visible. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+class RowSnap(private val padPx: Float) : androidx.compose.foundation.gestures.BringIntoViewSpec {
+    override val scrollAnimationSpec: androidx.compose.animation.core.AnimationSpec<Float> =
+        androidx.compose.animation.core.tween(380, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float = offset - padPx
 }

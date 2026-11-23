@@ -74,10 +74,11 @@ fun Modifier.dawnGlass(r: Dp = 18.dp): Modifier = this.clip(Rnd(r)).background(S
 fun Modifier.glassCard(r: Dp = 16.dp): Modifier = this.clip(Rnd(r)).background(Color(0x8C14181C)).border(1.dp, Color(0x1FFFFFFF), Rnd(r))
 
 
-/** The approved PRETORIAN ROOM (spec 06): a static image of the dark concrete room with the helmet, centre-cropped, never stretched. */
+/** PRETORIAN PURE GRAPHITE: the one and only background of the whole app (every screen goes through DawnShell),
+ *  a static 16:9 image, centre-cropped, never stretched. Fullscreen video is the only exception. */
 @Composable
 fun DawnBackground() {
-    androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.pretorian_room), null, Modifier.fillMaxSize(),
+    androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.pretorian_graphite), null, Modifier.fillMaxSize(),
         contentScale = androidx.compose.ui.layout.ContentScale.Crop)
 }
 
@@ -272,11 +273,14 @@ fun NoteBell(nav: Nav) {
     LaunchedEffect(Unit) { Notes.load() }
     val unread = Notes.unread()
     var open by remember { mutableStateOf(false) }
-    Focusable(onClick = { open = true }, shape = androidx.compose.foundation.shape.CircleShape, normal = Color.Transparent, focused = Dawn.pill, focusBorderColor = Color.Transparent,
-        zoom = 1f, modifier = Modifier.size(40.dp)) { f ->
-        Box(Modifier.align(Alignment.Center)) { Ico(R.drawable.lc_bell, 20.dp, if (f) Dawn.onPill else C.Text) }
-        if (unread > 0) Box(Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 2.dp).size(17.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Color(0xFFE5484D)),
-            contentAlignment = Alignment.Center) { T(if (unread > 9) "9+" else unread.toString(), 10.sp, Color.White, FontWeight.Bold) }
+    // BUG 06C: the round button clipped the badge (and the bell's top); the badge now sits in an outer box that never clips
+    Box(Modifier.size(48.dp)) {
+        Focusable(onClick = { open = true }, shape = androidx.compose.foundation.shape.CircleShape, normal = Color.Transparent, focused = Dawn.pill,
+            zoom = 1f, modifier = Modifier.size(40.dp).align(Alignment.Center)) { f ->
+            Box(Modifier.align(Alignment.Center)) { Ico(R.drawable.lc_bell, 20.dp, if (f) Color.White else C.Text) }
+        }
+        if (unread > 0) Box(Modifier.align(Alignment.TopEnd).size(16.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Color(0xFFE5484D)),
+            contentAlignment = Alignment.Center) { T(if (unread > 9) "9+" else unread.toString(), 9.sp, Color.White, FontWeight.Bold) }
     }
     if (open) NoteCenter(nav) { open = false }
 }
@@ -312,7 +316,8 @@ private fun NoteCenter(nav: Nav, onDismiss: () -> Unit) {
 private fun PlaylistChip(p: Playlist, now: Long) {
     val sec = p.exp.toLongOrNull()?.takeIf { it > 0 }
     val days = sec?.let { ((it * 1000 - now) / 86_400_000L).toInt() }
-    Row(Modifier.height(40.dp).clip(Rnd(12.dp)).background(Silver.Panel).border(1.dp, Silver.Border, Rnd(12.dp)).padding(horizontal = 12.dp),
+    // BUG 06B: plain header text, no pill, no border, no background
+    Row(Modifier.height(40.dp).padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         // one line (approved): Name · dd.MM.yyyy · X days left — green > 7, orange 3–7, red ≤ 2, gray when the provider gives no date
         Ico(R.drawable.lc_list, 16.dp, C.Soft)

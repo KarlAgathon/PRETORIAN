@@ -140,13 +140,15 @@ fun LiveInfoOverlay(item: PlayItem, number: Int, quality: String?, epg: List<Epg
 /** STATE C: the six small actions, grouped and centred (not stretched across the screen). */
 @Composable
 fun LiveActionBar(fav: Boolean, catchupOk: Boolean, frs: Map<String, FocusRequester>, onAction: (String) -> Unit) {
-    Row(Modifier.reveal(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-        LiveUi.ACTIONS.forEach { (id, icon, label) ->
+    Row(Modifier.reveal().clip(Rnd(18.dp)).background(Color(0xE0151A22)).border(1.dp, Color(0x29FFFFFF), Rnd(18.dp)).padding(horizontal = 10.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+        LiveUi.ACTIONS.forEachIndexed { k, (id, icon, label) ->
+            if (k > 0) Box(Modifier.width(1.dp).height(30.dp).background(Color(0x1FFFFFFF)))
             val off = id == LiveUi.CATCHUP && !catchupOk
-            Focusable(onClick = { onAction(id) }, focusRequester = frs[id], shape = Rnd(12.dp), normal = Color.Transparent, focused = Dawn.pill, zoom = 1f,
-                modifier = Modifier.width(78.dp).height(62.dp)) { f ->
+            Focusable(onClick = { onAction(id) }, focusRequester = frs[id], shape = Rnd(12.dp), normal = Color.Transparent, focused = Color(0x33FFFFFF),
+                focusBorderColor = Color(0xE6FFFFFF), zoom = 1f, modifier = Modifier.width(80.dp).height(62.dp)) { f ->
                 Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                    val tint = when { off -> Color(0x66FFFFFF); f -> Color.White; else -> Color(0xFFDDE1E6) }
+                    val tint = when { off -> Color(0x66FFFFFF); f -> Color.White; else -> Color(0xFFE6E8EB) }
                     Ico(if (id == "fav" && fav) R.drawable.lc_star else icon, 22.dp, if (id == "fav" && fav) C.Amber else tint)
                     Spacer(Modifier.height(5.dp))
                     T(label, 12.sp, tint, if (f) FontWeight.SemiBold else FontWeight.Normal)

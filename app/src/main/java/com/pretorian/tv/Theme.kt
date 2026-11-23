@@ -139,3 +139,6 @@ object FocusCard {
 fun Rnd(d: androidx.compose.ui.unit.Dp): androidx.compose.ui.graphics.Shape = androidx.compose.foundation.shape.RoundedCornerShape(d)
 
 val Pill: androidx.compose.ui.graphics.Shape get() = androidx.compose.foundation.shape.RoundedCornerShape(50)
+
+/** the tone of the Pure Graphite background (left side); artwork fades into it */
+val GRAPHITE = androidx.compose.ui.graphics.Color(0xFF161A23)

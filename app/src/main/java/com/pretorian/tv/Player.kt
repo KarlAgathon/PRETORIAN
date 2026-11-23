@@ -311,6 +311,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     val panelFr = remember { FocusRequester() }
     var lastAct by remember { mutableStateOf("fav") }
     var clearAsk by remember { mutableStateOf(false) }
+    var epgDirect by remember { mutableStateOf(false) }   // EPG opened with ▶ (Back → clean picture) or from the dock (Back → dock)
+    var backArmed by remember { mutableStateOf(false) }
     var keyTick by remember { mutableIntStateOf(0) }
     var upSel by remember { mutableIntStateOf(0) }
     var autoCancel by remember { mutableStateOf(false) }
@@ -594,8 +596,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             resume != null -> { resume = null; player.seekTo(0); player.play() }
             dialog != null -> dialog = null
             bar -> { bar = false; showInfo = false }
-            side == "channels" -> side = "groups"
-            side == "groups" -> { side = null; sideGroup = null; nav.back() }
+            side == "channels" || side == "groups" -> { side = null; sideGroup = null }
             else -> { side = null; sideGroup = null }
         }
     }
@@ -627,17 +628,34 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         Modifier.fillMaxSize().background(Color.Black)
             .focusRequester(focus)
             .onPreviewKeyEvent { e ->
-                // live TV: short OK pauses / plays, holding OK asks to add the channel to favourites
                 val okKey = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter
-                // live TV (spec 07): short OK = channel info, long OK = the six actions
+                // BUG 05 — Back first, here at the top of the player, before any panel or Compose's own focus logic can
+                // swallow it (the floating panels keep the arrows inside, and Compose used Back to exit them and then
+                // dropped it). One physical press = one step: armed on key-down, done on key-up, only for the top layer.
+                if (s.live && (e.key == Key.Back || e.key == Key.Escape) && dialog == null && resume == null && !clearAsk &&
+                    (lv != LiveUi.NONE || side == "channels" || side == "groups")) {
+                    if (e.type == KeyEventType.KeyDown) { if (e.nativeKeyEvent.repeatCount == 0) backArmed = true }
+                    else if (e.type == KeyEventType.KeyUp && backArmed) {
+                        backArmed = false
+                        when {
+                            side != null -> { side = null; sideGroup = null }                                  // channel list → picture
+                            lv == LiveUi.EPG && epgDirect -> { lv = LiveUi.NONE; epgDirect = false }           // ▶ EPG → picture
+                            else -> lv = LiveUi.back(lv)                                                         // sub → More → dock → picture
+                        }
+                    }
+                    return@onPreviewKeyEvent true
+                }
+                // BUG 04 — live TV: short OK = pause / play (only where the stream really can), long OK = nothing at all;
+                // the repeats and the release of a long press are swallowed, so nothing else ever gets them
                 if (s.live && okKey && (lv == LiveUi.NONE || lv == LiveUi.INFO) && dialog == null && side == null && resume == null && !bar && error == null && digits.isEmpty() && favAsk == null) {
                     if (e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount == 0) { okLong = false; keyTick++; return@onPreviewKeyEvent true }
-                    if (e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount > 0) {
-                        if (!okLong) { okLong = true; lastAct = "fav"; lv = LiveUi.OPTIONS }
-                        return@onPreviewKeyEvent true
-                    }
+                    if (e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount > 0) { okLong = true; return@onPreviewKeyEvent true }
                     if (e.type == KeyEventType.KeyUp) {
-                        if (!okLong) lv = if (lv == LiveUi.INFO) LiveUi.NONE else LiveUi.INFO
+                        if (!okLong) {
+                            if (player.isCurrentMediaItemSeekable || Tech.livePause) {
+                                if (player.isPlaying) player.pause() else player.play()
+                            } else Toast.makeText(ctx, tr("Pauza nije dostupna za ovaj kanal"), Toast.LENGTH_SHORT).show()
+                        }
                         okLong = false
                         return@onPreviewKeyEvent true
                     }
@@ -686,10 +704,11 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 }
                 when (e.key) {
                     Key.Menu, Key.Info -> { dialog = "menu"; true }
-                    Key.DirectionUp, Key.ChannelUp -> if (s.live && (e.key == Key.ChannelUp || Prefs.bool("zap_updown", true))) { index = (index - 1 + n) % n; true } else { showInfo = true; true }
+                    Key.DirectionUp, Key.ChannelUp -> if (s.live && e.key == Key.ChannelUp) { index = (index - 1 + n) % n; true }
+                        else if (s.live) { epgDirect = false; lv = LiveUi.OPTIONS; true } else { showInfo = true; true }
                     // ▼ opens the channel options (the bar); CH− changes the channel
-                    Key.DirectionDown, Key.ChannelDown -> if (s.live && (e.key == Key.ChannelDown || Prefs.bool("zap_updown", true))) { index = (index + 1) % n; true }
-                        else if (s.live) { lastAct = "fav"; lv = LiveUi.OPTIONS; true }
+                    Key.DirectionDown, Key.ChannelDown -> if (s.live && e.key == Key.ChannelDown) { index = (index + 1) % n; true }
+                        else if (s.live) { epgDirect = false; lv = LiveUi.OPTIONS; true }
                         else { bar = true; showInfo = true; true }
                     // live with archive: ◀◀ goes 5 minutes back through the provider's archive, ▶▶ forward (back to live at the end)
                     Key.MediaRewind -> if (!s.live) { player.seekTo((player.currentPosition - step).coerceAtLeast(0)); showInfo = true; true }
@@ -697,9 +716,9 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                     Key.MediaFastForward -> if (!s.live) { player.seekTo(player.currentPosition + step); showInfo = true; true }
                         else { liveShift(1); true }
                     Key.DirectionLeft -> if (!s.live) { player.seekTo((player.currentPosition - bwd).coerceAtLeast(0)); showInfo = true; true }
-                        else { side = "channels"; showInfo = false; true }
+                        else { lv = LiveUi.NONE; side = "channels"; showInfo = false; true }
                     Key.DirectionRight -> if (!s.live) { player.seekTo(player.currentPosition + fwd); showInfo = true; true }
-                        else { lastAct = LiveUi.EPG; lv = LiveUi.EPG; true }
+                        else { epgDirect = true; lv = LiveUi.EPG; true }
                     Key.MediaPause, Key.MediaPlay -> { if (!s.live || Tech.livePause) { if (e.key == Key.MediaPause) player.pause() else player.play() }; showInfo = true
                         if (!s.live && e.key == Key.MediaPause) bar = true; true }
                     Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.MediaPlayPause -> {
@@ -1083,14 +1102,14 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                         else -> {}
                     }
                 }
-                if (lv != LiveUi.OPTIONS) Spacer(Modifier.height(14.dp))
+                if (lv != LiveUi.OPTIONS && !epgDirect) Spacer(Modifier.height(14.dp))
                 @Suppress("UNUSED_VARIABLE") val favRev = Favs.rev
-                LiveActionBar(fav = ch != null && Favs.inAny(ctx, ch), catchupOk = catchupOk, frs = liveFrs) { id ->
+                if (!(lv == LiveUi.EPG && epgDirect)) LiveActionBar(fav = ch != null && Favs.inAny(ctx, ch), catchupOk = catchupOk, frs = liveFrs) { id ->
                     lastAct = id
                     when (id) {
                         "fav" -> ch?.let { c -> Toast.makeText(ctx, tr(if (Favs.flip(ctx, c)) "Dodano u favorite" else "Uklonjeno iz favorita"), Toast.LENGTH_SHORT).show() }
                         LiveUi.CATCHUP -> if (!catchupOk) Toast.makeText(ctx, tr("Ovaj kanal nema arhivu"), Toast.LENGTH_SHORT).show() else lv = id
-                        else -> lv = id
+                        else -> { epgDirect = false; lv = id }
                     }
                 }
             }
@@ -1511,12 +1530,12 @@ private fun SideLists(mode: String, sideGroup: GroupRef?, items: List<PlayItem>,
     // a slow list can come after the first focus try: keep trying for a few seconds until the panel holds the focus
     LaunchedEffect(mode) { repeat(30) { delay(200); if (!has) try { fr.requestFocus() } catch (_: Exception) {} } }
     Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxHeight().width(380.dp).background(C.Overlay).padding(horizontal = 16.dp, vertical = 20.dp)
+        Column(Modifier.fillMaxHeight().width(400.dp).background(Color(0xE614181C)).padding(horizontal = 16.dp, vertical = 20.dp)
             .onFocusChanged { has = it.hasFocus }
             .onPreviewKeyEvent { e ->
                 // Back works like Left: channels → groups → out of the player to TV
                 if (e.key == Key.Back || e.key == Key.Escape) {
-                    if (e.type == KeyEventType.KeyUp) { if (mode == "groups") onBackToChannels() else onGroups() }
+                    if (e.type == KeyEventType.KeyUp) onClose()
                     return@onPreviewKeyEvent true
                 }
                 if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
@@ -1552,7 +1571,7 @@ private fun SideLists(mode: String, sideGroup: GroupRef?, items: List<PlayItem>,
                 }
             } else {
                 T(sideGroup?.cat?.name ?: TvMemory.group?.cat?.name ?: tr("Kanali"), 20.sp, C.Text, FontWeight.Bold)
-                T("◀ grupe · ▶ zatvori", 12.sp, C.Muted)
+                T("◀ grupe · ▶ / Back zatvori", 12.sp, C.Muted)
                 val list by load(sideGroup?.key) { sideGroup?.let { channelsOf(ctx, it) } ?: items.mapNotNull { it.channel } }
                 val state = rememberLazyListState()
                 when (val s = list) {
@@ -1562,12 +1581,15 @@ private fun SideLists(mode: String, sideGroup: GroupRef?, items: List<PlayItem>,
                             itemsIndexed(s.value, key = { i, c -> "$i${c.url}" }) { i, c ->
                                 Focusable(modifier = Modifier.fillMaxWidth().height(ListStyle.sideRow), onClick = { onChannel(s.value, i) },
                                     focusRequester = if (i == cur.coerceAtLeast(0)) fr else null,
-                                    normal = if (i == cur) C.CardFocus else C.Card, zoom = 1.01f) { f ->
+                                    normal = Color.Transparent, focused = Dawn.pill, zoom = 1f) { f ->
                                     Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                        T("${c.num}", 12.sp, C.Muted, modifier = Modifier.width(30.dp))
+                                        T("%02d".format(c.num), 13.sp, if (f) Color.White else C.Muted, modifier = Modifier.width(30.dp))
                                         ChannelLogo(c.logo, c.name)
-                                        T(c.name, 14.sp, if (f) C.Text else C.Soft, if (f || i == cur) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
+                                        T(c.name, 14.sp, if (f || i == cur) Color.White else C.Soft, if (f || i == cur) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
+                                        qualityTag(c.name)?.let { q -> T(q, 10.sp, Color(0xFFDDE1E6), FontWeight.Bold) }
+                                        // the channel that is playing: its own mark, independent of the focus
+                                        if (i == cur) Ico(R.drawable.lc_play, 14.dp, Color.White)
                                     }
                                 }
                             }

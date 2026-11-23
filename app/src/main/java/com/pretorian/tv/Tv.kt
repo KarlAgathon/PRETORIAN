@@ -489,7 +489,7 @@ private fun TvList(nav: Nav) {
             val i = focusedCh?.let { c -> list.indexOfFirst { it.url == c.url } } ?: -1
             Dawn.pos = if (i >= 0) "${i + 1} / ${list.size}" else ""
         }
-        Row(Modifier.fillMaxSize().padding(start = 34.dp, end = 34.dp, top = 6.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(Modifier.fillMaxSize().padding(start = 34.dp, end = 28.dp, top = 4.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             // ◀ from the preview or the options comes back to the same channel, never to the one that happens to sit beside them
             Box(Modifier.weight(0.46f).fillMaxHeight().focusRestorer().focusGroup().padding(vertical = 4.dp)) {
                 if (g != null) key(g.key, st.rev) {
@@ -499,8 +499,11 @@ private fun TvList(nav: Nav) {
             }
             // one fixed layout for every channel (approved): picture, programme box and icons are always the same size
             // and exactly as wide as each other, with or without a programme guide
-            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(0.54f).fillMaxHeight(), contentAlignment = Alignment.TopCenter) {
-                val infoH = 112.dp; val optH = 64.dp; val gaps = 20.dp
+            // BUG 06A: the right group (preview, name + NOW/NEXT, icons) takes the full width of its column; the preview
+            // is 16:9 of that width; only if the three together do not fit the height does the whole group shrink
+            // proportionally. Same left edge and the same width for all three.
+            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(0.54f).fillMaxHeight(), contentAlignment = Alignment.TopStart) {
+                val infoH = 84.dp; val optH = 56.dp; val gaps = 20.dp
                 val w = minOf(maxWidth, (maxHeight - infoH - optH - gaps) * 16f / 9f)
                 Column(Modifier.width(w).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     DawnPreview(Modifier.fillMaxWidth())

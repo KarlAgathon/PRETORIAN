@@ -2655,4 +2655,6 @@ Stanje|Состояние
 Učitava se|Загрузка
 Obrisati nedavno gledane kanale?|Очистить недавно просмотренные каналы?
 Historija|История
+Pauza nije dostupna za ovaj kanal|Пауза недоступна для этого канала
+◀ grupe · ▶ / Back zatvori|◀ группы · ▶ / Назад закрыть
 """.trimIndent()

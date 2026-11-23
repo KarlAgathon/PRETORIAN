@@ -1,3 +1,15 @@
+Media Center 2.4.3 – fixes from the TV test + Pure Graphite
+
+• One background for the whole app: PRETORIAN Pure Graphite (the old concrete room is gone); film and series pictures fade into it
+• Live TV: Back always works and goes exactly one step (panel → dock → picture → channel list → groups); it no longer gets stuck in EPG, Catch-up and the other panels
+• Live TV remote: ▲ or ▼ open the six actions (they no longer change the channel; CH+ / CH− still do), short OK = pause / play where the channel really allows it, long OK does nothing (no more accidental favourites), ◀ = channels of the group you came from, ▶ = EPG (Back goes straight back to the picture)
+• The six actions sit on one dark bar that stays readable on bright pictures; the focused one has a light outline
+• Channel list over the picture: number, logo, name, quality; the playing channel is marked; ▲ ▼ never switch by themselves; Back only closes the list
+• Movies and Series galleries: one whole row of posters always fits; ▲ ▼ glide a whole row into the same place; posters are shown whole and in their own shape (no zooming)
+• Background picture of a title: its own 16:9 shape on the right, nothing cut off; a portrait poster is never stretched as a background
+• Series view: the first episode is no longer cut off when it has the focus
+• TV channel list: bigger preview, preview / programme / icons share the same edges; the playlist info in the top bar has no box any more; the bell and its number are no longer cut off
+
 Media Center 2.4.2 – Live TV
 
 • Full screen means full screen: only the picture while you watch
