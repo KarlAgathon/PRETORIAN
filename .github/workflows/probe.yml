@@ -1,0 +1,9 @@
+name: probe
+on: { push: { branches: [probe] } }
+jobs:
+  p:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          for u in https://repo1.maven.org/maven2/org/jellyfin/media3/media3-ffmpeg-decoder/maven-metadata.xml https://dl.google.com/android/maven2/androidx/compose/compose-bom/maven-metadata.xml https://dl.google.com/android/maven2/androidx/media3/media3-exoplayer/maven-metadata.xml https://dl.google.com/android/maven2/androidx/activity/activity-compose/maven-metadata.xml https://dl.google.com/android/maven2/com/android/tools/build/gradle/maven-metadata.xml; do echo "== $u"; curl -s "$u" | grep -o '<version>[^<]*' | sed 's/<version>//' | grep -v -E 'alpha|beta|rc|dev' | tail -15 | tr '\n' ' '; echo; done
+          curl -s https://repo1.maven.org/maven2/org/jellyfin/media3/media3-ffmpeg-decoder/1.8.0+1/media3-ffmpeg-decoder-1.8.0+1.pom | head -60
