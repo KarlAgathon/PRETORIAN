@@ -193,7 +193,7 @@ fun OnyxSearch(nav: Nav) {
         val at = qNow.value
         repeat(50) { if (qNow.value != at) return@LaunchedEffect; if (anyNow.value) { firstFr.tryFocus(); return@LaunchedEffect }; delay(100) }
     }
-    val only = SearchScope.only
+    val only = SearchOnly.only
     var favAsk by remember { mutableStateOf<Channel?>(null) }
     fun longOk(h: Hit) {
         // long OK on a channel: into Favourites at once; only removing asks

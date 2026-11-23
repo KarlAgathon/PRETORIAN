@@ -419,18 +419,18 @@ fun HitActions(h: Hit, nav: Nav, onDismiss: () -> Unit) {
 
 /** The last 10 searches of the chosen category (TV, Movies, Series, Sport, Settings), newest first. */
 /** Search opened inside TV, Movies, Series or Settings looks only there (owner); null = the general search from Home. */
-object SearchScope { var only: String? = null }
+object SearchOnly { var only: String? = null }
 
 /** Opens the search limited to one part of the app, starting empty. */
 fun openScopedSearch(nav: Nav, only: String?) {
-    SearchScope.only = only; SearchMem.q = ""; SearchMem.open = only; SearchSession.reset(); if (only != null) SearchSession.cat = only
+    SearchOnly.only = only; SearchMem.q = ""; SearchMem.open = only; SearchSession.reset(); if (only != null) SearchSession.cat = only
     nav.push(Screen.Search)
 }
 
 object SearchHistory {
     var rev by androidx.compose.runtime.mutableIntStateOf(0)
     /** each part keeps its own recent searches */
-    private fun k() = "search_hist_" + (SearchScope.only ?: "all")
+    private fun k() = "search_hist_" + (SearchOnly.only ?: "all")
     fun list() = Prefs.str(k()).split('\n').filter { it.isNotBlank() }
     fun add(text: String) {
         val t = text.trim(); if (t.isEmpty()) return
