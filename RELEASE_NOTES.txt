@@ -1,3 +1,16 @@
+Media Center 2.4.4 – Search, TV groups, same event, branding and fixes
+
+• Home: the old MEDIA CENTER heading is gone; only the Spartan helmet, lightly engraved into the graphite
+• Status bar everywhere: playlist name and the days left in a thin outline (green 7+, yellow 3–6, red 0–2 or expired, grey when the provider gives no date)
+• Continue Watching cards keep the top of the picture (faces and heads), anything extra is cut off the bottom
+• Movies and Series galleries: faster and steady — one press = one poster, holding moves at a controlled pace and stops as soon as you let go; the next row is always ready
+• Posters fill their cards again (small posters were drawn tiny before)
+• Double OK on a poster opens the title (same as Watch), never twice
+• Without TMDB data the gallery and the film view use the provider's own story, cast, director and picture
+• Live TV: when the dock is open and the guide shows the same event on other channels, a small SAME EVENT list appears top right; OK switches at once; nothing appears when there is no match
+• TV groups: Favourites and Recently watched are always the first two; long OK in Favourites = edit mode (OK pick up, ▲▼ move, OK drop, saved at once, Back done); long OK in Recently watched = remove one / clear history
+• Search: TV · Movies · Series · Sport · Settings, one history of the last 10 searches (X removes one, Clear history removes all), a new Search always starts empty, Back from a result returns to the same search; long OK on a TV result adds / removes the favourite; Settings search opens the real settings page
+
 Media Center 2.4.3 – fixes from the TV test + Pure Graphite
 
 • One background for the whole app: PRETORIAN Pure Graphite (the old concrete room is gone); film and series pictures fade into it
