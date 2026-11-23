@@ -628,3 +628,11 @@ Back
 1× OK
 2× OK
 note_
+E%02d
+E%02d — 
+MEDIA CENTER
+S%02dE%02d
+bd
+ps
+pl
+subpick_film_

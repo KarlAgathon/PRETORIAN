@@ -2619,4 +2619,16 @@ Sadržaj iz Indije|Контент из Индии
 Emisije, filmovi, serije i utakmice|Передачи, фильмы, сериалы и матчи
 Zastoji, pali kanali i rušenja|Зависания, упавшие каналы и сбои
 Verzija, uređaj i licence|Версия, устройство и лицензии
+Vrijeme – lokacija|Погода – местоположение
+Prikazuje se na početnom ekranu (Open-Meteo)|Показывается на главном экране (Open-Meteo)
+Grad|Город
+Nedavno gledani TV kanali|Недавно просмотренное ТВ
+Ovdje će se pojaviti ono što gledaš.|Здесь появится то, что вы смотрите.
+Brzina|Скорость
+Zadano|По умолчанию
+Popuni|Заполнить
+Pusti epizodu od početka|Начать серию сначала
+Pusti sljedeću|Следующая серия
+Otkaži automatsko|Отменить автовоспроизведение
+Veličina teksta, vrijeme i performanse|Размер текста, погода и производительность
 """.trimIndent()

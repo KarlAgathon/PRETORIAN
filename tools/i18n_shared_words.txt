@@ -7,3 +7,6 @@ nextdns
 max
 min
 logo
+
+open
+meteo
