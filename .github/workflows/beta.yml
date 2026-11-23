@@ -1,13 +1,11 @@
 name: Beta APK
 
-# Manual only. Builds the signed BETA APK (com.pretorian.tv.beta, installs next to Stable) from a branch or tag
-# and keeps it as a workflow artifact for 14 days. Publishes nothing: no release, no update.json, main untouched.
+# Runs only when a tag beta/<n> is pushed (a manual start would need this file on main, which stays untouched).
+# Builds the signed BETA APK (com.pretorian.tv.beta, installs next to Stable) and keeps it as a workflow artifact
+# for 14 days. Publishes nothing: no release, no update.json, main untouched.
 on:
-  workflow_dispatch:
-    inputs:
-      ref:
-        description: "Branch or tag to build"
-        required: true
+  push:
+    tags: ["beta/*"]
 
 permissions:
   contents: read
@@ -17,8 +15,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.inputs.ref }}
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
