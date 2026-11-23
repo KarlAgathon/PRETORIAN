@@ -167,7 +167,9 @@ sealed class GRow {
     data class NewGroup(val pid: String) : GRow()
     /** Sport: live matches and sports channels, the first row of TV (Sport has no entry of its own in the main menu) */
     data class Sport(val dummy: Int = 0) : GRow()
-    val id get() = when (this) { is Group -> "g:" + ref.key; is Header -> "h:" + p.id; is NewFav -> "nf"; is NewGroup -> "ng:$pid"; is Sport -> "sport" }
+    /** spec 15: Catch Up as a special TV group, right under Recently watched */
+    data class Catchup(val dummy: Int = 0) : GRow()
+    val id get() = when (this) { is Group -> "g:" + ref.key; is Header -> "h:" + p.id; is NewFav -> "nf"; is NewGroup -> "ng:$pid"; is Sport -> "sport"; is Catchup -> "catchup" }
 }
 
 internal fun groupFocusTarget(rows: List<GRow>, selected: GroupRef?): String? {
@@ -182,6 +184,7 @@ suspend fun groupRows(ctx: android.content.Context): List<GRow> {
     // spec 09: Favourites and Recently watched are always the first two groups (each has its own empty state)
     out.add(GRow.Group(GroupRef(null, Category(RECENT_GROUP, tr("Nedavno gledano")))))
     val pls = Store.actives(ctx)
+    if (pls.any { it.type == SourceType.XTREAM || (it.type == SourceType.M3U && Tech.m3uCatchup) }) out.add(GRow.Catchup())
     pls.forEachIndexed { _, p ->
         // several playlists: all folded until you open one (its groups are read only then)
         val open = pls.size == 1 || p.id in TvFold.open
@@ -215,6 +218,7 @@ fun GroupColumn(
     title: String, sub: String?, onFocusGroup: (GroupRef) -> Unit, onOpen: (GroupRef) -> Unit, onMenu: (GroupRef) -> Unit,
     onHeader: (Playlist) -> Unit, onNewFav: () -> Unit, onNewGroup: (String) -> Unit, onFocusRow: (String) -> Unit,
     onSport: () -> Unit = {},
+    onCatchup: () -> Unit = {},
     extra: (@Composable () -> Unit)? = null, containVerticalFocus: Boolean = false, classicStyle: Boolean = false, fillWidth: Boolean = false,
 ) {
     val ctx = LocalContext.current
@@ -306,6 +310,15 @@ fun GroupColumn(
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                     Ico(R.drawable.lc_trophy, 18.dp, if (f) Dawn.onPill else C.Text)
                                     T("Sport", 18.sp, if (f) Dawn.onPill else C.Text, if (f) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, modifier = Modifier.weight(1f))
+                                }
+                            }
+                            is GRow.Catchup -> Focusable(modifier = rowModifier.height(48.dp), onClick = onCatchup, onFocus = { onFocusRow(r.id) },
+                                focusRequester = if (containVerticalFocus) null else fr, shape = Rnd(12.dp), normal = Color.Transparent,
+                                focused = Dawn.pill, focusBorderColor = Color.Transparent, zoom = 1f) { f ->
+                                Row(Modifier.fillMaxSize().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    Ico(R.drawable.lc_history, 18.dp, if (f) Dawn.onPill else C.Text)
+                                    T("Catch Up", 18.sp, if (f) Dawn.onPill else C.Text, if (f) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, modifier = Modifier.weight(1f))
                                 }
                             }
                             is GRow.NewGroup -> Focusable(modifier = rowModifier, onClick = { onNewGroup(r.pid) }, onFocus = { onFocusRow(r.id) }, focusRequester = if (containVerticalFocus) null else fr,
@@ -479,7 +492,7 @@ private fun TvList(nav: Nav) {
                 onMenu = { st.focusKey = "g:" + it.key; st.groupMenu = it },
                 onHeader = { p -> TvFold.toggle(p.id); if (p.id in TvFold.open) Store.open(ctx, p.id); st.focusKey = "h:" + p.id; st.rev++; st.refocus++ },
                 onNewFav = { st.newFav = true }, onNewGroup = { st.newGroupFor = it },
-                onFocusRow = { st.focusKey = it }, onSport = { nav.push(Screen.Sports) })
+                onFocusRow = { st.focusKey = it }, onSport = { nav.push(Screen.Sports) }, onCatchup = { Preview.stop(); PreviewSel.ch = null; nav.push(Screen.Catchup) })
         }
     } else {
         val g = st.group

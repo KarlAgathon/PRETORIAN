@@ -230,69 +230,36 @@ private data class CuData(val chans: List<Channel>, val groups: List<Pair<String
 /** Catch-up: Continue watching · Groups · Search; every level replaces the one before, Back goes exactly one level out. */
 @Composable
 private fun DawnCatchup(nav: Nav) {
+    // spec 15: TV › Catch Up — channels with archive (two columns) → one channel's archive; each level replaces the one before
     val ctx = LocalContext.current
     val stack = remember { androidx.compose.runtime.mutableStateListOf<Cu>(Cu.Menu).also { s -> CatchupOpen.ch?.let { s.add(Cu.Archive(it)) }; CatchupOpen.ch = null } }
-    val mem = remember { HashMap<String, Int>() }
+    val mem = remember { CuMem.mem }
     val data by load(Unit) {
         val pls = Store.actives(ctx).filter { it.type == SourceType.XTREAM || (it.type == SourceType.M3U && Tech.m3uCatchup) }
-        val chans = ArrayList<Channel>(); val groups = ArrayList<Pair<String, Category>>()
-        pls.forEach { p ->
-            val cs = try { Repo.allChannels(p).filter { Catchups.has(p, it) } } catch (e: Exception) { emptyList() }
-            chans += cs
-            val ids = cs.map { it.group }.toSet()
-            try { Repo.liveGroups(p).filter { it.id in ids }.forEach { groups += p.id to it } } catch (_: Exception) {}
-        }
-        CuData(chans.distinctBy { it.url }, groups)
+        pls.flatMap { p -> try { Repo.allChannels(p).filter { Catchups.has(p, it) } } catch (e: Exception) { emptyList() } }.distinctBy { it.url }
     }
     val top = stack.last()
     androidx.activity.compose.BackHandler(enabled = stack.size > 1) { stack.removeAt(stack.lastIndex) }
-    fun push(c: Cu) { stack.add(c) }
-    LaunchedEffect(top) {
-        Dawn.crumb = when (top) {
-            Cu.Menu -> ""; Cu.Continue -> tr("Nastavi gledati"); Cu.Groups -> tr("Grupe"); Cu.Search -> tr("Pretraga")
-            is Cu.Channels -> top.cat.name; is Cu.Archive -> top.ch.name
-        }
-    }
+    LaunchedEffect(top) { Dawn.crumb = when (top) { Cu.Continue -> tr("Nastavi gledati"); is Cu.Archive -> top.ch.name; else -> "" } }
     androidx.compose.runtime.DisposableEffect(Unit) { CuTitle.on = true; onDispose { Dawn.crumb = ""; CuTitle.on = false } }
     Box(Modifier.fillMaxSize().padding(start = 34.dp, end = 38.dp, top = 6.dp, bottom = 8.dp)) {
         when (val d = data) {
             is Load.Loading -> Loading("Učitavam kanale…")
             is Load.Err -> Message("Greška", d.message)
             is Load.Ok -> key(top.key) {
-                val all = d.value
                 when (top) {
-                    Cu.Menu -> CuPanel {
-                        CuList(mem, top.key, listOf(
-                            CuItem("Nastavi gledati", icon = R.drawable.lc_play) { push(Cu.Continue) },
-                            CuItem("Grupe", icon = R.drawable.lc_layers) { push(Cu.Groups) },
-                            CuItem("Pretraga", icon = R.drawable.lc_search) { push(Cu.Search) },
-                        ))
-                    }
+                    is Cu.Archive -> CuArchiveView(top.ch, mem, top.key, nav)
                     Cu.Continue -> CuContinue(mem, top.key, nav)
-                    Cu.Groups -> CuPanel {
-                        var q by remember { mutableStateOf("") }
-                        CuSearchField("Traži grupe…", q) { q = it }
-                        val list = all.groups.filter { q.isBlank() || Sports.norm(it.second.name).contains(Sports.norm(q)) }
-                        if (all.chans.isEmpty()) Message("Nijedan kanal nema arhivu", "Provider ne nudi catch-up za tvoje kanale")
-                        else if (list.isEmpty()) Message("Nema rezultata", null)
-                        else CuList(mem, top.key, list.map { (pid, cat) ->
-                            CuItem(cat.name, icon = R.drawable.lc_tv, trailing = all.chans.count { it.pid == pid && it.group == cat.id }.toString()) { push(Cu.Channels(pid, cat)) }
-                        })
-                    }
-                    is Cu.Channels -> CuPanel {
-                        var q by remember { mutableStateOf("") }
-                        CuSearchField(trf("Traži kanale u %s…", top.cat.name), q) { q = it }
-                        val list = all.chans.filter { it.pid == top.pid && it.group == top.cat.id && (q.isBlank() || Sports.norm(it.name).contains(Sports.norm(q))) }
-                        if (list.isEmpty()) Message("Nema rezultata", null)
-                        else CuList(mem, top.key, list.map { c -> CuItem(c.name, ch = c, trailing = trf("%sd", c.archive.coerceAtMost(14))) { push(Cu.Archive(c)) } })
-                    }
-                    is Cu.Archive -> CuArchive(top.ch, mem, top.key, nav)
-                    Cu.Search -> CuSearch(all.chans, mem, top.key, nav, onChannel = { push(Cu.Archive(it)) })
+                    else -> if (d.value.isEmpty()) Message("Nijedan kanal nema arhivu", "Provider ne nudi catch-up za tvoje kanale")
+                            else CuChannelBrowser(d.value, mem, onContinue = { stack.add(Cu.Continue) }, onOpen = { stack.add(Cu.Archive(it)) })
                 }
             }
         }
     }
 }
+
+/** Where you were in Catch Up (channel row, chosen day), kept while the app runs. */
+object CuMem { val mem = HashMap<String, Int>() }
 
 internal class CuItem(val title: String, val icon: Int? = null, val ch: Channel? = null, val sub: String? = null, val trailing: String? = null,
                      val progress: Float? = null, val dim: Boolean = false, val onLong: (() -> Unit)? = null, val divider: Boolean = false, val onClick: () -> Unit)
@@ -361,7 +328,7 @@ internal fun CuSearchField(hint: String, q: String, onQ: (String) -> Unit) {
 private fun mmss(ms: Long): String { val s = ms / 1000; return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, s / 60 % 60, s % 60) else "%d:%02d".format(s / 60, s % 60) }
 
 /** Plays a show: from [at] ms (0 = from the beginning), and remembers it for "Continue watching". */
-private fun cuPlay(ctx: android.content.Context, nav: Nav, ch: Channel, e: EpgItem, at: Long) {
+internal fun cuPlay(ctx: android.content.Context, nav: Nav, ch: Channel, e: EpgItem, at: Long) {
     val p = Store.byId(ctx, ch.pid)
     if (expired(ch, e.start)) { android.widget.Toast.makeText(ctx, tr("Ova emisija više nije u arhivi"), android.widget.Toast.LENGTH_SHORT).show(); return }
     val url = Catchups.url(p, ch, e) ?: run { android.widget.Toast.makeText(ctx, tr("Arhiva nije dostupna"), android.widget.Toast.LENGTH_SHORT).show(); return }
@@ -372,7 +339,7 @@ private fun cuPlay(ctx: android.content.Context, nav: Nav, ch: Channel, e: EpgIt
 
 /** The small action box of a show: Watch from the beginning, or Continue / Start from the beginning when it was partly watched. */
 @Composable
-private fun CuActions(ch: Channel, e: EpgItem, nav: Nav, onRemove: (() -> Unit)? = null, onDismiss: () -> Unit) {
+internal fun CuActions(ch: Channel, e: EpgItem, nav: Nav, onRemove: (() -> Unit)? = null, onDismiss: () -> Unit) {
     val ctx = LocalContext.current
     val p = Store.byId(ctx, ch.pid)
     val pr = Catchups.url(p, ch, e)?.let { Watch.get(ctx, it) }?.takeIf { it.started }
@@ -388,7 +355,7 @@ private fun CuActions(ch: Channel, e: EpgItem, nav: Nav, onRemove: (() -> Unit)?
 }
 
 @Composable
-private fun CuContinue(mem: HashMap<String, Int>, key: String, nav: Nav) {
+internal fun CuContinue(mem: HashMap<String, Int>, key: String, nav: Nav) {
     val ctx = LocalContext.current
     @Suppress("UNUSED_VARIABLE") val r = CatchupHist.rev + Watch.rev
     var q by remember { mutableStateOf("") }

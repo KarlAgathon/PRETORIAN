@@ -164,23 +164,38 @@ fun DawnVod(nav: Nav, series: Boolean) {
                     val groups by load(p.id, rev) { if (p.type == SourceType.M3U) emptyList() else ovr.groups(kind, if (series) Repo.seriesGroups(p) else Repo.vodGroups(p)) }
                     val totals = remember(p.id) { CatalogDb.counts(p.id, kind) }
                     LaunchedEffect(groups) { (groups as? Load.Ok)?.value?.let { cats = it } }
-                    CuPanel {
-                        val fixed = listOf(
-                            CuItem("Nastavi gledati", icon = R.drawable.lc_play) { stack.add(VL.Gallery(VG_CONT, tr("Nastavi gledati"), R.drawable.lc_play)) },
-                            CuItem("Nedavno dodano", icon = R.drawable.lc_clock) { stack.add(VL.Gallery(VG_NEW, tr("Nedavno dodano"), R.drawable.lc_clock)) },
-                            if (series) CuItem("Streaming", icon = R.drawable.lc_tv) { stack.add(VL.Streaming) }
-                            else CuItem("U kinima", icon = R.drawable.lc_film) { stack.add(VL.Gallery(VG_CINEMA, tr("U kinima"), R.drawable.lc_film)) },
-                            CuItem("Moja lista", icon = R.drawable.lc_bookmark) { stack.add(VL.Gallery(VG_MY, tr("Moja lista"), R.drawable.lc_bookmark)) },
-                        )
-                        val provider = ((groups as? Load.Ok)?.value ?: emptyList()).mapIndexed { i, g ->
-                            val locked = ovr.isLocked(kind, g.id)
-                            CuItem(g.name, icon = if (locked) R.drawable.lc_lock else R.drawable.lc_layers, trailing = totals[g.id]?.takeIf { it > 0 }?.toString(),
-                                divider = i == 0, onLong = { groupMenu = g }) {
-                                gate.run("$kind:${g.id}", locked) { stack.add(VL.Gallery(g.id, g.name, R.drawable.lc_layers)) }
-                            }
+                    // spec 13: rows on the left, the focused category on the right, one button, the module's own illustration
+                    val myCount = remember(MyList.rev) { MyList.items(kind).size }
+                    val newAll = remember(NewContent.rev) { NewContent.count(kind) }
+                    fun plus(n: Int) = if (n > 0) trf("+%s novih", n) else null
+                    val fixed = listOf(
+                        BrowseRow("cont", tr("Nastavi gledati"), R.drawable.lc_play) { stack.add(VL.Gallery(VG_CONT, tr("Nastavi gledati"), R.drawable.lc_play)) },
+                        BrowseRow("new", tr("Nedavno dodano"), R.drawable.lc_clock, badge = plus(newAll)) { stack.add(VL.Gallery(VG_NEW, tr("Nedavno dodano"), R.drawable.lc_clock)) },
+                        if (series) BrowseRow("stream", tr("Streaming"), R.drawable.lc_tv) { stack.add(VL.Streaming) }
+                        else BrowseRow("cinema", tr("U kinima"), R.drawable.lc_film) { stack.add(VL.Gallery(VG_CINEMA, tr("U kinima"), R.drawable.lc_film)) },
+                        BrowseRow("my", tr("Moja lista"), R.drawable.lc_bookmark, count = myCount.takeIf { it > 0 }?.toString()) { stack.add(VL.Gallery(VG_MY, tr("Moja lista"), R.drawable.lc_bookmark)) },
+                    )
+                    val provider = ((groups as? Load.Ok)?.value ?: emptyList()).mapIndexed { i, g ->
+                        val locked = ovr.isLocked(kind, g.id)
+                        BrowseRow("g:" + g.id, g.name, if (locked) R.drawable.lc_lock else R.drawable.lc_layers, count = totals[g.id]?.takeIf { it > 0 }?.toString(),
+                            badge = if (locked) null else plus(NewContent.countCat(p.id, kind, g.id)), gapBefore = i == 0, onLong = { groupMenu = g }) {
+                            gate.run("$kind:${g.id}", locked) { stack.add(VL.Gallery(g.id, g.name, R.drawable.lc_layers)) }
                         }
-                        CuList(mem, "menu", fixed + provider)
                     }
+                    TwoColBrowser(fixed + provider, mem, "menu", tr("Pregledaj kategoriju"), R.drawable.lc_chevron_right,
+                        art = if (series) R.drawable.pretorian_tv_camera else R.drawable.pretorian_film_reel,
+                        panel = { r ->
+                            val desc = when (r.id) {
+                                "cont" -> if (series) "Serije koje si počeo gledati, od mjesta gdje si stao." else "Filmovi koje si počeo gledati, od mjesta gdje si stao."
+                                "new" -> if (series) "Najnovije serije u tvojoj playlisti." else "Najnoviji filmovi u tvojoj playlisti."
+                                "cinema" -> "Filmovi koji su sada u kinima, a nalaze se u tvojoj playlisti."
+                                "stream" -> "Serije po streaming servisima, iz tvoje playliste."
+                                "my" -> "Naslovi koje si sačuvao za kasnije."
+                                else -> if (series) "Pregledaj serije u ovoj kategoriji." else "Pregledaj filmove u ovoj kategoriji."
+                            }
+                            val facts = listOfNotNull(r.count?.let { trf("Naslova: %s", it) }, r.badge).joinToString(" · ").ifBlank { null }
+                            BrowsePanelText(tr("KATEGORIJA"), r.title, facts, tr(desc))
+                        })
                 }
                 is VL.Gallery -> VodGalleryLevel(p, series, top, mem, nav)
                 VL.Streaming -> StreamingGrid(mem) { stack.add(VL.Svc(it)) }

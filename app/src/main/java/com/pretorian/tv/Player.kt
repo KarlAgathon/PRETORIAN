@@ -1034,7 +1034,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 lv = LiveUi.NONE
                 CatchupHist.add(CatchupHist.E(u, e.title, c, e.start, e.end, System.currentTimeMillis()))
                 // archive playback is its own (non-live) player; Back comes back to this channel
-                nav.push(Screen.Player(listOf(PlayItem(e.title, u, c.logo, c.name + " · " + e.times(), startAt = 0L)), 0, live = false))
+                val pr = Watch.get(ctx, u)?.takeIf { it.started && !it.watched }
+                nav.push(Screen.Player(listOf(PlayItem(e.title, u, c.logo, c.name + " · " + e.times(), startAt = pr?.pos ?: 0L)), 0, live = false))
             }
             fun tune(c: Channel) {
                 val i = items.indexOfFirst { it.url == c.url }
@@ -1053,8 +1054,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                     when (lv) {
                         LiveUi.EPG -> LiveEpgPanel(ch?.name ?: item.title, liveEpg, { e -> catchupOk && ch != null && !expired(ch, e.start) }, { e -> playArchive(e) }, panelFr)
                         LiveUi.CATCHUP -> {
-                            val arch by load(ch?.url) { if (p != null && ch != null) archiveOf(p, ch) else emptyList() }
-                            LiveCatchupPanel(ch?.name ?: item.title, arch, { e -> playArchive(e) }, panelFr)
+                            val arch by load(ch?.url) { if (p != null && ch != null) cuArchive(p, ch) else emptyList() }
+                            LiveCatchupPanel(ch, p, ch?.name ?: item.title, arch, { e -> playArchive(e) }, panelFr)
                         }
                         LiveUi.PICTURE -> LivePanel(tr("Slika"), R.drawable.lc_monitor, false, panelFr) {
                             PICTURE_MODES.forEachIndexed { k, (i, label) ->
@@ -1120,7 +1121,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                     lastAct = id
                     when (id) {
                         "fav" -> ch?.let { c -> Toast.makeText(ctx, tr(if (Favs.flip(ctx, c)) "Dodano u favorite" else "Uklonjeno iz favorita"), Toast.LENGTH_SHORT).show() }
-                        LiveUi.CATCHUP -> if (!catchupOk) Toast.makeText(ctx, tr("Ovaj kanal nema arhivu"), Toast.LENGTH_SHORT).show() else lv = id
+                        LiveUi.CATCHUP -> if (!catchupOk) Toast.makeText(ctx, tr("Catch-Up nije dostupan za ovaj kanal"), Toast.LENGTH_SHORT).show() else lv = id
                         else -> { epgDirect = false; lv = id }
                     }
                 }
