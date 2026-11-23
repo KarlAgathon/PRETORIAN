@@ -58,6 +58,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
@@ -100,23 +102,21 @@ fun SetRow(title: String, sub: String? = null, value: String? = null, arrow: Str
            focusRequester: FocusRequester? = null, onLong: (() -> Unit)? = null, onClick: () -> Unit) {
     val id = "row:$title"
     val fr = setFocusFr(id, focusRequester)
-    Focusable(modifier = Modifier.fillMaxWidth().heightIn(min = if (sub != null) 56.dp else 48.dp).border(1.dp, C.Line, Rnd(12.dp)),
+    val d = LocalSetDims.current
+    // Phase A: New Dawn row – no box or border, the pale focus pill over the whole row, readable from the couch
+    Focusable(modifier = Modifier.fillMaxWidth().heightIn(min = if (sub != null) d.row else d.row - 10.dp),
         onClick = { SetFocus.last = id; SetFocus.pending = true; onClick() }, onMenu = onLong, onFocus = { SetFocus.last = id },
-        focusRequester = fr, shape = Rnd(12.dp), normal = SolidRow, focused = C.Red, zoom = 1.01f) { f ->
-        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 10.dp, top = 7.dp, bottom = 7.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        focusRequester = fr, shape = Rnd(14.dp), normal = Color.Transparent, focused = Dawn.pill, zoom = 1f) { f ->
+        val fg = if (f) Dawn.onPill else C.Text
+        val mg = if (f) Dawn.onPill.copy(alpha = 0.7f) else C.Muted
+        Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 14.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    T(title, 15.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, maxLines = 2)
-                    // no "NEW" badges in Settings (approved: calm rows)
-                }
-                if (sub != null) T(sub, 12.sp, if (f) C.OnRed.copy(alpha = 0.65f) else C.Muted, maxLines = 2)
+                T(title, d.title, fg, FontWeight.SemiBold, maxLines = 2)
+                // no "NEW" badges in Settings (approved: calm rows)
+                if (sub != null) T(sub, d.sub, mg, maxLines = 2)
             }
-            if (value != null || arrow.isNotEmpty()) Row(Modifier.clip(Rnd(9.dp)).background(if (f) Color(0x14000000) else C.Card)
-                .border(1.dp, if (f) Color(0x26000000) else C.Line, Rnd(9.dp)).padding(horizontal = 10.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                if (value != null) T(value, 14.sp, if (f) C.OnRed else (valueColor ?: C.Text), FontWeight.SemiBold, maxLines = 1, modifier = Modifier.widthIn(max = 170.dp))
-                if (arrow.isNotEmpty()) T(arrow, 10.sp, if (f) C.OnRed else C.Muted)
-            }
+            if (value != null) T(value, d.sub, if (f) Dawn.onPill else (valueColor ?: C.Soft), FontWeight.SemiBold, maxLines = 1, modifier = Modifier.widthIn(max = 240.dp))
+            if (arrow.isNotEmpty()) T(arrow, d.sub, mg)
         }
     }
 }
@@ -252,3 +252,137 @@ fun SetSlider(title: String, sub: String?, value: Int, min: Int, max: Int, step:
 
 internal fun csv(k: String, def: String) = Prefs.str(k, def).split(',').filter { it.isNotBlank() }
 private fun onOff(b: Boolean) = if (b) 0 else 1
+
+/* ---------------------------------------------------------------- Phase A: shared New Dawn Settings components */
+
+/** Row sizes (start values, tuned on the box): normal, and compact below about 540 dp of height. */
+class SetDims(val row: Dp, val icon: Dp, val title: TextUnit, val sub: TextUnit, val gap: Dp, val pad: Dp)
+val SetDimsNormal = SetDims(68.dp, 30.dp, 20.sp, 15.sp, 8.dp, 24.dp)
+val SetDimsCompact = SetDims(58.dp, 26.dp, 18.sp, 14.sp, 6.dp, 20.dp)
+val LocalSetDims = androidx.compose.runtime.compositionLocalOf { SetDimsNormal }
+
+/** keeps the focused row fully visible with about half a row of air above and below (never clipped at an edge) */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+class SetBringSpec(private val marginPx: Float) : androidx.compose.foundation.gestures.BringIntoViewSpec {
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
+        val m = marginPx.coerceAtMost(((containerSize - size) / 2f).coerceAtLeast(0f))
+        val end = offset + size
+        return when {
+            offset < m -> offset - m
+            end > containerSize - m -> end - (containerSize - m)
+            else -> 0f
+        }
+    }
+}
+
+/** one item of a [SetList]: a stable [key] (never an index alone) and its content, given its own focus requester */
+class SetItem(val key: String, val content: @Composable (FocusRequester) -> Unit)
+
+/**
+ * The Settings list: as many complete rows as fit (no fixed count), focus-following scroll with a margin,
+ * and the focused row and scroll position restored from [entry] when the page comes back.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+fun SetList(entry: SetEntry, rows: List<SetItem>, modifier: Modifier = Modifier, takeFocus: Boolean = true) {
+    val dims = LocalSetDims.current
+    val state = remember(entry) { androidx.compose.foundation.lazy.LazyListState(entry.scrollIndex, entry.scrollOffset) }
+    val frs = remember(entry) { HashMap<String, FocusRequester>() }
+    fun fr(k: String) = frs.getOrPut(k) { FocusRequester() }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val spec = remember(dims) { SetBringSpec(with(density) { dims.row.toPx() / 2f }) }
+    // keep the place for when this page comes back
+    LaunchedEffect(state) {
+        androidx.compose.runtime.snapshotFlow { state.firstVisibleItemIndex to state.firstVisibleItemScrollOffset }
+            .collect { (i, o) -> entry.scrollIndex = i; entry.scrollOffset = o }
+    }
+    if (takeFocus) LaunchedEffect(entry, rows.size) {
+        if (rows.isEmpty()) return@LaunchedEffect
+        val k = entry.focus?.takeIf { f -> rows.any { it.key == f } } ?: rows.first().key
+        val idx = rows.indexOfFirst { it.key == k }.coerceAtLeast(0)
+        if (state.layoutInfo.visibleItemsInfo.none { it.index == idx }) runCatching { state.scrollToItem(idx) }
+        delay(40)
+        fr(k).tryFocus()
+    }
+    androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides spec) {
+        androidx.compose.foundation.lazy.LazyColumn(modifier.fillMaxWidth(), state = state,
+            verticalArrangement = Arrangement.spacedBy(dims.gap),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = dims.gap)) {
+            items(rows.size, key = { rows[it].key }) { i ->
+                val it2 = rows[i]
+                Box(Modifier.onFocusChanged { f -> if (f.hasFocus) entry.focus = it2.key }) { it2.content(fr(it2.key)) }
+            }
+        }
+    }
+}
+
+/** A navigation row: monochrome icon, title, optional subtitle, optional value, chevron when it opens a page. */
+@Composable
+fun SetNavRow(title: String, sub: String? = null, icon: Int? = null, value: String? = null, chevron: Boolean = true,
+              badge: Int = 0, focusRequester: FocusRequester? = null, onClick: () -> Unit) {
+    val d = LocalSetDims.current
+    Focusable(modifier = Modifier.fillMaxWidth().heightIn(min = d.row), onClick = onClick, focusRequester = focusRequester,
+        shape = Rnd(14.dp), normal = Color.Transparent, focused = Dawn.pill, zoom = 1f) { f ->
+        val fg = if (f) Dawn.onPill else C.Text
+        val mg = if (f) Dawn.onPill.copy(alpha = 0.7f) else C.Muted
+        Row(Modifier.fillMaxWidth().heightIn(min = d.row).padding(horizontal = 18.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            if (icon != null) Ico(icon, d.icon, fg)
+            Column(Modifier.weight(1f)) {
+                T(title, d.title, fg, FontWeight.SemiBold, maxLines = 2)
+                if (sub != null) T(sub, d.sub, mg, maxLines = 2)
+            }
+            if (badge > 0) Box(Modifier.size(20.dp).clip(CircleShape).background(C.Danger), contentAlignment = Alignment.Center) {
+                T(badge.toString(), 11.sp, Color.White, FontWeight.Bold)
+            }
+            if (value != null) T(value, d.sub, mg, maxLines = 1, modifier = Modifier.widthIn(max = 260.dp))
+            if (chevron) Ico(R.drawable.lc_chevron_right, (d.icon.value * 0.66f).dp, mg)
+        }
+    }
+}
+
+/** A short centred confirmation: focus starts on Odustani; Back cancels and returns focus to the row that opened it. */
+@Composable
+fun SetConfirm(title: String, message: String?, confirm: String, danger: Boolean = false, onCancel: () -> Unit, onConfirm: () -> Unit) {
+    val cancelFr = remember { FocusRequester() }
+    Popup(title, onCancel) {
+        if (message != null) T(message, 15.sp, C.Soft, maxLines = 4)
+        Focusable(modifier = Modifier.fillMaxWidth().height(52.dp), onClick = onCancel, focusRequester = cancelFr, shape = Rnd(12.dp),
+            normal = Color.Transparent, focused = Dawn.pill, zoom = 1f) { f ->
+            Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Ico(R.drawable.lc_x, 18.dp, if (f) Dawn.onPill else C.Text); T("Odustani", 16.sp, if (f) Dawn.onPill else C.Text, FontWeight.SemiBold)
+            }
+        }
+        Focusable(modifier = Modifier.fillMaxWidth().height(52.dp), onClick = onConfirm, shape = Rnd(12.dp),
+            normal = Color.Transparent, focused = Dawn.pill, zoom = 1f) { f ->
+            val c = if (f) Dawn.onPill else if (danger) C.Danger else C.Text
+            Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Ico(if (danger) R.drawable.lc_trash_2 else R.drawable.lc_check, 18.dp, c); T(confirm, 16.sp, c, FontWeight.SemiBold)
+            }
+        }
+    }
+    LaunchedEffect(Unit) { delay(60); cancelFr.tryFocus() }
+}
+
+/** Two equal actions side by side (◀ ▶ between them); one under the other when the page is narrow. */
+@Composable
+fun SetActionPair(a: Pair<String, Int>, b: Pair<String, Int>, onA: () -> Unit, onB: () -> Unit, trailing: Int? = R.drawable.lc_refresh_cw) {
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val d = LocalSetDims.current
+        val wide = maxWidth > 520.dp
+        @Composable fun Act(t: Pair<String, Int>, on: () -> Unit, m: Modifier) =
+            Focusable(modifier = m.height(d.row), onClick = on, shape = Rnd(14.dp), normal = C.Card, focused = Dawn.pill, zoom = 1f) { f ->
+                val fg = if (f) Dawn.onPill else C.Text
+                Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Ico(t.second, d.icon * 0.8f, fg)
+                    T(t.first, d.sub, fg, FontWeight.SemiBold, maxLines = 2, modifier = Modifier.weight(1f))
+                    if (trailing != null) Ico(trailing, 16.dp, fg)
+                }
+            }
+        if (wide) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(d.gap)) {
+            Act(a, onA, Modifier.weight(1f)); Act(b, onB, Modifier.weight(1f))
+        } else Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(d.gap)) {
+            Act(a, onA, Modifier.fillMaxWidth()); Act(b, onB, Modifier.fillMaxWidth())
+        }
+    }
+}

@@ -2777,4 +2777,10 @@ Spremi u folder|Сохранить в папку
 Ovaj link više ne važi. Otvori ponovo „Izvezi izvještaj“ na TV-u.|Эта ссылка больше не действует. Снова откройте «Экспорт отчёта» на ТВ.
 Dijagnostički izvještaj (TXT), bez lozinki i ključeva. Link radi jednom.|Диагностический отчёт (TXT), без паролей и ключей. Ссылка работает один раз.
 Beta: ažuriranja su isključena|Бета: обновления отключены
+Više opcija|Ещё настройки
+Vanjski plejer, jezici titla i zvuka, file manager|Внешний плеер, языки субтитров и звука, файловый менеджер
+eksterni plejer, vanjski plejer, jezici titla, jezici zvuka, file manager|внешний плеер, другой плеер, языки субтитров, языки звука, файловый менеджер
+Više opcija plejera|Ещё настройки плеера
+Procesor, RAM, ekran, mreža|Процессор, RAM, экран, сеть
+Pronađi bilo koju postavku po imenu|Найдите любую настройку по названию
 """.trimIndent()

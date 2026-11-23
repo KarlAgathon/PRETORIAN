@@ -273,24 +273,35 @@ internal fun PlayerV2(openSub: (String) -> Unit) {
                 sel.coerceAtLeast(0), disabled = slots.indices.filter { slots[it].second == null }.map { it + 1 }.toSet()) { k ->
                 Prefs.put("trailer_app", if (k == 0) "" else slots[k - 1].second ?: ""); rev++
             }
-            if (SetMode.advanced) {
-                SetSection("Napredno")
-                val players = remember { ExtPlayer.installed(ctx) }
-                SetDrop("Plejer", "za filmove i serije", listOf(tr("Ugrađeni")) + players.map { it.label },
-                    if (!ExtPlayer.always) 0 else (players.indexOfFirst { it.pkg == ExtPlayer.saved } + 1).coerceAtLeast(0)) { i ->
-                    if (i == 0) ExtPlayer.always = false else { ExtPlayer.saved = players[i - 1].pkg; ExtPlayer.always = true }; rev++
-                }
-                var langEdit by remember { mutableStateOf<String?>(null) }
-                SetRow("Jezici titlova po redu", "prvi koji postoji se uključi", langList(Prefs.subLangs)) { langEdit = "sub" }
-                SetRow("Jezici zvuka po redu", "prvi koji postoji se uključi", langList(Prefs.audioLangs)) { langEdit = "audio" }
-                val fm = listOf("" to tr("Pitaj svaki put"), "builtin" to tr("Ugrađeni")) + FileAccess.pickers(ctx).map { it.pkg to it.label }
-                SetDrop("File manager", "za titlove i backup s USB-a", fm.map { it.second }, fm.indexOfFirst { it.first == FileAccess.app }.coerceAtLeast(0)) { FileAccess.app = fm[it].first; rev++ }
-                when (langEdit) {
-                    "sub" -> LangOrderPicker("Jezici titla", Prefs.subLangs.split(',').filter { it.isNotBlank() }, onDismiss = { langEdit = null; SetFocus.tick++ }) { Prefs.subLangs = it.joinToString(","); langEdit = null; rev++ }
-                    "audio" -> LangOrderPicker("Jezici zvuka", Prefs.audioLangs.split(',').filter { it.isNotBlank() }, onDismiss = { langEdit = null; SetFocus.tick++ }) { Prefs.audioLangs = it.joinToString(","); langEdit = null; rev++ }
-                }
-            }
+            // Phase A: the technical player options live one level down, in "Više opcija" (no Basic/Advanced mode)
+            SetRow("Više opcija", "Vanjski plejer, jezici titla i zvuka, file manager", arrow = "›") { openSub("playermore") }
             ResetSection("Plejer", listOf("sub_size", "sub_style", "recover_on", "recover_wait2", "buffer_mb", "zap_updown", "resume_mode", "next_ep", "blur_eps", "trailer_app", "audio_passthrough")) { rev++ }
+        }
+    }
+}
+
+
+/** Settings › Reprodukcija › Plejer › Više opcija: the technical player options (moved here unchanged from "Napredno"). */
+@Composable
+internal fun PlayerMoreV2() {
+    val ctx = LocalContext.current
+    var rev by remember { mutableIntStateOf(0) }
+    key(rev) {
+        SetPage("Više opcija") {
+            val players = remember { ExtPlayer.installed(ctx) }
+            SetDrop("Plejer", "za filmove i serije", listOf(tr("Ugrađeni")) + players.map { it.label },
+                if (!ExtPlayer.always) 0 else (players.indexOfFirst { it.pkg == ExtPlayer.saved } + 1).coerceAtLeast(0)) { i ->
+                if (i == 0) ExtPlayer.always = false else { ExtPlayer.saved = players[i - 1].pkg; ExtPlayer.always = true }; rev++
+            }
+            var langEdit by remember { mutableStateOf<String?>(null) }
+            SetRow("Jezici titlova po redu", "prvi koji postoji se uključi", langList(Prefs.subLangs)) { langEdit = "sub" }
+            SetRow("Jezici zvuka po redu", "prvi koji postoji se uključi", langList(Prefs.audioLangs)) { langEdit = "audio" }
+            val fm = listOf("" to tr("Pitaj svaki put"), "builtin" to tr("Ugrađeni")) + FileAccess.pickers(ctx).map { it.pkg to it.label }
+            SetDrop("File manager", "za titlove i backup s USB-a", fm.map { it.second }, fm.indexOfFirst { it.first == FileAccess.app }.coerceAtLeast(0)) { FileAccess.app = fm[it].first; rev++ }
+            when (langEdit) {
+                "sub" -> LangOrderPicker("Jezici titla", Prefs.subLangs.split(',').filter { it.isNotBlank() }, onDismiss = { langEdit = null; SetFocus.tick++ }) { Prefs.subLangs = it.joinToString(","); langEdit = null; rev++ }
+                "audio" -> LangOrderPicker("Jezici zvuka", Prefs.audioLangs.split(',').filter { it.isNotBlank() }, onDismiss = { langEdit = null; SetFocus.tick++ }) { Prefs.audioLangs = it.joinToString(","); langEdit = null; rev++ }
+            }
         }
     }
 }

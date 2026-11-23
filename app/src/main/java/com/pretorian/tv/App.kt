@@ -167,18 +167,20 @@ fun PretorianApp() {
     LaunchedEffect(Unit) { Chrome.rail = 3 }
     val nav = remember {
         Nav(
-            push = { stack.add(it) },
+            // Settings keeps its own page stack per copy on the app stack (Phase A); a newly opened copy starts fresh
+            push = { if (it == Screen.Settings) SettingsStack.opened(stack.count { s -> s == Screen.Settings } + 1, stack.lastOrNull() == Screen.Search); stack.add(it) },
             back = {
                 if (stack.size > 1) {
                     val left = stack.removeAt(stack.lastIndex)
                     // a new version waits: once per version, right after the player, Settings › Update opens by itself
                     val u = Updater.available
                     if (left is Screen.Player && u != null && Updater.mayAsk(u) && Updater.notify("player") && Prefs.str("upd_asked") != u.name) {
-                        Prefs.put("upd_asked", u.name); SettingsNav.section = "update"; stack.add(Screen.Settings)
+                        Prefs.put("upd_asked", u.name); SettingsNav.section = "update"
+                        SettingsStack.opened(stack.count { s -> s == Screen.Settings } + 1, false); stack.add(Screen.Settings)
                     }
                 }
             },
-            root = { s -> if (s != Screen.Search) SearchMem.clear() else SearchOnly.only = null; stack.clear(); stack.add(Screen.Home); if (s != Screen.Home) stack.add(s) },
+            root = { s -> if (s != Screen.Search) SearchMem.clear() else SearchOnly.only = null; if (s == Screen.Settings) SettingsStack.opened(1, false); stack.clear(); stack.add(Screen.Home); if (s != Screen.Home) stack.add(s) },
             playlistsChanged = { Repo.clear(); version++ },
         )
     }
@@ -299,7 +301,7 @@ fun PretorianApp() {
                                 Screen.Tv -> TvScreen(nav)
                                 Screen.Movies -> MoviesScreen(nav)
                                 Screen.Series -> SeriesScreen(nav)
-                                Screen.Settings -> SettingsScreen(nav)
+                                Screen.Settings -> { SettingsStack.depth = stack.count { s -> s == Screen.Settings }; SettingsScreen(nav) }
                                 Screen.AddPlaylist -> AddPlaylistScreen(nav)
                                 is Screen.MovieDetail -> MovieDetailScreen(top.vod, nav)
                                 is Screen.SeriesDetail -> SeriesDetailScreen(top.item, nav)
