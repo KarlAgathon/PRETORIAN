@@ -390,14 +390,21 @@ fun DawnOptions(ch: Channel?, nav: Nav, modifier: Modifier) {
     // actions that need a picture work on the channel in the preview (after the first OK)
     fun live(): Boolean = (PreviewSel.ch != null && Preview.player != null).also { if (!it) toast("Prvo pritisni OK na kanalu za pregled.") }
     // the way back to the channel list is explicit: ◀ on the first icon (or Back) goes to the channel in the preview
-    Row(modifier.dawnGlass(14.dp).padding(5.dp).onFocusChanged { TvFocus.inDock = it.hasFocus }, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    // Compose turns Back (on key-down) into "leave this group", so the row itself takes Back and ◀ before anything else:
+    // ◀ on the first icon and Back anywhere in the row go to the channel in the preview (2.5.6)
+    var dockIdx by remember { mutableIntStateOf(0) }
+    Row(modifier.dawnGlass(14.dp).padding(5.dp).onFocusChanged { TvFocus.inDock = it.hasFocus }.onPreviewKeyEvent { e ->
+        val toList = TvFocus.toList ?: return@onPreviewKeyEvent false
+        val back = e.key == androidx.compose.ui.input.key.Key.Back || e.key == androidx.compose.ui.input.key.Key.Escape
+        val left = e.key == androidx.compose.ui.input.key.Key.DirectionLeft && dockIdx == 0
+        if (!back && !left) return@onPreviewKeyEvent false
+        val down = e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown
+        if (left && down) toList()
+        if (back && !down) toList()
+        true
+    }, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         @Composable fun Opt(icon: Int, tint: Color? = null, first: Boolean = false, onClick: () -> Unit) {
-            Focusable(modifier = Modifier.weight(1f).fillMaxHeight().then(if (!first) Modifier else Modifier.onPreviewKeyEvent { e ->
-                if (e.key == androidx.compose.ui.input.key.Key.DirectionLeft) {
-                    if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) TvFocus.toList?.invoke()
-                    TvFocus.toList != null
-                } else false
-            }), onClick = onClick, shape = Rnd(10.dp), normal = Color.Transparent,
+            Focusable(modifier = Modifier.weight(1f).fillMaxHeight(), onFocus = { dockIdx = if (first) 0 else 1 }, onClick = onClick, shape = Rnd(10.dp), normal = Color.Transparent,
                 focused = Dawn.pill, focusBorderColor = Color.Transparent, zoom = 1.0f) { f ->
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Ico(icon, 26.dp, if (f && tint == null) Dawn.onPill else tint ?: C.Text) }
             }
