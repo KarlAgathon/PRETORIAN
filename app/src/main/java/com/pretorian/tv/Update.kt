@@ -330,6 +330,7 @@ object Updater {
 
 class UpdateResultReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
+        Prefs.ensure(ctx)
         // only the install started last counts: an old, thrown-away session must not touch the running one
         val sid = intent.getIntExtra(PackageInstaller.EXTRA_SESSION_ID, -1)
         if (sid != Updater.session) return
