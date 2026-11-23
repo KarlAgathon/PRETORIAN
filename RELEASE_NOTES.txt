@@ -1,3 +1,17 @@
+Media Center 2.4.0 – new look (part 1: Home, Movies, Series, player)
+
+• New look: a concrete gallery room with soft light shafts, glass panels with a thin line, white text; the focus is a soft white pill with a white border
+• Home: MEDIA CENTER and one navigation column on the left (Search, Home, TV, Movies, Series, Sport, Catch-up, Settings); weather, time and playlist in the top right; Continue Watching as 1–3 big cards; Recently watched TV as logo tiles
+• Weather: Open-Meteo – choose your city in Settings › Appearance (no city = no weather)
+• Movies and Series: a category fills the screen; the top shows the title you chose with OK (story, actors, director, Watch · Trailer · My List), below rows of six whole posters with the title and the rating; the rows glide smoothly
+• Film view: the whole picture, breadcrumb, Watch / Resume, the red Trailer, My List, progress only when started, and four icons – Subtitles, Audio, Playback, Picture – whose menus open upward
+• Subtitles: one menu with a language switch top right (English first, remembered), provider tracks, then online "Eng ver.1", "Eng ver.2" …
+• Playback: start over, speed 0.75–2× (films and series only), sleep timer; Picture: Default, Fit, Fill, Stretch, 4:3
+• Series view: Watch S01E01 / Resume S02E04, SEASON ▾ with mark season watched, the four icons above one row of episodes (it goes round); episodes without a picture get a clean numbered plate; short OK plays, long OK shows the episode with Watch and Mark watched
+• Player (films and series): only the picture while playing; OK shows the controls without pausing, Pause shows the paused screen, the controls hide after 5 s
+• Next episode: a 10 s "Up next" card with Play next / Cancel autoplay (Back cancels); it carries on into the next season
+• Skip intro shows only when the intro time is really known – no more guessing
+
 Media Center 2.3.4
 
 • Favourites: holding OK never removes anything by itself – it asks "Remove the channel from favourites?" and offers Move to put your channels in your own order
