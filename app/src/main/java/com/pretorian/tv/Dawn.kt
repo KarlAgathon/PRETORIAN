@@ -71,7 +71,7 @@ object Dawn {
 fun Modifier.dawnGlass(r: Dp = 18.dp): Modifier = this.clip(Rnd(r)).background(Silver.Panel).border(1.dp, Silver.Border, Rnd(r))
 
 /** Glass card of the redesign: rgba(20,24,28,.55) with a 1px hairline. */
-fun Modifier.glass(r: Dp = 16.dp): Modifier = this.clip(Rnd(r)).background(Color(0x8C14181C)).border(1.dp, Color(0x1FFFFFFF), Rnd(r))
+fun Modifier.glassCard(r: Dp = 16.dp): Modifier = this.clip(Rnd(r)).background(Color(0x8C14181C)).border(1.dp, Color(0x1FFFFFFF), Rnd(r))
 
 
 /** Concrete gallery (redesign v2.0): dark raw-concrete room, light shafts from ceiling slits, a soft floor,
@@ -139,6 +139,8 @@ fun DawnShell(top: Screen, nav: Nav, content: @Composable () -> Unit) {
         DawnBackground()
         // Home v2.0: its own layout (navigation column + status bar), nothing else on the screen
         if (menu) { HomeV2(nav); OfflineNote(Modifier.align(Alignment.BottomEnd).padding(end = 34.dp, bottom = 10.dp)); return@Box }
+        // the single movie / series view fills the whole screen with its picture (spec 03 / 04)
+        if (top is Screen.MovieDetail || top is Screen.SeriesDetail) { content(); return@Box }
         Column(Modifier.fillMaxSize()) {
             DawnTopBar(top, menu, nav)
             Box(Modifier.weight(1f).fillMaxWidth()) {

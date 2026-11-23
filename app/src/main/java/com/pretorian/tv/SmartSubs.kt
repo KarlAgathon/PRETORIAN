@@ -2,6 +2,9 @@ package com.pretorian.tv
 
 import android.widget.Toast
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -118,53 +121,72 @@ fun subTrackNames(tracks: List<TrackItem>): List<String> {
 
 @Composable
 fun SubsPanel(item: PlayItem, tracks: List<TrackItem>, current: String?, online: Boolean = true, onDismiss: () -> Unit, onOff: () -> Unit, onTrack: (TrackItem) -> Unit, onFile: (String) -> Unit) {
+    val search = item.search ?: item.title
+    val chosen = remember { mutableStateOf(Prefs.str("subpick_" + item.url.hashCode())) }
+    val names = subTrackNames(tracks)
+    SubsMenu(search, item.season, item.episode, online, names, { i -> current == null && tracks[i].selected },
+        offOn = current == null && tracks.none { it.selected }, onOff = onOff, onProvider = { i -> onTrack(tracks[i]) },
+        onlineOn = { id -> current != null && chosen.value == id }, onDismiss = onDismiss) { id, f ->
+        Prefs.put("subpick_" + item.url.hashCode(), id); chosen.value = id; onFile(f.path)
+    }
+}
+
+/**
+ * The one Subtitles menu (redesign spec 03), the same on the movie / series view and in the player:
+ * a language selector top right (default English, remembered), PROVIDER (Off + the stream's real tracks),
+ * then ONLINE · language with "Eng ver.1", "Eng ver.2" … A ✓ only after the file really loaded; the film never restarts.
+ */
+@Composable
+fun SubsMenu(search: String, season: Int?, episode: Int?, online: Boolean, provider: List<String>, providerOn: (Int) -> Boolean,
+             offOn: Boolean, onOff: () -> Unit, onProvider: (Int) -> Unit, onlineOn: (String) -> Boolean, onDismiss: () -> Unit,
+             onOnline: (String, java.io.File) -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    val search = item.search ?: item.title
     @Suppress("UNUSED_VARIABLE") val r = SmartSubs.rev
-    LaunchedEffect(search) { if (online && SmartSubs.state(search, item.season, item.episode) == null) SmartSubs.prepare(search, item.season, item.episode) }
+    LaunchedEffect(search) { if (online && SmartSubs.state(search, season, episode) == null) SmartSubs.prepare(search, season, episode) }
+    val langs = SmartSubs.langs()
+    var lang by remember { mutableStateOf(Prefs.str("sub_menu_lang", "en").let { if (it in langs) it else if ("en" in langs) "en" else langs.first() }) }
     var shown by remember { mutableIntStateOf(3) }
     var busy by remember { mutableStateOf<String?>(null) }
-    val chosen = remember { mutableStateOf(Prefs.str("subpick_" + item.url.hashCode())) }
-    Popup("", onDismiss, width = 620.dp) {
-        T("Provider", 22.sp, C.Text, FontWeight.Bold)
-        if (tracks.isEmpty()) T("Nije dostupno", 15.sp, C.Soft, modifier = Modifier.padding(start = 8.dp, bottom = 4.dp))
-        val names = subTrackNames(tracks)
-        tracks.forEachIndexed { i, t -> OptionRow(names[i], R.drawable.lc_message_square, selected = current == null && t.selected) { onTrack(t) } }
-        if (online) Box(Modifier.fillMaxWidth().padding(vertical = 6.dp).height(1.dp).background(Color(0x33FFFFFF)))
-        if (online) T("Online", 22.sp, C.Text, FontWeight.Bold)
-        if (online) when (val st = SmartSubs.state(search, item.season, item.episode)) {
-            null, SmartSubs.State.Searching -> T("Tražim titlove…", 15.sp, C.Soft, modifier = Modifier.padding(start = 8.dp))
-            SmartSubs.State.None -> T("Nije dostupno", 15.sp, C.Soft, modifier = Modifier.padding(start = 8.dp))
-            is SmartSubs.State.Found -> {
-                // every chosen language, one version per row: "Engleski – verzija 1", "Engleski – verzija 2", "Hrvatski – verzija 1"
-                val byLang = st.list.groupBy { it.lang }
-                val rows = byLang.flatMap { (l, rs) -> rs.take(shown).mapIndexed { i, r -> Triple(l, i + 1, r) } }
-                rows.forEach { (l, ver, res) ->
-                    val id = res.provider + "|" + res.ref
-                    OptionRow(trf("%s – verzija %s", Langs.label(l), ver), R.drawable.lc_cloud, selected = current != null && chosen.value == id,
-                        value = if (busy == id) tr("Preuzimam…") else null) {
-                        if (busy != null) return@OptionRow
-                        busy = id
-                        scope.launch {
-                            try {
-                                val f = SmartSubs.get(ctx, res, search, ver)
-                                Prefs.put("subpick_" + item.url.hashCode(), id); chosen.value = id
-                                onFile(f.path)
-                            } catch (e: Exception) { Toast.makeText(ctx, tr("Titl se nije mogao preuzeti, probaj drugu verziju"), Toast.LENGTH_SHORT).show() }
-                            busy = null
-                        }
-                    }
-                }
-                if (byLang.values.any { it.size > shown }) {
-                    Box(Modifier.fillMaxWidth().padding(vertical = 6.dp).height(1.dp).background(Color(0x33FFFFFF)))
-                    OptionRow("Pronađi još titlova", R.drawable.lc_search) { shown += 3 }
+    Popup("", onDismiss, width = 460.dp) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            T("Titlovi", 16.sp, Color.White, FontWeight.SemiBold, modifier = Modifier.weight(1f).padding(start = 6.dp))
+            // language selector: OK switches to the next of your subtitle languages
+            if (online && langs.size > 1) Focusable(onClick = {
+                lang = langs[(langs.indexOf(lang) + 1) % langs.size]; Prefs.put("sub_menu_lang", lang); shown = 3
+            }, shape = Rnd(16.dp), normal = Color(0x1AFFFFFF), focused = Dawn.pill, zoom = 1f, modifier = Modifier.height(34.dp)) { _ ->
+                Row(Modifier.align(Alignment.Center).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    T(Langs.label(lang), 13.sp, Color.White, FontWeight.SemiBold)
+                    Ico(R.drawable.lc_chevron_down, 14.dp, Color.White)
                 }
             }
         }
-        if (current != null || tracks.any { it.selected }) {
-            Box(Modifier.fillMaxWidth().padding(vertical = 6.dp).height(1.dp).background(Color(0x33FFFFFF)))
-            OptionRow("Bez titlova", R.drawable.lc_x) { onOff() }
+        MenuHead(tr("Provider").uppercase())
+        MenuRow(tr("Isključeno"), on = offOn) { onOff() }
+        provider.forEachIndexed { i, n -> MenuRow(n, on = providerOn(i)) { onProvider(i) } }
+        if (online) {
+            MenuHead(tr("Online").uppercase() + " · " + Langs.label(lang))
+            when (val st = SmartSubs.state(search, season, episode)) {
+                null, SmartSubs.State.Searching -> MenuRow(tr("Tražim titlove…")) {}
+                SmartSubs.State.None -> MenuRow(tr("Nije dostupno")) {}
+                is SmartSubs.State.Found -> {
+                    val rs = st.list.filter { it.lang == lang }
+                    if (rs.isEmpty()) MenuRow(tr("Nije dostupno")) {}
+                    rs.take(shown).forEachIndexed { k, res ->
+                        val id = res.provider + "|" + res.ref
+                        MenuRow(subShort(lang) + " ver." + (k + 1), on = onlineOn(id), sub = if (busy == id) tr("Preuzimam…") else null) {  // i18n-ignore
+                            if (busy != null) return@MenuRow
+                            busy = id
+                            scope.launch {
+                                try { val f = SmartSubs.get(ctx, res, search, k + 1); onOnline(id, f) }
+                                catch (e: Exception) { Toast.makeText(ctx, tr("Titl se nije mogao preuzeti, probaj drugu verziju"), Toast.LENGTH_SHORT).show() }
+                                busy = null
+                            }
+                        }
+                    }
+                    if (rs.size > shown) MenuRow(tr("Pronađi još titlova")) { shown += 3 }
+                }
+            }
         }
     }
 }

@@ -750,9 +750,10 @@ private fun PeopleRow(people: List<Person>) {
 }
 
 /** What was picked on the movie page before playing. */
-data class TrackChoice(val subFile: File? = null, val subOff: Boolean = false, val sub: StreamTrack? = null, val audio: StreamTrack? = null) {
+data class TrackChoice(val subFile: File? = null, val subOff: Boolean = false, val sub: StreamTrack? = null, val audio: StreamTrack? = null,
+                       val speed: Float = 1f, val fmt: Int = -1) {
     fun apply(i: PlayItem) = i.copy(subFile = subFile?.path, subOff = subOff, subLang = sub?.lang, subLabel = sub?.label,
-        audioLang = audio?.lang, audioLabel = audio?.label)
+        audioLang = audio?.lang, audioLabel = audio?.label, speed = speed, fmt = fmt)
 }
 
 /** Subtitle + audio buttons next to Play: green frame when a subtitle is ready. */

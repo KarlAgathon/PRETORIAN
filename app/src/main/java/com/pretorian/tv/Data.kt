@@ -109,6 +109,8 @@ data class PlayItem(
     val subLang: String? = null, val subLabel: String? = null,
     /** start here (ms) without asking; null = the usual resume question */
     val startAt: Long? = null,
+    /** films and series: playback speed and picture format chosen on the movie / series view (-1 = the last used) */
+    val speed: Float = 1f, val fmt: Int = -1,
 )
 
 fun JSONObject.str(k: String): String = if (!has(k) || isNull(k)) "" else optString(k, "")

@@ -142,6 +142,7 @@ fun HomeV2(nav: Nav) {
     LaunchedEffect(Unit) { Weather.refresh() }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val navW = (maxWidth * 0.17f).coerceIn(200.dp, 300.dp)
+        val mh = maxHeight
         Row(Modifier.fillMaxSize().padding(start = 40.dp, end = 48.dp, top = 28.dp, bottom = 32.dp), horizontalArrangement = Arrangement.spacedBy(36.dp)) {
             // left: wordmark + navigation
             Column(Modifier.width(navW).fillMaxHeight().onFocusChanged { Chrome.inRail = it.hasFocus }) {
@@ -149,7 +150,7 @@ fun HomeV2(nav: Nav) {
                     T("MEDIA CENTER", 19.sp, Color.White, FontWeight.Bold)  // i18n-ignore
                 }
                 Spacer(Modifier.height(28.dp))
-                val rowH = ((maxHeight - 28.dp - 32.dp - 46.dp - 28.dp - 6.dp * (items.size - 1)) / items.size).coerceIn(34.dp, 52.dp)
+                val rowH = ((mh - 28.dp - 32.dp - 46.dp - 28.dp - 6.dp * (items.size - 1)) / items.size).coerceIn(34.dp, 52.dp)
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     items.forEachIndexed { i, it ->
                         Focusable(
@@ -269,7 +270,7 @@ private fun HomeContent(nav: Nav, modifier: Modifier) {
                     }
                 }
             }
-            if (cont.isEmpty() && recent.isEmpty()) Box(Modifier.fillMaxSize().glass(), contentAlignment = Alignment.Center) {
+            if (cont.isEmpty() && recent.isEmpty()) Box(Modifier.fillMaxSize().glassCard(), contentAlignment = Alignment.Center) {
                 T("Ovdje će se pojaviti ono što gledaš.", 16.sp, Silver.TextSoft)
             }
         }

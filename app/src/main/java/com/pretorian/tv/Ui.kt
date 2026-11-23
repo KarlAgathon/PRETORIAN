@@ -48,6 +48,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
@@ -149,7 +150,7 @@ fun Focusable(
         m.graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(shape)
             .background(if (isFocused) (focused ?: C.CardFocus) else normal)
-            .border(if (isFocused && focused == Silver.Focus) 1.dp else 1.5.dp, if (isFocused && focused == Silver.Focus) Color(0xE6FFFFFF) else if (isFocused) (focusBorderColor ?: C.Red.copy(alpha = (0.45f + FocusCard.pct / 180f).coerceIn(0.5f, 1f))) else (borderColor ?: Color.Transparent), shape)
+            .border(if (isFocused && focused == Silver.Focus) 1.dp else 1.5.dp, if (isFocused && focused == Silver.Focus) Color(0xE6FFFFFF) else if (isFocused) (focusBorderColor ?: Color(0xE6FFFFFF)) else (borderColor ?: Color.Transparent), shape)
             .combinedClickable(interactionSource = src, indication = null, onClick = onClick, onLongClick = long),
         content = { content(isFocused) },
     )
@@ -252,8 +253,49 @@ fun Dot(color: Color, size: Dp = 8.dp) {
  * The OK press that opened it (holding OK) is still going on when the card appears: its repeats and
  * its release are swallowed, so the card stays open and nothing inside gets clicked by accident.
  */
+/** Inside one of the four media icons (Subtitles, Audio, Playback, Picture): a Popup becomes the floating menu
+ *  that always opens UPWARD from its icon (redesign spec 03), scrolls inside and closes with Back. */
+val LocalUpward = androidx.compose.runtime.compositionLocalOf { false }
+
+private class UpwardPosition(private val gapPx: Int) : androidx.compose.ui.window.PopupPositionProvider {
+    override fun calculatePosition(anchorBounds: androidx.compose.ui.unit.IntRect, windowSize: androidx.compose.ui.unit.IntSize,
+                                   layoutDirection: androidx.compose.ui.unit.LayoutDirection, popupContentSize: androidx.compose.ui.unit.IntSize): androidx.compose.ui.unit.IntOffset {
+        val x = anchorBounds.left.coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0))
+        val y = (anchorBounds.top - popupContentSize.height - gapPx).coerceAtLeast(0)
+        return androidx.compose.ui.unit.IntOffset(x, y)
+    }
+}
+
+@Composable
+private fun FloatMenu(title: String, onDismiss: () -> Unit, width: Dp, content: @Composable ColumnScope.() -> Unit) {
+    val dens = androidx.compose.ui.platform.LocalDensity.current
+    val conf = androidx.compose.ui.platform.LocalConfiguration.current
+    val pos = remember { UpwardPosition(with(dens) { 14.dp.roundToPx() }) }
+    val fr = remember { FocusRequester() }
+    androidx.compose.ui.window.Popup(popupPositionProvider = pos, onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.PopupProperties(focusable = true)) {
+        val armed = remember { booleanArrayOf(false) }
+        Column(
+            Modifier.widthIn(min = 300.dp, max = width.coerceAtMost(460.dp)).clip(Rnd(18.dp)).background(Color(0xF014181C))
+                .border(1.dp, Color(0x29FFFFFF), Rnd(18.dp)).heightIn(max = (conf.screenHeightDp * 0.62f).dp)
+                .onPreviewKeyEvent { e ->
+                    val ok = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter
+                    if (!ok || armed[0]) return@onPreviewKeyEvent false
+                    if (e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount == 0) { armed[0] = true; false } else true
+                }
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (title.isNotBlank()) T(title, 16.sp, Color.White, FontWeight.SemiBold, modifier = Modifier.padding(start = 6.dp, bottom = 2.dp))
+            Column(Modifier.focusRequester(fr).focusGroup().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp), content = content)
+        }
+        LaunchedEffect(Unit) { kotlinx.coroutines.delay(40); try { fr.requestFocus() } catch (_: Exception) {} }
+    }
+}
+
 @Composable
 fun Popup(title: String, onDismiss: () -> Unit, width: Dp = 560.dp, content: @Composable ColumnScope.() -> Unit) {
+    if (LocalUpward.current) { FloatMenu(title, onDismiss, width, content); return }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         val armed = remember { booleanArrayOf(false) }
         Box(
@@ -303,7 +345,7 @@ fun OptionRow(label: String, icon: Int? = null, sub: String? = null, value: Stri
                 if (sub != null) T(sub, 12.sp, C.Muted, maxLines = 2)
             }
             if (value != null) T(value, 14.sp, valueColor ?: C.Soft, if (valueColor != null) FontWeight.Bold else FontWeight.Medium, modifier = Modifier.widthIn(max = 260.dp))
-            if (selected) Ico(R.drawable.lc_check, 18.dp, C.Red)
+            if (selected) Ico(R.drawable.lc_check, 18.dp, Color.White)
         }
     }
 }

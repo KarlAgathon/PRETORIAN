@@ -233,7 +233,7 @@ private fun VodGalleryBody(title: String, icon: Int, items: Load<List<VItem>>, m
     when (items) {
         is Load.Loading -> { Loading("Učitavam…"); return }
         is Load.Err -> { Message("Nije se učitalo", items.message); return }
-        is Load.Ok -> if (items.value.isEmpty()) { Box(Modifier.fillMaxSize().glass()) { Message(title, empty) }; return }
+        is Load.Ok -> if (items.value.isEmpty()) { Box(Modifier.fillMaxSize().glassCard()) { Message(title, empty) }; return }
     }
     val list = (items as Load.Ok).value
     val cols = 6
@@ -445,4 +445,9 @@ private fun StreamingGrid(mem: HashMap<String, Int>, onPick: (Service) -> Unit) 
         }
     }
     LaunchedEffect(Unit) { delay(60); fr.tryFocus() }
+}
+
+/** The category the title was opened from (for the breadcrumb of the movie / series view). */
+fun vodCrumb(series: Boolean): String? = when (val t = VodMemory.stack[if (series) "series" else "vod"]?.lastOrNull()) {
+    is VL.Gallery -> t.title; is VL.Svc -> t.s.name; VL.Streaming -> "Streaming"; else -> null
 }
