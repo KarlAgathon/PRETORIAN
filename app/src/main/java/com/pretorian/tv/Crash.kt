@@ -23,7 +23,7 @@ object CrashLog {
     private fun file(c: Context) = File(c.filesDir, "last_crash.txt")
     /** every crash and freeze is also kept here (last 10), readable from a laptop: adb pull [ADB_DIR] */
     fun dir(c: Context): File? = c.getExternalFilesDir(null)?.let { File(it, "crash") }
-    const val ADB_DIR = "/sdcard/Android/data/com.pretorian.tv/files/crash"  // i18n-ignore
+    val ADB_DIR get() = "/sdcard/Android/data/" + BuildConfig.APPLICATION_ID + "/files/crash"  // i18n-ignore
     private fun header(c: Context): String {
         val rt = Runtime.getRuntime()
         val am = c.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager

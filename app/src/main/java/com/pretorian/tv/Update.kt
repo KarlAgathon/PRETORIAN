@@ -113,6 +113,8 @@ object Updater {
     /** the newest Stable version (for the gold STABLE shield) */
     var stableName by mutableStateOf(Prefs.str("upd_stable_name"))
     suspend fun check(ctx: Context): UpdateInfo? = withContext(Dispatchers.IO) {
+        // Beta never offers the Stable APK (it is a different app next to Stable)
+        if (Beta.on) { available = null; status = "Beta: ažuriranja su isključena"; return@withContext null }
         Prefs.put("upd_checked_at", System.currentTimeMillis())
         try {
             fun read(u: String) = JSONObject(String(Http.bytes(u, 100_000))).let { o -> UpdateInfo(o.optLong("versionCode"), o.str("versionName"), o.str("apk"), o.str("notes")) }
@@ -368,7 +370,7 @@ object PublicFiles {
         if (Build.VERSION.SDK_INT >= 29) {
             val cv = android.content.ContentValues().apply {
                 put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, name)
-                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS + "/MediaCenter")
+                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS + "/" + Beta.folder)
             }
             val uri = ctx.contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv) ?: throw IOException("Download")
             try {
@@ -379,7 +381,7 @@ object PublicFiles {
             }
         } else {
             @Suppress("DEPRECATION")
-            val dir = File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "MediaCenter")
+            val dir = File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), Beta.folder)
             dir.mkdirs(); File(dir, name).outputStream().use { input.copyTo(it) }
         }
     }

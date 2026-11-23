@@ -193,7 +193,7 @@ object Backup {
         Watch.reloadAfterRestore()
     }
 
-    fun fileName() = "MediaCenter-backup-" + SimpleDateFormat("yyyy-MM-dd_HH-mm", Locale.US).format(Date()) + ".json"
+    fun fileName() = Beta.backupPrefix + SimpleDateFormat("yyyy-MM-dd_HH-mm", Locale.US).format(Date()) + ".json"
 
     /** weekly automatic backup inside the box (last 3 kept) */
     fun auto(ctx: Context) {
@@ -228,7 +228,7 @@ object Backup {
             val uri = android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI
             ctx.contentResolver.query(uri, arrayOf(android.provider.MediaStore.MediaColumns._ID, android.provider.MediaStore.MediaColumns.DISPLAY_NAME,
                 android.provider.MediaStore.MediaColumns.DATE_MODIFIED, android.provider.MediaStore.MediaColumns.SIZE),
-                android.provider.MediaStore.MediaColumns.DISPLAY_NAME + " LIKE ?", arrayOf("MediaCenter-backup%"), null)?.use { c ->
+                android.provider.MediaStore.MediaColumns.DISPLAY_NAME + " LIKE ?", arrayOf(if (Beta.on) "MediaCenter%-backup%" else "MediaCenter-backup%"), null)?.use { c ->
                 while (c.moveToNext()) {
                     val id = c.getLong(0); val name = c.getString(1) ?: continue
                     if (!seen.add("dl:$name")) continue
@@ -239,10 +239,11 @@ object Backup {
         } catch (_: Exception) {}
         @Suppress("DEPRECATION")
         val dl = File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "MediaCenter")
-        dl.listFiles()?.filter { it.name.startsWith("MediaCenter-backup") && seen.add("dl:" + it.name) }?.forEach { f -> out += Found("Download/MediaCenter", f.lastModified(), f.length()) { f.readText() } }
+        val dlBeta = File(dl.parentFile, Beta.folder)
+        (dl.listFiles().orEmpty() + (if (Beta.on) dlBeta.listFiles().orEmpty() else emptyArray())).filter { (it.name.startsWith("MediaCenter-backup") || it.name.startsWith(Beta.backupPrefix)) && seen.add("dl:" + it.name) }?.forEach { f -> out += Found("Download/MediaCenter", f.lastModified(), f.length()) { f.readText() } }
         usbDirs().forEach { d ->
-            listOf(d, File(d, "MediaCenter")).forEach { dir ->
-                dir.listFiles()?.filter { it.name.startsWith("MediaCenter-backup") && it.name.endsWith(".json") }?.forEach { f -> out += Found("USB", f.lastModified(), f.length()) { f.readText() } }
+            listOf(d, File(d, "MediaCenter"), File(d, Beta.folder)).distinct().forEach { dir ->
+                dir.listFiles()?.filter { (it.name.startsWith("MediaCenter-backup") || it.name.startsWith(Beta.backupPrefix)) && it.name.endsWith(".json") }?.forEach { f -> out += Found("USB", f.lastModified(), f.length()) { f.readText() } }
             }
         }
         autoList(ctx).forEach { f -> out += Found("Automatski", f.lastModified(), f.length()) { f.readText() } }
@@ -254,12 +255,12 @@ object Backup {
         val name = fileName(); val text = export(ctx, pass.ifBlank { null }, parts)
         if (usb) {
             val d = usbDirs().firstOrNull() ?: throw java.io.IOException(tr("USB nije priključen"))
-            val dir = File(d, "MediaCenter").apply { mkdirs() }
+            val dir = File(d, Beta.folder).apply { mkdirs() }
             File(dir, name).writeText(text)
-            return "USB/MediaCenter"
+            return "USB/" + Beta.folder
         }
         PublicFiles.save(ctx, name, text.toByteArray())
-        return "Download/MediaCenter"
+        return "Download/" + Beta.folder
     }
 }
 

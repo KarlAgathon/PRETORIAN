@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Beta build (com.pretorian.tv.beta): installed next to Stable, its own data -->
+    <string name="app_name">Media Center Beta</string>
+</resources>

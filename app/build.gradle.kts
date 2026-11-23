@@ -40,6 +40,13 @@ android {
             isMinifyEnabled = false
             signingConfig = signingConfigs.findByName("lead")
         }
+        // Beta (redesign): its own package next to Stable, its own data; never published as Stable
+        create("beta") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".beta"
+            versionNameSuffix = "-beta." + (System.getenv("GITHUB_RUN_NUMBER") ?: "0")
+            matchingFallbacks += listOf("release")
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -48,6 +55,13 @@ android {
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true; buildConfig = true }
     lint { abortOnError = false; checkReleaseBuilds = false }
+}
+
+// every beta build installs over the previous beta (its own version number, not Stable's)
+androidComponents {
+    onVariants(selector().withBuildType("beta")) { v ->
+        v.outputs.forEach { it.versionCode.set(900_000 + (System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0)) }
+    }
 }
 
 dependencies {

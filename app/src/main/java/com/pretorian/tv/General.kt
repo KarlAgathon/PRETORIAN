@@ -27,6 +27,7 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         Prefs.ensure(ctx)
         if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
+        if (Beta.on) return   // only Stable may start with the box
         val on = ctx.getSharedPreferences("pretorian", Context.MODE_PRIVATE).getBoolean("gen_boot", false)
         if (!on) return
         try { ctx.startActivity(Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {}

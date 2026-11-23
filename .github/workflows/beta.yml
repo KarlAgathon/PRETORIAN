@@ -1,0 +1,55 @@
+name: Beta APK
+
+# Manual only. Builds the signed BETA APK (com.pretorian.tv.beta, installs next to Stable) from a branch or tag
+# and keeps it as a workflow artifact for 14 days. Publishes nothing: no release, no update.json, main untouched.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch or tag to build"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  beta:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.inputs.ref }}
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Cache Robolectric Android jars
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-4.14.1
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+      - name: Signing key
+        env:
+          KS: ${{ secrets.LEAD_KEYSTORE_B64 }}
+          KEY_PASSWORD: ${{ secrets.LEAD_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KS" ] || [ -z "$KEY_PASSWORD" ]; then echo "::error::Signing secrets missing"; exit 1; fi
+          echo "$KS" | base64 -d > app/release.keystore
+      - run: python3 tools/check_i18n.py
+      - run: gradle testReleaseUnitTest assembleBeta --no-daemon || (sleep 20 && gradle testReleaseUnitTest assembleBeta --no-daemon)
+        env:
+          LEAD_KEY_PASSWORD: ${{ secrets.LEAD_KEY_PASSWORD }}
+          TMDB_KEY: ${{ secrets.TMDB_KEY }}
+      - name: Remove signing key
+        if: always()
+        run: rm -f app/release.keystore
+      - name: Name the APK
+        run: cp app/build/outputs/apk/beta/*.apk "MediaCenterBeta-${{ github.run_number }}.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MediaCenterBeta-${{ github.run_number }}
+          path: MediaCenterBeta-${{ github.run_number }}.apk
+          retention-days: 14
