@@ -477,10 +477,11 @@ private fun TvList(nav: Nav) {
         val toList = TvFocus.toList
         if (TvFocus.inDock && toList != null) toList() else { PreviewSel.ch = null; Preview.stop(); backToGroups() }
     }
-    LaunchedEffect(inChannels, st.group?.key) {
+    LaunchedEffect(inChannels, st.group?.key, TvFocus.inDock) {
         Dawn.crumb = if (inChannels) st.group?.cat?.name ?: "" else ""
         if (!inChannels) Dawn.pos = ""
-        Dawn.hints = if (inChannels) listOf("▲▼" to "Izaberi kanal", "1× OK" to "Pregled", "2× OK" to "Cijeli ekran", "Back" to "Grupe")
+        Dawn.hints = if (inChannels && TvFocus.inDock) listOf("◀▶" to "Opcije", "OK" to "Odaberi", "Back" to "Lista kanala")
+            else if (inChannels) listOf("▲▼" to "Izaberi kanal", "1× OK" to "Pregled", "2× OK" to "Cijeli ekran", "Back" to "Grupe")
             else listOf("▲▼" to "Izaberi grupu", "OK" to "Otvori grupu", "Back" to "Meni")
     }
     DisposableEffect(Unit) { onDispose { Dawn.crumb = ""; Dawn.pos = ""; Dawn.hints = emptyList() } }
@@ -811,16 +812,24 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                     }
                 }
                 // the options under the preview come back here explicitly: the channel in the preview, else the last row, else the first
+                val dockScope = rememberCoroutineScope()
                 DisposableEffect(list) {
-                    TvFocus.toList = {
+                    val mine: () -> Unit = {
                         val i = list.indexOfFirst { it.url == PreviewSel.ch?.url }.takeIf { it >= 0 }
                             ?: list.indexOfFirst { it.url == lastUrl }.takeIf { it >= 0 } ?: 0
+                        TvFocus.log("toList index=$i of ${list.size}")
                         if (list.isNotEmpty()) {
                             Chrome.inRail = false   // a stale "in the menu rail" mark must never block this
-                            cWrap.target = -1; cWrap.target = i
+                            cWrap.target = i
+                            // second try if the first did not land (row not laid out yet)
+                            dockScope.launch {
+                                delay(300)
+                                if (TvFocus.inDock) { TvFocus.log("retry focus $i"); Chrome.inRail = false; cWrap.target = i }
+                            }
                         }
                     }
-                    onDispose { TvFocus.toList = null }
+                    TvFocus.toList = mine
+                    onDispose { if (TvFocus.toList === mine) TvFocus.toList = null }
                 }
                 LaunchedEffect(list) {
                     if (TvMemory.group?.key == g.key && TvMemory.channel > list.lastIndex) TvMemory.channel = list.lastIndex.coerceAtLeast(0)
@@ -1208,4 +1217,22 @@ fun rememberFrozen(key: String, raw: List<Channel>): List<Channel> {
 object TvFocus {
     @Volatile var toList: (() -> Unit)? = null
     var inDock by mutableStateOf(false)
+    /** focus is on the first icon of the options row (◀ there goes back to the list) */
+    @Volatile var dockFirst = false
+    /** adb logcat -s MCFocus : every key while the options row has focus, and every jump back to the list */
+    fun log(msg: String) { try { android.util.Log.d("MCFocus", msg) } catch (_: Throwable) {} }
+
+    /** Called by MainActivity before Compose sees the key, so no focus rule inside Compose can swallow it. */
+    fun onKey(e: android.view.KeyEvent): Boolean {
+        if (!inDock) return false
+        val go = toList
+        log("key code=${e.keyCode} action=${e.action} first=$dockFirst hasList=${go != null}")
+        if (go == null) return false
+        val back = e.keyCode == android.view.KeyEvent.KEYCODE_BACK || e.keyCode == android.view.KeyEvent.KEYCODE_ESCAPE
+        val left = e.keyCode == android.view.KeyEvent.KEYCODE_DPAD_LEFT && dockFirst
+        if (!back && !left) return false
+        val fire = if (back) e.action == android.view.KeyEvent.ACTION_UP else e.action == android.view.KeyEvent.ACTION_DOWN
+        if (fire) { log("to list (" + (if (back) "Back" else "Left") + ")"); go() }
+        return true
+    }
 }

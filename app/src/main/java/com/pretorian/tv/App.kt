@@ -90,6 +90,12 @@ class MainActivity : ComponentActivity() {
 
     private var stoppedAt = 0L
 
+    // TV browser: Back / ◀ in the options row under the preview go to the channel list before Compose sees them
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        if (TvFocus.onKey(event)) return true
+        return super.dispatchKeyEvent(event)
+    }
+
     // Android asks for memory back: drop lists that are not on the screen, they load again when needed
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
