@@ -2756,4 +2756,6 @@ reprezentacija i lige|сборная и лиги
 nema zakazanih utakmica|нет запланированных матчей
 Promijeni redoslijed|Изменить порядок
 OK uzmi · ▲ ▼ pomjeri · OK spusti|OK взять · ▲ ▼ переместить · OK опустить
+Vraćeno u favorite|Возвращено в избранное
+Uklonjeno · dugi OK vrati|Удалено · долгий OK вернёт
 """.trimIndent()

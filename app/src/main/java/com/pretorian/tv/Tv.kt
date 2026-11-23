@@ -714,7 +714,11 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
             is Load.Loading -> Loading("Učitavam kanale…")
             is Load.Err -> Message("Kanali se nisu učitali", s.message)
             is Load.Ok -> {
-                val list = s.value
+                // Favourites: a removed channel stays in place, dimmed, until you leave the list. Rows never vanish under the
+                // focus — Compose 1.7 crashes ("Release should only be called once") when a focused / pinned row is removed.
+                val raw = s.value
+                val list = if (favEditable) rememberFrozen(g.key + "#" + enterTick, raw) else raw
+                val gone = if (favEditable) list.filter { c -> raw.none { it.url == c.url } }.map { it.url }.toSet() else emptySet()
                 if (list.isEmpty()) {
                     if (g.cat.id == RECENT_GROUP) Message("Još nema gledanih kanala.", "Kanali koje gledaš pojavit će se ovdje · Back za grupe")
                     else Message(if (isFav) "Nema favorita" else "Grupa je prazna",
@@ -761,6 +765,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                     .then(if (active) Modifier.border(1.dp, C.Green.copy(alpha = 0.48f), Rnd(12.dp)) else Modifier)
                                     .then(if (edit && picked == ch.url) Modifier.border(1.5.dp, Color.White, Rnd(12.dp)) else Modifier),
                                 onClick = {
+                                    if (ch.url in gone) return@Focusable
                                     if (edit) { picked = if (picked == ch.url) null else ch.url; return@Focusable }
                                     gate.run("c:${ch.url}", locked) {
                                         ovr.countWatch(ch)
@@ -770,7 +775,8 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                             PreviewSel.ch = ch
                                         } else {
                                             TvMemory.restore = true
-                                            playChannels(nav, list, i)
+                                            val live = list.filter { it.url !in gone }
+                                            playChannels(nav, live, live.indexOfFirst { it.url == ch.url }.coerceAtLeast(0))
                                         }
                                     }
                                 },
@@ -778,7 +784,10 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                     // spec 09: in Favourites long OK only enters edit mode (removing is in the channel options);
                                     // in Recently watched it offers Remove from history / Clear history
                                     // in Favourites long OK offers: Remove from favourites · Change the order
-                                    if (favEditable) {
+                                    if (favEditable && ch.url in gone) {
+                                        Favs.toggle(favListId(g.cat.id), ch)
+                                        android.widget.Toast.makeText(ctx, tr("Vraćeno u favorite"), android.widget.Toast.LENGTH_SHORT).show()
+                                    } else if (favEditable) {
                                         if (!edit) { menuUrl = ch.url; favAsk = ch }
                                     } else if (g.cat.id == RECENT_GROUP) { menuUrl = ch.url; recentAsk = ch }
                                     else if (isFav || Favs.inAny(ctx, ch)) { menuUrl = ch.url; favAsk = ch }
@@ -800,8 +809,9 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                     T("%02d".format(ch.num), 16.sp, if (f) Color.White else C.Soft,
                                         modifier = Modifier.width(36.dp))
                                     ChannelLogo(ch.logo, ch.name)
-                                    T(ch.name, 16.sp, if (f) Dawn.onPill else C.Text, if (f) FontWeight.SemiBold else FontWeight.Normal,
+                                    T(ch.name, 16.sp, if (ch.url in gone) C.Muted else if (f) Dawn.onPill else C.Text, if (f) FontWeight.SemiBold else FontWeight.Normal,
                                         maxLines = 1, modifier = Modifier.weight(1f))
+                                    if (ch.url in gone) T(tr("Uklonjeno · dugi OK vrati"), 12.sp, C.Muted)
                                     if (locked) Ico(R.drawable.lc_lock, 16.dp, C.Muted)
                                     if (edit && picked == ch.url) Ico(R.drawable.lc_hand_grab, 16.dp, Color.White)
                                     // quality from the channel's own name (4K / UHD / FHD / HD / SD), never invented
@@ -843,7 +853,8 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                 val at = list.indexOfFirst { it.url == ch.url }
                                 Favs.toggle(favListId(g.cat.id), ch)
                                 android.widget.Toast.makeText(ctx, tr("Uklonjeno iz favorita"), android.widget.Toast.LENGTH_SHORT).show()
-                                menuUrl = null; favAsk = null; refocusAt = at.coerceAtLeast(0); listRev++
+                                @Suppress("UNUSED_VARIABLE") val unusedAt = at
+                                favAsk = null; listRev++
                             }
                             if (list.size > 1) OptionRow("Promijeni redoslijed", R.drawable.lc_hand_grab, sub = "OK uzmi · ▲ ▼ pomjeri · OK spusti") {
                                 favAsk = null; edit = true; picked = ch.url
@@ -1359,3 +1370,20 @@ fun Bell(count: Int) {
 
 /** "HRT 1 FHD" → "FHD": the quality written in the channel's name, or null. */
 fun qualityTag(name: String): String? = Regex("\\b(4K|UHD|FHD|HD|SD)\\b", RegexOption.IGNORE_CASE).find(name)?.value?.uppercase()
+
+
+/** Keeps the rows of a list in place while it is open: rows that left the source stay (shown as removed), new rows
+ *  are added, the order follows the source. A fresh [key] (leaving and opening the list again) starts clean. */
+@Composable
+fun rememberFrozen(key: String, raw: List<Channel>): List<Channel> {
+    val holder = remember(key) { arrayOfNulls<List<Channel>>(1) }
+    val prev = holder[0]
+    val out = if (prev == null) raw else {
+        val now = raw.toMutableList()
+        val urls = raw.map { it.url }.toHashSet()
+        prev.forEachIndexed { i, c -> if (c.url !in urls) now.add(i.coerceAtMost(now.size), c) }
+        now
+    }
+    holder[0] = out
+    return out
+}
