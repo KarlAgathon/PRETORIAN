@@ -40,6 +40,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
@@ -216,95 +221,123 @@ private fun VodGalleryLevel(p: Playlist, series: Boolean, g: VL.Gallery, mem: Ha
 }
 
 /**
- * The cinematic browser: the focused title fills the top (picture, title, year, genres, story, Watch · Trailer · My List),
- * the posters run along the bottom. Moving over the posters changes the top; OK opens the title.
+ * The poster gallery (redesign spec 02, one shared component for Movies and Series):
+ * the upper ~40 % shows the CONFIRMED title (OK on a poster confirms it and moves the focus to Watch),
+ * the lower ~60 % rows of six whole 2:3 posters with the title below and the rating on the poster.
+ * Watch opens the single movie / series view; Back leaves the category (one level).
  */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 private fun VodGalleryBody(title: String, icon: Int, items: Load<List<VItem>>, mem: HashMap<String, Int>, key: String, nav: Nav, empty: String) {
     val ctx = LocalContext.current
     when (items) {
         is Load.Loading -> { Loading("Učitavam…"); return }
         is Load.Err -> { Message("Nije se učitalo", items.message); return }
-        is Load.Ok -> if (items.value.isEmpty()) { Box(Modifier.fillMaxSize().dawnGlass()) { Message(title, empty) }; return }
+        is Load.Ok -> if (items.value.isEmpty()) { Box(Modifier.fillMaxSize().glass()) { Message(title, empty) }; return }
     }
     val list = (items as Load.Ok).value
+    val cols = 6
     val start = (mem[key] ?: 0).coerceIn(0, list.lastIndex)
-    var focused by remember { mutableStateOf(list[start]) }
-    var shown by remember { mutableStateOf(list[start]) }
-    LaunchedEffect(focused) { delay(300); shown = focused }
+    var shown by remember { mutableStateOf(list[(mem[key + ":c"] ?: start).coerceIn(0, list.lastIndex)]) }
+    var focusIdx by remember { mutableStateOf(start) }
     val m by load(shown.name, shown.series, Prefs.tmdbKey) { Tmdb.find(shown.name, tv = shown.series) }
     val meta = (m as? Load.Ok)?.value
-    val st = rememberLazyListState(initialFirstVisibleItemIndex = 0)
+    val gs = androidx.compose.foundation.lazy.grid.rememberLazyGridState(initialFirstVisibleItemIndex = (start / cols) * cols)
     val fr = remember { FocusRequester() }
-    Box(Modifier.fillMaxSize().clip(Rnd(18.dp)).background(Color(0xFF0B0B0C))) {
-        // picture on the right, fading into black towards the text
-        Box(Modifier.fillMaxHeight().fillMaxWidth(0.68f).align(Alignment.TopEnd)) {
-            OnyxImage(meta?.backdrop ?: shown.image, "bd:" + shown.id, Modifier.fillMaxSize(), maxW = 1280, scale = ContentScale.Crop, highQuality = true)
-            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xFF0B0B0C), Color(0x990B0B0C), Color(0x000B0B0C)))))
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.55f to Color(0x000B0B0C), 1f to Color(0xFF0B0B0C))))
-        }
-        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().padding(start = 26.dp, end = 26.dp, top = 16.dp, bottom = 14.dp)) {
-        // the poster row has its own fixed height, so the text and buttons above can never run over it;
-        // the gap is chosen so a whole number of posters fills the row (no poster cut at the right edge)
-        // approved: bigger posters, about five at once, the row centred with the same space left and right
-        // whole posters fill the row from edge to edge (approved): n posters and n−1 equal gaps make exactly the width
-        var posterW = (maxWidth - 20.dp * 4) / 5
-        var posterH = posterW * 1.5f
-        val maxH = maxHeight * 0.5f
-        if (posterH > maxH) { posterH = maxH; posterW = posterH / 1.5f }
-        val n = ((maxWidth + 16.dp) / (posterW + 16.dp)).toInt().coerceIn(1, 5)
-        val gap = if (n > 1) (maxWidth - posterW * n) / (n - 1) else 0.dp
-        val side = 0.dp
-        val rowH = posterH + 16.dp
-        // the row moves a whole poster at a time, so the first and the last one on screen are never cut
-        var firstShown by remember { mutableStateOf((start - (n - 1)).coerceAtLeast(0)) }
-        LaunchedEffect(focused, n) {
-            val i = list.indexOf(focused).takeIf { it >= 0 } ?: return@LaunchedEffect
-            if (i < firstShown) firstShown = i else if (i > firstShown + n - 1) firstShown = i - (n - 1)
-            runCatching { st.scrollToItem(firstShown) }
-        }
-        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(22.dp)) {
-          Column(Modifier.fillMaxWidth().weight(1f).clip(Rnd(0.dp)), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Ico(icon, 18.dp, C.Soft); T(title, 16.sp, C.Soft, FontWeight.SemiBold)
-                Spacer(Modifier.weight(1f))
-                T("${(mem[key] ?: 0) + 1} / ${list.size}", 14.sp, C.Soft)  // i18n-ignore
+    val watchFr = remember { FocusRequester() }
+    var toWatch by remember { mutableStateOf(0) }
+    LaunchedEffect(toWatch) { if (toWatch > 0) { delay(30); watchFr.tryFocus() } }
+    Box(Modifier.fillMaxSize()) {
+        // the confirmed title's picture behind the upper part, fading into the room
+        Box(Modifier.fillMaxWidth(0.7f).fillMaxHeight(0.62f).align(Alignment.TopEnd)) {
+            androidx.compose.animation.Crossfade(meta?.backdrop ?: shown.image, label = "bd", animationSpec = androidx.compose.animation.core.tween(350)) { img ->
+                OnyxImage(img, "bd:" + img, Modifier.fillMaxSize(), maxW = 1280, scale = ContentScale.Crop, highQuality = true)
             }
-            T(titleCase(meta?.title ?: cleanTitle(shown.name).first), 34.sp, C.Text, FontWeight.Bold, maxLines = 1)
-            val facts = listOfNotNull(meta?.year?.take(4) ?: cleanTitle(shown.name).second, meta?.runtime, translated(meta?.genres)?.replace(", ", " · "))
-            if (facts.isNotEmpty()) T(facts.joinToString("  |  "), 15.sp, C.Soft)
-            T(translated(meta?.overview) ?: "", 15.sp, C.Soft, maxLines = 2, modifier = Modifier.widthIn(max = 560.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                HeroBtn(if (shown.series) "Otvori" else "Gledaj", R.drawable.lc_play, primary = true) {
-                    if (shown.series) shown.open(nav) else { VodMemory.returning = true; nav.push(Screen.Player(listOf(PlayItem(cleanTitle(shown.name).first, shown.url, shown.image, null, null, shown.name)), 0, live = false)) }
+            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xFF151617), Color(0x99151617), Color(0x00151617)))))
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.45f to Color(0x00151617), 1f to Color(0xFF151617))))
+        }
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 0.dp)) {
+            val gap = 18.dp
+            val posterW = (maxWidth - gap * (cols - 1)) / cols
+            val posterH = posterW * 1.5f
+            val cellH = posterH + 34.dp
+            val upperH = (maxHeight * 0.40f).coerceAtLeast(200.dp)
+            Column(Modifier.fillMaxSize()) {
+                // upper part: the confirmed title
+                Column(Modifier.fillMaxWidth().height(upperH), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    T(titleCase(meta?.title ?: cleanTitle(shown.name).first), 32.sp, Color.White, FontWeight.Bold, maxLines = 1, modifier = Modifier.widthIn(max = 760.dp))
+                    val facts = listOfNotNull(meta?.year?.take(4) ?: cleanTitle(shown.name).second, meta?.runtime, translated(meta?.genres)?.split(", ")?.take(2)?.joinToString(" · "))
+                    if (facts.isNotEmpty()) T(facts.joinToString("  •  "), 15.sp, Silver.TextSoft)  // i18n-ignore
+                    T(translated(meta?.overview) ?: "", 15.sp, Color(0xFFDDE1E6), maxLines = 2, modifier = Modifier.widthIn(max = 640.dp))
+                    val dir = meta?.people?.firstOrNull { it.role == "Režija" }?.name
+                    val cast = meta?.people?.filter { it.role != "Režija" && it.role != "Autor" }?.take(3)?.joinToString(", ") { it.name }?.ifBlank { null }
+                    if (cast != null) T(tr("Glumci") + ": " + cast, 13.sp, Silver.TextSoft, maxLines = 1, modifier = Modifier.widthIn(max = 640.dp))
+                    if (dir != null) T(tr("Režija") + ": " + dir, 13.sp, Silver.TextSoft, maxLines = 1)
+                    Spacer(Modifier.weight(1f))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        HeroBtn("Gledaj", R.drawable.lc_play, primary = true, fr = watchFr) { shown.open(nav) }
+                        HeroBtn("Trailer", R.drawable.ic_trailer_red, colored = true) { openTrailer(ctx, shown.name, meta?.trailerKey) }
+                        val on = remember(MyList.rev, shown.id) { MyList.has(shown.kind, shown.id) }
+                        HeroBtn(if (on) "Na mojoj listi" else "Moja lista", if (on) R.drawable.lc_check else R.drawable.lc_plus) { myListToggle(ctx, shown) }
+                        Spacer(Modifier.weight(1f))
+                        T("${focusIdx + 1} / ${list.size}", 14.sp, Silver.TextSoft, modifier = Modifier.align(Alignment.Bottom))  // i18n-ignore
+                    }
+                    Spacer(Modifier.height(14.dp))
                 }
-                HeroBtn("Trailer", R.drawable.ic_trailer_red, colored = true) { openTrailer(ctx, shown.name, meta?.trailerKey) }
-                val on = remember(MyList.rev, shown.id) { MyList.has(shown.kind, shown.id) }
-                HeroBtn(if (on) "Ukloni s moje liste" else "Dodaj na moju listu", if (on) R.drawable.lc_bookmark_filled else R.drawable.lc_bookmark) { myListToggle(ctx, shown) }
-            }
-          }
-            LazyRow(state = st, modifier = Modifier.fillMaxWidth().height(rowH), horizontalArrangement = Arrangement.spacedBy(gap),
-                verticalAlignment = Alignment.CenterVertically, contentPadding = PaddingValues(horizontal = side, vertical = 8.dp)) {
-                itemsIndexed(list, key = { _, it -> it.id + it.url }) { i, it ->
-                    Focusable(onClick = { mem[key] = i; it.open(nav) }, onFocus = { mem[key] = i; focused = it },
-                        focusRequester = if (i == start) fr else null, shape = Rnd(12.dp), normal = Color.Transparent, focused = Color.Transparent,
-                        focusBorderColor = Color.White, zoom = 1.0f, modifier = Modifier.width(posterW).height(posterH)) { _ ->
-                        OnyxImage(it.image, "p:" + it.id, Modifier.fillMaxSize().clip(Rnd(12.dp)), maxW = 300)
-                        if (it.image == null) T(cleanTitle(it.name).first, 13.sp, C.Text, FontWeight.SemiBold, maxLines = 3, modifier = Modifier.align(Alignment.Center).padding(8.dp))
+                // lower part: rows of six posters; the row slides smoothly, the next row peeks in
+                LazyVerticalGrid(GridCells.Fixed(cols), state = gs, modifier = Modifier.fillMaxWidth().weight(1f).focusRestorer(),
+                    horizontalArrangement = Arrangement.spacedBy(gap), verticalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = PaddingValues(top = 12.dp, bottom = 40.dp)) {
+                    itemsIndexed(list, key = { _, it -> it.id + it.url }) { i, it ->
+                        PosterCell(it, Modifier.width(posterW).height(cellH), posterH, if (i == start) fr else null, onFocus = { mem[key] = i; focusIdx = i }) {
+                            mem[key] = i; mem[key + ":c"] = i; shown = it; toWatch++
+                        }
                     }
                 }
             }
-        }
         }
     }
     LaunchedEffect(Unit) { delay(60); fr.tryFocus() }
 }
 
+/** One poster of the gallery: whole 2:3 picture (never stretched), rating badge top-left, title below.
+ *  Focus: a little bigger and lifted, thin white border. */
 @Composable
-private fun HeroBtn(label: String, icon: Int, primary: Boolean = false, colored: Boolean = false, onClick: () -> Unit) {
-    Focusable(onClick = onClick, shape = Rnd(12.dp), normal = if (primary) Color(0xE6F2F2F4) else Color(0x14FFFFFF), focused = Dawn.pill,
-        focusBorderColor = Color.Transparent, zoom = 1f, modifier = Modifier.height(48.dp).border(1.dp, if (primary) Color.Transparent else Color(0x99FFFFFF), Rnd(12.dp))) { f ->
-        val fg = if (f || primary) Dawn.onPill else Color.White
+fun PosterCell(it: VItem, modifier: Modifier, posterH: androidx.compose.ui.unit.Dp, fr: FocusRequester?, onFocus: () -> Unit, onClick: () -> Unit) {
+    val src = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val f by src.collectIsFocusedAsState()
+    val sc by androidx.compose.animation.core.animateFloatAsState(if (f) 1.08f else 1f, androidx.compose.animation.core.tween(220), label = "ps")
+    val lift by androidx.compose.animation.core.animateDpAsState(if (f) (-6).dp else 0.dp, androidx.compose.animation.core.tween(220), label = "pl")
+    LaunchedEffect(f) { if (f) onFocus() }
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.fillMaxWidth().height(posterH)
+            .then(if (fr != null) Modifier.focusRequester(fr) else Modifier)
+            .graphicsLayer { scaleX = sc; scaleY = sc; translationY = lift.toPx(); shadowElevation = if (f) 18f else 0f; shape = Rnd(10.dp); clip = true }
+            .background(Color(0xFF1B1C1E))
+            .border(if (f) 1.5.dp else 1.dp, if (f) Color.White else Color(0x1FFFFFFF), Rnd(10.dp))
+            .clickable(interactionSource = src, indication = null, onClick = onClick)) {
+            OnyxImage(it.image, "p:" + it.id, Modifier.fillMaxSize(), maxW = 300)
+            if (it.image == null) T(cleanTitle(it.name).first, 13.sp, C.Text, FontWeight.SemiBold, maxLines = 3, modifier = Modifier.align(Alignment.Center).padding(8.dp))
+            val r = it.rating?.replace(',', '.')?.toDoubleOrNull()?.takeIf { v -> v > 0.0 && v <= 10.0 }
+            if (r != null) Row(Modifier.align(Alignment.TopStart).padding(6.dp).clip(Rnd(6.dp)).background(Color(0xCC0B0C0D)).padding(horizontal = 6.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                T("★", 11.sp, Color(0xFFF5C518), FontWeight.Bold)  // i18n-ignore
+                T(String.format(java.util.Locale.US, "%.1f", r), 12.sp, Color.White, FontWeight.SemiBold)  // i18n-ignore
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        T(cleanTitle(it.name).first, 13.sp, if (f) Color.White else Silver.TextSoft, if (f) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1,
+            modifier = Modifier.padding(horizontal = 2.dp))
+    }
+}
+
+@Composable
+fun HeroBtn(label: String, icon: Int, primary: Boolean = false, colored: Boolean = false, fr: FocusRequester? = null, onClick: () -> Unit) {
+    // redesign: glass buttons with a hairline; focus = translucent white pill with a white border; Watch is solid white
+    Focusable(onClick = onClick, shape = Rnd(24.dp), normal = if (primary) Color(0xF2FFFFFF) else Color(0x8C14181C), focused = if (primary) Color.White else Dawn.pill,
+        focusBorderColor = Color.White, borderColor = if (primary) Color.Transparent else Color(0x33FFFFFF), zoom = 1.04f, focusRequester = fr,
+        modifier = Modifier.height(46.dp)) { f ->
+        val fg = if (primary) Color(0xFF111113) else Color.White
         Row(Modifier.align(Alignment.Center).padding(horizontal = 22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             if (colored) androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(icon), null, Modifier.size(22.dp)) else Ico(icon, 18.dp, fg)
             T(label, 16.sp, fg, FontWeight.SemiBold)

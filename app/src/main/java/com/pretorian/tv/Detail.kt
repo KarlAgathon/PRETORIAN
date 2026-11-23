@@ -495,7 +495,7 @@ fun OnyxSeriesDetail(s: SeriesItem, nav: Nav) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         T(trf("Sezona %s", n), 22.sp, C.Text, FontWeight.Bold, modifier = Modifier.weight(1f))
                                         if (count > 0 && seen == count) Ico(R.drawable.lc_circle_check, 22.dp, C.Text)
-                                        else if (fresh) Box(Modifier.clip(Rnd(8.dp)).background(Color(0xF2F2F2F4)).padding(horizontal = 8.dp, vertical = 2.dp)) { T("NOVO", 12.sp, Dawn.onPill, FontWeight.Bold) }
+                                        else if (fresh) Box(Modifier.clip(Rnd(8.dp)).background(Color(0xF2F2F2F4)).padding(horizontal = 8.dp, vertical = 2.dp)) { T("NOVO", 12.sp, Color(0xFF111113), FontWeight.Bold) }
                                     }
                                     T(if (count > 0) trf("%s epizoda", count) else tr("uskoro"), 15.sp, C.Soft)
                                     Spacer(Modifier.weight(1f))
@@ -579,7 +579,7 @@ fun OnyxSeriesDetail(s: SeriesItem, nav: Nav) {
                                         e == null -> T("Čeka se provider", 15.sp, C.Soft)
                                         pr?.watched == true -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                             Ico(R.drawable.lc_check, 16.dp, C.Text); T("Odgledano", 15.sp, C.Text) }
-                                        isNew(air) -> Box(Modifier.clip(Rnd(8.dp)).background(Color(0xF2F2F2F4)).padding(horizontal = 10.dp, vertical = 3.dp)) { T("NOVO", 13.sp, Dawn.onPill, FontWeight.Bold) }
+                                        isNew(air) -> Box(Modifier.clip(Rnd(8.dp)).background(Color(0xF2F2F2F4)).padding(horizontal = 10.dp, vertical = 3.dp)) { T("NOVO", 13.sp, Color(0xFF111113), FontWeight.Bold) }
                                         else -> {}
                                     }
                                 }

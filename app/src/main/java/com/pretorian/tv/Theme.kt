@@ -57,17 +57,17 @@ object Look {
 /** Monochrome Silver design tokens. Every screen takes its colours from here (C.*), never its own hex values. */
 object Silver {
     val Background = Color(0xFF0A0A0B)
-    val Panel = Color(0xE0141416)          // dark charcoal, slightly see-through
+    val Panel = Color(0xA614181C)          // glass: rgba(20,24,28) over the concrete
     val PanelSolid = Color(0xFF141416)
     val Card = Color(0x14FFFFFF)
     val CardHi = Color(0x24FFFFFF)
-    val Border = Color(0x29FFFFFF)
+    val Border = Color(0x1FFFFFFF)
     val Text = Color(0xFFF4F4F5)
-    val TextSoft = Color(0xFFC9C9CE)
+    val TextSoft = Color(0xFFB0B8C4)
     val TextMuted = Color(0xFF8E8E94)
     val Tile = Color(0xFF1A1A1D)
-    val Focus = Color(0xFFDADADE)          // soft silver
-    val OnFocus = Color(0xFF111113)        // dark text on the focus
+    val Focus = Color(0x29FFFFFF)          // redesign: translucent white pill (with a white hairline)
+    val OnFocus = Color(0xFFFFFFFF)        // text stays white on the pill
     val Track = Color(0x33FFFFFF)          // progress track
     val Progress = Color(0xFFE6E6E9)       // progress fill
     // semantic colours, restrained, never the only signal

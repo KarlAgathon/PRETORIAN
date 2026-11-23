@@ -331,7 +331,7 @@ internal fun CuList(mem: HashMap<String, Int>, key: String, items: List<CuItem>,
                         if (it.sub != null) T(it.sub, 13.sp, if (f) fg else C.Soft, maxLines = 1)
                         it.progress?.let { pr ->
                             Box(Modifier.fillMaxWidth().height(3.dp).background(if (f) Color(0x33000000) else Color(0x33FFFFFF))) {
-                                Box(Modifier.fillMaxHeight().fillMaxWidth(pr.coerceIn(0.02f, 1f)).background(if (f) Dawn.onPill else Silver.Focus))
+                                Box(Modifier.fillMaxHeight().fillMaxWidth(pr.coerceIn(0.02f, 1f)).background(Silver.Progress))
                             }
                         }
                     }

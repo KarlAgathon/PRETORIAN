@@ -70,49 +70,62 @@ object Dawn {
 /** Charcoal panel used everywhere (Monochrome Silver). */
 fun Modifier.dawnGlass(r: Dp = 18.dp): Modifier = this.clip(Rnd(r)).background(Silver.Panel).border(1.dp, Silver.Border, Rnd(r))
 
-/** The background is drawn in neutral grey only: every colour becomes its grey value. */
-private fun dc(c: Color): Color {
-    val l = c.red * 0.3f + c.green * 0.59f + c.blue * 0.11f
-    return Color(l * 0.82f, l * 0.82f, l * 0.82f, c.alpha)
-}
+/** Glass card of the redesign: rgba(20,24,28,.55) with a 1px hairline. */
+fun Modifier.glass(r: Dp = 16.dp): Modifier = this.clip(Rnd(r)).background(Color(0x8C14181C)).border(1.dp, Color(0x1FFFFFFF), Rnd(r))
 
-/** Misty night in neutral grey: fog, a house corner on the right and a glowing street lamp. Drawn, not a picture: sharp on every screen. */
+
+/** Concrete gallery (redesign v2.0): dark raw-concrete room, light shafts from ceiling slits, a soft floor,
+ *  and a faint helmet mark. Drawn, not a picture: sharp on every screen. */
 @Composable
 fun DawnBackground() {
+    val grain = remember {
+        val r = java.util.Random(7L)
+        List(900) { floatArrayOf(r.nextFloat(), r.nextFloat(), r.nextFloat()) }
+    }
     Canvas(Modifier.fillMaxSize()) {
         val w = size.width; val h = size.height
-        drawRect(Brush.verticalGradient(listOf(dc(Silver.Background), dc(Color(0xFF24364C)), dc(Color(0xFF0D1622))), startY = 0f, endY = h))
-        val lx = w * 0.64f; val ly = h * 0.36f
-        drawRect(Brush.radialGradient(listOf(dc(Color(0x38A5B9D0)), dc(Color(0x00A5B9D0))), center = Offset(lx, ly), radius = w * 0.42f))
-        // house: roof slab and wall in the fog
-        drawPath(Path().apply { moveTo(w * 0.78f, h * 0.38f); lineTo(w, h * 0.02f); lineTo(w, h * 0.10f); lineTo(w * 0.83f, h * 0.40f); close() }, dc(Color(0x8C0C1420)))
-        drawPath(Path().apply { moveTo(w * 0.83f, h * 0.40f); lineTo(w, h * 0.10f); lineTo(w, h * 0.86f); lineTo(w * 0.83f, h * 0.86f); close() },
-            Brush.verticalGradient(listOf(dc(Color(0x8C141E2C)), dc(Color(0x40141E2C))), startY = h * 0.1f, endY = h * 0.86f))
-        // lamp post
-        val u = h / 720f
-        drawRect(Brush.verticalGradient(listOf(dc(Color(0xF2121820)), dc(Color(0x26121820))), startY = ly, endY = h * 0.95f),
-            topLeft = Offset(lx - 3 * u, ly + 28 * u), size = Size(6 * u, h * 0.6f))
-        drawRect(dc(Color(0x99121820)), topLeft = Offset(lx - 7 * u, h * 0.70f), size = Size(14 * u, 4 * u))
-        // warm halo
-        drawRect(Brush.radialGradient(0f to dc(Color(0x8CFFD696)), 0.35f to dc(Color(0x2EFFC882)), 1f to dc(Color(0x00FFC882)), center = Offset(lx, ly), radius = w * 0.10f))
-        // lantern: glass, roof, base
-        drawPath(Path().apply { moveTo(lx - 14 * u, ly - 16 * u); lineTo(lx + 14 * u, ly - 16 * u); lineTo(lx + 10 * u, ly + 22 * u); lineTo(lx - 10 * u, ly + 22 * u); close() }, dc(Color(0xFFFFE2B0)))
-        drawPath(Path().apply { moveTo(lx - 20 * u, ly - 16 * u); lineTo(lx, ly - 30 * u); lineTo(lx + 20 * u, ly - 16 * u); close() }, dc(Color(0xFF1C1C1E)))
-        drawRect(dc(Color(0xFF1C1C1E)), topLeft = Offset(lx - 12 * u, ly + 22 * u), size = Size(24 * u, 6 * u))
-        drawRect(dc(Color(0xFF1C1C1E)), topLeft = Offset(lx - 1.5f * u, ly - 16 * u), size = Size(3 * u, 38 * u))
-        drawCircle(Brush.radialGradient(listOf(dc(Color(0xE6FFF0D2)), dc(Color(0x00FFF0D2))), center = Offset(lx, ly + 4 * u), radius = 22 * u), radius = 22 * u, center = Offset(lx, ly + 4 * u))
-        // bench beside the lamp: a dark silhouette in the fog (seat, back rails, legs)
-        val bc = dc(Color(0xB30B0F15)); val bx = lx + 34 * u; val bw = 120 * u; val by = h * 0.80f
-        drawRect(bc, topLeft = Offset(bx, by), size = Size(bw, 5 * u))
-        drawRect(bc, topLeft = Offset(bx, by - 30 * u), size = Size(bw, 4 * u))
-        drawRect(bc, topLeft = Offset(bx, by - 19 * u), size = Size(bw, 4 * u))
-        listOf(bx + 6 * u, bx + bw - 10 * u).forEach { x ->
-            drawRect(bc, topLeft = Offset(x, by - 30 * u), size = Size(4 * u, 30 * u))
-            drawRect(bc, topLeft = Offset(x, by + 5 * u), size = Size(4 * u, 22 * u))
+        // walls: warm graphite concrete, lighter in the middle of the back wall
+        drawRect(Brush.verticalGradient(0f to Color(0xFF2A2B2D), 0.55f to Color(0xFF1C1D1F), 1f to Color(0xFF0E0F10), startY = 0f, endY = h))
+        drawRect(Brush.radialGradient(listOf(Color(0x33C8CCD2), Color(0x00C8CCD2)), center = Offset(w * 0.58f, h * 0.42f), radius = w * 0.55f))
+        // back wall panel lines (formwork joints)
+        val joint = Color(0x14000000)
+        for (i in 1..5) drawRect(joint, topLeft = Offset(w * (0.18f + i * 0.14f), h * 0.08f), size = Size(1.2f, h * 0.62f))
+        drawRect(joint, topLeft = Offset(w * 0.18f, h * 0.36f), size = Size(w * 0.82f, 1.2f))
+        // concrete grain
+        grain.forEach { g ->
+            drawRect(if (g[2] > 0.5f) Color(0x0AFFFFFF) else Color(0x10000000), topLeft = Offset(g[0] * w, g[1] * h * 0.72f), size = Size(2f + g[2] * 3f, 2f + g[2] * 2f))
         }
-        // ground fog
-        drawRect(Brush.verticalGradient(0f to dc(Color(0x00788799)), 0.5f to dc(Color(0x1A788799)), 1f to dc(Color(0x80080C14)), startY = h * 0.6f, endY = h),
-            topLeft = Offset(0f, h * 0.6f), size = Size(w, h * 0.4f))
+        // light shafts from ceiling slits
+        listOf(0.46f to 0.10f, 0.66f to 0.08f, 0.84f to 0.07f).forEach { (x, sw) ->
+            val top = w * x; val bw = w * sw
+            drawPath(Path().apply {
+                moveTo(top, 0f); lineTo(top + bw * 0.35f, 0f); lineTo(top + bw * 0.2f + w * 0.08f, h * 0.74f); lineTo(top - w * 0.04f, h * 0.74f); close()
+            }, Brush.verticalGradient(listOf(Color(0x1FEDEFF2), Color(0x05EDEFF2)), startY = 0f, endY = h * 0.74f))
+            drawRect(Color(0x66F4F5F7), topLeft = Offset(top, 0f), size = Size(bw * 0.35f, 3f))
+        }
+        // floor: polished concrete with a soft reflection
+        drawRect(Brush.verticalGradient(0f to Color(0xFF1A1B1C), 0.08f to Color(0xFF232426), 1f to Color(0xFF0A0A0B), startY = h * 0.72f, endY = h),
+            topLeft = Offset(0f, h * 0.72f), size = Size(w, h * 0.28f))
+        drawRect(Color(0x22FFFFFF), topLeft = Offset(0f, h * 0.72f), size = Size(w, 1.2f))
+        listOf(0.5f, 0.7f, 0.88f).forEach { x ->
+            drawRect(Brush.radialGradient(listOf(Color(0x18EDEFF2), Color(0x00EDEFF2)), center = Offset(w * x, h * 0.80f), radius = w * 0.12f))
+        }
+        // faint helmet watermark on the right
+        val u = h / 720f; val cx = w * 0.80f; val cy = h * 0.40f
+        drawPath(Path().apply {
+            moveTo(cx - 70 * u, cy + 90 * u)
+            cubicTo(cx - 95 * u, cy, cx - 85 * u, cy - 110 * u, cx, cy - 120 * u)
+            cubicTo(cx + 85 * u, cy - 110 * u, cx + 95 * u, cy, cx + 70 * u, cy + 90 * u)
+            lineTo(cx + 26 * u, cy + 90 * u); lineTo(cx + 22 * u, cy + 10 * u); lineTo(cx + 8 * u, cy - 10 * u)
+            lineTo(cx + 8 * u, cy + 95 * u); lineTo(cx - 8 * u, cy + 95 * u); lineTo(cx - 8 * u, cy - 10 * u)
+            lineTo(cx - 22 * u, cy + 10 * u); lineTo(cx - 26 * u, cy + 90 * u); close()
+        }, Color(0x0DFFFFFF))
+        drawPath(Path().apply {
+            moveTo(cx - 10 * u, cy - 120 * u); cubicTo(cx - 30 * u, cy - 190 * u, cx + 90 * u, cy - 200 * u, cx + 130 * u, cy - 140 * u)
+            cubicTo(cx + 80 * u, cy - 160 * u, cx + 30 * u, cy - 150 * u, cx + 10 * u, cy - 118 * u); close()
+        }, Color(0x0AFFFFFF))
+        // vignette
+        drawRect(Brush.radialGradient(listOf(Color(0x00000000), Color(0x99000000)), center = Offset(w * 0.55f, h * 0.45f), radius = w * 0.78f))
     }
 }
 
@@ -124,6 +137,8 @@ fun DawnShell(top: Screen, nav: Nav, content: @Composable () -> Unit) {
     val menu = top == Screen.Home
     Box(Modifier.fillMaxSize().background(Silver.Background)) {
         DawnBackground()
+        // Home v2.0: its own layout (navigation column + status bar), nothing else on the screen
+        if (menu) { HomeV2(nav); OfflineNote(Modifier.align(Alignment.BottomEnd).padding(end = 34.dp, bottom = 10.dp)); return@Box }
         Column(Modifier.fillMaxSize()) {
             DawnTopBar(top, menu, nav)
             Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -299,7 +314,7 @@ private fun DawnTopBar(top: Screen, menu: Boolean, nav: Nav) {
 
 /** The bell with a red number of unread notifications; OK opens the notification center. */
 @Composable
-private fun NoteBell(nav: Nav) {
+fun NoteBell(nav: Nav) {
     LaunchedEffect(Unit) { Notes.load() }
     val unread = Notes.unread()
     var open by remember { mutableStateOf(false) }

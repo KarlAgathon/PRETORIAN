@@ -497,7 +497,7 @@ private val SETTINGS_LINKS = mapOf(
     ),
     "appearance" to listOf(
         SettingsLink("language", "Jezik", "Jezik menija i opisa sadržaja", R.drawable.lc_languages),
-        SettingsLink("look", "Izgled", "Veličina teksta i performanse", R.drawable.lc_palette),
+        SettingsLink("look", "Izgled", "Veličina teksta, vrijeme i performanse", R.drawable.lc_palette),
     ),
     "home" to listOf(
         SettingsLink("general", "Pokretanje i mreža", "Start s boxom, rad u pozadini, mreža", R.drawable.lc_settings),
@@ -1772,6 +1772,7 @@ private fun AppearanceV2() {
     key(rev) {
         SetPage("Izgled", "Jedan izgled za sve. Ovdje biraš samo veličinu teksta i način rada.") {
             SetSlider("Veličina teksta", "za gledanje s daljeg kauča · 90 – 120 %", Tune.textSize, 90, 120, 5, { "$it %" }) { Tune.textSize = it; Tune.save() }
+            WeatherPlaceRow()
             SetDrop("Način rada", trf("Ocjena uređaja %s/100 · %s GB RAM", Perf.score, String.format("%.1f", Perf.ramGb)),
                 Perf.MODES, Perf.mode.coerceIn(0, Perf.MODES.lastIndex)) { Perf.set(it); rev++ }
             T("Lite štedi memoriju i procesor na slabijim uređajima. Izgled i funkcije ostaju isti.", 12.sp, C.Muted, maxLines = 2)

@@ -149,7 +149,7 @@ fun Focusable(
         m.graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(shape)
             .background(if (isFocused) (focused ?: C.CardFocus) else normal)
-            .border(1.5.dp, if (isFocused) (focusBorderColor ?: C.Red.copy(alpha = (0.45f + FocusCard.pct / 180f).coerceIn(0.5f, 1f))) else (borderColor ?: Color.Transparent), shape)
+            .border(if (isFocused && focused == Silver.Focus) 1.dp else 1.5.dp, if (isFocused && focused == Silver.Focus) Color(0xE6FFFFFF) else if (isFocused) (focusBorderColor ?: C.Red.copy(alpha = (0.45f + FocusCard.pct / 180f).coerceIn(0.5f, 1f))) else (borderColor ?: Color.Transparent), shape)
             .combinedClickable(interactionSource = src, indication = null, onClick = onClick, onLongClick = long),
         content = { content(isFocused) },
     )
