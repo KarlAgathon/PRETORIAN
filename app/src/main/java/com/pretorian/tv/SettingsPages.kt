@@ -254,7 +254,6 @@ internal fun PlayerV2(openSub: (String) -> Unit) {
             }
             SetSection("Serije")
             SetSwitch("Sljedeća epizoda sama", "odbrojava 10 s na kraju", Prefs.bool("next_ep", true)) { Prefs.put("next_ep", it) }
-            SetSwitch("Zamuti neodgledane epizode", "slike epizoda bez spojlera", Prefs.bool("blur_eps", true)) { Prefs.put("blur_eps", it) }
             // learned per series the first time you skip: then at the right second in every episode
             SetDrop("Preskoči prethodno", "„Previously on…“ na početku epizode, uči se za svaku seriju", listOf("Dugme", "Sam preskoči", "Isključeno"),
                     Prefs.long("skip_recap", 0).toInt().coerceIn(0, 2)) { Prefs.put("skip_recap", it.toLong()) }
@@ -275,7 +274,7 @@ internal fun PlayerV2(openSub: (String) -> Unit) {
             }
             // Phase A: the technical player options live one level down, in "Više opcija" (no Basic/Advanced mode)
             SetRow("Više opcija", "Vanjski plejer, jezici titla i zvuka, file manager", arrow = "›") { openSub("playermore") }
-            ResetSection("Plejer", listOf("sub_size", "sub_style", "recover_on", "recover_wait2", "buffer_mb", "zap_updown", "resume_mode", "next_ep", "blur_eps", "trailer_app", "audio_passthrough")) { rev++ }
+            ResetSection("Plejer", listOf("sub_size", "sub_style", "recover_on", "recover_wait2", "buffer_mb", "zap_updown", "resume_mode", "next_ep", "trailer_app", "audio_passthrough")) { rev++ }
         }
     }
 }

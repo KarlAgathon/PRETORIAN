@@ -228,7 +228,7 @@ private fun DawnMenu(nav: Nav) {
     clear?.let { item ->
         Popup(item.label, onDismiss = { clear = null }) {
             OptionRow("Obriši obavještenja", R.drawable.lc_trash_2) {
-                if (item.kind == "series") { NewContent.clear("series"); Follow.clearFresh() } else if (item.kind != null) NewContent.clear(item.kind)
+                item.kind?.let { Notes.clearKind(it) }   // FIX 2: only the notices; "Nedavno dodano" keeps its titles
                 clear = null
             }
         }

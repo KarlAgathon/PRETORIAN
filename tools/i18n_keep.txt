@@ -650,3 +650,10 @@ dot
 MediaCenter%-backup%
 AIza***
 player
+g
+SYNC
+◀ ▶ 0,5 s
+−10 s
+−5 s
++5 s
++10 s

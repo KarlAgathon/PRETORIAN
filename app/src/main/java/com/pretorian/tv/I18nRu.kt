@@ -2783,4 +2783,19 @@ eksterni plejer, vanjski plejer, jezici titla, jezici zvuka, file manager|вне
 Više opcija plejera|Ещё настройки плеера
 Procesor, RAM, ekran, mreža|Процессор, RAM, экран, сеть
 Pronađi bilo koju postavku po imenu|Найдите любую настройку по названию
+Grad ili poštanski broj|Город или почтовый индекс
+▲ ▼ pomjeri · OK spusti · Back odustani|▲ ▼ переместить · OK опустить · Назад отмена
+OK otvara · drži OK za opcije|OK открывает · удерживайте OK для опций
+Kanali · %s|Каналы · %s
+OK na grupu prikazuje njene kanale|OK на группе показывает её каналы
+Zaključaj PIN-om|Заблокировать PIN-кодом
+Sakriti sve grupe?|Скрыть все группы?
+Sakriti sve kanale ove grupe?|Скрыть все каналы этой группы?
+Ponovo učitaj kanal|Перезагрузить канал
+Označi da kanal ne radi|Отметить, что канал не работает
+Kanal označen: trenutno ne radi|Канал отмечен: сейчас не работает
+samo za titlove iz fajla ili online|только для субтитров из файла или онлайн
+Očistiti Nedavno dodano?|Очистить «Недавно добавленные»?
+Očisti|Очистить
+Naslovi ostaju u svojim kategorijama.|Названия остаются в своих категориях.
 """.trimIndent()

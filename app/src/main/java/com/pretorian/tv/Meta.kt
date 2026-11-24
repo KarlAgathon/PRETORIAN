@@ -169,10 +169,15 @@ object Tmdb {
         out
     }
 
-    /** films in cinemas now (this country, else the US list) */
+    /** films in cinemas now: German theatrical premiere within the last 60 days; re-releases of old films are left out
+     *  (their first release anywhere must be within the last year) */
     suspend fun nowPlaying(): List<Hit> {
-        val cc = java.util.Locale.getDefault().country.ifBlank { "DE" }
-        return list("/movie/now_playing", "language=en-US&region=$cc", 3, tv = false).ifEmpty { list("/movie/now_playing", "language=en-US&region=US", 3, tv = false) }
+        val f = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+        val now = System.currentTimeMillis(); val day = 86_400_000L
+        val q = "language=en-US&region=DE&with_release_type=2%7C3&sort_by=popularity.desc" +
+            "&release_date.gte=${f.format(java.util.Date(now - 60 * day))}&release_date.lte=${f.format(java.util.Date(now))}" +
+            "&primary_release_date.gte=${f.format(java.util.Date(now - 365 * day))}"
+        return list("/discover/movie", q, 3, tv = false)
     }
     /** series made by one network (its originals), most popular first */
     suspend fun network(ids: String): List<Hit> = list("/discover/tv", "language=en-US&sort_by=popularity.desc&with_networks=$ids", 5, tv = true)

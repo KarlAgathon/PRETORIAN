@@ -707,6 +707,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                 val raw = s.value
                 val list = if (favEditable) rememberFrozen(g.key + "#" + enterTick, raw) else raw
                 val gone = if (favEditable) list.filter { c -> raw.none { it.url == c.url } }.map { it.url }.toSet() else emptySet()
+                LaunchedEffect(g.key, raw.size) { ChannelHealth.probe(raw) }
                 if (list.isEmpty()) {
                     if (g.cat.id == RECENT_GROUP) Message("Još nema gledanih kanala.", "Kanali koje gledaš pojavit će se ovdje · Back za grupe")
                     else Message(if (isFav) "Nema favorita" else "Grupa je prazna",
@@ -805,7 +806,8 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                     // quality from the channel's own name (4K / UHD / FHD / HD / SD), never invented
                                     qualityTag(ch.name)?.let { q -> Box(Modifier.clip(Rnd(5.dp)).background(if (f) Color.White else Color(0x40FFFFFF)).padding(horizontal = 6.dp, vertical = 1.dp)) {
                                         T(q, 11.sp, if (f) Color(0xFF111113) else Color(0xFFDDE1E6), FontWeight.Bold) } }
-                                    if (active) Dot(C.Green, 8.dp)
+                                    // FIX 9: only the channel's status (works / not now / not checked); the playing row keeps just its outline
+                                    HealthLamp(ch.url)
                                 }
                             }
                         }
@@ -1078,11 +1080,13 @@ fun PreviewBox(ch: Channel?, modifier: Modifier) {
     val player = remember { buildPlayer(ctx, preview = true) }
     var ready by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
+    val curCh by androidx.compose.runtime.rememberUpdatedState(ch)
     DisposableEffect(Unit) {
         Preview.player = player
         val l = object : androidx.media3.common.Player.Listener {
-            override fun onRenderedFirstFrame() { ready = true }
-            override fun onPlayerError(error: androidx.media3.common.PlaybackException) { failed = true }
+            override fun onRenderedFirstFrame() { ready = true; ChannelHealth.mark(curCh?.url, true) }
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) { failed = true; ChannelHealth.mark(curCh?.url, false) }
+            override fun onIsPlayingChanged(isPlaying: Boolean) { ChannelHealth.previewOn = isPlaying }
         }
         player.addListener(l)
         // no background play: the preview stops when the app leaves the screen and starts again when it comes back
@@ -1097,7 +1101,7 @@ fun PreviewBox(ch: Channel?, modifier: Modifier) {
             } catch (_: Exception) {}
         }
         life?.addObserver(lo)
-        onDispose { life?.removeObserver(lo); player.removeListener(l); if (Preview.player === player) Preview.player = null; player.release() }
+        onDispose { ChannelHealth.previewOn = false; life?.removeObserver(lo); player.removeListener(l); if (Preview.player === player) Preview.player = null; player.release() }
     }
     LaunchedEffect(ch?.url) {
         ready = false; failed = false

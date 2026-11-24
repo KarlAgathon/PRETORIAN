@@ -151,6 +151,7 @@ fun DawnVod(nav: Nav, series: Boolean) {
     val gate = remember { PinGate() }
     val ovr = remember { Ovr(ctx, p.id) }
     var groupMenu by remember { mutableStateOf<Category?>(null) }
+    var clearNew by remember { mutableStateOf(false) }
     var cats by remember { mutableStateOf(emptyList<Category>()) }
     var rev by remember { mutableStateOf(0) }
     LaunchedEffect(top) {
@@ -168,12 +169,15 @@ fun DawnVod(nav: Nav, series: Boolean) {
                     val myCount = remember(MyList.rev) { MyList.items(kind).size }
                     val newAll = remember(NewContent.rev) { NewContent.count(kind) }
                     fun plus(n: Int) = if (n > 0) trf("+%s novih", n) else null
-                    val fixed = listOf(
+                    // FIX 1: "U kinima" only when at least one current cinema film is in the playlist
+                    val cinemaN by produceState<Int?>(null, p.id) { value = if (series) 0 else runCatching { VodMatch.match(p, false, "cinema", Tmdb.nowPlaying()).size }.getOrDefault(0) }
+                    val fixed = listOfNotNull(
                         // search only movies / only series (owner); one OK opens it
                         BrowseRow("find", tr(if (series) "Traži serije" else "Traži filmove"), R.drawable.lc_search, direct = true) { openScopedSearch(nav, if (series) "series" else "vod") },
                         BrowseRow("cont", tr("Nastavi gledati"), R.drawable.lc_play) { stack.add(VL.Gallery(VG_CONT, tr("Nastavi gledati"), R.drawable.lc_play)) },
-                        BrowseRow("new", tr("Nedavno dodano"), R.drawable.lc_clock, badge = plus(newAll)) { stack.add(VL.Gallery(VG_NEW, tr("Nedavno dodano"), R.drawable.lc_clock)) },
+                        BrowseRow("new", tr("Nedavno dodano"), R.drawable.lc_clock, badge = plus(newAll), onLong = { clearNew = true }) { stack.add(VL.Gallery(VG_NEW, tr("Nedavno dodano"), R.drawable.lc_clock)) },
                         if (series) BrowseRow("stream", tr("Streaming"), R.drawable.lc_tv) { stack.add(VL.Streaming) }
+                        else if ((cinemaN ?: 0) == 0) null
                         else BrowseRow("cinema", tr("U kinima"), R.drawable.lc_film) { stack.add(VL.Gallery(VG_CINEMA, tr("U kinima"), R.drawable.lc_film)) },
                         BrowseRow("my", tr("Moja lista"), R.drawable.lc_bookmark, count = myCount.takeIf { it > 0 }?.toString()) { stack.add(VL.Gallery(VG_MY, tr("Moja lista"), R.drawable.lc_bookmark)) },
                     )
@@ -209,6 +213,11 @@ fun DawnVod(nav: Nav, series: Boolean) {
                 }
             }
         }
+    }
+    // FIX 2: long OK on "Nedavno dodano" clears it, after a question (focus on Odustani)
+    if (clearNew) Popup(tr("Očistiti Nedavno dodano?"), onDismiss = { clearNew = false }) {
+        OptionRow("Odustani", R.drawable.lc_x) { clearNew = false }
+        OptionRow("Očisti", R.drawable.lc_trash_2, sub = "Naslovi ostaju u svojim kategorijama.") { NewContent.clear(kind); clearNew = false; rev++ }
     }
     groupMenu?.let { g ->
         GroupOptions(kind, g, ovr, cats, onDismiss = { groupMenu = null }) { close -> rev++; if (close) groupMenu = null }

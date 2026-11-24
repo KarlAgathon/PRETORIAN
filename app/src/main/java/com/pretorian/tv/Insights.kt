@@ -566,29 +566,34 @@ fun DeviceV2() {
     val cards by load("dev") { withContext(Dispatchers.IO) { deviceCards(ctx) } }
     var open by remember { mutableStateOf<DevCard?>(null) }
     val head = remember { DeviceInfo.head(ctx) }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(Modifier.fillMaxWidth().clip(Rnd(20.dp)).background(C.CardHi).border(1.dp, C.Line, Rnd(20.dp)).padding(18.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-            Box(Modifier.size(72.dp).clip(Rnd(18.dp)).background(Brush.linearGradient(listOf(Silver.TextSoft, Silver.TextSoft))), contentAlignment = Alignment.Center) {
-                Ico(R.drawable.lc_monitor, 34.dp, Color.White)
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    // FIX 3: rows scroll whole, with half a box of margin at the bottom
+    val spec = remember { SetBringSpec(with(density) { 56.dp.toPx() }) }
+    androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides spec) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 10.dp, bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // a low hero: one line of name, one of version, small badges
+        Row(Modifier.fillMaxWidth().clip(Rnd(18.dp)).background(C.Card).border(1.dp, C.Line, Rnd(18.dp)).padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Box(Modifier.size(48.dp).clip(Rnd(14.dp)).background(Color.White.copy(alpha = 0.10f)), contentAlignment = Alignment.Center) {
+                Ico(R.drawable.lc_monitor, 24.dp, Color.White)
             }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Kicker("O uređaju", C.Muted, size = 10.sp)
-                T(head.first, 26.sp, C.Text, FontWeight.ExtraBold)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                T(head.first, 20.sp, C.Text, FontWeight.ExtraBold)
                 T(head.second, 13.sp, C.Soft)
-                Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    head.third.forEach { b -> Box(Modifier.clip(Pill).background(Color.White.copy(alpha = 0.08f)).padding(horizontal = 9.dp, vertical = 3.dp)) { T(b, 11.sp, C.Text, FontWeight.Bold) } }
-                }
             }
+            head.third.take(3).forEach { b -> Box(Modifier.clip(Pill).background(Color.White.copy(alpha = 0.08f)).padding(horizontal = 9.dp, vertical = 3.dp)) { T(b, 11.sp, C.Text, FontWeight.Bold) } }
         }
         when (val st = cards) {
-            is Load.Ok -> {
-                val list: List<@Composable (Modifier) -> Unit> = st.value.map { c -> { m -> InfoCard(c.label, c.title, c.sub, c.icon, Color(c.color), m, bar = c.bar, onClick = { open = c }) } }
-                CardGrid(3, list)
+            is Load.Ok -> st.value.chunked(3).forEach { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    row.forEach { c -> DevBox(c, Modifier.weight(1f)) { open = c } }
+                    repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                }
             }
             is Load.Err -> Message("Greška", st.message)
             else -> Box(Modifier.fillMaxWidth().height(120.dp)) { Loading("") }
         }
+    }
     }
     open?.let { c ->
         Popup(c.label, { open = null }, width = 640.dp) {
@@ -597,6 +602,25 @@ fun DeviceV2() {
                     T(k, 13.sp, C.Muted, modifier = Modifier.width(190.dp))
                     T(v, 13.sp, C.Text, FontWeight.SemiBold, maxLines = 3, modifier = Modifier.weight(1f))
                 }
+            }
+        }
+    }
+}
+
+/** One equal box of "This device": short label, one line of value, one line of detail (cut with …), an optional bar.
+ *  Focus = the calm pill, no zoom, one hairline only. */
+@Composable
+private fun DevBox(c: DevCard, modifier: Modifier, onClick: () -> Unit) {
+    Focusable(onClick = onClick, shape = Rnd(16.dp), normal = C.Card, focused = Silver.Focus, zoom = 1f, borderColor = C.Line,
+        modifier = modifier.height(104.dp)) { _ ->
+        Row(Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(Modifier.size(34.dp).clip(Rnd(10.dp)).background(Color.White.copy(alpha = 0.10f)), contentAlignment = Alignment.Center) { Ico(c.icon, 18.dp, Color.White) }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                T(c.label.uppercase(), 10.sp, C.Muted, FontWeight.SemiBold)
+                T(c.title, 16.sp, C.Text, FontWeight.ExtraBold)
+                T(c.sub ?: " ", 12.sp, C.Soft)
+                if (c.bar != null) ThinBar(c.bar, Color(c.color), Modifier.fillMaxWidth().padding(top = 4.dp), 3.dp)
             }
         }
     }

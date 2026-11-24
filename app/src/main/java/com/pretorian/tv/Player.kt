@@ -333,7 +333,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     val item = items.getOrElse(index) { items.first() }
     // spec 16: Match Follow needs to know what is being watched (context filter, same-match check)
     LaunchedEffect(item.url) { PlayCtx.kind = if (s.live) "live" else if (item.season != null) "series" else "movie"; PlayCtx.chUrl = if (s.live) item.url else null }
-    DisposableEffect(Unit) { onDispose { PlayCtx.kind = null; PlayCtx.chUrl = null } }
+    DisposableEffect(Unit) { ChannelHealth.playerOn = true; onDispose { ChannelHealth.playerOn = false; PlayCtx.kind = null; PlayCtx.chUrl = null } }
     val p = item.channel?.let { Store.byId(ctx, it.pid) } ?: Store.ownerOf(ctx, item.url) ?: Store.active(ctx)
 
     /** audio / built-in subtitle picked on the movie page, applied when the stream's tracks are known */
@@ -431,7 +431,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     /** the quiet tries are used up: the same channel from elsewhere (backup stream), otherwise a clear message — never a silent freeze */
     fun giveUp(e: PlaybackException?) {
         val cur = items.getOrNull(index)
-        fun fail() { if (e != null) error = errorText(e, s.live) else frozenMsg = true }
+        fun fail() { if (e != null) error = errorText(e, s.live) else frozenMsg = true; if (s.live) ChannelHealth.mark(cur?.channel?.url ?: cur?.url, false) }
         if (s.live && (Tech.backup || MatchWatch.on(cur?.url)) && cur?.channel != null && shiftFrom == 0L) {
             val request = mediaRequest.begin()
             val selectedIndex = index
@@ -464,6 +464,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             }
             override fun onPlaybackStateChanged(state: Int) {
                 buffering = state == Player.STATE_BUFFERING
+                if (state == Player.STATE_READY && s.live) items.getOrNull(index)?.let { ChannelHealth.mark(it.channel?.url ?: it.url, true) }
                 if (state == Player.STATE_READY) { if (reconnect > 0) StreamLog.event("ok", items.getOrNull(index)?.title ?: ""); if (reconnect > 0) StreamLog.add(listOf(items.getOrNull(index)?.title ?: "", " · ", tr("radi ponovo ✓")).joinToString("")); error = null; reconnect = 0; readyOnce[0] = true }  // i18n-ignore
                 if (state == Player.STATE_ENDED && !s.live) { saveProgress(done = true); if (index < n - 1 && Prefs.bool("next_ep", true) && !autoCancel) index++ }
             }
@@ -524,14 +525,21 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         }
         error = null; retried = false; showInfo = s.live; videoH = 0; autoCancel = false; upSel = 0
         if (s.live && lv == LiveUi.NONE && prevIndex >= 0) lv = LiveUi.INFO
-        val cur = items[index]
+        val cur0 = items[index]
+        // FIX 8: the subtitle you chose last time for this film / episode (file, provider language or off)
+        val mem = if (!s.live && cur0.subFile == null) SubMem.get(cur0.url) else null
+        val cur = when {
+            mem == "off" -> cur0.copy(subOff = true)
+            mem?.startsWith("t:") == true -> cur0.copy(subLang = mem.removePrefix("t:").ifBlank { null })
+            else -> cur0
+        }
         AudioDelay.use(cur.url)   // sound delay kept for this channel / film
         // films and series only: the speed chosen on the movie / series view (never on live TV)
         if (!s.live && index == s.index) player.setPlaybackSpeed(cur.speed.coerceIn(0.5f, 2f))
         if (cur.channel?.url != items.getOrNull(prevIndex)?.channel?.url) backupTried.clear()
         shiftFrom = 0L
         // a subtitle fixed with SYNC earlier for this film comes back by itself
-        subFile = cur.subFile ?: if (!s.live) SubSync.kept(cur.url) else null
+        subFile = cur.subFile ?: if (!s.live) (SubSync.kept(cur.url) ?: SubMem.file(mem)) else null
         val saved = if (!s.live) Watch.get(ctx, cur.url) else null
         val rm = Prefs.str("resume_mode", "0")
         if (cur.startAt != null) loadMedia(cur, subFile, cur.startAt)
@@ -624,10 +632,12 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     }
 
     val subsUi: @Composable (() -> Unit) -> Unit = { done -> SubsPanel(item, tracksOf(player, MC.TRACK_TYPE_TEXT), subFile, online = !s.live, onDismiss = done,
-            onOff = { subFile = null; player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, true).build(); done() },
+            onShift = if (s.live) null else ({ if (subFile != null) dialog = "subsync" }), shiftOk = subFile != null,
+            onOff = { if (!s.live) { SubMem.set(item.url, "off"); SubSync.forget(item.url) }; subFile = null; player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, true).build(); done() },
             onTrack = { t ->
                 // only one subtitle on screen: a downloaded file is taken out of the stream first, then the provider track is chosen
                 val lang = try { t.group.getTrackFormat(t.index).language } catch (_: Exception) { null }
+                if (!s.live) { SubMem.set(item.url, "t:" + (lang ?: "")); SubSync.forget(item.url) }
                 if (subFile != null) {
                     subFile = null
                     player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().clearOverridesOfType(MC.TRACK_TYPE_TEXT)
@@ -638,6 +648,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 done()
             },
             onFile = { path ->
+                if (!s.live) { SubMem.set(item.url, "f:$path"); SubSync.forget(item.url) }
                 subFile = path
                 // the downloaded file replaces the provider's subtitle (never both on screen)
                 val code = java.io.File(path).name.removeSuffix(".srt").substringAfterLast('.').takeIf { it.length in 2..3 }
@@ -1091,11 +1102,29 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                         }
                         LiveUi.HISTORY -> LiveHistoryPanel(Recent.list().map { it.ch }.distinctBy { it.url }.take(10), { c -> lv = LiveUi.NONE; tune(c) }, { clearAsk = true }, panelFr)
                         LiveUi.MORE -> LivePanel(tr("Više"), R.drawable.lc_more_horizontal, false, panelFr) {
+                            // FIX 10: always the same six rows, in this order; what the channel does not have says "Nema"
                             val auds = tracksOf(player, MC.TRACK_TYPE_AUDIO); val subs = tracksOf(player, MC.TRACK_TYPE_TEXT)
-                            var k = 0
-                            if (auds.size > 1) LiveRow(tr("Audio"), value = auds.firstOrNull { it.selected }?.label?.substringBefore(" · "), fr = if (k++ == 0) panelFr else null) { lv = LiveUi.MORE_AUDIO }
-                            if (subs.isNotEmpty()) LiveRow(tr("Titlovi"), fr = if (k++ == 0) panelFr else null) { lv = LiveUi.MORE_SUBS }
-                            LiveRow(tr("Informacije o streamu"), fr = if (k == 0) panelFr else null) { lv = LiveUi.MORE_INFO }
+                            val subOff = player.trackSelectionParameters.disabledTrackTypes.contains(MC.TRACK_TYPE_TEXT) || subs.none { it.selected }
+                            val chUrl = item.channel?.url ?: item.url
+                            LiveRow(tr("Audio"), value = if (auds.size > 1) auds.firstOrNull { it.selected }?.label?.substringBefore(" · ") else tr("Nema"),
+                                dimValue = auds.size <= 1, icon = R.drawable.lc_volume, fr = panelFr) { if (auds.size > 1) lv = LiveUi.MORE_AUDIO }
+                            LiveRow(tr("Titlovi"), value = if (subs.isEmpty()) tr("Nema") else if (subOff) tr("Isključeno") else subTrackNames(subs).getOrNull(subs.indexOfFirst { it.selected }),
+                                dimValue = subs.isEmpty(), icon = R.drawable.lc_captions) { if (subs.isNotEmpty()) lv = LiveUi.MORE_SUBS }
+                            LiveRow(tr("Tajmer za spavanje"), value = if (Sleep.until > 0) trf("još %s min", ((Sleep.until - System.currentTimeMillis()) / 60_000 + 1).coerceAtLeast(1)) else tr("Isključen"),
+                                icon = R.drawable.lc_moon) { lv = LiveUi.MORE_SLEEP }
+                            LiveRow(tr("Ponovo učitaj kanal"), icon = R.drawable.lc_refresh_cw) {
+                                lv = LiveUi.NONE; error = null; reconnect = 0; gaveUp = false; frozenMsg = false
+                                loadMedia(items[index], subFile, 0L)
+                            }
+                            LiveRow(tr("Označi da kanal ne radi"), icon = R.drawable.lc_alert_triangle) {
+                                ChannelHealth.mark(chUrl, false); lv = LiveUi.NONE
+                                Toast.makeText(ctx, tr("Kanal označen: trenutno ne radi"), Toast.LENGTH_SHORT).show()
+                            }
+                            LiveRow(tr("Informacije o streamu"), icon = R.drawable.lc_info) { lv = LiveUi.MORE_INFO }
+                        }
+                        LiveUi.MORE_SLEEP -> LivePanel(tr("Tajmer za spavanje"), R.drawable.lc_moon, false, panelFr) {
+                            LiveRow(tr("Isključen"), on = Sleep.until <= 0, fr = panelFr) { Sleep.until = 0; lv = LiveUi.MORE }
+                            listOf(30, 60, 90).forEach { m -> LiveRow(trf("%s min", m)) { Sleep.until = System.currentTimeMillis() + m * 60_000L; lv = LiveUi.MORE } }
                         }
                         LiveUi.MORE_AUDIO -> LivePanel(tr("Audio"), R.drawable.lc_volume, false, panelFr) {
                             tracksOf(player, MC.TRACK_TYPE_AUDIO).forEachIndexed { k, t ->
@@ -1312,7 +1341,6 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             if (s.live) item.channel?.let { c -> OptionRow("Pomak vremena", R.drawable.lc_clock, value = EpgShift.label(EpgShift.chMin(c.url))) { dialog = "epgshift" } }
             OptionRow("Vanjski plejer", R.drawable.lc_external_link) { player.pause(); saveProgress(); dialog = "ext" }
             if (s.live) OptionRow("Arhiva", R.drawable.lc_history, sub = tr("emisije koje su prošle")) { dialog = null; nav.push(Screen.Catchup) }
-            if (!s.live && subFile != null) OptionRow("Podesi vrijeme titla", R.drawable.lc_clock, sub = "ako titl kasni ili žuri · SYNC") { dialog = "subsync" }
             if (Tech.audioDelay) OptionRow("Pomak zvuka", R.drawable.lc_volume, sub = tr("ako zvuk kasni ili žuri"), value = AudioDelay.label(AudioDelay.of(item.url))) { dialog = "adelay" }
             if (tracksOf(player, MC.TRACK_TYPE_AUDIO).size > 1) OptionRow("Audio", R.drawable.lc_volume, value = tracksOf(player, MC.TRACK_TYPE_AUDIO).firstOrNull { it.selected }?.label ?: "—") { dialog = "audio" }
         }
@@ -1366,12 +1394,14 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         "subsync" -> {
             val base = remember { subFile }
             if (base == null) dialog = null
-            else SubSyncDialog(File(base).nameWithoutExtension.take(30), onDismiss = { dialog = null },
+            else SubSyncDialog(File(base).nameWithoutExtension.take(30),
+                // Back closes without saving: the subtitle goes back to how it was
+                onDismiss = { if (subFile != base) { subFile = base; loadMedia(item, base, player.currentPosition) }; dialog = null },
                 onPreview = { off -> if (off != 0L) try { val f = SubSync.shift(base, off); subFile = f.path; loadMedia(item, f.path, player.currentPosition) } catch (_: Exception) {} },
                 onSync = { off ->
                     try {
                         val f = SubSync.sync(item.url, base, player.currentPosition, off)
-                        subFile = f.path; loadMedia(item, f.path, player.currentPosition)
+                        subFile = f.path; SubMem.set(item.url, "f:" + f.path); loadMedia(item, f.path, player.currentPosition)
                         Toast.makeText(ctx, tr("Titl usklađen i snimljen za ovaj film"), Toast.LENGTH_SHORT).show()
                     } catch (e: Exception) { Toast.makeText(ctx, tr("Ovaj titl se ne može uskladiti"), Toast.LENGTH_LONG).show() }
                     dialog = null
@@ -1384,7 +1414,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         "psettings" -> PlayerSettings(series = item.season != null, audio = tracksOf(player, MC.TRACK_TYPE_AUDIO).firstOrNull { it.selected }?.label?.substringBefore(" · "), resize = resize,
             onDismiss = { dialog = null }, onAudio = { dialog = "audio" }, onFormat = { dialog = "vfmt" },
             // time shift only in films and series (approved): subtitle delay (when a subtitle file is on) and audio delay
-            onSubDelay = if (subFile != null) ({ dialog = "subsync" }) else null,
+            onSubDelay = null,   // FIX 7: the subtitle offset lives in the Subtitles menu now
             onAudioDelay = if (Tech.audioDelay) ({ dialog = "adelay" }) else null,
             audioDelayLabel = AudioDelay.label(AudioDelay.of(item.url)))
         "audio" -> {
@@ -1591,6 +1621,7 @@ private fun SideLists(mode: String, sideGroup: GroupRef?, items: List<PlayItem>,
                                         ChannelLogo(c.logo, c.name)
                                         T(c.name, 14.sp, if (f || i == cur) Color.White else C.Soft, if (f || i == cur) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
                                         qualityTag(c.name)?.let { q -> T(q, 10.sp, Color(0xFFDDE1E6), FontWeight.Bold) }
+                                        HealthLamp(c.url, 7.dp)
                                         // the channel that is playing: its own mark, independent of the focus
                                         if (i == cur) Ico(R.drawable.lc_play, 14.dp, Color.White)
                                     }

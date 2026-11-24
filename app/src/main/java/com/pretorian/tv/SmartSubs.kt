@@ -137,13 +137,14 @@ fun subTrackNames(tracks: List<TrackItem>): List<String> {
 }
 
 @Composable
-fun SubsPanel(item: PlayItem, tracks: List<TrackItem>, current: String?, online: Boolean = true, onDismiss: () -> Unit, onOff: () -> Unit, onTrack: (TrackItem) -> Unit, onFile: (String) -> Unit) {
+fun SubsPanel(item: PlayItem, tracks: List<TrackItem>, current: String?, online: Boolean = true, onDismiss: () -> Unit, onOff: () -> Unit, onTrack: (TrackItem) -> Unit,
+              onShift: (() -> Unit)? = null, shiftOk: Boolean = false, onFile: (String) -> Unit) {
     val search = item.search ?: item.title
     val chosen = remember { mutableStateOf(Prefs.str("subpick_" + item.url.hashCode())) }
     val names = subTrackNames(tracks)
     SubsMenu(search, item.season, item.episode, online, names, { i -> current == null && tracks[i].selected },
         offOn = current == null && tracks.none { it.selected }, onOff = onOff, onProvider = { i -> onTrack(tracks[i]) },
-        onlineOn = { id -> current != null && chosen.value == id }, onDismiss = onDismiss) { id, f ->
+        onlineOn = { id -> current != null && chosen.value == id }, onDismiss = onDismiss, onShift = onShift, shiftOk = shiftOk) { id, f ->
         Prefs.put("subpick_" + item.url.hashCode(), id); chosen.value = id; onFile(f.path)
     }
 }
@@ -156,7 +157,7 @@ fun SubsPanel(item: PlayItem, tracks: List<TrackItem>, current: String?, online:
 @Composable
 fun SubsMenu(search: String, season: Int?, episode: Int?, online: Boolean, provider: List<String>, providerOn: (Int) -> Boolean,
              offOn: Boolean, onOff: () -> Unit, onProvider: (Int) -> Unit, onlineOn: (String) -> Boolean, onDismiss: () -> Unit,
-             onOnline: (String, java.io.File) -> Unit) {
+             onShift: (() -> Unit)? = null, shiftOk: Boolean = false, onOnline: (String, java.io.File) -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     @Suppress("UNUSED_VARIABLE") val r = SmartSubs.rev
@@ -177,6 +178,11 @@ fun SubsMenu(search: String, season: Int?, episode: Int?, online: Boolean, provi
                     Ico(R.drawable.lc_chevron_down, 14.dp, Color.White)
                 }
             }
+        }
+        // FIX 7: the subtitle offset is the first row (only for a subtitle from a file or online)
+        if (onShift != null) {
+            if (shiftOk) MenuRow(tr("Pomak titla") + "  ▸") { onShift() }
+            else MenuRow(tr("Pomak titla"), sub = tr("samo za titlove iz fajla ili online")) {}
         }
         // subtitle size: OK steps Small → Medium → Large → Very large, at once and for every movie and series
         @Suppress("UNUSED_VARIABLE") val sr = SubStyle.rev

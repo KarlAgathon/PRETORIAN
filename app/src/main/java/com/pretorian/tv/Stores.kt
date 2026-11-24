@@ -437,8 +437,9 @@ object Notes {
     }
     fun remove(id: String) { if (list.removeAll { it.id == id }) save() }
     fun markRead(id: String) { val i = list.indexOfFirst { it.id == id }; if (i >= 0 && !list[i].read) { list[i] = list[i].copy(read = true); save() } }
-    /** clearing the bell also clears "Recently added": nothing comes back until the provider really adds something new */
-    fun clear() { list.clear(); save(); NewContent.clear() }
+    /** clearing the bell removes only the notices; "Nedavno dodano" keeps its titles until each is opened or the category is cleared */
+    fun clear() { list.clear(); save() }
+    fun clearKind(kind: String) { if (list.removeAll { it.kind == kind }) save() }
 }
 
 /** Remembers which movies and series a playlist had, so new ones get a "NEW" badge after an update. */
@@ -447,14 +448,12 @@ object NewContent {
     /** key "pid|kind|id" -> {t: time first seen, c: category, n: name, i: image, r: rating, u: url} */
     private val fresh = HashMap<String, JSONObject>()
     private var loaded = false
-    private const val DAYS7 = 7 * 86_400_000L
 
     private fun key(pid: String, kind: String, id: String) = "$pid|$kind|$id"
 
     private fun load() {
         if (loaded) return; loaded = true
         try { val o = JSONObject(Prefs.str("new_items", "{}")); o.keys().forEach { k -> o.optJSONObject(k)?.let { fresh[k] = it } } } catch (_: Exception) {}
-        val now = System.currentTimeMillis(); fresh.entries.removeAll { now - it.value.optLong("t") > DAYS7 }
     }
     private fun save() { val o = JSONObject(); fresh.forEach { (k, v) -> o.put(k, v) }; Prefs.put("new_items", o.toString()); rev++ }
 

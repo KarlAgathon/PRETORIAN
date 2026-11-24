@@ -68,11 +68,12 @@ object LiveUi {
     const val MORE_AUDIO = "more_audio"
     const val MORE_SUBS = "more_subs"
     const val MORE_INFO = "more_info"
+    const val MORE_SLEEP = "more_sleep"
     /** the action icon a panel belongs to (focus goes back to it when the panel closes) */
-    fun iconOf(state: String) = when (state) { MORE_AUDIO, MORE_SUBS, MORE_INFO -> MORE; else -> state }
+    fun iconOf(state: String) = when (state) { MORE_AUDIO, MORE_SUBS, MORE_INFO, MORE_SLEEP -> MORE; else -> state }
     /** one step back: nested More pages → More, a panel → the actions, the actions / info → clean picture */
     fun back(state: String) = when (state) {
-        MORE_AUDIO, MORE_SUBS, MORE_INFO -> MORE
+        MORE_AUDIO, MORE_SUBS, MORE_INFO, MORE_SLEEP -> MORE
         EPG, PICTURE, CATCHUP, HISTORY, MORE -> OPTIONS
         else -> NONE
     }
@@ -181,16 +182,18 @@ fun LivePanel(title: String, icon: Int?, wide: Boolean, first: FocusRequester, c
 
 /** A row of a vertical panel: focus = the pill with a white border, the active choice = ✓ (never confused). */
 @Composable
-fun LiveRow(label: String, on: Boolean = false, sub: String? = null, value: String? = null, fr: FocusRequester? = null, onClick: () -> Unit) {
+fun LiveRow(label: String, on: Boolean = false, sub: String? = null, value: String? = null, fr: FocusRequester? = null, icon: Int? = null,
+            dimValue: Boolean = false, onClick: () -> Unit) {
     Focusable(onClick = onClick, focusRequester = fr, shape = Rnd(10.dp), normal = Color.Transparent, focused = Dawn.pill, zoom = 1f,
         modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)) { _ ->
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (icon != null) Ico(icon, 18.dp, Color(0xFFDDE1E6))
             Column(Modifier.weight(1f)) {
                 T(label, 15.sp, Color.White, if (on) FontWeight.SemiBold else FontWeight.Normal)
                 if (sub != null) T(sub, 12.sp, Color(0xFFB8BEC6), maxLines = 2)
             }
-            if (value != null) T(value, 13.sp, Color(0xFFDDE1E6))
+            if (value != null) T(value, 13.sp, if (dimValue) Color(0x80DDE1E6) else Color(0xFFDDE1E6))
             if (on) Ico(R.drawable.lc_check, 17.dp, Color.White)
         }
     }

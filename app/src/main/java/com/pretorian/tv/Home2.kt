@@ -72,16 +72,60 @@ object Weather {
             temp = kotlin.math.round(c.getDouble("temperature_2m")).toInt(); code = c.optInt("weather_code", -1); at = System.currentTimeMillis()
         } catch (_: Exception) {}
     }
-    data class Place(val name: String, val area: String, val lat: Double, val lon: Double)
-    suspend fun search(q: String): List<Place> = withContext(Dispatchers.IO) {
+    data class Place(val name: String, val area: String, val lat: Double, val lon: Double, val cc: String = "", val zip: String = "")
+
+    /** FIX 11: where the box roughly is (country and coordinates from its internet address, kept a week; else the device region) */
+    private suspend fun home(): Triple<String, Double?, Double?> = withContext(Dispatchers.IO) {
+        val saved = Prefs.str("wx_home")
+        if (saved.isNotBlank() && System.currentTimeMillis() - Prefs.long("wx_home_at") < 7 * 86_400_000L) {
+            val p = saved.split('|'); return@withContext Triple(p[0], p.getOrNull(1)?.toDoubleOrNull(), p.getOrNull(2)?.toDoubleOrNull())
+        }
         try {
-            val j = JSONObject(Http.request("https://geocoding-api.open-meteo.com/v1/search?count=8&name=" + Net.enc(q)))  // i18n-ignore
-            val a = j.optJSONArray("results") ?: return@withContext emptyList()
-            (0 until a.length()).map { a.getJSONObject(it) }.map { o ->
+            val j = JSONObject(Http.request("https://ipwho.is/?fields=success,country_code,latitude,longitude"))  // i18n-ignore
+            if (j.optBoolean("success", false)) {
+                val cc = j.optString("country_code").uppercase(); val la = j.optDouble("latitude"); val lo = j.optDouble("longitude")
+                Prefs.put("wx_home", "$cc|$la|$lo"); Prefs.put("wx_home_at", System.currentTimeMillis())
+                return@withContext Triple(cc, la, lo)
+            }
+        } catch (_: Exception) {}
+        Triple(Locale.getDefault().country.uppercase(), null, null)
+    }
+
+    /** a place by name or by postal code; names without umlauts work too; the nearest places to this box come first */
+    suspend fun search(q: String): List<Place> = withContext(Dispatchers.IO) {
+        val query = q.trim()
+        val (cc, hla, hlo) = home()
+        fun ask(name: String, country: String?): List<Place> = try {
+            val j = JSONObject(Http.request("https://geocoding-api.open-meteo.com/v1/search?count=20&language=" + Look.lang + "&name=" + Net.enc(name) +  // i18n-ignore
+                (if (!country.isNullOrBlank()) "&countryCode=$country" else "")))
+            val a = j.optJSONArray("results")
+            if (a == null) emptyList() else (0 until a.length()).map { a.getJSONObject(it) }.map { o ->
+                val zips = o.optJSONArray("postcodes")?.let { z -> (0 until z.length()).map { z.optString(it) } } ?: emptyList()
                 Place(o.optString("name"), listOf(o.optString("admin1"), o.optString("country")).filter { it.isNotBlank() }.joinToString(", "),
-                    o.getDouble("latitude"), o.getDouble("longitude"))
+                    o.getDouble("latitude"), o.getDouble("longitude"), o.optString("country_code").uppercase(),
+                    zips.firstOrNull { it == name } ?: zips.firstOrNull().orEmpty())
             }
         } catch (_: Exception) { emptyList() }
+        val zip = query.all { it.isDigit() || it == ' ' || it == '-' } && query.any { it.isDigit() }
+        val out = LinkedHashMap<String, Place>()
+        fun addAll(l: List<Place>) = l.forEach { out.putIfAbsent("${it.name}|${it.lat}|${it.lon}", it) }
+        if (zip) {
+            addAll(ask(query, cc))                      // your own country first, then everywhere else
+            addAll(ask(query, null))
+        } else {
+            addAll(ask(query, null))
+            // typed without umlauts: ue → ü, oe → ö, ae → ä, ss → ß
+            val folded = query.replace("ue", "ü").replace("oe", "ö").replace("ae", "ä").replace("Ue", "Ü").replace("Oe", "Ö").replace("Ae", "Ä")
+            if (folded != query) addAll(ask(folded, null))
+            if (out.isEmpty() && query.contains("ss")) addAll(ask(query.replace("ss", "ß"), null))
+        }
+        fun dist(p: Place): Double {
+            if (hla == null || hlo == null || hla.isNaN() || hlo.isNaN()) return 0.0
+            val dLat = Math.toRadians(p.lat - hla); val dLon = Math.toRadians(p.lon - hlo)
+            val h = Math.sin(dLat / 2).let { it * it } + Math.cos(Math.toRadians(hla)) * Math.cos(Math.toRadians(p.lat)) * Math.sin(dLon / 2).let { it * it }
+            return 2 * 6371 * Math.asin(Math.sqrt(h))
+        }
+        out.values.withIndex().sortedWith(compareBy({ if (it.value.cc == cc) 0 else 1 }, { dist(it.value) }, { it.index })).map { it.value }.take(20)
     }
     /** WMO weather code → a short condition (Open-Meteo) */
     fun condition(): String = when (code) {
@@ -103,7 +147,7 @@ fun WeatherPlaceRow() {
     var name by remember { mutableStateOf(Weather.place) }
     val scope = rememberCoroutineScope()
     SetRow("Vrijeme – lokacija", "Prikazuje se na početnom ekranu (Open-Meteo)", value = name.ifBlank { tr("Isključeno") }) { ask = true }
-    if (ask) TextDialog("Vrijeme – lokacija", "Grad", name, onDismiss = { ask = false }) { q ->
+    if (ask) TextDialog("Vrijeme – lokacija", "Grad ili poštanski broj", "", onDismiss = { ask = false }) { q ->
         ask = false
         if (q.isBlank()) { Weather.clear(); name = "" } else scope.launch { results = Weather.search(q) }
     }
@@ -111,7 +155,7 @@ fun WeatherPlaceRow() {
         Popup("Vrijeme – lokacija", { results = null }) {
             if (list.isEmpty()) T("Ništa nije pronađeno", 15.sp, C.Soft)
             list.forEach { p ->
-                OptionRow(p.name, R.drawable.lc_map_pin, sub = p.area) {
+                OptionRow(p.name, R.drawable.lc_map_pin, sub = listOf(p.zip, p.area).filter { it.isNotBlank() }.joinToString(" · ")) {
                     Weather.set(p.name, p.lat, p.lon); name = p.name; results = null
                     scope.launch { Weather.refresh() }
                 }
@@ -299,7 +343,7 @@ fun HomeV2(nav: Nav) {
     clear?.let { item ->
         Popup(item.label, onDismiss = { clear = null }) {
             OptionRow("Obriši obavještenja", R.drawable.lc_trash_2) {
-                if (item.kind == "series") { NewContent.clear("series"); Follow.clearFresh() } else if (item.kind != null) NewContent.clear(item.kind)
+                item.kind?.let { Notes.clearKind(it) }   // FIX 2: only the notices; "Nedavno dodano" keeps its titles
                 clear = null
             }
         }
