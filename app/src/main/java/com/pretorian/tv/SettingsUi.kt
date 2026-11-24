@@ -303,6 +303,7 @@ private val SETTINGS_LINKS = mapOf(
     "appearance" to listOf(
         SettingsLink("language", "Jezik", "Jezik menija i opisa sadržaja", R.drawable.lc_languages),
         SettingsLink("look", "Izgled", "Veličina teksta, vrijeme i performanse", R.drawable.lc_palette),
+        SettingsLink("saver", "Čuvar ekrana", "Sat, vrijeme, mreža i Nastavi gledati", R.drawable.lc_monitor),
     ),
     "home" to listOf(
         SettingsLink("general", "Pokretanje i mreža", "Start s boxom, rad u pozadini, mreža", R.drawable.lc_settings),
@@ -324,6 +325,7 @@ private val SETTINGS_LINKS = mapOf(
         SettingsLink("update", "Ažuriranje", "Provjeri i instaliraj novu verziju", R.drawable.lc_download),
         SettingsLink("backup", "Backup i vraćanje", "Sačuvaj ili vrati postavke", R.drawable.lc_archive),
         SettingsLink("diagnostics", "Dijagnostika", "Zastoji, pali kanali i rušenja", R.drawable.lc_gauge2),
+        SettingsLink("storage", "Pohrana i resetovanje", "Privremeni podaci i vraćanje na početno", R.drawable.lc_trash_2),
         SettingsLink("about", "O aplikaciji", "Verzija, uređaj i licence", R.drawable.lc_info),
     ),
 )
@@ -449,6 +451,8 @@ private fun SettingsPage(nav: Nav, ses: SetSession, e: SetEntry) {
                 "player" -> PlayerV2 { ses.push(it) }
                 "playermore" -> PlayerMoreV2()
                 "look" -> AppearanceV2()
+                "saver" -> SaverSettings()
+                "storage" -> StorageResetPage()
                 "language" -> LanguageV2()
                 "sports" -> SportV3()
                 "reminders" -> RemindersV2(nav)

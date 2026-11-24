@@ -213,7 +213,7 @@ fun SportV3() {
             SetRow("Takmičenja", "traži i dodaj lige i turnire", names(SportPrefs.comps().mapNotNull { a -> Sports.LEAGUES.firstOrNull { it.abbr == a }?.name })) { pick = "comp" }
             SetSection("Obavještenja · praćenje utakmica")
             SetDrop("Trajanje prikaza", null, SportPrefs.DURS.map { trf("%s s", it) }, SportPrefs.DURS.indexOf(SportPrefs.dur)) { SportPrefs.dur = SportPrefs.DURS[it]; rev++ }
-            SetSwitch("Ne uznemiravaj", "nijedno obavještenje o utakmicama", SportPrefs.dnd) { SportPrefs.dnd = it; rev++ }
+            SetSwitch("Isključi sva sportska obavještenja", null, SportPrefs.dnd) { SportPrefs.dnd = it; rev++ }
             val C = SportPrefs.CTX
             SetMulti("Prikaži tokom", null, C.map { it.second }, C.indices.filter { SportPrefs.ctxOn(C[it].first) }.toSet(), all = false, none = true) { s2 ->
                 SportPrefs.setCtx(s2.map { C[it].first }.toSet()); rev++
@@ -705,7 +705,7 @@ object FollowWatch {
 
     private fun note(e: SportEvent, kind: String, d: MatchDetail?) {
         val cat = when (kind) { "goal" -> "goal"; "goalpen" -> if (SportPrefs.eventOn("goal")) "goal" else "pen"; "yellow", "red" -> "cards"; "pen" -> "pen"; "ht" -> "ht"; else -> "ft" }
-        if (SportPrefs.dnd || !SportPrefs.eventOn(cat)) return
+        if (SportPrefs.dnd || Quiet.now() || !SportPrefs.eventOn(cat)) return
         val pk = PlayCtx.kind
         if (pk != null && !SportPrefs.ctxOn(pk)) return
         // already watching this match on a channel the guide confirms: no duplicate overlay

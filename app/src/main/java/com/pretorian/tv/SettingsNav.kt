@@ -80,11 +80,11 @@ object SettingsTree {
     val LINKS: Map<String, List<String>> = mapOf(
         "sources" to listOf("playlists", "epg", "groups"),
         "playback" to listOf("player"),
-        "appearance" to listOf("language", "look"),
+        "appearance" to listOf("language", "look", "saver"),
         "home" to listOf("general"),
         "privacy" to listOf("pin", "parental"),
         "sportscenter" to listOf("sports"),
-        "system" to listOf("update", "backup", "diagnostics", "about"),
+        "system" to listOf("update", "backup", "diagnostics", "storage", "about"),
         "notify" to listOf("notifications", "reminders"),
     )
 

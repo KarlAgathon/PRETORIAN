@@ -84,8 +84,9 @@ fun buildPlayer(ctx: Context, preview: Boolean = false): ExoPlayer {
     val http = DefaultHttpDataSource.Factory()
         .setUserAgent(Net.UA)
         .setAllowCrossProtocolRedirects(true)
-        .setConnectTimeoutMs(15_000)
-        .setReadTimeoutMs(30_000)
+        // Phase E: Automatski = 15 s connect / 30 s read, or the chosen 10 / 20 / 30 s
+        .setConnectTimeoutMs(PlayOpts.connectMs)
+        .setReadTimeoutMs(PlayOpts.readMs)
     // sound: by default the box decodes Dolby (AC3/E-AC3) itself and sends plain sound over HDMI.
     // Sending Dolby "as it is" (passthrough) gives silence on many TVs and soundbars - that was why some channels had no sound.
     val passthrough = Prefs.bool("audio_passthrough", false)
@@ -333,7 +334,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     val item = items.getOrElse(index) { items.first() }
     // spec 16: Match Follow needs to know what is being watched (context filter, same-match check)
     LaunchedEffect(item.url) { PlayCtx.kind = if (s.live) "live" else if (item.season != null) "series" else "movie"; PlayCtx.chUrl = if (s.live) item.url else null }
-    DisposableEffect(Unit) { ChannelHealth.playerOn = true; onDispose { ChannelHealth.playerOn = false; PlayCtx.kind = null; PlayCtx.chUrl = null } }
+    DisposableEffect(Unit) { ChannelHealth.playerOn = true; PlayState.inPlayer = true; PlayState.update(s.live, true, Player.STATE_BUFFERING); onDispose { PlayState.inPlayer = false; PlayState.active = false; ChannelHealth.playerOn = false; PlayCtx.kind = null; PlayCtx.chUrl = null } }
     val p = item.channel?.let { Store.byId(ctx, it.pid) } ?: Store.ownerOf(ctx, item.url) ?: Store.active(ctx)
 
     /** audio / built-in subtitle picked on the movie page, applied when the stream's tracks are known */
@@ -463,13 +464,21 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 else { reconnect = 0; giveUp(e) }
             }
             override fun onPlaybackStateChanged(state: Int) {
+                PlayState.update(s.live, player.playWhenReady, state)
                 buffering = state == Player.STATE_BUFFERING
                 if (state == Player.STATE_READY && s.live) items.getOrNull(index)?.let { ChannelHealth.mark(it.channel?.url ?: it.url, true) }
                 if (state == Player.STATE_READY) { if (reconnect > 0) StreamLog.event("ok", items.getOrNull(index)?.title ?: ""); if (reconnect > 0) StreamLog.add(listOf(items.getOrNull(index)?.title ?: "", " · ", tr("radi ponovo ✓")).joinToString("")); error = null; reconnect = 0; readyOnce[0] = true }  // i18n-ignore
                 if (state == Player.STATE_ENDED && !s.live) { saveProgress(done = true); if (index < n - 1 && Prefs.bool("next_ep", true) && !autoCancel) index++ }
             }
-            override fun onIsPlayingChanged(isPlaying: Boolean) { playing = isPlaying }
+            override fun onIsPlayingChanged(isPlaying: Boolean) { playing = isPlaying; PlayState.update(s.live, player.playWhenReady, player.playbackState) }
             override fun onTracksChanged(tracks: Tracks) {
+                // Phase E: subtitles "only for a foreign language": off when the audio is already in the subtitle language
+                if (PlayOpts.subBehaviour == 1 && subFile == null && items.getOrNull(index)?.subOff != true) {
+                    val audio = player.audioFormat?.language?.take(2)?.lowercase()
+                    val want = Prefs.subLangs.split(',').map { it.trim() }.firstOrNull { it.isNotEmpty() }?.take(2)?.lowercase()
+                    if (audio != null && want != null && audio == want && !player.trackSelectionParameters.disabledTrackTypes.contains(MC.TRACK_TYPE_TEXT))
+                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, true).build()
+                }
                 player.videoFormat?.let {
                     if (it.height != videoH) resUntil = System.currentTimeMillis() + 6000
                     videoH = it.height; videoW = it.width; fps = it.frameRate
@@ -788,6 +797,10 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                         player.addListener(object : androidx.media3.common.Player.Listener {
                             override fun onCues(cueGroup: androidx.media3.common.text.CueGroup) {
                                 if (cueGroup.cues.any { it.bitmap != null }) pv.subtitleView?.setCues(scaleBitmapCues(cueGroup.cues))
+                            }
+                            // Phase H3: the screen stays on while playing or loading, not while paused (Android may sleep then)
+                            override fun onEvents(p: androidx.media3.common.Player, events: androidx.media3.common.Player.Events) {
+                                pv.keepScreenOn = p.playWhenReady && p.playbackState != androidx.media3.common.Player.STATE_ENDED && p.playbackState != androidx.media3.common.Player.STATE_IDLE
                             }
                         })
                         useController = false
@@ -1259,7 +1272,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                             "settings" -> { bar = false; dialog = "psettings" }
                         } }
                     }
-                    else T(if (s.live) "▲ ▼ kanal · ◀ lista kanala · ▶ EPG · OK još jednom = dugmad"
+                    else T(if (s.live) "▲ ▼ radnje · CH+ CH− kanal · ◀ lista kanala · ▶ EPG"
                       else trf("OK pauza · ◀ ▶ %s s · ▼ = dugmad (audio, titlovi, format slike)", Prefs.seekStep), 13.sp, C.Soft)
                 }
             }

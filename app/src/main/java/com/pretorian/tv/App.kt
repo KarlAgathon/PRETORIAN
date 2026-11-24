@@ -95,6 +95,7 @@ class MainActivity : ComponentActivity() {
 
     // TV browser: Back / ◀ in the options row under the preview go to the channel list before Compose sees them
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        Saver.touch()
         if (TvFocus.onKey(event)) return true
         return super.dispatchKeyEvent(event)
     }
@@ -325,6 +326,7 @@ fun PretorianApp() {
             }
             ReminderPopup(nav)
             CrashDialog()
+            SaverHost(nav)
             WhatsNewDialog()
             ImportDialog()
             UpdateAskDialog(nav)

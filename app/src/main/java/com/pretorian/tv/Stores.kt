@@ -414,7 +414,7 @@ object Notes {
     }
 
     private fun save() {
-        val a = JSONArray(); list.take(50).forEach { a.put(JSONObject().put("id", it.id).put("kind", it.kind).put("text", it.text).put("time", it.time).put("read", it.read)) }
+        val a = JSONArray(); while (list.size > 100) list.removeAt(list.size - 1); list.take(100).forEach { a.put(JSONObject().put("id", it.id).put("kind", it.kind).put("text", it.text).put("time", it.time).put("read", it.read)) }
         Prefs.put("notes", a.toString())
     }
 
@@ -422,8 +422,10 @@ object Notes {
     val KINDS = listOf("series" to "Nove epizode serija", "vod" to "Novi filmovi", "update" to "Nova verzija aplikacije",
         "sport" to "Sport: tvoji timovi i utakmice", "reminder" to "Podsjetnici")
     fun on(kind: String): Boolean = Prefs.bool("note_" + kind, true)
+    /** Phase F: master switch for optional notices (per-kind choices are kept) */
+    val master get() = Prefs.bool("notes_master", true)
     fun add(kind: String, text: String, id: String = "$kind:${System.currentTimeMillis()}") {
-        if (!on(kind)) return
+        if (!on(kind) || (!master && kind != "update")) return
         load()
         if (list.any { it.id == id }) return
         if (kind == "update") list.removeAll { it.kind == "update" }   // only the newest version is announced

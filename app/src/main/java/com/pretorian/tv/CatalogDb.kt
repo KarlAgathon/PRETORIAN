@@ -512,7 +512,7 @@ object GuideSync {
         val allIds = HashSet<String>()
         for (p in pls) {
             val chans = try { Repo.allChannels(p) } catch (e: Throwable) { emptyList() }
-            val ids = chans.mapNotNull { it.epg?.lowercase()?.ifBlank { null } }.toSet()
+            val ids = chans.mapNotNull { it.epg?.lowercase()?.ifBlank { null } }.toSet() + EpgMap.ids(p.id)
             allIds += ids; chans.forEach { allIds += Sports.norm(it.name).replace(" ", "") }
             if (p.type == SourceType.XTREAM && EpgSources.providerOn(p.id) && ids.isNotEmpty()) out += Job(GuideDb.srcOf(p), Xtream(p).xmltvUrl(), ids)
         }

@@ -274,9 +274,11 @@ internal fun PlaylistEpg(ses: SetSession, e: SetEntry) {
     val p = remember { Store.playlists(ctx).firstOrNull { it.id == PlEdit.id } }
     if (p == null) { LaunchedEffect(Unit) { ses.pop() }; return }
     var off by remember { mutableStateOf(false) }
+    var find by remember { mutableStateOf(false) }
     @Suppress("UNUSED_VARIABLE") val r = EpgShift.rev
     val rows = listOf(
         SetItem("src") { fr -> SetNavRow("EPG izvori", "Dodaj, uključi, poredaj ili ukloni izvore ove playliste", R.drawable.lc_calendar, focusRequester = fr) { ses.push("epg") } },
+        SetItem("find") { fr -> SetNavRow("Pronađi kanal", "Ručno poveži kanal s kanalom iz vodiča", R.drawable.lc_search, focusRequester = fr) { find = true } },
         SetItem("off") { fr -> SetNavRow("Vremenski pomak", "Za sve kanale ove playliste · kanal može imati svoj", R.drawable.lc_clock,
             value = EpgShift.label(EpgShift.plMin(p.id)), focusRequester = fr) { off = true } },
         SetItem("ref") { fr -> SetNavRow("Osvježi EPG", if (p.active) null else "EPG se osvježava kad je playlista aktivna.", R.drawable.lc_refresh_cw, chevron = false, focusRequester = fr) {
@@ -288,6 +290,7 @@ internal fun PlaylistEpg(ses: SetSession, e: SetEntry) {
         T(trf("EPG · %s", p.name), 22.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 18.dp, bottom = 4.dp))
         SetList(e, rows, Modifier.weight(1f))
     }
+    if (find) FindChannelDialog(p) { find = false }
     if (off) Popup(tr("Vremenski pomak"), { off = false }) {
         val cur = EpgShift.plMin(p.id)
         (-12 * 60..12 * 60 step 15).filter { it % 60 == 0 || kotlin.math.abs(it) <= 120 }.forEach { m ->

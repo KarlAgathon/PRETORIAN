@@ -2859,4 +2859,69 @@ Ovaj QR kod više ne važi.|Этот QR-код больше не действу�
 Dijagnostički izvještaj, bez lozinki i ključeva. Link radi jednom. Prenos u kućnoj mreži nije šifrovan.|Диагностический отчёт без паролей и ключей. Ссылка работает один раз. Передача не шифруется.
 Preuzimanje je već u toku ili je završeno.|Загрузка уже идёт или завершена.
 Sa laptopa (padovi, zamrzavanja i događaji):|С ноутбука (сбои, зависания и события):
+Pronađi kanal|Найти канал
+Dio naziva kanala|Часть названия канала
+Traži: %s|Поиск: %s
+Traži u vodiču|Искать в программе
+Dio naziva|Часть названия
+EPG za %s|EPG для %s
+Ukloni ručno povezivanje|Удалить ручную привязку
+Učitavam listu kanala iz vodiča…|Загрузка списка каналов программы…
+Vodič ove playliste nema listu kanala.|В программе этого плейлиста нет списка каналов.
+Povezano. EPG se osvježava u pozadini.|Привязано. EPG обновляется в фоне.
+Povezano|Подключено
+Nije povezano|Не подключено
+Brzina još nije izmjerena (Postavke › Dijagnostika)|Скорость ещё не измерена (Настройки › Диагностика)
+izmjereno %s|измерено %s
+Samo na menijima i preko pauziranog filma ili epizode, nikad dok nešto svira|Только в меню и поверх фильма или серии на паузе, никогда во время воспроизведения
+Android se gasi nakon %s min i može ga preduhitriti|Android выключается через %s мин и может опередить
+Način|Режим
+Informacije|Информация
+Nastavak gledanja|Продолжить просмотр
+Oboje|Оба
+Sat i datum|Часы и дата
+Vrijeme|Погода
+Grad se bira u Izgled › Lokacija za vrijeme|Город выбирается в Вид › Место для погоды
+Mreža i brzina|Сеть и скорость
+Povezano, VPN i zadnja izmjerena brzina|Подключение, VPN и последняя скорость
+Podaci o uređaju|Данные устройства
+Prikaži čuvar ekrana sada|Показать заставку сейчас
+Pohrana i resetovanje|Хранилище и сброс
+Slobodno: %s MB|Свободно: %s МБ
+Obriši privremene podatke|Удалить временные данные
+Keš, slike i privremene datoteke · playliste, favoriti, PIN i postavke ostaju|Кэш, изображения и временные файлы · плейлисты, избранное, PIN и настройки остаются
+Resetuj postavke|Сбросить настройки
+Vraća postavke na zadane · playliste, favoriti, PIN i historija ostaju|Восстанавливает настройки · плейлисты, избранное, PIN и история остаются
+Obriši sve podatke aplikacije|Удалить все данные приложения
+Sve se briše i aplikacija kreće od početnog podešavanja|Всё удаляется, приложение начинается с первой настройки
+Obrisati privremene podatke?|Удалить временные данные?
+Keš i slike se brišu i ponovo učitavaju po potrebi.|Кэш и изображения удаляются и загружаются снова при необходимости.
+Privremeni podaci obrisani|Временные данные удалены
+Pričekaj da se završi učitavanje playliste|Дождитесь окончания загрузки плейлиста
+Resetovati postavke?|Сбросить настройки?
+Sve postavke se vraćaju na zadane. Playliste, prijave, favoriti, PIN i historija ostaju.|Все настройки сбрасываются. Плейлисты, входы, избранное, PIN и история остаются.
+Postavke resetovane|Настройки сброшены
+Obrisati SVE podatke aplikacije?|Удалить ВСЕ данные приложения?
+Brišu se playliste, prijave, favoriti, PIN, historija, EPG i sve postavke. Aplikacija se zatvara i kreće od početka. Ovo se ne može vratiti.|Удаляются плейлисты, входы, избранное, PIN, история, EPG и все настройки. Приложение закроется и начнётся заново. Отменить нельзя.
+▲ ▼ radnje · CH+ CH− kanal · ◀ lista kanala · ▶ EPG|▲ ▼ действия · CH+ CH− канал · ◀ список каналов · ▶ EPG
+Vrijeme čekanja na vezu|Тайм-аут соединения
+Koliko dugo plejer čeka server prije novog pokušaja|Сколько плеер ждёт сервер перед повтором
+Kada se titl uključuje sam|Когда субтитры включаются сами
+Samo strani jezik|Только иностранный язык
+Vrati postavke reprodukcije|Сбросить настройки воспроизведения
+Playliste, EPG, favoriti i historija ostaju|Плейлисты, EPG, избранное и история остаются
+Vratiti postavke reprodukcije?|Сбросить настройки воспроизведения?
+Plejer, zvuk, titlovi i stream vraćaju se na zadane vrijednosti.|Плеер, звук, субтитры и поток вернутся к значениям по умолчанию.
+Glavni prekidač · tvoji izbori ispod ostaju sačuvani|Главный переключатель · выбор ниже сохраняется
+Vrijeme bez ometanja|Время без беспокойства
+Od %s do %s h bez iskačućih obavještenja|С %s до %s ч без всплывающих уведомлений
+Zvonce ih i dalje bilježi|Колокольчик всё равно их записывает
+Od|С
+Do|До
+Isključi sva sportska obavještenja|Отключить все спортивные уведомления
+Ručno poveži kanal s kanalom iz vodiča|Вручную привязать канал к каналу программы
+TV: ▲ ▼ otvaraju radnje, CH+ i CH− mijenjaju kanal, ◀ lista kanala, ▶ EPG.|ТВ: ▲ ▼ открывают действия, CH+ и CH− переключают канал, ◀ список каналов, ▶ EPG.
+Film i serija: ◀ ▶ premotava, OK pauza.|Фильмы и сериалы: ◀ ▶ перемотка, OK пауза.
+Sat, vrijeme, mreža i Nastavi gledati|Часы, погода, сеть и Продолжить просмотр
+Privremeni podaci i vraćanje na početno|Временные данные и сброс
 """.trimIndent()

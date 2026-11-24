@@ -711,10 +711,12 @@ object Repo {
     suspend fun epg(p: Playlist, ch: Channel, limit: Int = 10): List<EpgItem> {
         val sh = EpgShift.totalMs(ch.url, p.id)
         fun List<EpgItem>.shifted() = if (sh == 0L) this else map { it.copy(start = it.start + sh, end = it.end + sh) }
-        suspend fun own() = try { OwnGuide.of(ch.epg, ch.name, p.id).take(limit).shifted() } catch (e: Exception) { emptyList() }
+        // Phase D2: a channel linked by hand ("Pronađi kanal") uses that guide channel first; automatic matching is untouched
+        val eid = EpgMap.of(p.id, ch.url) ?: ch.epg
+        suspend fun own() = try { OwnGuide.of(eid, ch.name, p.id).take(limit).shifted() } catch (e: Exception) { emptyList() }
         // order: the playlist's default EPG, then the provider's own guide, then the other active EPGs
         if (EpgSources.hasDefault(p.id)) own().let { if (it.isNotEmpty()) return it }
-        val provider = if (!EpgSources.providerOn(p.id)) emptyList() else GuideDb.items(GuideDb.srcOf(p), ch.epg, limit).ifEmpty { null } ?: cached("epg_${p.id}_${ch.url}_$limit") {
+        val provider = if (!EpgSources.providerOn(p.id)) emptyList() else GuideDb.items(GuideDb.srcOf(p), eid, limit).ifEmpty { null } ?: cached("epg_${p.id}_${ch.url}_$limit") {
             if (p.type != SourceType.XTREAM || ch.id.isBlank() || !ch.url.contains("/live/")) emptyList() else try { Xtream(p).epg(ch.id, limit) } catch (e: Exception) { emptyList() }
         }
         if (provider.isNotEmpty() || EpgSources.srcs(p.id).isEmpty()) return provider.shifted()

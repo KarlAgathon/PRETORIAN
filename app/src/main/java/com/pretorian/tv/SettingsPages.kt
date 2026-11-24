@@ -248,7 +248,6 @@ internal fun PlayerV2(openSub: (String) -> Unit) {
                 Buffer.OPTIONS, Buffer.choice, new = true, note = tr("Vrijedi od sljedećeg pokretanja kanala ili filma.")) { Prefs.put("buffer_mb", it.toLong()); rev++ }
             SetSection("Kontrole")
             SetDrop("Preskok ◀ ▶", null, listOf("10 s", "20 s", "30 s"), listOf(10, 20, 30).indexOf(Prefs.seekStep).coerceAtLeast(0)) { Prefs.seekStep = listOf(10, 20, 30)[it]; rev++ }
-            SetSwitch("▲ ▼ mijenja kanal", "u TV-u, preko cijelog ekrana", Prefs.bool("zap_updown", true), new = true) { Prefs.put("zap_updown", it) }
             SetDrop("Nastavi gdje si stao", null, listOf("Pitaj", "Uvijek nastavi", "Uvijek od početka"), Prefs.str("resume_mode", "0").toIntOrNull() ?: 0, new = true) {
                 Prefs.put("resume_mode", it.toString()); rev++
             }
@@ -287,6 +286,13 @@ internal fun PlayerMoreV2() {
     var rev by remember { mutableIntStateOf(0) }
     key(rev) {
         SetPage("Više opcija") {
+            var askReset by remember { mutableStateOf(false) }
+            SetDrop("Vrijeme čekanja na vezu", "Koliko dugo plejer čeka server prije novog pokušaja", PlayOpts.TIMEOUTS.map { if (it == 0) tr("Automatski") else "$it s" },  // i18n-ignore
+                PlayOpts.TIMEOUTS.indexOf(PlayOpts.timeout).coerceAtLeast(0)) { Prefs.put("conn_timeout", PlayOpts.TIMEOUTS[it].toLong()); rev++ }
+            SetDrop("Titlovi", "Kada se titl uključuje sam", listOf(tr("Uvijek"), tr("Samo strani jezik"), tr("Isključeno")), PlayOpts.subBehaviour) { PlayOpts.setSubBehaviour(it); rev++ }
+            SetRow("Vrati postavke reprodukcije", "Playliste, EPG, favoriti i historija ostaju") { askReset = true }
+            if (askReset) SetConfirm(tr("Vratiti postavke reprodukcije?"), tr("Plejer, zvuk, titlovi i stream vraćaju se na zadane vrijednosti."), tr("Vrati"),
+                onCancel = { askReset = false }) { PlayOpts.reset(); askReset = false; rev++ }
             val players = remember { ExtPlayer.installed(ctx) }
             SetDrop("Plejer", "za filmove i serije", listOf(tr("Ugrađeni")) + players.map { it.label },
                 if (!ExtPlayer.always) 0 else (players.indexOfFirst { it.pkg == ExtPlayer.saved } + 1).coerceAtLeast(0)) { i ->
@@ -355,6 +361,12 @@ internal fun NotificationsV2() {
     var rev by remember { mutableIntStateOf(0) }
     key(rev) {
         SetPage("Obavještenja", "Šta ti aplikacija sama javlja (zvonce gore desno)") {
+            SetSwitch("Obavještenja", "Glavni prekidač · tvoji izbori ispod ostaju sačuvani", Notes.master) { Prefs.put("notes_master", it); rev++ }
+            SetSwitch("Vrijeme bez ometanja", if (Quiet.on) trf("Od %s do %s h bez iskačućih obavještenja", Quiet.from, Quiet.to) else "Zvonce ih i dalje bilježi", Quiet.on) { Prefs.put("quiet_on", it); rev++ }
+            if (Quiet.on) {
+                SetDrop("Od", null, (0..23).map { "$it:00" }, Quiet.from) { Prefs.put("quiet_from", it.toLong()); rev++ }  // i18n-ignore
+                SetDrop("Do", null, (0..23).map { "$it:00" }, Quiet.to) { Prefs.put("quiet_to", it.toLong()); rev++ }  // i18n-ignore
+            }
             SetSection("Javi mi")
             Notes.KINDS.forEach { (k, t) -> SetSwitch(t, null, Prefs.bool("note_" + k, true)) { Prefs.put("note_" + k, it); rev++ } }
             SetSection("Sport")
@@ -656,7 +668,8 @@ internal fun AboutV2(onSub: (String) -> Unit, onSection: (String) -> Unit) {
         "help" -> Popup("Kratko uputstvo", { dlg = null }, width = 640.dp) {
             listOf("OK otvara, dugi OK otvara meni (označi, dodaj na listu, sakrij).",
                 "Nazad uvijek ide jedan korak nazad i ostaje u istoj sekciji.",
-                "U plejeru: ▲ ▼ mijenja kanal, ◀ ▶ premotava, OK pauza.",
+                "TV: ▲ ▼ otvaraju radnje, CH+ i CH− mijenjaju kanal, ◀ lista kanala, ▶ EPG.",
+                "Film i serija: ◀ ▶ premotava, OK pauza.",
                 "Brojevi na daljinskom biraju kanal; 0 vraća na prethodni.",
                 "Zadani PIN je 0000 – promijeni ga u Postavkama.").forEach { T("• " + tr(it), 14.sp, C.Soft, maxLines = 3) }
         }

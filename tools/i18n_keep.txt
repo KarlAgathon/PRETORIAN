@@ -660,3 +660,10 @@ SYNC
 txt
 diag_log_for
 .log.txt
+clock
+weather
+net
+sys
+ · VPN
+$it s
+Internet

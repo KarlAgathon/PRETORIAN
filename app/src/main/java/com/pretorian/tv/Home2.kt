@@ -364,7 +364,7 @@ fun HomeV2(nav: Nav) {
 
 /** OK on a Home card opens the title's own view (never plays at once): a recently added film → its movie view;
  *  Continue Watching → the movie / series view with Resume (the series view waits on that episode). */
-private fun openHomeCard(ctx: android.content.Context, nav: Nav, pr: Progress?, row: CatalogDb.Row?) {
+internal fun openHomeCard(ctx: android.content.Context, nav: Nav, pr: Progress?, row: CatalogDb.Row?) {
     VodMemory.stack.remove("vod"); VodMemory.stack.remove("series")
     if (row != null) { nav.push(Screen.MovieDetail(Vod(row.id, row.n, row.i, row.r, row.u))); return }
     pr ?: return

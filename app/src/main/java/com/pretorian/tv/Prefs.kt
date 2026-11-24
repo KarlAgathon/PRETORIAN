@@ -22,6 +22,7 @@ object Prefs {
     /** every stored text value (diagnostics: to find secret values before a report leaves the box) */
     fun allStrings(): List<Pair<String, String>> = sp.all.mapNotNull { (k, v) -> (v as? String)?.let { k to it } }
     fun has(k: String) = sp.contains(k)
+    fun allKeys(): List<String> = sp.all.keys.toList()
     fun allLongs(): List<Pair<String, Long>> = sp.all.mapNotNull { (k, v) -> (v as? Long)?.let { k to it } ?: (v as? Int)?.let { k to it.toLong() } }
     fun put(k: String, v: String) = sp.edit().putString(k, v).apply()
     /** written at once: used while the app is crashing */
