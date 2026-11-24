@@ -48,3 +48,9 @@ Beta 1 (A0 + A, built from branch `redesign-beta/1`) → owner Mi Box test → o
 - B: Playlists overview / detail (Informacije o izvoru, Uredi, Aktivna switch, Osvježi, EPG, Obriši), Promijeni redoslijed, RefreshCenter (pending 12 h, waits during playback), pl_check_<id>, local M3U copy (64 KB), form: Sačuvaj, Više opcija, MAC empty for new, activation switch, leave-with-changes question.
 - C/D: playlist EPG menu (sources, Vremenski pomak, Osvježi EPG); offsets P (playlist) + channel override, migration marker epg_off_v2.
 - Not yet: TV groups art (waiting for image), D2 "Pronađi kanal" + gchan index, multi-pid EPG assignment UI.
+
+## 2.8.0 (24.11.) — diagnostics, reliability, completion
+- Diagnostics: DiagStore (journal current.log + gzip segments, incidents with attached app log; 100 incidents / 10,000 events / 90 days / 50 MB / 100 MB free floor), ApplicationExitInfo (ANR, native), crash dialog with direct export, exports LATEST/FULL/ZIP via QR, PhoneLink sessions (atomic key, monotonic expiry, per-session stop, VPN/tunnel interfaces excluded), Redact + SecretScan extended.
+- Channel health: SHA-256 keys, stale kept, playback evidence wins 30 min, files/health.json batched, scheduler focused→neighbours→rest, classification (auth/limit/no internet/outage = inconclusive).
+- Find Channel (epgmap_<pid>_<key>), screensaver (H) with cached speeds, storage + 3 resets (G), notes master + quiet (F), connection timeout + subtitle behaviour + playback reset (E), help text, rollback checks.
+- Not done: TV groups picture (no image supplied); E–G items still open: background/contrast/animation/clock-format options, temporary parental unlock, full Diagnostics 4-entry page, Serbian Latin.

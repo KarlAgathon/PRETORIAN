@@ -1,3 +1,16 @@
+Media Center 2.8.0 – diagnostics, reliability and completion
+
+• Crash and freeze reports are kept on the box (up to 100, 90 days, 50 MB) together with a journal of up to 10,000 technical events; nothing is written below 100 MB of free space
+• After a crash or freeze the next start shows a short dialog with "Export diagnostic report" – no need to go through Settings
+• Diagnostics › Export report: latest crash report (TXT), complete report (TXT) or complete archive (ZIP), each as a one-time QR download to your phone; passwords, keys, MAC addresses and logins are removed first
+• Channel lamps: results are kept after leaving a group and after a restart; the whole group is checked in the background, the focused channel first; a temporary internet or provider problem no longer paints the group orange
+• EPG › Find channel: link a channel to the right guide channel by hand
+• Screensaver (Settings › Appearance › Screensaver): clock, weather, network with the last measured internet / VPN speed, Continue watching; never while something plays
+• Settings › System › Storage and reset: clear temporary data, reset settings, delete all app data
+• Notifications: one main switch and a quiet time for pop-ups
+• Player › More options: connection timeout, when subtitles switch on by themselves, reset playback settings
+• Going back to the previous version first checks the backup and the old version's signature
+
 Media Center 2.4.4 – Search, TV groups, same event, branding and fixes
 
 • Home: the old MEDIA CENTER heading is gone; only the Spartan helmet, lightly engraved into the graphite
