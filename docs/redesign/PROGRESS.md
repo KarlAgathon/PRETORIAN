@@ -42,3 +42,9 @@ Checkpoints are branches `checkpoint/<phase>` that are never moved (tags cannot 
 
 ## Next
 Beta 1 (A0 + A, built from branch `redesign-beta/1`) → owner Mi Box test → only then Phase B.
+
+## Beta 2 (24.11.) — fixes 1–11 + phases B, C, D
+- Fixes: U kinima (DE premiere ≤ 60 days, no re-releases, row hidden when empty); Nedavno dodano kept until opened or cleared (long OK › Očisti), bell deletes only notices; O uređaju grid; blur option removed; Grupe i kanali file-manager editor; subtitle offset window (first row of Titlovi) and per-title subtitle memory; channel status lamps (green / yellow / not checked) + light background check; live Više menu (6 rows); weather by postal code, nearest first.
+- B: Playlists overview / detail (Informacije o izvoru, Uredi, Aktivna switch, Osvježi, EPG, Obriši), Promijeni redoslijed, RefreshCenter (pending 12 h, waits during playback), pl_check_<id>, local M3U copy (64 KB), form: Sačuvaj, Više opcija, MAC empty for new, activation switch, leave-with-changes question.
+- C/D: playlist EPG menu (sources, Vremenski pomak, Osvježi EPG); offsets P (playlist) + channel override, migration marker epg_off_v2.
+- Not yet: TV groups art (waiting for image), D2 "Pronađi kanal" + gchan index, multi-pid EPG assignment UI.
