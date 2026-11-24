@@ -209,7 +209,7 @@ fun flagEmoji(c: String): String = when (c) {
     else -> if (c.length == 2) String(Character.toChars(0x1F1E6 + (c.uppercase()[0] - 'A'))) + String(Character.toChars(0x1F1E6 + (c.uppercase()[1] - 'A'))) else "🌍"
 }
 private fun countryName(c: String) = when (c) {
-    "eu" -> tr("Evropa"); "int" -> tr("Međunarodno"); else -> try { java.util.Locale("", c.uppercase()).getDisplayCountry(java.util.Locale(Look.lang)) } catch (e: Exception) { c.uppercase() }
+    "eu" -> tr("Evropa"); "int" -> tr("Međunarodno"); else -> try { java.util.Locale("", c.uppercase()).getDisplayCountry(appLocale()) } catch (e: Exception) { c.uppercase() }
 }
 
 
@@ -237,7 +237,7 @@ object SportCache {
 
 /** "Tuesday, 17 November" (today / tomorrow named) */
 fun whenLong(ms: Long): String {
-    val loc = java.util.Locale(Look.lang)
+    val loc = appLocale()
     val d = java.text.SimpleDateFormat("EEEE, d. MMMM", loc).format(java.util.Date(ms))  // i18n-ignore
     return when (ms) { in Sports.dayStart(0) until Sports.dayStart(1) -> tr("Danas") + " · " + d; in Sports.dayStart(1) until Sports.dayStart(2) -> tr("Sutra") + " · " + d; else -> d }  // i18n-ignore
 }

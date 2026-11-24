@@ -75,3 +75,10 @@ Beta 1 (A0 + A, built from branch `redesign-beta/1`) → owner Mi Box test → o
 - §8 LogoResolver (iptv-org logos.json + channels.json, streamed, compact TSV index, 14-day refresh via Work.heavy, strict country/uniqueness match) + LogoTrim (transparent margins only) used by TV list, history row, Home tiles, Onyx channel logo.
 - §13–16 PerfLog (metrics/*.csv, 512 KB + 1 rotation each, inside diag ceiling), Work.heavy task rows, incident dedupe by signature (10 min), Full Diagnostic Report ZIP (incidents before events, 40 MB budget, MANIFEST with omissions, cancellable).
 - Not done / blockers: Serbian Latin (no spec found), help/remote text audit, EPG conditional requests, per-endpoint backoff for artwork/metadata, player reuse preview→fullscreen (kept: preview stops first), device measurements.
+
+## 3.0.0.1 (24.11.) — Final Test Stable; DEVELOPMENT FROZEN until ≥ 01.01.2027
+- DeviceIdentity.kt: UUID v4 (SecureRandom) in noBackupFilesDir via AtomicFile, short PTR-XXXX-XXXX-XXXX; name sanitised (NFC, no control/format except ZWJ & tags, ≤256 cp, ≤1024 B), fileSafe for file names; Onboarding steps lang → device → legal → source (step persisted); one-time name popup for existing installs; rename in Diagnostics.
+- Serbian Latin: Lang "sr-Latn" (Look.lang "sr" + Look.latin), Latin.of transliteration of the sr column, appLocale(); device language default on fresh install.
+- Full report: Kind.FULL = one UTF-8 TXT, 31 sections + journal appendix, 40 MB budget, incidents before journal, validation before QR, low-memory refusal; ZIP removed. File name PTR-…_<safe-name>_DIAGNOSTICS_<yyyy-MM-dd_HHmmss>.txt. Stale exports deleted at start.
+- Incidents carry device id/name/version/channel/model/API/session/tz/screen/class; foreground low-memory exits recorded as "oom".
+- No remote reporting code existed (verified: no SMTP/Firebase/Sentry/mailto).

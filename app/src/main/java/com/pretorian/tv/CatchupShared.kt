@@ -78,14 +78,14 @@ internal fun CuDayTabs(days: List<Int>, sel: Int, visible: Int, onSel: (Int) -> 
             itemsIndexed(days, key = { _, d -> d }) { _, d ->
                 val on = d == sel
                 val t = Sports.dayStart(-d)
-                val name = when (d) { 0 -> tr("Danas"); 1 -> tr("Jučer"); else -> SimpleDateFormat("EEE d. MMM", Locale(Look.lang)).format(Date(t)) }  // i18n-ignore
+                val name = when (d) { 0 -> tr("Danas"); 1 -> tr("Jučer"); else -> SimpleDateFormat("EEE d. MMM", appLocale()).format(Date(t)) }  // i18n-ignore
                 Focusable(onClick = { onSel(d) }, onFocus = { onSel(d) }, focusRequester = frs[d], shape = Rnd(10.dp),
                     normal = if (on) Color(0x33FFFFFF) else Color(0x14FFFFFF), focused = Color(0x40FFFFFF),
                     borderColor = if (on) Color(0xB3FFFFFF) else Color(0x1FFFFFFF), focusBorderColor = Color(0xE6FFFFFF), zoom = 1f,
                     modifier = Modifier.width(w).height(52.dp)) { f ->
                     Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                         T(name, 15.sp, if (f || on) Color.White else Color(0xFFC9CED6), if (on) FontWeight.SemiBold else FontWeight.Normal)
-                        if (d <= 1) T(SimpleDateFormat("EEE d. MMM", Locale(Look.lang)).format(Date(t)), 12.sp, Color(0xFF9AA3AF))  // i18n-ignore
+                        if (d <= 1) T(SimpleDateFormat("EEE d. MMM", appLocale()).format(Date(t)), 12.sp, Color(0xFF9AA3AF))  // i18n-ignore
                     }
                 }
             }

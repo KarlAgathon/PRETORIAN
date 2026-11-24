@@ -22,18 +22,24 @@ object Look {
     const val mostWatched = true
     const val overlay = 0
     const val rowSize = 1
-    var lang by mutableStateOf("en")           // app language
+    var lang by mutableStateOf("en")           // app language (ISO code; Serbian Latin is "sr" + latin)
+    /** 3.0.0.1: Serbian in Latin script (the Serbian texts, transliterated) */
+    var latin by mutableStateOf(false)
+    /** the code in the language list: "sr-Latn" for Serbian Latin, otherwise [lang] */
+    val code get() = if (lang == "sr" && latin) "sr-Latn" else lang  // i18n-ignore
     const val resBadge = 1
     const val uiScale = 0
 
     private fun sp(c: Context) = c.getSharedPreferences("pretorian", Context.MODE_PRIVATE)
 
     fun load(c: Context) {
-        lang = sp(c).getString("app_lang", null) ?: "en"   // a new install starts in English
+        // 3.0.0.1: a new install starts in the device language when the app has it, otherwise English
+        lang = sp(c).getString("app_lang", null) ?: deviceLang().also { d -> latin = d == "sr-Latn" }.let { if (it == "sr-Latn") "sr" else it }  // i18n-ignore
+        if (sp(c).contains("app_lang")) latin = sp(c).getBoolean("app_lang_latin", false)
     }
 
     fun save(c: Context) {
-        sp(c).edit().putString("app_lang", lang).apply()
+        sp(c).edit().putString("app_lang", lang).putBoolean("app_lang_latin", latin).apply()
     }
 }
 
@@ -120,3 +126,14 @@ val Pill: androidx.compose.ui.graphics.Shape get() = androidx.compose.foundation
 
 /** the tone of the Pure Graphite background (left side); artwork fades into it */
 val GRAPHITE = androidx.compose.ui.graphics.Color(0xFF161A23)
+
+
+/** the device language when the app offers it ("sr-Latn" for Serbian in Latin script), else "en" */
+fun deviceLang(): String {
+    val l = java.util.Locale.getDefault()
+    if (l.language == "sr" && l.script == "Latn") return "sr-Latn"  // i18n-ignore
+    val c = if (l.language == "in") "id" else l.language
+    return Langs.APP.firstOrNull { it.code == c }?.code ?: "en"  // i18n-ignore
+}
+/** the locale for dates and numbers in the app language */
+fun appLocale(): java.util.Locale = if (Look.lang == "sr" && Look.latin) java.util.Locale.forLanguageTag("sr-Latn") else java.util.Locale(Look.lang)  // i18n-ignore

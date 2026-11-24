@@ -254,7 +254,7 @@ fun PlayerSettings(series: Boolean, audio: String?, resize: Int, onDismiss: () -
         }
         "lang" -> Popup("Titlovi", { sub = "" }) {
             T("Jezik u kojem se titlovi traže online. Titlovi providera ostaju svi dostupni.", 13.sp, C.Soft, maxLines = 3)
-            Langs.APP.forEach { l -> OptionRow(l.native, null, selected = SmartSubs.lang() == l.code) { SmartSubs.setLang(l.code); sub = "" } }
+            Langs.APP.filter { it.code.length == 2 }.forEach { l -> OptionRow(l.native, null, selected = SmartSubs.lang() == l.code) { SmartSubs.setLang(l.code); sub = "" } }
         }
         "font" -> Popup("Font titlova", { sub = "" }) {
             SubStyle.FONTS.forEachIndexed { i, (n, _) -> OptionRow(n, R.drawable.lc_type, selected = SubStyle.font() == i) { Prefs.put("sub_font", i.toLong()); SubStyle.rev++; sub = "" } }

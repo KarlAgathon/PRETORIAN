@@ -106,7 +106,7 @@ private fun SaverScreen(nav: Nav) {
             if (Saver.show("clock")) {
                 val is24 = android.text.format.DateFormat.is24HourFormat(ctx)
                 T(SimpleDateFormat(if (is24) "HH:mm" else "h:mm a", Locale.getDefault()).format(Date(now)), 96.sp, Color.White, FontWeight.Light)  // i18n-ignore
-                T(SimpleDateFormat("EEEE, d. MMMM", Locale(Look.lang)).format(Date(now)), 24.sp, C.Soft)  // i18n-ignore
+                T(SimpleDateFormat("EEEE, d. MMMM", appLocale()).format(Date(now)), 24.sp, C.Soft)  // i18n-ignore
             }
             if (Saver.show("weather") && Weather.place.isNotBlank()) Weather.temp?.let { t ->
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 10.dp)) {

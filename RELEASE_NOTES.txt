@@ -1,3 +1,13 @@
+Media Center 3.0.0.1 Stable – final test edition (feature freeze until at least 01.01.2027)
+
+• First start: Language → Device identity → Legal notice → Add playlist; an interrupted setup continues where it stopped
+• Device identity: every installation gets its own random ID (shown as PTR-XXXX-XXXX-XXXX, never from MAC or serial) and a name you choose – any letters, numbers, symbols, Unicode or emoji. Change the name in Settings › Sistem i održavanje › Dijagnostika; the ID stays
+• Updating from an earlier version keeps everything (playlists, favorites, history, Continue watching, settings, diagnostics) and asks only once for a device name
+• New language: Srpski (latinica). A new install starts in the device language when the app has it, otherwise English
+• Diagnostics shows Device ID, Device name, Version and local crash recording; "Kreiraj kompletan izvještaj" makes one TXT file with 31 sections (identity, device, session, startup, CPU, RAM, storage, network, VPN, TV/film/series playback, first picture, buffering, recovery, channel health, provider protection, EPG, logos, background tasks, crashes, freezes/ANR, critical errors, diagnostic health, limitations) – checked for passwords and keys, at most 40 MB, Back cancels
+• The QR screen shows the real file name, size and how long the link is valid; download it on your phone and share it however you like – the app never sends anything by itself
+• Crashes, freezes, ANRs and out-of-memory endings on screen are recorded locally with the device ID and name
+
 Media Center 3.0 Stable – provider protection, logos, full diagnostic report
 
 • Provider protection: channel checks are now passive by default – the lamps come only from what you really watch, no extra connections to your provider. "Aktivna provjera kanala" (Settings › Plejer › Više opcija) can switch them on: at most 30 requests per hour per provider, 6 seconds apart, one at a time, never during startup, preview or playback; a "too many connections" or login refusal pauses checks for 24 hours, even across restarts

@@ -88,7 +88,7 @@ private fun ArchiveList(list: Load<List<EpgItem>>, ch: Channel, p: Playlist, day
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items((0 until ch.archive.coerceAtMost(14)).toList()) { d ->
                 val sel = d == day
-                val label = when (d) { 0 -> tr("Danas"); 1 -> tr("Jučer"); else -> SimpleDateFormat("EEE d.", Locale(Look.lang)).format(Date(Sports.dayStart(-d))) }
+                val label = when (d) { 0 -> tr("Danas"); 1 -> tr("Jučer"); else -> SimpleDateFormat("EEE d.", appLocale()).format(Date(Sports.dayStart(-d))) }
                 Focusable(onClick = { onDay(d) }, shape = Pill, normal = if (sel) C.Red else C.Card, focused = if (sel) C.Red else C.CardHi,
                     zoom = 1.04f, modifier = Modifier.height(38.dp)) { _ ->
                     T(label, 14.sp, if (sel) C.OnRed else C.Text, FontWeight.SemiBold, modifier = Modifier.align(Alignment.Center).padding(horizontal = 14.dp))
@@ -286,7 +286,7 @@ internal fun CuActions(ch: Channel, e: EpgItem, nav: Nav, onRemove: (() -> Unit)
     val p = Store.byId(ctx, ch.pid)
     val pr = Catchups.url(p, ch, e)?.let { Watch.get(ctx, it) }?.takeIf { it.started }
     Popup(e.title, onDismiss) {
-        T(ch.name + " · " + SimpleDateFormat("EEE d. MMM", Locale(Look.lang)).format(Date(e.start)) + " · " + e.times(), 14.sp, C.Soft)
+        T(ch.name + " · " + SimpleDateFormat("EEE d. MMM", appLocale()).format(Date(e.start)) + " · " + e.times(), 14.sp, C.Soft)
         if (expired(ch, e.start)) T("Ova emisija više nije u arhivi.", 15.sp, C.Text)
         else if (pr != null) {
             OptionRow(trf("Nastavi (%s)", mmss(pr.pos)), R.drawable.lc_play) { onDismiss(); cuPlay(ctx, nav, ch, e, pr.pos) }
@@ -309,7 +309,7 @@ internal fun CuContinue(mem: HashMap<String, Int>, key: String, nav: Nav) {
         else CuList(mem, key, list.map { (e, pr) ->
             val exp = expired(e.ch, e.start)
             CuItem(e.title, ch = e.ch, dim = exp,
-                sub = e.ch.name + " · " + SimpleDateFormat("EEE d. MMM HH:mm", Locale(Look.lang)).format(Date(e.start)) + if (exp) " · " + tr("Arhiva istekla") else "",
+                sub = e.ch.name + " · " + SimpleDateFormat("EEE d. MMM HH:mm", appLocale()).format(Date(e.start)) + if (exp) " · " + tr("Arhiva istekla") else "",
                 trailing = "${(pr.fraction * 100).toInt()}%", progress = pr.fraction) { pick = e }
         })
     }

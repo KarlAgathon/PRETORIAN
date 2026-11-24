@@ -37,13 +37,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * First-time setup (approved design): 01 language · 02 legal notice · 03 how to begin (Xtream, M3U, Stalker or Skip).
+ * First-time setup: 01 language · 02 device identity (3.0.0.1) · 03 legal notice · 04 how to begin (Xtream, M3U, Stalker or Skip).
+ * The step reached is saved, so an interrupted setup (app closed, box restarted) continues where it was.
  * Onboarding being finished is its own state: a user who skipped has finished it and is never sent back.
  * Adding a playlist later (Settings › Playlists) shows only step 03, never the language or the notice again.
  */
 object Onboard {
     const val LEGAL_VERSION = 1
-    var step by mutableIntStateOf(0)
+    var step by mutableIntStateOf(Prefs.long("onboard_step", 0).toInt())
     fun done(ctx: android.content.Context): Boolean = Prefs.bool("onboard_done") || Store.playlists(ctx).isNotEmpty()
     val legalOk get() = Prefs.long("legal_ack_v", 0) >= LEGAL_VERSION
     fun finish() { Prefs.put("onboard_done", true) }
@@ -54,20 +55,26 @@ object Onboard {
 fun OnboardingScreen(nav: Nav) {
     val ctx = LocalContext.current
     val first = remember { Onboard.done(ctx) || Onboard.legalOk }
-    var step by remember { mutableIntStateOf(if (first) 2 else Onboard.step.coerceIn(0, 2)) }
-    LaunchedEffect(step) { Onboard.step = step }
+    var step by remember { mutableIntStateOf(if (first) 3 else Onboard.step.coerceIn(0, 3)) }
+    // an existing user without a playlist who already finished setup gets the name step once, nothing else
+    LaunchedEffect(step) { Onboard.step = step; if (!first) Prefs.put("onboard_step", step.toLong()) }
+    if (first && !DeviceIdentity.hasName()) { Box(Modifier.fillMaxSize().background(Color(0x99000000)), contentAlignment = Alignment.Center) {
+        Column(Modifier.widthIn(max = 900.dp).fillMaxWidth(0.78f).dawnGlass(22.dp).verticalScroll(rememberScrollState()).padding(horizontal = 36.dp, vertical = 26.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)) { DeviceIdentityStep { } } }; return }
     BackHandler(enabled = step > 0 && !first) { step-- }
+    @Suppress("UNUSED_VARIABLE") val dRev = DeviceIdentity.rev
     Box(Modifier.fillMaxSize().background(Color(0x99000000)).padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
         // the panel scrolls when the screen is small (phones, big text): Continue is always reachable
         Column(Modifier.widthIn(max = 900.dp).fillMaxWidth(0.78f).dawnGlass(22.dp).verticalScroll(rememberScrollState()).padding(horizontal = 36.dp, vertical = 26.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)) {
             if (!first) Row(verticalAlignment = Alignment.CenterVertically) {
                 T("PRVO POKRETANJE", 12.sp, C.Muted, FontWeight.Bold, modifier = Modifier.weight(1f))
-                T("0${step + 1} / 03", 12.sp, C.Muted, FontWeight.Bold)  // i18n-ignore
+                T("0${step + 1} / 04", 12.sp, C.Muted, FontWeight.Bold)  // i18n-ignore
             }
             when (step) {
                 0 -> LanguageStep { step = 1 }
-                1 -> LegalStep { Prefs.put("legal_ack_v", Onboard.LEGAL_VERSION.toLong()); step = 2 }
+                1 -> DeviceIdentityStep { step = 2 }
+                2 -> LegalStep { Prefs.put("legal_ack_v", Onboard.LEGAL_VERSION.toLong()); step = 3 }
                 else -> SourceStep(nav, showSkip = !Onboard.done(ctx))
             }
         }
@@ -92,7 +99,7 @@ private fun LanguageStep(onNext: () -> Unit) {
         T("Složeno iznutra. Jednostavno spolja.", 13.sp, C.Muted)
         Spacer(Modifier.height(4.dp))
         // one row "Language: English ▾"; OK opens the list, OK on a language applies it at once (no extra question)
-        val now = langs.firstOrNull { it.code == Look.lang } ?: langs.first()
+        val now = langs.firstOrNull { it.code == Look.code } ?: langs.first()
         Focusable(onClick = { open = !open }, focusRequester = drop, shape = Rnd(12.dp), normal = Color(0x14FFFFFF), focused = C.Red,
             focusBorderColor = Color.Transparent, zoom = 1f, modifier = Modifier.fillMaxWidth().height(50.dp).border(1.dp, Color(0x4DFFFFFF), Rnd(12.dp))) { f ->
             Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -106,7 +113,7 @@ private fun LanguageStep(onNext: () -> Unit) {
             androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxWidth().heightIn(max = 260.dp).dawnGlass().padding(6.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 items(langs.size) { i ->
-                    val l = langs[i]; val sel = l.code == Look.lang
+                    val l = langs[i]; val sel = l.code == Look.code
                     Focusable(onClick = { open = false; if (!sel) { setAppLang(ctx, l.code); rev++ } else scope.launch { cont.tryFocus() } },
                         focusRequester = if (sel) cur else null, shape = Rnd(10.dp), normal = Color.Transparent, focused = C.Red,
                         focusBorderColor = Color.Transparent, zoom = 1f, modifier = Modifier.fillMaxWidth().height(44.dp)) { f ->

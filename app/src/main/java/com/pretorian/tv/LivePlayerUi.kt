@@ -251,7 +251,7 @@ fun dayLabel(t: Long): String {
     return when {
         t >= d0 -> tr("Danas")
         t >= Sports.dayStart(-1) -> tr("Jučer")
-        else -> SimpleDateFormat("EEEE", Locale(Look.lang)).format(Date(t)).replaceFirstChar { it.uppercase() }  // i18n-ignore
+        else -> SimpleDateFormat("EEEE", appLocale()).format(Date(t)).replaceFirstChar { it.uppercase() }  // i18n-ignore
     }
 }
 

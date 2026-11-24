@@ -60,7 +60,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         Prefs.init(this)
         CrashLog.install(this)
-        ChannelHealth.init(this); LogoResolver.init(this)
+        ChannelHealth.init(this); LogoResolver.init(this); DeviceIdentity.init(this)
+        // a report left from a run that ended during export is removed (one download session, never stale files)
+        try { java.io.File(cacheDir, "diag_export").listFiles()?.forEach { it.delete() } } catch (_: Throwable) {}
         Work.watchNetwork(this)
         Work.safeMode = CrashGuard.quick() || CrashGuard.tooMany()
         if (Work.safeMode) {
@@ -343,6 +345,10 @@ fun PretorianApp() {
             }
             ReminderPopup(nav)
             CrashDialog()
+            // 3.0.0.1: an existing installation is asked for a device name once (playlists and everything else stay)
+            @Suppress("UNUSED_VARIABLE") val dRev = DeviceIdentity.rev
+            if (top !is Screen.Player && !DeviceIdentity.hasName() && remember(version) { Store.playlists(ctx).isNotEmpty() })
+                Popup("Identitet uređaja", { DeviceIdentity.setName(DeviceIdentity.suggestion()) }, width = 680.dp) { DeviceIdentityStep(title = false) { } }
             SaverHost(nav)
             WhatsNewDialog()
             ImportDialog()
@@ -390,7 +396,7 @@ fun Clock() {
     LaunchedEffect(Unit) { while (true) { now = Date(); delay(15_000) } }
     Column(horizontalAlignment = Alignment.End) {
         T(SimpleDateFormat("HH:mm", Locale.getDefault()).format(now), 22.sp, C.Text, FontWeight.SemiBold)
-        T(SimpleDateFormat("EEE, d. MMM", Locale(Look.lang)).format(now), 12.sp, C.Muted)
+        T(SimpleDateFormat("EEE, d. MMM", appLocale()).format(now), 12.sp, C.Muted)
     }
 }
 

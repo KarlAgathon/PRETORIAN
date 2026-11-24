@@ -51,14 +51,16 @@ class Release300Test {
         assertEquals(DiagStore.signature("crash", a), DiagStore.signature("crash", b))
         assertNotEquals(DiagStore.signature("crash", a), DiagStore.signature("freeze", a))
     }
-    @Test fun fullReportZipHasManifestAndNoSecrets() {
+    @Test fun fullReportIsOneTxtWithAllSections() {
         val ctx = RuntimeEnvironment.getApplication()
-        Prefs.init(ctx); DiagStore.init(ctx)
+        Prefs.init(ctx); DiagStore.init(ctx); DeviceIdentity.init(ctx)
         DiagEvents.add("net", "test event")
-        val f = java.io.File(ctx.cacheDir, "t.zip")
-        DiagReport.build(ctx, DiagReport.Kind.ZIP, f)
-        val names = java.util.zip.ZipFile(f).use { z -> z.entries().toList().map { it.name } }
-        assertTrue(names.contains("MANIFEST.json")); assertTrue(names.contains("SUMMARY.txt")); assertTrue(names.contains("PROVIDER_PROTECTION.txt"))
+        val f = java.io.File(ctx.cacheDir, "t.txt")
+        DiagReport.build(ctx, DiagReport.Kind.FULL, f)
+        val t = f.readText(Charsets.UTF_8)
+        for (n in 1..31) assertTrue("section $n", t.contains("\n$n. "))
+        assertTrue(t.contains(DeviceIdentity.id()))
+        assertTrue(t.contains("END OF REPORT"))
         f.delete()
     }
 }

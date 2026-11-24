@@ -259,7 +259,8 @@ fun langList(codes: String): String = codes.split(',').filter { it.isNotBlank() 
 
 
 fun setAppLang(ctx: android.content.Context, code: String) {
-    Look.lang = code; Look.save(ctx)
+    if (code == "sr-Latn") { Look.lang = "sr"; Look.latin = true } else { Look.lang = code; Look.latin = false }  // i18n-ignore
+    Look.save(ctx)
     val l = Langs.of(code)
     Toast.makeText(ctx, tr("Jezik promijenjen") + ": " + (l?.native ?: code), Toast.LENGTH_SHORT).show()
 }

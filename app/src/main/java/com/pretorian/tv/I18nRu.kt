@@ -2944,4 +2944,27 @@ Sve sačuvano: padovi, zamrzavanja, mjerenja i događaji|Всё сохранён
 Pripremam izvještaj… Back prekida.|Готовлю отчёт… Назад отменяет.
 Aktivna provjera kanala|Активная проверка каналов
 samo ako tvoj provider dozvoljava više konekcija · najviše 30 na sat|только если провайдер разрешает несколько подключений · не более 30 в час
+Identitet uređaja|Идентификация устройства
+Upiši naziv uređaja.|Введите имя устройства.
+Naziv se nije mogao sačuvati. Pokušaj ponovo.|Не удалось сохранить имя. Попробуйте снова.
+Ovaj uređaj je dobio jedinstveni ID. Daj mu naziv.|Этому устройству присвоен уникальный ID. Дайте ему имя.
+ID uređaja|ID устройства
+Bilo koji naziv: slova, brojevi, znakovi, razmaci, emoji.|Любое имя: буквы, цифры, символы, пробелы, эмодзи.
+Uređaj trenutno nema dovoljno memorije. Pokušaj ponovo za nekoliko minuta.|Сейчас на устройстве мало памяти. Попробуйте через несколько минут.
+Kompletan dijagnostički izvještaj|Полный диагностический отчёт
+Kreiraj kompletan izvještaj|Создать полный отчёт
+Napravi kompletan dijagnostički izvještaj|Создать полный диагностический отчёт
+✓ Izvještaj je uspješno napravljen.|✓ Отчёт успешно создан.
+Skeniraj telefonom|Отсканируйте телефоном
+Preuzmi kompletan dijagnostički izvještaj (TXT). Telefon mora biti u istoj kućnoj mreži.|Скачайте полный диагностический отчёт (TXT). Телефон должен быть в той же домашней сети.
+Link važi do %s. Back zatvara vezu.|Ссылка действует до %s. Назад закрывает соединение.
+Nakon preuzimanja izvještaj možeš poslati e-mailom, WhatsAppom ili bilo kojom drugom aplikacijom.|После скачивания отчёт можно отправить по почте, WhatsApp или в любом другом приложении.
+OK mijenja naziv · ID ostaje isti|OK меняет имя · ID остаётся прежним
+nije postavljen|не задано
+Lokalno bilježenje padova|Локальная запись сбоев
+padovi i zamrzavanja ostaju samo na ovom uređaju|сбои и зависания остаются только на этом устройстве
+Aktivno|Активно
+Ostali izvozi|Другие экспорты
+zadnji pad (TXT) · obriši izvještaje|последний сбой (TXT) · удалить отчёты
+Srpski (latinica)|Сербский (латиница)
 """.trimIndent()

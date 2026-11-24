@@ -235,6 +235,8 @@ fun DiagnosticsV2() {
     var streamAll by remember { mutableStateOf(false) }
     var logExport by remember { mutableStateOf(false) }
     var reportExport by remember { mutableStateOf(false) }
+    var fullExport by remember { mutableStateOf(false) }
+    var renameDevice by remember { mutableStateOf(false) }
     val vpn = remember { NetInfo.vpn(ctx) }
     var testingNorm by remember { mutableStateOf(false) }
     var bypassErr by remember { mutableStateOf(false) }
@@ -283,8 +285,14 @@ fun DiagnosticsV2() {
                 }
                 SmallBtn(tr("↺ Resetuj sve")) { confirmAll = true }
             }
-            // A0: the safe TXT report for a phone (QR), instead of photos of the TV
-            SetRow("Izvezi izvještaj", "Siguran TXT izvještaj za telefon ili folder, bez lozinki", arrow = "›") { reportExport = true }
+            // 3.0.0.1: who this box is, then the one main action — everything stays on the box until you download it
+            @Suppress("UNUSED_VARIABLE") val idRev = DeviceIdentity.rev
+            SetRow("ID uređaja", null, DeviceIdentity.short()) {}
+            SetRow("Naziv uređaja", "OK mijenja naziv · ID ostaje isti", DeviceIdentity.display(maxCp = 32).let { if (it.isBlank()) tr("nije postavljen") else "" + '\u2068' + it + '\u2069' }) { renameDevice = true }  // i18n-ignore
+            SetRow("Verzija", null, BuildConfig.VERSION_NAME) {}
+            SetRow("Lokalno bilježenje padova", "padovi i zamrzavanja ostaju samo na ovom uređaju", tr("Aktivno")) {}
+            SetRow("Kreiraj kompletan izvještaj", "Napravi kompletan dijagnostički izvještaj", arrow = "›") { fullExport = true }
+            SetRow("Ostali izvozi", "zadnji pad (TXT) · obriši izvještaje", arrow = "›") { reportExport = true }
             val tv = Stats.sum("tv", period); val ser = Stats.sum("ser", period); val mov = Stats.sum("mov", period)
             val total = tv + ser + mov
             // ---- watched (two columns wide) and uptime
@@ -434,6 +442,8 @@ fun DiagnosticsV2() {
         logExport = false
     }
     if (reportExport) DiagExportDialog { reportExport = false }
+    if (fullExport) DiagExportDialog(DiagReport.Kind.FULL) { fullExport = false }
+    if (renameDevice) Popup("Naziv uređaja", { renameDevice = false }, width = 680.dp) { DeviceIdentityStep(title = false) { renameDevice = false } }
     if (confirmAll) Popup("Resetuj sve brojače?", { confirmAll = false }) {
         OptionRow("Da, resetuj sve", R.drawable.lc_trash_2, color = C.Danger) { Stats.resetAll(); confirmAll = false; rev++ }
         OptionRow("Ne", R.drawable.lc_x) { confirmAll = false }
@@ -695,7 +705,7 @@ private fun deviceCards(ctx: Context): List<DevCard> {
             R.drawable.lc_gauge2, 0xFFC9C9CE, null, rows)
     }
     val patch = Build.VERSION.SECURITY_PATCH
-    val patchNice = try { SimpleDateFormat("d. MMMM yyyy", Locale(Look.lang)).format(SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(patch)!!) } catch (e: Exception) { patch }  // i18n-ignore
+    val patchNice = try { SimpleDateFormat("d. MMMM yyyy", appLocale()).format(SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(patch)!!) } catch (e: Exception) { patch }  // i18n-ignore
     out += DevCard(tr("Sigurnosna zakrpa"), patchNice, null, R.drawable.lc_shield_check, 0xFFEF4444, null, listOf(tr("Sigurnosna zakrpa") to patch))
     out += DevCard(tr("Način rada"), (if (Perf.lite) "Lite" else "Full") + " · " + trf("ocjena %s/100", Perf.score), "Media Center " + BuildInfo.VERSION, R.drawable.lc_sparkle, 0xFF9CA3AF, Perf.score / 100f,  // i18n-ignore
         listOf(tr("Način rada") to (if (Perf.lite) "Lite" else "Full"), tr("Ocjena uređaja") to listOf(Perf.score, "/100").joinToString(""),  // i18n-ignore

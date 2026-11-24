@@ -70,9 +70,9 @@ import kotlinx.coroutines.delay
 internal fun LanguageV2() {
     val ctx = LocalContext.current
     var rev by remember { mutableIntStateOf(0) }
-    key(rev, Look.lang) {
+    key(rev, Look.code) {
         SetPage("Jezik") {
-            val cur = Langs.APP.firstOrNull { it.code == Look.lang } ?: Langs.APP[0]
+            val cur = Langs.APP.firstOrNull { it.code == Look.code } ?: Langs.APP[0]
             Row(Modifier.fillMaxWidth().clip(Rnd(16.dp)).background(Color(0x332563EB)).border(1.dp, Color(0x552563EB), Rnd(16.dp)).padding(14.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Flag(cur.flag, 52)
@@ -87,7 +87,7 @@ internal fun LanguageV2() {
             list.chunked(2).forEach { pair ->
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     pair.forEach { l ->
-                        val on = l.code == Look.lang
+                        val on = l.code == Look.code
                         val id = "lang:" + l.code
                         Focusable(modifier = Modifier.weight(1f).height(54.dp).border(if (on) 2.dp else 1.dp, if (on) Color(0xFF22C55E) else C.Line, Rnd(14.dp)),
                             onClick = { SetFocus.last = id; SetFocus.pending = true; setAppLang(ctx, l.code); rev++ }, onFocus = { SetFocus.last = id },
@@ -263,7 +263,7 @@ internal fun RemindersV2(nav: Nav) {
             SetSection(trf("Nadolazeći · %s", all.size))
             if (all.isEmpty()) T("Nema podsjetnika. U TV vodiču ili Sportu: OK na emisiji › Podsjeti me.", 12.sp, C.Muted, maxLines = 2)
             all.forEach { r ->
-                SetRow(r.title, java.text.SimpleDateFormat("EEE d. M. HH:mm", java.util.Locale(Look.lang)).format(java.util.Date(r.start)) + (r.channelName?.let { " · $it" } ?: ""), arrow = "›",
+                SetRow(r.title, java.text.SimpleDateFormat("EEE d. M. HH:mm", appLocale()).format(java.util.Date(r.start)) + (r.channelName?.let { " · $it" } ?: ""), arrow = "›",
                     onLong = { menu = r }) { menu = r }
             }
             SetSection("Kad dođe vrijeme")

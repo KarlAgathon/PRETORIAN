@@ -13,6 +13,7 @@ object Langs {
         Lang("bs", "Bosanski", "Bosanski", R.drawable.flag_bs),
         Lang("hr", "Hrvatski", "Hrvatski", R.drawable.flag_hr),
         Lang("sr", "Srpski", "Српски", R.drawable.flag_rs),
+        Lang("sr-Latn", "Srpski (latinica)", "Srpski (latinica)", R.drawable.flag_rs),
         Lang("en", "Engleski", "English", R.drawable.flag_en),
         Lang("de", "Njemački", "Deutsch", R.drawable.flag_de),
         Lang("tr", "Turski", "Türkçe", R.drawable.flag_tr),
@@ -27,7 +28,7 @@ object Langs {
         Lang("fr", "Francuski", "Français", R.drawable.flag_fr),
         Lang("es", "Španski", "Español", R.drawable.flag_es),
     )
-    fun of(code: String): Lang? = MEDIA.firstOrNull { it.code == code.lowercase().take(2) }
+    fun of(code: String): Lang? = MEDIA.firstOrNull { it.code == code } ?: MEDIA.firstOrNull { it.code == code.lowercase().take(2) }
     /** "Bosanski" in the app language, "English" etc. */
     fun label(code: String): String = of(code)?.let { tr(it.name) } ?: code.uppercase()
 }
@@ -510,8 +511,8 @@ Ne radi na svim uređajima. Ako je box potpuno ugašen, podsjetnik ne može doć
 Tvoji podsjetnici|Your reminders|Deine Erinnerungen|Tvoji podsjetnici|Твоји подсетници|Твоите напомняния|Mementourile tale|Hatırlatıcıların|I tuoi promemoria|تذكيراتك
 Nema podsjetnika.|No reminders.|Keine Erinnerungen.|Nema podsjetnika.|Нема подсетника.|Няма напомняния.|Niciun memento.|Hatırlatıcı yok.|Nessun promemoria.|لا توجد تذكيرات.
 Obriši|Delete|Löschen|Obriši|Обриши|Изтрий|Șterge|Sil|Elimina|حذف
-Backup je spremljen|Backup saved|Backup gespeichert|Sigurnosna kopija je spremljenaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|Бекап је сачуван|Копието е запазено|Backup salvat|Yedek kaydedildi|Backup salvato|تم حفظ النسخة
-Backup nije spremljen|Backup not saved|Backup nicht gespeichert|Sigurnosna kopija nije spremljenaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|Бекап није сачуван|Копието не е запазено|Backup nesalvat|Yedek kaydedilmedi|Backup non salvato|لم تُحفظ النسخة
+Backup je spremljen|Backup saved|Backup gespeichert|Sigurnosna kopija je spremljenaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|Бекап је сачуван|Копието е запазено|Backup salvat|Yedek kaydedildi|Backup salvato|تم حفظ النسخة
+Backup nije spremljen|Backup not saved|Backup nicht gespeichert|Sigurnosna kopija nije spremljenaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|Бекап није сачуван|Копието не е запазено|Backup nesalvat|Yedek kaydedilmedi|Backup non salvato|لم تُحفظ النسخة
 Sve je vraćeno. PRETORIAN se ponovo pokreće.|Everything restored. PRETORIAN restarts.|Alles wiederhergestellt. PRETORIAN startet neu.|Sve je vraćeno. PRETORIAN se ponovo pokreće.|Све је враћено. PRETORIAN се поново покреће.|Всичко е възстановено. PRETORIAN се рестартира.|Totul a fost restaurat. PRETORIAN repornește.|Her şey geri yüklendi. PRETORIAN yeniden başlıyor.|Tutto ripristinato. PRETORIAN si riavvia.|تمت الاستعادة. يُعاد تشغيل PRETORIAN.
 Vraćanje nije uspjelo|Restore failed|Wiederherstellung fehlgeschlagen|Vraćanje nije uspjelo|Враћање није успело|Възстановяването не успя|Restaurarea a eșuat|Geri yükleme başarısız|Ripristino non riuscito|فشلت الاستعادة
 Backup i vraćanje|Backup and restore|Sichern und wiederherstellen|Sigurnosna kopija i vraćanje|Бекап и враћање|Резервно копие|Backup și restaurare|Yedekle ve geri yükle|Backup e ripristino|النسخ والاستعادة
@@ -2844,6 +2845,29 @@ Sve sačuvano: padovi, zamrzavanja, mjerenja i događaji|Everything saved: crash
 Pripremam izvještaj… Back prekida.|Preparing the report… Back cancels.|Bericht wird erstellt… Zurück bricht ab.|Pripremam izvješće… Natrag prekida.|Припремам извештај… Бацк прекида.|Подготвям отчета… Назад отказва.|Se pregătește raportul… Înapoi anulează.|Rapor hazırlanıyor… Geri iptal eder.|Preparo il rapporto… Indietro annulla.|جارٍ إعداد التقرير… الرجوع يلغي.
 Aktivna provjera kanala|Active channel check|Aktive Senderprüfung|Aktivna provjera kanala|Активна провера канала|Активна проверка на каналите|Verificare activă a canalelor|Etkin kanal kontrolü|Controllo attivo dei canali|فحص القنوات النشط
 samo ako tvoj provider dozvoljava više konekcija · najviše 30 na sat|only if your provider allows several connections · at most 30 per hour|nur wenn dein Anbieter mehrere Verbindungen erlaubt · höchstens 30 pro Stunde|samo ako tvoj pružatelj dopušta više veza · najviše 30 na sat|само ако твој провајдер дозвољава више конекција · највише 30 на сат|само ако доставчикът позволява няколко връзки · най-много 30 на час|doar dacă furnizorul permite mai multe conexiuni · cel mult 30 pe oră|yalnızca sağlayıcın birden fazla bağlantıya izin veriyorsa · saatte en fazla 30|solo se il provider consente più connessioni · al massimo 30 all'ora|فقط إذا كان مزودك يسمح بعدة اتصالات · 30 في الساعة كحد أقصى
+Identitet uređaja|Device identity|Geräteidentität|Identitet uređaja|Идентитет уређаја|Идентичност на устройството|Identitatea dispozitivului|Cihaz kimliği|Identità del dispositivo|هوية الجهاز
+Upiši naziv uređaja.|Enter a device name.|Gib einen Gerätenamen ein.|Upiši naziv uređaja.|Упиши назив уређаја.|Въведи име на устройството.|Introdu un nume pentru dispozitiv.|Bir cihaz adı gir.|Inserisci un nome per il dispositivo.|أدخل اسمًا للجهاز.
+Naziv se nije mogao sačuvati. Pokušaj ponovo.|The name could not be saved. Please try again.|Der Name konnte nicht gespeichert werden. Bitte erneut versuchen.|Naziv se nije mogao spremiti. Pokušaj ponovno.|Назив није могао да се сачува. Покушај поново.|Името не можа да се запази. Опитай отново.|Numele nu a putut fi salvat. Încearcă din nou.|Ad kaydedilemedi. Tekrar dene.|Impossibile salvare il nome. Riprova.|تعذر حفظ الاسم. حاول مرة أخرى.
+Ovaj uređaj je dobio jedinstveni ID. Daj mu naziv.|This device has been given a unique ID. Give it a name.|Dieses Gerät hat eine eindeutige ID erhalten. Gib ihm einen Namen.|Ovaj uređaj je dobio jedinstveni ID. Daj mu naziv.|Овај уређај је добио јединствени ID. Дај му назив.|Това устройство получи уникален ID. Дай му име.|Acest dispozitiv a primit un ID unic. Dă-i un nume.|Bu cihaza benzersiz bir kimlik verildi. Ona bir ad ver.|Questo dispositivo ha ricevuto un ID univoco. Dagli un nome.|حصل هذا الجهاز على معرّف فريد. امنحه اسمًا.
+ID uređaja|Device ID|Geräte-ID|ID uređaja|ID уређаја|ID на устройството|ID dispozitiv|Cihaz kimliği|ID dispositivo|معرّف الجهاز
+Bilo koji naziv: slova, brojevi, znakovi, razmaci, emoji.|Any name: letters, numbers, symbols, spaces, emoji.|Beliebiger Name: Buchstaben, Zahlen, Zeichen, Leerzeichen, Emoji.|Bilo koji naziv: slova, brojevi, znakovi, razmaci, emoji.|Било који назив: слова, бројеви, знакови, размаци, емоџи.|Всяко име: букви, цифри, символи, интервали, емоджи.|Orice nume: litere, cifre, simboluri, spații, emoji.|Herhangi bir ad: harfler, rakamlar, semboller, boşluklar, emoji.|Qualsiasi nome: lettere, numeri, simboli, spazi, emoji.|أي اسم: حروف، أرقام، رموز، مسافات، رموز تعبيرية.
+Uređaj trenutno nema dovoljno memorije. Pokušaj ponovo za nekoliko minuta.|The device is low on memory right now. Try again in a few minutes.|Das Gerät hat gerade zu wenig Speicher. Versuche es in ein paar Minuten erneut.|Uređaj trenutno nema dovoljno memorije. Pokušaj ponovno za nekoliko minuta.|Уређај тренутно нема довољно меморије. Покушај поново за неколико минута.|Устройството в момента няма достатъчно памет. Опитай отново след няколко минути.|Dispozitivul are acum prea puțină memorie. Încearcă din nou peste câteva minute.|Cihazın şu anda belleği yetersiz. Birkaç dakika sonra tekrar dene.|Il dispositivo ha poca memoria in questo momento. Riprova tra qualche minuto.|ذاكرة الجهاز منخفضة حاليًا. حاول مرة أخرى بعد بضع دقائق.
+Kompletan dijagnostički izvještaj|Full diagnostic report|Vollständiger Diagnosebericht|Potpuno dijagnostičko izvješće|Комплетан дијагностички извештај|Пълен диагностичен отчет|Raport complet de diagnostic|Tam tanılama raporu|Rapporto diagnostico completo|تقرير التشخيص الكامل
+Kreiraj kompletan izvještaj|Create full report|Vollständigen Bericht erstellen|Izradi potpuno izvješće|Креирај комплетан извештај|Създай пълен отчет|Creează raportul complet|Tam rapor oluştur|Crea rapporto completo|إنشاء تقرير كامل
+Napravi kompletan dijagnostički izvještaj|Generate a complete diagnostic report|Einen vollständigen Diagnosebericht erstellen|Izradi potpuno dijagnostičko izvješće|Направи комплетан дијагностички извештај|Създай пълен диагностичен отчет|Generează un raport complet de diagnostic|Eksiksiz bir tanılama raporu oluştur|Genera un rapporto diagnostico completo|أنشئ تقرير تشخيص كاملًا
+✓ Izvještaj je uspješno napravljen.|✓ Report successfully generated.|✓ Bericht erfolgreich erstellt.|✓ Izvješće je uspješno izrađeno.|✓ Извештај је успешно направљен.|✓ Отчетът е създаден успешно.|✓ Raportul a fost generat cu succes.|✓ Rapor başarıyla oluşturuldu.|✓ Rapporto generato correttamente.|✓ تم إنشاء التقرير بنجاح.
+Skeniraj telefonom|Scan with your phone|Mit dem Handy scannen|Skeniraj telefonom|Скенирај телефоном|Сканирай с телефона|Scanează cu telefonul|Telefonunla tara|Scansiona con il telefono|امسح بهاتفك
+Preuzmi kompletan dijagnostički izvještaj (TXT). Telefon mora biti u istoj kućnoj mreži.|Download the complete diagnostic report (TXT). The phone must be on the same home network.|Lade den vollständigen Diagnosebericht (TXT) herunter. Das Handy muss im selben Heimnetz sein.|Preuzmi potpuno dijagnostičko izvješće (TXT). Telefon mora biti u istoj kućnoj mreži.|Преузми комплетан дијагностички извештај (TXT). Телефон мора бити у истој кућној мрежи.|Изтегли пълния диагностичен отчет (TXT). Телефонът трябва да е в същата домашна мрежа.|Descarcă raportul complet de diagnostic (TXT). Telefonul trebuie să fie în aceeași rețea de acasă.|Tam tanılama raporunu (TXT) indir. Telefon aynı ev ağında olmalı.|Scarica il rapporto diagnostico completo (TXT). Il telefono deve essere sulla stessa rete di casa.|نزّل تقرير التشخيص الكامل (TXT). يجب أن يكون الهاتف على نفس الشبكة المنزلية.
+Link važi do %s. Back zatvara vezu.|The link is valid until %s. Back closes the connection.|Der Link gilt bis %s. Zurück beendet die Verbindung.|Poveznica vrijedi do %s. Natrag zatvara vezu.|Линк важи до %s. Бацк затвара везу.|Връзката е валидна до %s. Назад затваря връзката.|Linkul este valabil până la %s. Înapoi închide conexiunea.|Bağlantı %s saatine kadar geçerli. Geri bağlantıyı kapatır.|Il link è valido fino alle %s. Indietro chiude la connessione.|الرابط صالح حتى %s. الرجوع يغلق الاتصال.
+Nakon preuzimanja izvještaj možeš poslati e-mailom, WhatsAppom ili bilo kojom drugom aplikacijom.|After downloading, you can share the report by email, WhatsApp or any other app of your choice.|Nach dem Herunterladen kannst du den Bericht per E-Mail, WhatsApp oder jeder anderen App teilen.|Nakon preuzimanja izvješće možeš poslati e-poštom, WhatsAppom ili bilo kojom drugom aplikacijom.|Након преузимања извештај можеш послати имејлом, Вотсапом или било којом другом апликацијом.|След изтегляне можеш да споделиш отчета по имейл, WhatsApp или друго приложение.|După descărcare poți trimite raportul prin e-mail, WhatsApp sau orice altă aplicație.|İndirdikten sonra raporu e-posta, WhatsApp veya istediğin başka bir uygulamayla paylaşabilirsin.|Dopo il download puoi condividere il rapporto via e-mail, WhatsApp o qualsiasi altra app.|بعد التنزيل يمكنك مشاركة التقرير عبر البريد الإلكتروني أو واتساب أو أي تطبيق آخر.
+OK mijenja naziv · ID ostaje isti|OK changes the name · the ID stays the same|OK ändert den Namen · die ID bleibt gleich|OK mijenja naziv · ID ostaje isti|OK мења назив · ID остаје исти|OK променя името · ID остава същият|OK schimbă numele · ID-ul rămâne același|OK adı değiştirir · kimlik aynı kalır|OK cambia il nome · l'ID resta lo stesso|OK يغيّر الاسم · المعرّف يبقى كما هو
+nije postavljen|not set|nicht festgelegt|nije postavljen|није постављен|не е зададено|nesetat|ayarlanmadı|non impostato|غير محدد
+Lokalno bilježenje padova|Local crash recording|Lokale Absturzaufzeichnung|Lokalno bilježenje rušenja|Локално бележење падова|Локално записване на сривове|Înregistrare locală a blocărilor|Yerel çökme kaydı|Registrazione locale dei crash|تسجيل الأعطال محليًا
+padovi i zamrzavanja ostaju samo na ovom uređaju|crashes and freezes stay on this device only|Abstürze und Hänger bleiben nur auf diesem Gerät|rušenja i zamrzavanja ostaju samo na ovom uređaju|падови и замрзавања остају само на овом уређају|сривовете и замръзванията остават само на това устройство|blocările și înghețările rămân doar pe acest dispozitiv|çökmeler ve donmalar yalnızca bu cihazda kalır|crash e blocchi restano solo su questo dispositivo|تبقى الأعطال والتجمّد على هذا الجهاز فقط
+Aktivno|Active|Aktiv|Aktivno|Активно|Активно|Activ|Etkin|Attivo|نشط
+Ostali izvozi|Other exports|Weitere Exporte|Ostali izvozi|Остали извози|Други експорти|Alte exporturi|Diğer dışa aktarımlar|Altre esportazioni|عمليات تصدير أخرى
+zadnji pad (TXT) · obriši izvještaje|last crash (TXT) · delete reports|letzter Absturz (TXT) · Berichte löschen|zadnje rušenje (TXT) · obriši izvješća|последњи пад (TXT) · обриши извештаје|последен срив (TXT) · изтрий отчетите|ultima blocare (TXT) · șterge rapoartele|son çökme (TXT) · raporları sil|ultimo crash (TXT) · elimina rapporti|آخر عطل (TXT) · حذف التقارير
+Srpski (latinica)|Serbian (Latin)|Serbisch (lateinisch)|Srpski (latinica)|Српски (латиница)|Сръбски (латиница)|Sârbă (latină)|Sırpça (Latin)|Serbo (latino)|الصربية (اللاتينية)
 Nepoznat jezik|Unknown language|Unbekannte Sprache|Nepoznat jezik|Непознат језик|Неизвестен език|Limbă necunoscută|Bilinmeyen dil|Lingua sconosciuta|لغة غير معروفة
 Prikaz liste kanala|Channel list style|Senderliste-Ansicht|Prikaz popisa kanala|Приказ листе канала|Изглед на списъка|Stil listă canale|Kanal listesi görünümü|Stile elenco canali|نمط قائمة القنوات
 u TV-u i u listi u playeru|in TV and in the list in the player|im TV und in der Liste im Player|u TV-u i na popisu u playeru|у ТВ-у и у листи у плејеру|в ТВ и в списъка в плейъра|în TV și în lista din player|TV'de ve oynatıcıdaki listede|in TV e nell'elenco del player|في التلفاز وفي قائمة المشغل
@@ -3005,7 +3029,28 @@ private val DICT: Map<String, Map<String, String>> by lazy {
 fun tr(s: String): String {
     val l = Look.lang
     if (l == "bs" || s.isEmpty()) return s
+    if (l == "sr" && Look.latin) { val c = DICT["sr"]?.get(s) ?: return s; return latinCache.getOrPut(c) { Latin.of(c) } }
     return DICT[l]?.get(s) ?: s
+}
+private val latinCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+/** Serbian Cyrillic → Serbian Latin (official one-to-one mapping; Љ Њ Џ become Lj Nj Dž, or LJ NJ DŽ in capitals) */
+object Latin {
+    private val M = mapOf('а' to "a", 'б' to "b", 'в' to "v", 'г' to "g", 'д' to "d", 'ђ' to "đ", 'е' to "e", 'ж' to "ž", 'з' to "z", 'и' to "i",  // i18n-ignore
+        'ј' to "j", 'к' to "k", 'л' to "l", 'љ' to "lj", 'м' to "m", 'н' to "n", 'њ' to "nj", 'о' to "o", 'п' to "p", 'р' to "r", 'с' to "s",  // i18n-ignore
+        'т' to "t", 'ћ' to "ć", 'у' to "u", 'ф' to "f", 'х' to "h", 'ц' to "c", 'ч' to "č", 'џ' to "dž", 'ш' to "š")  // i18n-ignore
+    fun of(s: String): String {
+        val b = StringBuilder(s.length + 8)
+        for (i in s.indices) {
+            val ch = s[i]; val low = ch.lowercaseChar(); val m = M[low]
+            if (m == null) { b.append(ch); continue }
+            if (ch == low) { b.append(m); continue }
+            // a capital: a whole word in capitals keeps both letters capital (ЉУБАВ → LJUBAV), otherwise Ljubav
+            val nextUpper = i + 1 < s.length && s[i + 1].isUpperCase()
+            b.append(if (m.length == 1 || nextUpper) m.uppercase() else m[0].uppercaseChar() + m.substring(1))
+        }
+        return b.toString()
+    }
 }
 
 /** Description language for TMDB: the chosen one, or the app language. */

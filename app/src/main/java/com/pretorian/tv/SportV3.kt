@@ -124,7 +124,7 @@ object SportPrefs {
     fun isNational(abbr: String) = abbr in NATIONAL
 }
 
-fun countryName(code: String, loc: Locale = Locale(Look.lang)): String =
+fun countryName(code: String, loc: Locale = appLocale()): String =
     if (code == "eu") tr("Evropa") else Locale("", code.uppercase()).getDisplayCountry(loc).ifBlank { code.uppercase() }
 
 /* ============================================================== ESPN team lists (search source) */
@@ -476,7 +476,7 @@ private fun stateLine(e: SportEvent): String = when {
     e.state == "post" -> e.clock?.ifBlank { null } ?: tr("Kraj")
     else -> {
         val d = dayOffsetFwd(e.start)
-        (when (d) { 0 -> tr("Danas"); 1 -> tr("Sutra"); else -> SimpleDateFormat("EEE", Locale(Look.lang)).format(Date(e.start)) }) + " · " + hm(e.start)  // i18n-ignore
+        (when (d) { 0 -> tr("Danas"); 1 -> tr("Sutra"); else -> SimpleDateFormat("EEE", appLocale()).format(Date(e.start)) }) + " · " + hm(e.start)  // i18n-ignore
     }
 }
 private fun dayOffsetFwd(t: Long): Int { var d = 0; while (d < 10 && t >= Sports.dayStart(d + 1)) d++; return d }

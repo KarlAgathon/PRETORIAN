@@ -94,6 +94,10 @@ object CrashLog {
                 // 2.9.1: an update or a normal close is information, not an error
                 val normal = why == "exit" || why == "user" || (e.description ?: "").contains("installPackage")
                 DiagEvents.add(if (why == "anr" || why == "native") why else if (normal) "app" else "exitinfo", "previous run ended: $why · ${e.description ?: ""} · pss ${e.pss / 1024} MB")  // i18n-ignore
+                // 3.0.0.1: killed for memory while on screen = an out-of-memory incident (in the background it is normal Android)
+                if (why == "lowmem" && e.importance <= android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND) {
+                    archive(app, "oom", "Out of memory: Android ended the app while it was on screen at ${DiagEvents.stamp(e.timestamp)} · pss ${e.pss / 1024} MB · rss ${e.rss / 1024} MB\n${e.description ?: ""}")  // i18n-ignore
+                }
                 if (why == "anr" || why == "native") {
                     val trace = try { e.traceInputStream?.bufferedReader()?.use { r -> val cb = CharArray(200_000); val n = r.read(cb); if (n > 0) String(cb, 0, n) else "" } } catch (_: Throwable) { null }
                     val txt = "Media Center ${BuildInfo.VERSION} · ${android.os.Build.MODEL}\n" +  // i18n-ignore

@@ -42,7 +42,7 @@ internal fun BackupSettings() {
             SetSection("Vrati")
             if (found.isEmpty()) T("Još nema nijedne kopije.", 13.sp, C.Muted)
             found.take(6).forEach { f ->
-                SetRow(java.text.SimpleDateFormat("EEE, dd.MM.yy · HH:mm", java.util.Locale(Look.lang)).format(java.util.Date(f.at)),
+                SetRow(java.text.SimpleDateFormat("EEE, dd.MM.yy · HH:mm", appLocale()).format(java.util.Date(f.at)),
                     tr(f.where), tr("Vrati")) {
                     text = try { f.read() } catch (_: Exception) { null }
                     if (text == null || Backup.summary(text!!) == null) Toast.makeText(ctx, tr("Fajl nije backup ove aplikacije"), Toast.LENGTH_LONG).show() else step = "preview"

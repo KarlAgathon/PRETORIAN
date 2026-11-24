@@ -696,3 +696,6 @@ time,session,state,cpu_pct_one_core,java_heap_mb,pss_mb
 time,session,kind,event,ms,detail
 time,session,task,event,ms,detail
 ch_probe_active
+%.1f MB
+${maxOf(1, f.length() / 1024)} KB
+⁨$it⁩

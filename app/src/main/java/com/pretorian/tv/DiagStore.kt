@@ -195,7 +195,12 @@ object DiagStore {
             }
             val id = java.lang.Long.toHexString(java.security.SecureRandom().nextLong() and 0xffffffL)
             val base = kind + "_" + now + "_" + id
-            File(d, "$base.txt").writeText(bounded(Redact.text(text)))
+            // 3.0.0.1: every incident says which box and which run it came from (no hardware identifiers)
+            val who = "Device: " + DeviceIdentity.short() + " · " + DeviceIdentity.name().ifBlank { "name not set" } + " · Media Center " + BuildConfig.VERSION_NAME +  // i18n-ignore
+                " (" + BuildConfig.VERSION_CODE + ", " + (if (BuildConfig.BUILD_TYPE == "beta") "Beta" else "Stable") + ") · " + android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL +  // i18n-ignore
+                " · Android " + android.os.Build.VERSION.RELEASE + " (API " + android.os.Build.VERSION.SDK_INT + ") · session " + PerfLog.session + " · " + java.util.TimeZone.getDefault().id +  // i18n-ignore
+                " · screen " + CrashLog.screen.ifBlank { "unknown" } + " · class " + kind + "\n"  // i18n-ignore
+            File(d, "$base.txt").writeText(bounded(Redact.text(who + text)))
             Prefs.put("diag_last_sig", sig); Prefs.put("diag_last_at", now); Prefs.put("diag_last_base", base); Prefs.put("diag_last_n", 1L)
             base
         } catch (_: Throwable) { null }
