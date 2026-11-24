@@ -2798,4 +2798,38 @@ samo za titlove iz fajla ili online|только для субтитров из 
 Očistiti Nedavno dodano?|Очистить «Недавно добавленные»?
 Očisti|Очистить
 Naslovi ostaju u svojim kategorijama.|Названия остаются в своих категориях.
+Izaberi fajl na uređaju|Выбрать файл на устройстве
+Aktiviraj playlistu|Активировать плейлист
+Više opcija ▴|Больше опций ▴
+Više opcija ▾|Больше опций ▾
+Sačuvaj|Сохранить
+Izaberi M3U fajl|Выбрать файл M3U
+Imaš nesačuvane izmjene|Есть несохранённые изменения
+Nastavi uređivanje|Продолжить редактирование
+Odbaci|Отменить изменения
+Nema dovoljno prostora na uređaju|Недостаточно места на устройстве
+Čeka završetak reprodukcije|Ожидает окончания воспроизведения
+Osvježavam %s/%s|Обновление %s/%s
+Djelimično osvježeno|Частично обновлено
+Neaktivna|Неактивен
+EPG se osvježava u pozadini|EPG обновляется в фоне
+Samo jedna playlista može biti aktivna|Активным может быть только один плейлист
+Informacije o izvoru|Информация об источнике
+Vrsta|Тип
+Korisnik|Пользователь
+Zadnja provjera|Последняя проверка
+u redu|в порядке
+nije uspjela|не удалась
+Sakrij lozinku|Скрыть пароль
+Prikaži lozinku|Показать пароль
+Ovo je aktivna playlista. Nakon brisanja nijedna neće biti aktivna.|Это активный плейлист. После удаления активных не останется.
+Playlista i njen EPG od providera bit će uklonjeni.|Плейлист и EPG провайдера будут удалены.
+OK podigni · ▲ ▼ pomjeri · OK spusti|OK поднять · ▲ ▼ переместить · OK опустить
+Redoslijed, sakrivanje i zaključavanje|Порядок, скрытие и блокировка
+Svi EPG izvori|Все источники EPG
+Osvježi sve liste|Обновить все списки
+Naziv, adresa, korisnik, lozinka|Название, адрес, пользователь, пароль
+Kanali, filmovi i serije|Каналы, фильмы и сериалы
+Samo provjera prijave i datuma isteka|Только проверка входа и срока действия
+EPG se osvježava kad je playlista aktivna.|EPG обновляется, когда плейлист активен.
 """.trimIndent()

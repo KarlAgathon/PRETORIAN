@@ -368,6 +368,7 @@ object SettingsSearchIndex {
 
 private fun pageTitle(id: String): String = when (id) {
     "playermore" -> "Više opcija"
+    "pldetail" -> "Playlista"
     "device" -> "O uređaju"
     else -> SECTIONS2.firstOrNull { it.id == id }?.title
         ?: SETTINGS_LINKS.values.flatten().firstOrNull { it.id == id }?.let { l ->
@@ -431,6 +432,8 @@ private fun SettingsPage(nav: Nav, ses: SetSession, e: SetEntry) {
     when {
         e.id == SettingsTree.ROOT -> SettingsRoot(nav, ses, e)
         e.id in SettingsTree.SECTIONS && (SETTINGS_LINKS[e.id]?.size ?: 0) > 1 -> SettingsHub(ses, e)
+        e.id == "playlists" -> PlaylistsOverview(nav, ses, e)
+        e.id == "pldetail" -> PlaylistDetail(nav, ses, e)
         else -> LegacyPage {
             when (e.id) {
                 "groups" -> GroupManager(nav)

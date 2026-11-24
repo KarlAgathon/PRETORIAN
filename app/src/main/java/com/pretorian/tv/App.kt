@@ -72,6 +72,7 @@ class MainActivity : ComponentActivity() {
         Perf.init(this)
         // after Perf (Lite / Full decides how far ahead the guide goes)
         Import.missing(this)
+        RefreshCenter.resume(this)
         Upkeep.start(this); Monitor.start()
         // picture cache: limited so the disk never fills up (150 MB on weaker boxes, 400 MB otherwise)
         coil.Coil.setImageLoader(coil.ImageLoader.Builder(this)

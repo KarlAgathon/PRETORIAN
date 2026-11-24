@@ -72,7 +72,7 @@ fun AddPlaylistScreen(nav: Nav) {
     // first setup: Back from the form goes one step back to the source choice
     androidx.activity.compose.BackHandler(enabled = old == null && Store.playlists(ctx).isEmpty() && Welcome.tab >= 0) { Welcome.tab = -1 }
     var tab by remember { mutableIntStateOf(when { old?.type == SourceType.M3U -> 1; old?.type == SourceType.STALKER -> 2; old == null && Welcome.tab in 1..2 -> Welcome.tab; else -> 0 }) }
-    var mac by remember { mutableStateOf(old?.mac ?: Stalker.suggestMac(ctx)) }
+    var mac by remember { mutableStateOf(old?.mac ?: "") }   // Phase B: empty for a new playlist, an existing MAC is kept
     var serial by remember { mutableStateOf(old?.serial ?: "") }
     var devId by remember { mutableStateOf(old?.deviceId ?: "") }
     var devId2 by remember { mutableStateOf(old?.deviceId2 ?: "") }
@@ -88,6 +88,14 @@ fun AddPlaylistScreen(nav: Nav) {
     var series by remember { mutableStateOf(old?.series ?: true) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    // Phase B: a new playlist is switched on only when no other one is active; you may switch it on yourself
+    var activate by remember { mutableStateOf(Store.actives(ctx).isEmpty()) }
+    var more by remember { mutableStateOf(false) }
+    var picking by remember { mutableStateOf(false) }
+    var askLeave by remember { mutableStateOf(false) }
+    val first = remember { listOf(old?.name ?: "", old?.server ?: "", old?.user ?: "", old?.pass ?: "", old?.url ?: "", old?.mac ?: "") }
+    val dirty = listOf(name, server, user, pass, url, mac) != first
+    androidx.activity.compose.BackHandler(enabled = dirty && Store.playlists(ctx).isNotEmpty() && !askLeave) { askLeave = true }
 
     // type on the phone: a QR code opens a small form served by the box; what is sent fills these fields
     var phoneUrl by remember { mutableStateOf<String?>(null) }
@@ -136,22 +144,27 @@ fun AddPlaylistScreen(nav: Nav) {
                 Field(if (tab == 2) "Korisničko ime (nije obavezno)" else "Korisničko ime", user, { user = it }, Modifier.weight(1f))
                 Field(if (tab == 2) "Lozinka (nije obavezno)" else "Lozinka", pass, { pass = it }, Modifier.weight(1f), password = true)
             }
-            Field("EPG link (nije obavezno)", epg, { epg = it }, Modifier.fillMaxWidth(), KeyboardType.Uri)
-            if (tab == 0) Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Box(Modifier.weight(1f)) { ToggleRow("TV kanali", live) { live = it } }
-                Box(Modifier.weight(1f)) { ToggleRow("Filmovi", vod) { vod = it } }
-                Box(Modifier.weight(1f)) { ToggleRow("Serije", series) { series = it } }
+            if (tab == 1) Button("Izaberi fajl na uređaju", R.drawable.lc_folder) { picking = true }
+            if (old == null) ToggleRow("Aktiviraj playlistu", activate) { activate = it }
+            // Xtream: what to load sits under "Više opcija" (D1)
+            if (tab == 0) {
+                Button(if (more) "Više opcija ▴" else "Više opcija ▾", R.drawable.lc_sliders_horizontal) { more = !more }
+                if (more) Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Box(Modifier.weight(1f)) { ToggleRow("TV kanali", live) { live = it } }
+                    Box(Modifier.weight(1f)) { ToggleRow("Filmovi", vod) { vod = it } }
+                    Box(Modifier.weight(1f)) { ToggleRow("Serije", series) { series = it } }
+                }
             }
             T("Dugačke linkove i lozinke možeš kucati s telefona: Google TV aplikacija › Daljinski › ikona tastature.", 12.sp, C.Muted, maxLines = 2)
             error?.let { T(it, 14.sp, C.Danger, maxLines = 3) }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(if (busy) "Provjeravam…" else "Spremi i učitaj", R.drawable.lc_check, primary = true, focusRequester = saveFr) {
+                Button(if (busy) "Provjeravam…" else "Sačuvaj", R.drawable.lc_check, primary = true, focusRequester = saveFr) {
                     if (busy) return@Button
                     val base = Playlist(
                         id = old?.id ?: System.currentTimeMillis().toString(),
                         name = name.trim().ifBlank { when (tab) { 0 -> "Xtream"; 2 -> "Stalker"; else -> "M3U" } },  // i18n-ignore
                         type = when (tab) { 0 -> SourceType.XTREAM; 2 -> SourceType.STALKER; else -> SourceType.M3U },
-                        server = server.trim(), user = user.trim(), pass = pass.trim(), url = url.trim(), active = old?.active ?: true,
+                        server = server.trim(), user = user.trim(), pass = pass.trim(), url = url.trim(), active = old?.active ?: activate,
                         live = live, vod = vod, series = series,
                         mac = if (tab == 2) mac.trim().uppercase() else "", serial = serial.trim(), deviceId = devId.trim(), deviceId2 = devId2.trim(),
                     )
@@ -166,7 +179,7 @@ fun AddPlaylistScreen(nav: Nav) {
                             // EPG typed in the form: kept as this playlist's own guide (default for it), loaded at once
                             val e = epg.trim()
                             val epgSrc = when {
-                                e.isBlank() -> { if (oldEpg != null) EpgSources.delete(oldEpg); null }
+                                e.isBlank() -> null
                                 oldEpg != null && oldEpg.url == e -> null
                                 oldEpg != null -> oldEpg.copy(url = e).also { EpgSources.update(it) }
                                 else -> EpgSources.add(e, pl.id, def = setOf(pl.id))
@@ -175,12 +188,18 @@ fun AddPlaylistScreen(nav: Nav) {
                             if (old != null) {
                                 Store.savePlaylists(ctx, Store.playlists(ctx).map { if (it.id == old.id) pl else it })
                                 Toast.makeText(ctx, tr("Spremljeno"), Toast.LENGTH_SHORT).show()
-                                EditPlaylist.target = null; Repo.clear(); Repo.dropCatalogs(); nav.playlistsChanged(); nav.back()
-                                if (pl.active) Import.run(pl, reset = true) else CatalogDb.forget(old.id)
+                                val conn = listOf(old.server, old.user, old.pass, old.url, old.mac, old.type.name, old.live, old.vod, old.series) !=
+                                    listOf(pl.server, pl.user, pl.pass, pl.url, pl.mac, pl.type.name, pl.live, pl.vod, pl.series)
+                                PlCheck.put(pl.id, true, null)
+                                EditPlaylist.target = null; Repo.clear(); nav.playlistsChanged(); nav.back()
+                                if (conn) { Repo.dropCatalogs(); if (pl.active) Import.run(pl, reset = true) else CatalogDb.forget(old.id) }
                             } else {
-                                // only one playlist is active (approved): the new one switches the others off
-                                Store.savePlaylists(ctx, Store.playlists(ctx).map { it.copy(active = false) } + pl.copy(active = true))
-                                Import.run(pl.copy(active = true))
+                                // at most one playlist is active: switched on here, the others go off; otherwise it is only saved
+                                PlCheck.put(pl.id, true, null)
+                                if (activate) {
+                                    Store.savePlaylists(ctx, Store.playlists(ctx).map { it.copy(active = false) } + pl.copy(active = true))
+                                    Import.run(pl.copy(active = true))
+                                } else Store.savePlaylists(ctx, Store.playlists(ctx) + pl.copy(active = false))
                                 Toast.makeText(ctx, if (pl.type != SourceType.M3U) tr("Povezano ✓") else trf("Učitano: %s", info), Toast.LENGTH_LONG).show()
                                 nav.playlistsChanged(); nav.root(Screen.Home)
                             }
@@ -202,6 +221,25 @@ fun AddPlaylistScreen(nav: Nav) {
         }
         }
     }
+    if (picking) FileBrowser(tr("Izaberi M3U fajl"), setOf("m3u", "m3u8", "txt"), onDismiss = { picking = false }) { f ->
+        picking = false
+        try { url = copyLocalM3u(ctx, f); if (name.isBlank()) name = f.nameWithoutExtension } catch (e: Exception) { error = e.message }
+    }
+    if (askLeave) Popup(tr("Imaš nesačuvane izmjene"), { askLeave = false }) {
+        OptionRow("Nastavi uređivanje", R.drawable.lc_pencil) { askLeave = false }
+        OptionRow("Odbaci", R.drawable.lc_x) { askLeave = false; EditPlaylist.target = null; nav.back() }
+    }
+}
+
+/** Phase B: a local M3U file is copied into the app in 64 KB pieces (never whole in memory), after a free-space check; a failed copy is removed. */
+fun copyLocalM3u(ctx: android.content.Context, src: java.io.File): String {
+    val dir = java.io.File(ctx.filesDir, "m3u").apply { mkdirs() }
+    if (src.length() + 20L * 1024 * 1024 > dir.usableSpace) throw java.io.IOException(tr("Nema dovoljno prostora na uređaju"))
+    val out = java.io.File(dir, "local_" + System.currentTimeMillis() + ".m3u")  // i18n-ignore
+    try {
+        src.inputStream().use { i -> out.outputStream().use { o -> val b = ByteArray(64 * 1024); while (true) { val n = i.read(b); if (n <= 0) break; o.write(b, 0, n) } } }
+    } catch (e: Exception) { out.delete(); throw e }
+    return "file://" + out.path
 }
 
 /** Connection errors in plain words instead of technical messages. */

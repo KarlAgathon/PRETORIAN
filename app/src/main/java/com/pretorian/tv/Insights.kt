@@ -560,6 +560,7 @@ object StreamLog {
 
 private data class DevCard(val label: String, val title: String, val sub: String?, val icon: Int, val color: Long, val bar: Float?, val rows: List<Pair<String, String>>)
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun DeviceV2() {
     val ctx = LocalContext.current
