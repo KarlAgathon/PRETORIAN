@@ -1,3 +1,7 @@
+Media Center 3.0.0.6 Stable – fixes
+- Movies and series player: with the controls open, Up moves to the progress bar; Left/Right there moves the film; Down goes back to the buttons.
+- Series episode row: every episode picture shows its number (E1, E2…) in the corner; the selected episode's number is white.
+
 Media Center 3.0.0.5 Stable – fixes (feature freeze stays)
 - Provider safety: the preview's connection is fully closed (not just stopped) before a channel opens fullscreen, so only one connection to the provider exists at a time.
 - Provider safety: HTTP 458 (too many connections) no longer triggers automatic retries — the app stops at once, cools that provider account for a minute, and shows a clear message instead of hammering the provider.

@@ -10,6 +10,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.wrapContentSize
@@ -1067,10 +1068,31 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                         if (item.subtitle != null) T(item.subtitle, 16.sp, Color(0xFFDDE1E6), maxLines = 1)
                     }
                 }
-                if (duration > 0) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    T(fmt(position), 14.sp, Color.White)
-                    Box(Modifier.weight(1f).height(4.dp).clip(Rnd(2.dp)).background(Color(0x40FFFFFF))) {
-                        Box(Modifier.fillMaxWidth((position.toFloat() / duration).coerceIn(0f, 1f)).height(4.dp).background(Color.White))
+                // 3.0.0.6: with the controls open, ▲ from the buttons lands on the progress bar; ◀ ▶ there move it, ▼ goes back to the buttons
+                var seekFocused by remember { mutableStateOf(false) }
+                if (duration > 0) Row(
+                    (if (bar) Modifier
+                        .onFocusChanged { seekFocused = it.isFocused }
+                        .onPreviewKeyEvent { e ->
+                            if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                            when (e.key) {
+                                Key.DirectionLeft -> { player.seekTo((player.currentPosition - bwd).coerceAtLeast(0)); position = player.currentPosition; keyTick++; true }
+                                Key.DirectionRight -> { player.seekTo((player.currentPosition + fwd).coerceAtMost(player.duration.coerceAtLeast(0))); position = player.currentPosition; keyTick++; true }
+                                else -> false
+                            }
+                        }
+                        .focusable()
+                    else Modifier).padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    T(fmt(position), if (seekFocused) 16.sp else 14.sp, Color.White, if (seekFocused) FontWeight.Bold else FontWeight.Normal)
+                    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(1f).height(18.dp), contentAlignment = Alignment.CenterStart) {
+                        val f = (position.toFloat() / duration).coerceIn(0f, 1f)
+                        Box(Modifier.fillMaxWidth().height(if (seekFocused) 8.dp else 4.dp).clip(Rnd(4.dp)).background(Color(0x40FFFFFF))) {
+                            Box(Modifier.fillMaxWidth(f).fillMaxHeight().background(Color.White))
+                        }
+                        // the knob shows only while the bar has the focus, sitting where the film is now
+                        if (seekFocused) Box(Modifier.offset(x = (maxWidth - 18.dp) * f).size(18.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape).background(Color.White))
                     }
                     T("−" + fmt((duration - position).coerceAtLeast(0)), 14.sp, Silver.TextSoft)  // i18n-ignore
                 }

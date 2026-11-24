@@ -497,7 +497,7 @@ private fun EpisodeCard(r: EpRow, s: SeriesItem, w: Dp, fr: FocusRequester?, key
     Column(Modifier.width(w), verticalArrangement = Arrangement.spacedBy(7.dp)) {
         Focusable(onClick = { if (e != null) onPlay(e) else Toast.makeText(ctx, if (future) tr("Još nije izašla") else tr("Čeka se provider"), Toast.LENGTH_SHORT).show() },
             onMenu = onLong, onFocus = onFocus, focusRequester = fr, shape = Rnd(12.dp), normal = Color(0xFF1B1C1E), focused = Color(0xFF1B1C1E),
-            focusBorderColor = Color.White, borderColor = Color(0x1FFFFFFF), zoom = 1.06f, modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).then(keys)) { _ ->
+            focusBorderColor = Color.White, borderColor = Color(0x1FFFFFFF), zoom = 1.06f, modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).then(keys)) { focusedNow ->
             if (img != null) OnyxImage(img, e?.id ?: "${s.id}_${r.season}_${r.num}", Modifier.fillMaxSize(), maxW = 400)
             else Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color(0xFF2A2C2F), Color(0xFF17181A)))), contentAlignment = Alignment.Center) {
                 T("E%02d".format(r.num), 30.sp, Color(0x99FFFFFF), FontWeight.Bold)  // i18n-ignore
@@ -509,6 +509,12 @@ private fun EpisodeCard(r: EpRow, s: SeriesItem, w: Dp, fr: FocusRequester?, key
                 T("NOVO", 11.sp, Color(0xFF111113), FontWeight.Bold) }
             if (pr != null && pr.started) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Color(0x40FFFFFF))) {
                 Box(Modifier.fillMaxWidth(pr.fraction).fillMaxHeight().background(Color.White))
+            }
+            // 3.0.0.6: the episode number always sits on the picture (the line below can fall off the bottom of the TV);
+            // the focused episode gets a white badge so you see at once which one is selected
+            if (img != null) Box(Modifier.align(Alignment.TopStart).padding(6.dp).clip(Rnd(6.dp))
+                .background(if (focusedNow) Color.White else Color(0xB8000000)).padding(horizontal = 8.dp, vertical = 2.dp)) {
+                T("E${r.num}", if (focusedNow) 15.sp else 13.sp, if (focusedNow) Color(0xFF111113) else Color.White, FontWeight.Bold)  // i18n-ignore
             }
         }
         T("E%02d — ".format(r.num) + name, 14.sp, if (e == null) Silver.TextSoft else Color.White, FontWeight.SemiBold, maxLines = 1)  // i18n-ignore
