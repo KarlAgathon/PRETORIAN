@@ -1307,7 +1307,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                     T(item.title, 17.sp, C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
                 }
                 if (ch != null) OptionRow("Pomak vremena", R.drawable.lc_clock,
-                    value = EpgShift.label(EpgShift.chMin(ch.url))) { dialog = "epgshift" }
+                    value = EpgShift.label(EpgShift.chMin(ch.url, ch.pid))) { dialog = "epgshift" }
                 if (Hints.show()) T("◀ ili Nazad = slika preko cijelog ekrana · OK na emisiji = podsjeti me", 11.sp, C.Muted, maxLines = 2)
                 val fr = remember { FocusRequester() }
                 Box(Modifier.weight(1f).focusRequester(fr).onPreviewKeyEvent { e ->
@@ -1338,7 +1338,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             // Više: the rarer things, so the bar fits in one row
             OptionRow(if (Sleep.until > 0) trf("Tajmer: %s min", ((Sleep.until - System.currentTimeMillis()) / 60_000 + 1).coerceAtLeast(1)) else tr("Tajmer za spavanje"), R.drawable.lc_moon) { dialog = "sleep" }
             OptionRow("Kvalitet i informacije", R.drawable.lc_info, value = if (videoH > 0) qualityLabel(videoH) else null) { dialog = "info" }
-            if (s.live) item.channel?.let { c -> OptionRow("Pomak vremena", R.drawable.lc_clock, value = EpgShift.label(EpgShift.chMin(c.url))) { dialog = "epgshift" } }
+            if (s.live) item.channel?.let { c -> OptionRow("Pomak vremena", R.drawable.lc_clock, value = EpgShift.label(EpgShift.chMin(c.url, c.pid))) { dialog = "epgshift" } }
             OptionRow("Vanjski plejer", R.drawable.lc_external_link) { player.pause(); saveProgress(); dialog = "ext" }
             if (s.live) OptionRow("Arhiva", R.drawable.lc_history, sub = tr("emisije koje su prošle")) { dialog = null; nav.push(Screen.Catchup) }
             if (Tech.audioDelay) OptionRow("Pomak zvuka", R.drawable.lc_volume, sub = tr("ako zvuk kasni ili žuri"), value = AudioDelay.label(AudioDelay.of(item.url))) { dialog = "adelay" }
@@ -1355,7 +1355,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             OptionRow("Vanjski plejer", R.drawable.lc_external_link) { player.pause(); saveProgress(); dialog = "ext" }
             val c = item.channel
             if (c != null && Catchups.has(p, c)) OptionRow("Pomak uživo", R.drawable.lc_rotate_ccw, sub = tr("5 minuta nazad kroz arhivu")) { dialog = null; liveShift(-1) }
-            if (c != null) OptionRow("EPG postavke", R.drawable.lc_calendar_clock, value = EpgShift.label(EpgShift.chMin(c.url))) { dialog = "epgshift" }
+            if (c != null) OptionRow("EPG postavke", R.drawable.lc_calendar_clock, value = EpgShift.label(EpgShift.chMin(c.url, c.pid))) { dialog = "epgshift" }
         }
         "fav" -> item.channel?.let { FavPicker(it) { dialog = null } }
         "epgshift" -> item.channel?.let { EpgShiftPopup(it) { dialog = null } }

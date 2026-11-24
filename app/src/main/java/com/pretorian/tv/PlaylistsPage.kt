@@ -179,7 +179,7 @@ internal fun PlaylistDetail(nav: Nav, ses: SetSession, e: SetEntry) {
     rows += SetItem("refresh") { fr -> SetNavRow("Osvježi", if (p.active) "Kanali, filmovi i serije" else "Samo provjera prijave i datuma isteka", R.drawable.lc_refresh_cw,
         value = RefreshCenter.label(), chevron = false, focusRequester = fr) { RefreshCenter.request(ctx, listOf(p.id)) } }
     rows += SetItem("epg") { fr -> SetNavRow("EPG", if (p.active) null else "EPG se osvježava kad je playlista aktivna.", R.drawable.lc_calendar, focusRequester = fr) {
-        PlEdit.id = p.id; ses.push("epg") } }
+        PlEdit.id = p.id; ses.push("plepg") } }
     rows += SetItem("del") { fr -> SetNavRow("Obriši", null, R.drawable.lc_trash_2, chevron = false, focusRequester = fr) {
         if (Prefs.bool("pin_delpl") && Lock.hasPin()) pinDel = true else del = true } }
     Column(Modifier.fillMaxSize()) {
@@ -265,3 +265,33 @@ private fun Modifier.onPreviewKeyEventSafe(on: (Boolean, Int) -> Boolean) = this
         else -> false
     }
 })
+
+
+/** Phase C/D: the EPG menu of one playlist: its sources, the playlist's time offset, refresh. */
+@Composable
+internal fun PlaylistEpg(ses: SetSession, e: SetEntry) {
+    val ctx = LocalContext.current
+    val p = remember { Store.playlists(ctx).firstOrNull { it.id == PlEdit.id } }
+    if (p == null) { LaunchedEffect(Unit) { ses.pop() }; return }
+    var off by remember { mutableStateOf(false) }
+    @Suppress("UNUSED_VARIABLE") val r = EpgShift.rev
+    val rows = listOf(
+        SetItem("src") { fr -> SetNavRow("EPG izvori", "Dodaj, uključi, poredaj ili ukloni izvore ove playliste", R.drawable.lc_calendar, focusRequester = fr) { ses.push("epg") } },
+        SetItem("off") { fr -> SetNavRow("Vremenski pomak", "Za sve kanale ove playliste · kanal može imati svoj", R.drawable.lc_clock,
+            value = EpgShift.label(EpgShift.plMin(p.id)), focusRequester = fr) { off = true } },
+        SetItem("ref") { fr -> SetNavRow("Osvježi EPG", if (p.active) null else "EPG se osvježava kad je playlista aktivna.", R.drawable.lc_refresh_cw, chevron = false, focusRequester = fr) {
+            if (!p.active) Toast.makeText(ctx, tr("EPG se osvježava kad je playlista aktivna."), Toast.LENGTH_SHORT).show()
+            else { GuideSync.later(ctx, force = true); Toast.makeText(ctx, tr(if (ChannelHealth.playerOn) "Čeka završetak reprodukcije" else "EPG se osvježava u pozadini"), Toast.LENGTH_SHORT).show() }
+        } },
+    )
+    Column(Modifier.fillMaxSize()) {
+        T(trf("EPG · %s", p.name), 22.sp, C.Text, FontWeight.Bold, modifier = Modifier.padding(start = 18.dp, bottom = 4.dp))
+        SetList(e, rows, Modifier.weight(1f))
+    }
+    if (off) Popup(tr("Vremenski pomak"), { off = false }) {
+        val cur = EpgShift.plMin(p.id)
+        (-12 * 60..12 * 60 step 15).filter { it % 60 == 0 || kotlin.math.abs(it) <= 120 }.forEach { m ->
+            OptionRow(EpgShift.label(m), R.drawable.lc_clock, selected = m == cur) { EpgShift.setPl(p.id, m); off = false }
+        }
+    }
+}

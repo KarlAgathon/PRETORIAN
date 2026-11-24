@@ -435,7 +435,7 @@ fun DawnOptions(ch: Channel?, nav: Nav, modifier: Modifier) {
         if (texts > 0) OptionRow("Titlovi", R.drawable.lc_captions) { more = false; sub = 1 }
         OptionRow(if (Sleep.until > 0) trf("Tajmer: %s min", ((Sleep.until - System.currentTimeMillis()) / 60_000 + 1).coerceAtLeast(1)) else tr("Tajmer za spavanje"), R.drawable.lc_moon) { more = false; sub = 3 }
         if (ch != null) OptionRow("Vanjski plejer", R.drawable.lc_external_link) { more = false; sub = 5 }
-        if (ch != null) OptionRow("EPG postavke", R.drawable.lc_calendar_clock, value = EpgShift.label(EpgShift.chMin(ch.url))) { more = false; sub = 6 }
+        if (ch != null) OptionRow("EPG postavke", R.drawable.lc_calendar_clock, value = EpgShift.label(EpgShift.chMin(ch.url, ch.pid))) { more = false; sub = 6 }
     }
     when (sub) {
         1 -> DawnTracks(androidx.media3.common.C.TRACK_TYPE_TEXT) { sub = 0 }

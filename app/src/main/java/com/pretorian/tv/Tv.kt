@@ -1009,7 +1009,7 @@ fun ChannelOptions(g: GroupRef, ch: Channel, list: List<Channel>, groups: List<C
             }
             OptionRow("Izbriši kanal", R.drawable.lc_trash_2, color = C.Danger) { mode = "delete" }
         }
-        OptionRow("Pomak vremena", R.drawable.lc_clock, value = EpgShift.label(EpgShift.chMin(ch.url))) { mode = "epgshift" }
+        OptionRow("Pomak vremena", R.drawable.lc_clock, value = EpgShift.label(EpgShift.chMin(ch.url, ch.pid))) { mode = "epgshift" }
         OptionRow("Informacije o kanalu", R.drawable.lc_info) { mode = "info" }
     }
 }
@@ -1017,9 +1017,11 @@ fun ChannelOptions(g: GroupRef, ch: Channel, list: List<Channel>, groups: List<C
 /** The guide of one channel runs early or late: move it by minutes or hours (kept for that channel). */
 @Composable
 fun EpgShiftPopup(ch: Channel, onDismiss: () -> Unit) {
-    val cur = EpgShift.chMin(ch.url)
+    val cur = EpgShift.chMin(ch.url, ch.pid)
     Popup(tr("Pomak vremena") + " · " + ch.name, onDismiss) {
-        listOf(0, 5, 10, 30, 60, 120, 180, -5, -10, -30, -60, -120, -180).forEach { m ->
+        // Phase D: the channel follows its playlist until you give it its own value (0 counts as its own)
+        if (EpgShift.chOverride(ch.url) != null) OptionRow("Kao playlista", R.drawable.lc_list, value = EpgShift.label(EpgShift.plMin(ch.pid))) { EpgShift.setCh(ch.url, null); onDismiss() }
+        listOf(0, 15, 30, 60, 120, 180, -15, -30, -60, -120, -180).forEach { m ->
             OptionRow(EpgShift.label(m), if (m == 0) R.drawable.lc_rotate_ccw else R.drawable.lc_clock, selected = m == cur, color = if (m == cur) C.Green else null) {
                 EpgShift.setCh(ch.url, m); onDismiss()
             }

@@ -2832,4 +2832,9 @@ Naziv, adresa, korisnik, lozinka|Название, адрес, пользова�
 Kanali, filmovi i serije|Каналы, фильмы и сериалы
 Samo provjera prijave i datuma isteka|Только проверка входа и срока действия
 EPG se osvježava kad je playlista aktivna.|EPG обновляется, когда плейлист активен.
+Vremenski pomak|Сдвиг времени
+Kao playlista|Как в плейлисте
+Dodaj, uključi, poredaj ili ukloni izvore ove playliste|Добавить, включить, упорядочить или удалить источники плейлиста
+Za sve kanale ove playliste · kanal može imati svoj|Для всех каналов плейлиста · у канала может быть свой
+Osvježi EPG|Обновить EPG
 """.trimIndent()

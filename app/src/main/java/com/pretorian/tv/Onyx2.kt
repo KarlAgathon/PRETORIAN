@@ -65,6 +65,7 @@ object NowCache {
     fun put(url: String, e: EpgItem?) = synchronized(m) { if (e != null) m[url] = e else none[url] = System.currentTimeMillis() }
     fun empty(url: String) = synchronized(m) { (none[url] ?: 0L) > System.currentTimeMillis() - 10 * 60_000L }
     fun drop(url: String) = synchronized(m) { m.remove(url); none.remove(url); Unit }
+    fun clear() = synchronized(m) { m.clear(); none.clear() }
 }
 
 @Composable

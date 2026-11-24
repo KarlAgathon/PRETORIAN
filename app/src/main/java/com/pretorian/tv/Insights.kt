@@ -727,20 +727,51 @@ object AutoRefresh {
 /** Settings › Playlists: a refresh takes the group and channel order from the server (e.g. IPTV Editor) */
 object ServerOrder { val on get() = Prefs.bool("srv_order", true) }
 
-/** EPG time shift in hours (some providers are an hour early or late). */
+/**
+ * EPG time offsets (Phase D, D3): displayed time = programme time + the source's own correction + U, where U is the
+ * channel's override when one exists (an explicit 0 counts), otherwise the playlist offset P. ±12 h in 15 min steps.
+ * The old model (global hours + channel minutes) is migrated once; its keys stay untouched, the marker epg_off_v2 is written last.
+ */
 object EpgShift {
-    val hours get() = Prefs.long("epg_shift", 0).toInt().coerceIn(-12, 12)
-    val ms get() = hours * 3600_000L
-    /** one channel's own shift in minutes, on top of the general one (player › More › Time shift, or long OK on a channel) */
     var rev by mutableIntStateOf(0)
-    private fun key(url: String) = "epgsh_" + url.hashCode()
-    fun chMin(url: String) = Prefs.long(key(url), 0).toInt().coerceIn(-720, 720)
-    fun chMs(url: String) = chMin(url) * 60_000L
-    fun setCh(url: String, min: Int) { Prefs.put(key(url), min.toLong()); NowCache.drop(url); NextCache.m.remove(url); rev++ }
+    private fun oldKey(url: String) = "epgsh_" + url.hashCode()
+    private fun chKey(url: String) = "epgoff_ch_" + url.hashCode()
+    private fun plKey(pid: String) = "epgoff_pl_$pid"
+    private val oldGlobalMin get() = Prefs.long("epg_shift", 0).toInt().coerceIn(-12, 12) * 60
+    val migrated get() = Prefs.bool("epg_off_v2")
+
+    /** at start: old values become playlist offsets and channel overrides; on any failure the old model keeps running */
+    fun migrate(ctx: android.content.Context) {
+        if (migrated) return
+        try {
+            val g = oldGlobalMin
+            Store.playlists(ctx).forEach { if (!Prefs.has(plKey(it.id))) Prefs.put(plKey(it.id), g.toLong()) }
+            Prefs.allLongs().filter { it.first.startsWith("epgsh_") && it.second != 0L }.forEach { (k, v) ->
+                val nk = "epgoff_ch_" + k.removePrefix("epgsh_")
+                if (!Prefs.has(nk)) Prefs.put(nk, (g + v).coerceIn(-720, 720).toLong())
+            }
+            Prefs.put("epg_off_v2", true); rev++
+        } catch (_: Throwable) {}
+    }
+
+    fun plMin(pid: String?): Int = if (!migrated) oldGlobalMin else pid?.let { Prefs.long(plKey(it), 0).toInt().coerceIn(-720, 720) } ?: 0
+    fun setPl(pid: String, min: Int) { Prefs.put(plKey(pid), min.coerceIn(-720, 720).toLong()); NowCache.clear(); rev++ }
+    /** the channel's own override (null = follows the playlist) */
+    fun chOverride(url: String): Int? = if (!migrated) Prefs.long(oldKey(url), 0).toInt().takeIf { it != 0 }?.let { it + oldGlobalMin }
+        else if (Prefs.has(chKey(url))) Prefs.long(chKey(url), 0).toInt().coerceIn(-720, 720) else null
+    /** minutes shown for a channel (what the player's "Pomak vremena" edits) */
+    fun chMin(url: String, pid: String? = null) = chOverride(url) ?: plMin(pid)
+    /** the whole offset applied to a channel's guide */
+    fun totalMs(url: String, pid: String?) = chMin(url, pid) * 60_000L
+    fun setCh(url: String, min: Int?) {
+        if (!migrated) { Prefs.put(oldKey(url), ((min ?: oldGlobalMin) - oldGlobalMin).toLong()) }
+        else if (min == null) Prefs.remove(chKey(url)) else Prefs.put(chKey(url), min.coerceIn(-720, 720).toLong())
+        NowCache.drop(url); NextCache.m.remove(url); rev++
+    }
     fun label(min: Int): String {
         if (min == 0) return tr("Bez pomaka")
         val a = Math.abs(min); val sign = if (min > 0) "+" else "−"
-        return sign + (if (a % 60 == 0) "${a / 60} h" else "$a min")  // i18n-ignore
+        return sign + (if (a % 60 == 0) "${a / 60} h" else if (a > 60) "${a / 60} h ${a % 60} min" else "$a min")  // i18n-ignore
     }
 }
 

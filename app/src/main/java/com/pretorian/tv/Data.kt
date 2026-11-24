@@ -709,7 +709,7 @@ object Repo {
     }
 
     suspend fun epg(p: Playlist, ch: Channel, limit: Int = 10): List<EpgItem> {
-        val sh = EpgShift.ms + EpgShift.chMs(ch.url)
+        val sh = EpgShift.totalMs(ch.url, p.id)
         fun List<EpgItem>.shifted() = if (sh == 0L) this else map { it.copy(start = it.start + sh, end = it.end + sh) }
         suspend fun own() = try { OwnGuide.of(ch.epg, ch.name, p.id).take(limit).shifted() } catch (e: Exception) { emptyList() }
         // order: the playlist's default EPG, then the provider's own guide, then the other active EPGs
