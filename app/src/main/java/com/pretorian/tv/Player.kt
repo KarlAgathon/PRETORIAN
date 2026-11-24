@@ -73,8 +73,10 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.runtime.rememberCoroutineScope
 import java.io.File
 import androidx.media3.common.C as MC
@@ -225,6 +227,7 @@ private fun errorText(e: PlaybackException, live: Boolean): String {
     try { StreamLog.add("error " + (code?.let { "HTTP $it" } ?: e.errorCodeName.removePrefix("ERROR_CODE_"))) } catch (_: Exception) {}  // i18n-ignore
     return when {
         causeOf<java.net.UnknownHostException>(e) && !Net.online() -> tr("Nema interneta")
+        code == 458 -> tr("Provajder je odbio vezu (previše konekcija odjednom) · pokušaj ponovo za koji trenutak")
         live -> tr("Kanal trenutno nije dostupan")
         else -> tr("Video se trenutno ne može pustiti")
     }
@@ -468,6 +471,16 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         val l = object : Player.Listener {
             override fun onPlayerError(e: PlaybackException) {
                 DiagEvents.add("player", e.errorCodeName + ": " + (e.message ?: "") + " · " + (items.getOrNull(index)?.title ?: ""))  // i18n-ignore
+                // 3.0.0.4 (provider safety): HTTP 458 means the provider already refused the connection (too many at once).
+                // Retrying at once would only add to the count it is complaining about, so this never auto-retries on 458:
+                // it stops here, cools this provider account for a minute, and tells the viewer plainly.
+                val code458 = httpCode(e) == 458
+                if (code458) {
+                    val acct = ProbeGuard.account(items.getOrNull(index)?.channel?.url ?: items.getOrNull(index)?.url ?: "")
+                    ProbeGuard.cool(acct, 60_000L, "HTTP 458")  // i18n-ignore
+                    StreamLog.add(listOf(items.getOrNull(index)?.title ?: "", " · ", "HTTP 458 · provajder odbio vezu").joinToString(""))  // i18n-ignore
+                    reconnect = 0; giveUp(e); return
+                }
                 // automatic recovery: up to 3 quiet tries (live and films), keeping the position of a film
                 if (Recover.on && reconnect < 4) { reconnect++; Stats.recovery(); StreamLog.event(if (reconnect == 1) "freeze" else "x", items.getOrNull(index)?.title ?: ""); StreamLog.event("try", items.getOrNull(index)?.title ?: ""); StreamLog.add(listOf(items.getOrNull(index)?.title ?: "", " · ", e.errorCodeName.removePrefix("ERROR_CODE_"), " · ", trf("spajam ponovo (%s/4)", reconnect)).joinToString("")); retryToken++ }  // i18n-ignore
                 else if (!Recover.on && s.live && reconnect < 3) { reconnect++; retryToken++ }
@@ -1165,6 +1178,19 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                             LiveRow(tr("Označi da kanal ne radi"), icon = R.drawable.lc_alert_triangle) {
                                 ChannelHealth.mark(chUrl, false); lv = LiveUi.NONE
                                 Toast.makeText(ctx, tr("Kanal označen: trenutno ne radi"), Toast.LENGTH_SHORT).show()
+                            }
+                            // 3.0.0.4: one manual light check, only on request (never automatic, never scheduled)
+                            LiveRow(tr("Provjeri ovaj kanal"), icon = R.drawable.lc_wifi) {
+                                lv = LiveUi.NONE
+                                playerScope.launch {
+                                    val res = withContext(Dispatchers.IO) { runCatching { ChannelHealth.check(chUrl) }.getOrDefault(ChannelHealth.Res.UNSURE) }
+                                    when (res) {
+                                        ChannelHealth.Res.OK -> { ChannelHealth.probeResult(chUrl, true); Toast.makeText(ctx, tr("Kanal radi ✓"), Toast.LENGTH_SHORT).show() }
+                                        ChannelHealth.Res.LIMIT -> Toast.makeText(ctx, tr("Provajder trenutno ograničava provjere – pokušaj kasnije"), Toast.LENGTH_SHORT).show()
+                                        ChannelHealth.Res.NO_NET -> Toast.makeText(ctx, tr("Nema interneta"), Toast.LENGTH_SHORT).show()
+                                        else -> { ChannelHealth.probeResult(chUrl, false); Toast.makeText(ctx, tr("Kanal trenutno ne radi"), Toast.LENGTH_SHORT).show() }
+                                    }
+                                }
                             }
                             LiveRow(tr("Informacije o streamu"), icon = R.drawable.lc_info) { lv = LiveUi.MORE_INFO }
                         }

@@ -1,3 +1,10 @@
+Media Center 3.0.0.5 Stable – fixes (feature freeze stays)
+- Provider safety: the preview's connection is fully closed (not just stopped) before a channel opens fullscreen, so only one connection to the provider exists at a time.
+- Provider safety: HTTP 458 (too many connections) no longer triggers automatic retries — the app stops at once, cools that provider account for a minute, and shows a clear message instead of hammering the provider.
+- Live TV "More" menu: a new "Check this channel" row does one manual check, only when you press it.
+- Diagnostics: sections 7 (navigation timings), 17 (player creation/connection counts) and 25 (artwork load times) now show real measured numbers instead of fixed text.
+- Release process: the Stable workflow now checks the version name and code agree with each other (3.0.0.x -> code 30x) before building anything.
+
 Media Center 3.0.0.4 Stable – fixes (feature freeze stays)
 - Back is always one step: from a film/series, the player or Search you land on the same category or group you left.
 - TV, Movies and Series opened anew (Home, menu) always start at the top (TV: "Search channels").

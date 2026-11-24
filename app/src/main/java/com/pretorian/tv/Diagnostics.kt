@@ -275,7 +275,14 @@ object DiagReport {
                 events { it.contains("|app|") && (it.contains("start") || it.contains("exit")) }
             }
             sec(7, "NAVIGATION PERFORMANCE") {  // i18n-ignore
-                o.line("Per-screen timings: unavailable (not measured in this version; screens visited appear in the event journal)")  // i18n-ignore
+                // 3.0.0.4: real per-screen compose times (App.kt logs one "nav <screen> composed" task on every screen change)
+                val navRows = tasks.filter { (it.getOrNull(2) ?: "").startsWith("nav ") && it.getOrNull(3) == "composed" }  // i18n-ignore
+                if (navRows.isEmpty()) o.line("Per-screen timings: unavailable (no screen change recorded yet this run)")  // i18n-ignore
+                else {
+                    stat("every screen, time to compose (ms)", navRows.mapNotNull { it.getOrNull(4)?.toLongOrNull() }, "ms")  // i18n-ignore
+                    navRows.groupBy { (it.getOrNull(2) ?: "").removePrefix("nav ") }.toSortedMap()
+                        .forEach { (screen, r) -> stat("  $screen (ms)", r.mapNotNull { it.getOrNull(4)?.toLongOrNull() }, "ms") }
+                }
             }
             sec(8, "CPU STATISTICS") {  // i18n-ignore
                 o.line("Method: app process ticks from /proc/self/stat each minute, in % of ONE core (not the whole device).")  // i18n-ignore
@@ -316,8 +323,15 @@ object DiagReport {
                 stat("during playback (ms)", ms(play.filter { it.getOrNull(3) == "buffer_mid" }), "ms")  // i18n-ignore
             }
             sec(17, "PLAYER LIFECYCLE AND CONNECTIONS") {  // i18n-ignore
-                o.line("One stream at a time: the preview stops before the full player opens; channel checks close their connection when a stream opens.")  // i18n-ignore
-                o.line("Player creations/reuse counts: unavailable (not recorded in this version)")  // i18n-ignore
+                o.line("One stream at a time: the preview stops (and now releases) before the full player opens; channel checks close their connection when a stream opens.")  // i18n-ignore
+                // 3.0.0.4: real counts (DiagCollect.playerCreated/playerReleased, one call per ExoPlayer instance)
+                val createdPreview = DiagCollect.counters["players created (preview)"]?.get() ?: 0L
+                val createdFull = DiagCollect.counters["players created (fullscreen)"]?.get() ?: 0L
+                val releasedPreview = DiagCollect.counters["players released (preview)"]?.get() ?: 0L
+                val releasedFull = DiagCollect.counters["players released (fullscreen)"]?.get() ?: 0L
+                o.line("Created this session: $createdPreview preview · $createdFull fullscreen. Released: $releasedPreview preview · $releasedFull fullscreen.")  // i18n-ignore
+                o.line("Alive right now: " + DiagCollect.playersLive.get() + " · peak at once this session: " + DiagCollect.playersPeak.get() + " (more than 1 at once is logged below as a 'players>1' event)")  // i18n-ignore
+                events { it.contains("player instances alive at once") }
             }
             sec(18, "STREAM RECOVERY") { o.line("recovery attempts: " + play.count { it.getOrNull(3) == "recovery" }); events { it.contains("|recover|") || it.contains("|stream") } }  // i18n-ignore
             sec(19, "MOVIES PLAYBACK AND RESUME") { playKind("movie"); events { it.contains("|resume|") } }  // i18n-ignore
@@ -329,7 +343,14 @@ object DiagReport {
                 events { it.contains("|epg") || it.contains("guide") }  // i18n-ignore
             }
             sec(24, "CHANNEL LOGOS") { o.line(LogoResolver.stats(ctx)); PerfLog.counts.filterKeys { it.startsWith("logo") }.toSortedMap().forEach { (k, v) -> o.line("$k: $v") } }  // i18n-ignore
-            sec(25, "MOVIE AND SERIES ARTWORK") { o.line("Artwork load timings: unavailable (not measured in this version); picture cache size is in section 10.") }  // i18n-ignore
+            sec(25, "MOVIE AND SERIES ARTWORK") {  // i18n-ignore
+                // 3.0.0.4: real timings from Coil's own load events (DiagCollect.imageListener); picture cache size is in section 10
+                val ms = DiagCollect.imgMs["artwork"]?.let { synchronized(it) { it.toList() } } ?: emptyList()
+                stat("Artwork load time (ms)", ms, "ms")
+                val attempts = DiagCollect.counters.filterKeys { it.startsWith("images artwork") }
+                if (attempts.isEmpty()) o.line("No artwork load attempts recorded yet this session.")  // i18n-ignore
+                else attempts.toSortedMap().forEach { (k, v) -> o.line("$k: ${v.get()}") }
+            }
             sec(26, "BACKGROUND TASK COORDINATION") {  // i18n-ignore
                 tasks.groupBy { it.getOrNull(2) ?: "" }.toSortedMap().forEach { (t, r) -> o.line(t + ": " + r.groupingBy { it.getOrNull(3) ?: "" }.eachCount().entries.joinToString(", ") { it.key + " " + it.value }); stat("  $t duration (ms)", r.filter { it.getOrNull(3) == "done" }.mapNotNull { it.getOrNull(4)?.toLongOrNull() }, "ms") }  // i18n-ignore
                 events { it.contains("|work|") }
@@ -361,7 +382,7 @@ object DiagReport {
         o.budget?.set(0, maxOf(room[0], 64L * 1024))
         o.line(""); o.line("=".repeat(72)); o.line("31. REPORT LIMITATIONS, OMISSIONS AND UNAVAILABLE MEASUREMENTS"); o.line("=".repeat(72))  // i18n-ignore
         omitted.forEach { o.line("omitted: $it") }  // i18n-ignore
-        o.line("Not measured in this version: per-screen navigation times, player creation/reuse counts, artwork load times.")  // i18n-ignore
+        o.line("3.0.0.4: per-screen navigation times, player creation/reuse counts and artwork load times are now measured (sections 7, 17, 25); numbers are empty only until that kind of event happens in this session.")  // i18n-ignore
         o.line("Samples exist only while the app ran with 'Praćenje dugog rada' on; playback timings from 3.0 on.")  // i18n-ignore
         o.line("Counts are this device only; other devices on the same account and provider-side counts are not visible.")  // i18n-ignore
         try { extended(ctx, o, play, samples, tasks) } catch (_: Full) { o.budget?.set(0, maxOf(o.budget?.get(0) ?: 0, 32L * 1024)); o.line("[extended sections cut at the size limit]") }  // i18n-ignore

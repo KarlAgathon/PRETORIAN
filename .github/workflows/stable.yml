@@ -59,6 +59,14 @@ jobs:
         run: |
           CODE=$(grep -oP 'versionCode = \K[0-9]+' app/build.gradle.kts)
           NAME=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          # 3.0.0.4: fixed version scheme, checked before anything else — "3.0.0.x" must carry versionCode "30x".
+          # Catches a mismatched manual edit (wrong name or wrong code) on its own, not only by comparing to the live release.
+          if [[ "$NAME" =~ ^3\.0\.0\.([0-9]+)$ ]]; then
+            WANT=$((300 + ${BASH_REMATCH[1]}))
+            if [ "$CODE" -ne "$WANT" ]; then echo "::error::versionName $NAME means versionCode $WANT (scheme 3.0.0.x -> 30x), but build.gradle.kts has $CODE"; exit 1; fi
+          else
+            echo "::error::versionName \"$NAME\" does not match the 3.0.0.x scheme this check knows; update this workflow first if a new scheme is intended"; exit 1
+          fi
           LIVE=$(curl -sL "https://github.com/${{ github.repository }}/releases/latest/download/update.json" | jq -r '.versionCode // 0' || echo 0)
           if [ "$CODE" -le "$LIVE" ]; then echo "::error::versionCode $CODE must be higher than the live Stable $LIVE"; exit 1; fi
           if gh release view "v$NAME" --repo "${{ github.repository }}" >/dev/null 2>&1; then echo "::error::v$NAME already exists"; exit 1; fi

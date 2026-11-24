@@ -79,7 +79,12 @@ object TvMemory {
 /** The small live preview: stopped before the real player starts, so the account never has two connections. */
 object Preview {
     var player: ExoPlayer? = null
-    fun stop() { try { player?.stop(); player?.clearMediaItems() } catch (_: Exception) {} }
+    /** 3.0.0.4 (provider safety): fully closes the preview's connection, never just pauses it.
+     *  Called before a fullscreen channel opens, so there is never a second connection open to the same provider. */
+    fun stop() {
+        val p = player; player = null
+        try { p?.stop(); p?.clearMediaItems(); p?.release() } catch (_: Exception) {}
+    }
 }
 
 /** Row heights from Settings › Appearance › Row size. */
@@ -1128,7 +1133,12 @@ fun PreviewBox(ch: Channel?, modifier: Modifier) {
             } catch (_: Exception) {}
         }
         life?.addObserver(lo)
-        onDispose { DiagCollect.session("preview", false); ChannelHealth.previewOn = false; life?.removeObserver(lo); player.removeListener(l); if (Preview.player === player) Preview.player = null; player.release() }
+        onDispose {
+            DiagCollect.session("preview", false); ChannelHealth.previewOn = false; life?.removeObserver(lo); player.removeListener(l)
+            if (Preview.player === player) Preview.player = null
+            // Preview.stop() may already have released this same instance (provider-safety handoff to fullscreen); a second release is harmless, never fatal
+            try { player.release() } catch (_: Exception) {}
+        }
     }
     LaunchedEffect(ch?.url) {
         ready = false; failed = false
