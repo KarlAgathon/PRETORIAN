@@ -65,7 +65,8 @@ object RefreshCenter {
             var fails = 0; var oks = 0
             while (true) {
                 // full-screen playback first: the job waits without holding anything
-                while (ChannelHealth.playerOn) { state = St.Waiting; delay(3000) }
+                // 2.9.0: also waits during preview, offline, low memory (a refresh the user asked for may still run at start)
+                while (Work.playing() || !Work.online) { state = St.Waiting; delay(3000) }
                 val id = synchronized(queue) { queue.firstOrNull()?.also { queue.remove(it) } } ?: break
                 state = St.Running
                 val p = Store.playlists(ctx).firstOrNull { it.id == id }

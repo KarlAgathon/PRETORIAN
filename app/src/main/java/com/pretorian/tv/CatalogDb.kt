@@ -531,7 +531,7 @@ object GuideSync {
             try {
                 for (j in jobs(ctx)) {
                     if (!force && !stale(j.src)) continue
-                    while (CrashLog.screen.startsWith("Player")) delay(60_000) // i18n-ignore
+                    Work.awaitHeavy()   // 2.9.0: never during preview or playback, in the background, offline or low on memory
                     try { GuideDb.download(j.src, j.url, j.channels); OwnGuide.drop(j.url) } catch (e: Throwable) { DiagEvents.add("epg", j.src + ": " + (e.message ?: e.javaClass.simpleName)) }  // i18n-ignore
                 }
                 ProgIndex.clear()

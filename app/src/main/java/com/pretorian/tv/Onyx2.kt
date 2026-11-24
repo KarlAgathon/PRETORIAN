@@ -227,24 +227,6 @@ object Welcome { var tab by mutableIntStateOf(-1) }
 
 /* ============================================================== groups and channels, several at once */
 
-@Composable
-private fun ToolBtn(text: String, icon: Int, enabled: Boolean = true, onClick: () -> Unit) {
-    Focusable(onClick = { if (enabled) onClick() }, shape = Pill, normal = C.CardHi, focused = C.Red, zoom = 1.05f, modifier = Modifier.height(32.dp)) { f ->
-        Row(Modifier.align(Alignment.Center).padding(horizontal = 11.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            val c = if (!enabled) C.Muted else if (f) C.OnRed else C.Text
-            Ico(icon, 13.dp, c); T(text, 12.sp, c, FontWeight.SemiBold)
-        }
-    }
-}
-
-@Composable
-private fun CheckBox(on: Boolean, focused: Boolean) {
-    Box(Modifier.size(18.dp).clip(Rnd(5.dp)).background(if (on) C.Green else Color.Transparent)
-        .border(1.5.dp, if (on) C.Green else if (focused) C.OnRed.copy(alpha = 0.6f) else C.Muted, Rnd(5.dp)), contentAlignment = Alignment.Center) {
-        if (on) Ico(R.drawable.lc_check, 12.dp, Color.White)
-    }
-}
-
 /** Settings › Playlists › Groups and channels, like a file manager (FIX 5): groups left, the opened group's channels right.
  *  OK on a group opens its channels, ◀ goes back. Long OK = small menu. "Pomjeri" lifts the row: ▲▼ move it, OK puts it down, Back cancels. */
 @Composable

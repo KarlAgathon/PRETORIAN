@@ -502,11 +502,12 @@ private fun StreamingGrid(mem: HashMap<String, Int>, onPick: (Service) -> Unit) 
                 Focusable(onClick = { mem["st"] = i; onPick(s) }, onFocus = { mem["st"] = i }, focusRequester = if (i == start) fr else null,
                     shape = Rnd(16.dp), normal = Color(0xCC161618), focused = Color(0xCC161618), focusBorderColor = Color.White, zoom = 1.03f,
                     modifier = Modifier.fillMaxWidth().height(118.dp).border(1.dp, Color(0x33FFFFFF), Rnd(16.dp))) { f ->
-                    // the service's original logo from TMDB on a light plate, the name below; no logo → only the name
+                    // the service's original logo from TMDB, the name below; no logo → only the name
                     val logo by produceState<String?>(null, s.networks) { value = try { Tmdb.providerLogo(s.providers) ?: Tmdb.networkLogo(s.networks) } catch (_: Exception) { null } }
                     if (logo == null) T(s.name, 26.sp, Color.White, if (f) FontWeight.Bold else FontWeight.SemiBold, modifier = Modifier.align(Alignment.Center))
                     else Column(Modifier.fillMaxSize().padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Box(Modifier.fillMaxWidth().weight(1f).clip(Rnd(10.dp)).background(Color(0xFFE6E7E9)).padding(horizontal = 18.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
+                        // the logo on the tile itself (no light plate behind it)
+                        Box(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 18.dp, vertical = 4.dp), contentAlignment = Alignment.Center) {
                             coil.compose.AsyncImage(model = logo, contentDescription = s.name, contentScale = androidx.compose.ui.layout.ContentScale.Fit, modifier = Modifier.fillMaxSize())
                         }
                         T(s.name, 14.sp, if (f) Color.White else C.Soft, if (f) FontWeight.Bold else FontWeight.Medium, maxLines = 1)

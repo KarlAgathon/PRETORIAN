@@ -489,6 +489,10 @@ private fun TvList(nav: Nav) {
     var placed by remember { mutableStateOf(false) }
     LaunchedEffect(rows is Load.Ok, inChannels) { if (!inChannels && rows is Load.Ok && !placed) { placed = true; backToGroups() } }
     if (!inChannels) Box(Modifier.fillMaxSize().padding(start = 34.dp, top = 6.dp, bottom = 8.dp)) {
+        // decorative TV set on the right, like the film reel (Movies) and the camera (Series); never focusable
+        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.pretorian_tv_set), null,
+            Modifier.align(Alignment.BottomEnd).padding(start = 420.dp, end = 40.dp, bottom = 24.dp).fillMaxWidth().fillMaxHeight(0.72f),
+            contentScale = androidx.compose.ui.layout.ContentScale.Fit, alignment = Alignment.BottomEnd)
         Box(Modifier.width(360.dp).fillMaxHeight().dawnGlass().padding(vertical = 8.dp)
             .onPreviewKeyEvent { e ->
                 if (e.type != KeyEventType.KeyDown) false

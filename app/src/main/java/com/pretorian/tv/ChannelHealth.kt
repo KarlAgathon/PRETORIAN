@@ -63,7 +63,8 @@ object ChannelHealth {
     val probeOn get() = Prefs.bool("ch_probe", true)
     @Volatile var previewOn = false
     @Volatile var playerOn = false
-    private fun busy() = previewOn || playerOn
+    private fun busy() = previewOn || playerOn || Work.background || !Work.online || Work.safeMode ||
+        android.os.SystemClock.elapsedRealtime() < Work.lowMemoryUntil
 
     fun key(url: String): String = try {
         java.security.MessageDigest.getInstance("SHA-256").digest(url.toByteArray()).take(8).joinToString("") { "%02x".format(it) }
@@ -97,7 +98,8 @@ object ChannelHealth {
     }
 
     /** true works, false failed, null nothing reliable known (a stale result is still returned) */
-    fun of(url: String): Boolean? = synchronized(map) { map[key(url)]?.ok }
+    fun of(url: String): Boolean? = ofKey(key(url))
+    fun ofKey(k: String): Boolean? = synchronized(map) { map[k]?.ok }
     fun stale(url: String): Boolean = synchronized(map) { map[key(url)]?.let { System.currentTimeMillis() - it.tried > STALE_MS } ?: true }
 
     /** a result from real playback (strongest evidence) */
@@ -222,8 +224,10 @@ object ChannelHealth {
 /** The lamp after the quality label: green works, orange failed at the last reliable check, an empty ring nothing known yet. */
 @Composable
 fun HealthLamp(url: String, size: Dp = 8.dp) {
-    @Suppress("UNUSED_VARIABLE") val r = ChannelHealth.rev
-    when (ChannelHealth.of(url)) {
+    // 2.9.0: the key is hashed once per row, and a lamp redraws only when its own result changes (not on every result in the list)
+    val k = androidx.compose.runtime.remember(url) { ChannelHealth.key(url) }
+    val st by androidx.compose.runtime.remember(k) { androidx.compose.runtime.derivedStateOf { ChannelHealth.rev; ChannelHealth.ofKey(k) } }
+    when (st) {
         true -> Box(Modifier.size(size).clip(CircleShape).background(Color(0xFF3FBF5F)))
         false -> Box(Modifier.size(size).clip(CircleShape).background(Color(0xFFF0A029)))
         null -> Box(Modifier.size(size).clip(CircleShape).border(1.dp, Color(0x80FFFFFF), CircleShape))

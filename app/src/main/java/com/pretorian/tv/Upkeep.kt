@@ -19,7 +19,7 @@ object Upkeep {
         bg.launch {
             delay(120_000)   // never while the app is starting
             while (true) {
-                if (Tech.dbClean && !CrashLog.screen.startsWith("Player")) try { clean(app) } catch (_: Throwable) {} // i18n-ignore
+                if (Tech.dbClean) try { Work.heavy("db upkeep") { clean(app) } } catch (_: Throwable) {} // i18n-ignore
                 delay(6 * 3600_000L)
             }
         }

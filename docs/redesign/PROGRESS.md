@@ -54,3 +54,9 @@ Beta 1 (A0 + A, built from branch `redesign-beta/1`) → owner Mi Box test → o
 - Channel health: SHA-256 keys, stale kept, playback evidence wins 30 min, files/health.json batched, scheduler focused→neighbours→rest, classification (auth/limit/no internet/outage = inconclusive).
 - Find Channel (epgmap_<pid>_<key>), screensaver (H) with cached speeds, storage + 3 resets (G), notes master + quiet (F), connection timeout + subtitle behaviour + playback reset (E), help text, rollback checks.
 - Not done: TV groups picture (no image supplied); E–G items still open: background/contrast/animation/clock-format options, temporary parental unlock, full Diagnostics 4-entry page, Serbian Latin.
+
+## 2.9.0 (24.11.) — engineering audit, testing candidate
+- Work.kt: app state (startup, playback incl. preview/paused, background, low memory, offline, safe mode, idle); heavy jobs (GuideSync, Upkeep, speed profile, RefreshCenter, channel checks) wait; one heavy job and one speed test at a time; network callback; safe mode auto-exit after 3 min.
+- HealthLamp derivedStateOf per row; TV groups illustration (pretorian_tv_set.webp, transparent); streaming tiles without white plate.
+- Removed: PlaylistsListV2, PlMenu, ToolBtn, CheckBox, mc_mark.png, ic_fill_* (4), shirt_fill.
+- Not measured on a device: startup, CPU, RAM, first-frame times (pending the owner's box).

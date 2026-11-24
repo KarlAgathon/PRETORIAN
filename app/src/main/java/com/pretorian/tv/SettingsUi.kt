@@ -443,7 +443,6 @@ private fun SettingsPage(nav: Nav, ses: SetSession, e: SetEntry) {
                 "groups" -> GroupManager(nav)
                 "epg" -> { val epl = PlEdit.id?.let { id -> Store.playlists(ctx).firstOrNull { it.id == id } }
                     SetPage(if (epl != null) trf("EPG · %s", epl.name) else tr("EPG izvori"), "OK: meni · desno: uključi/ugasi · ▲ ▼ redoslijed") { EpgSourcesBlock(epl) } }
-                "playlists" -> PlaylistsListV2(nav)
                 "device" -> DeviceV2()
                 "pin" -> PinV2()
                 "parental" -> ParentalV2()

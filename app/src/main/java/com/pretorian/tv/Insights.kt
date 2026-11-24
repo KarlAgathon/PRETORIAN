@@ -450,6 +450,7 @@ object NetInfo {
 
     /** Mbit/s and ping in ms, or null */
     suspend fun measure(): Pair<Long, Long>? = withContext(Dispatchers.IO) {
+        if (!Work.speedTest.tryLock()) return@withContext null
         try {
             val t0 = System.currentTimeMillis()
             val c = java.net.URL("https://speed.cloudflare.com/__down?bytes=8000000").openConnection() as java.net.HttpURLConnection  // i18n-ignore
@@ -459,7 +460,7 @@ object NetInfo {
             c.disconnect()
             val ms = (System.currentTimeMillis() - first).coerceAtLeast(1)
             (n * 8 / 1000 / ms) to ping
-        } catch (e: Exception) { null }
+        } catch (e: Exception) { null } finally { Work.speedTest.unlock() }
     }
 
     /** the Wi-Fi or cable network under the VPN (null when there is none) */
@@ -472,6 +473,7 @@ object NetInfo {
 
     /** [direct]: past the VPN, straight over Wi-Fi/cable – works only when the VPN app allows it */
     suspend fun speedTest(ctx: Context? = null, direct: Boolean = false): String? = withContext(Dispatchers.IO) {
+        if (!Work.speedTest.tryLock()) return@withContext null   // 2.9.0: one speed test at a time
         try {
             val t0 = System.currentTimeMillis()
             val url = java.net.URL("https://speed.cloudflare.com/__down?bytes=8000000")  // i18n-ignore
@@ -483,7 +485,7 @@ object NetInfo {
             c.disconnect()
             val ms = (System.currentTimeMillis() - first).coerceAtLeast(1)
             listOf(n * 8 / 1000 / ms, " Mbit/s · ping ", ping, " ms").joinToString("")  // i18n-ignore
-        } catch (e: Exception) { null }
+        } catch (e: Exception) { null } finally { Work.speedTest.unlock() }
     }
 }
 

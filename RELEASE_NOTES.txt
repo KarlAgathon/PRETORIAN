@@ -1,3 +1,13 @@
+Media Center 2.9.0 – optimization and engineering audit (testing candidate)
+
+• Background work is coordinated: guide downloads, database upkeep, speed tests and channel checks wait while anything plays (preview included), while the app is in the background, offline or low on memory, and in the first minute after start
+• Only one speed test at a time; the automatic speed profile no longer starts while you watch
+• Safe mode after repeated crashes pauses heavy background work and returns to normal by itself after 3 minutes without a crash
+• Channel lamps redraw only when their own result changes
+• TV groups: the TV set picture on the right (like the film reel and the camera)
+• Series › Streaming: service logos without the light plate behind them
+• Removed unused old code and pictures (smaller app)
+
 Media Center 2.8.0 – diagnostics, reliability and completion
 
 • Crash and freeze reports are kept on the box (up to 100, 90 days, 50 MB) together with a journal of up to 10,000 technical events; nothing is written below 100 MB of free space

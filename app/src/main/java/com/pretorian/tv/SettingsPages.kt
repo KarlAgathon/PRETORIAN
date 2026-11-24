@@ -63,68 +63,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 
 
-@Composable
-internal fun PlaylistsListV2(nav: Nav) {
-    val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var list by remember { mutableStateOf(Store.playlists(ctx)) }
-    var menu by remember { mutableStateOf<Playlist?>(null) }
-    var del by remember { mutableStateOf<Playlist?>(null) }
-    var pinDel by remember { mutableStateOf<Playlist?>(null) }
-    fun refresh() { list = Store.playlists(ctx); Repo.clear() }
-    // a playlist clicked on the Playlists page opens its menu right away
-    LaunchedEffect(Unit) { PlMenu.open?.let { id -> menu = list.firstOrNull { it.id == id }; PlMenu.open = null } }
-    SetPage("Playliste", "OK na playlisti: uredi, uključi, osvježi, pomjeri ili ukloni") {
-        // the first row adds a new playlist (approved)
-        SetRow("＋ Dodaj playlistu", "Xtream, M3U ili Stalker · i s telefona preko QR koda", arrow = "›") { EditPlaylist.target = null; nav.push(Screen.AddPlaylist) }
-        list.forEach { pl ->
-            val sec = pl.exp.toLongOrNull()
-            SetRow(pl.name, (when (pl.type) { SourceType.XTREAM -> "Xtream"; SourceType.STALKER -> "Stalker"; else -> "M3U" }) +
-                (if (sec != null && sec > 0) " · " + trf("ističe %s", java.text.SimpleDateFormat("dd.MM.yy", java.util.Locale.getDefault()).format(java.util.Date(sec * 1000))) else ""),
-                if (pl.active) "● " + tr("Aktivna") else "○ " + tr("Isključena"), valueColor = if (pl.active) C.Green else C.Muted) { menu = pl }
-        }
-    }
-    menu?.let { pl ->
-        Popup(pl.name, { menu = null }) {
-            OptionRow("Uredi (naziv, link, korisnik, lozinka)", R.drawable.lc_pencil) { menu = null; EditPlaylist.target = pl; nav.push(Screen.AddPlaylist) }
-            // on / off with the same switch as everywhere: green = on, grey = off
-            val on = list.firstOrNull { it.id == pl.id }?.active ?: pl.active
-            Focusable(onClick = { Store.activate(ctx, pl.id); refresh() }, shape = Rnd(12.dp), normal = Color.Transparent, focused = C.Red, zoom = 1f,
-                modifier = Modifier.fillMaxWidth().height(52.dp)) { f ->
-                Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Ico(R.drawable.lc_check, 18.dp, if (f) C.OnRed else C.Text)
-                    T(if (on) "Aktivna" else "Isključena", 15.sp, if (f) C.OnRed else C.Text, FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                    Toggle(on, f, height = 24.dp)
-                }
-            }
-            OptionRow("Osvježi kanale, filmove i serije", R.drawable.lc_refresh_cw) {
-                menu = null; Repo.dropCatalogs()
-                if (ServerOrder.on) Ovr(ctx, pl.id).takeServerOrder()
-                scope.launch {
-                    val up = try { if (pl.type == SourceType.XTREAM) pl.copy(exp = Repo.test(pl)) else { Repo.test(pl); pl } } catch (e: Exception) { pl }
-                    Store.savePlaylists(ctx, Store.playlists(ctx).map { if (it.id == up.id) up else it }); refresh()
-                    Toast.makeText(ctx, tr("Osvježeno"), Toast.LENGTH_SHORT).show()
-                }
-            }
-            OptionRow("Pomjeri gore", R.drawable.lc_arrow_up) { Store.movePlaylist(ctx, pl.id, -1); list = Store.playlists(ctx); menu = null }
-            OptionRow("Pomjeri dolje", R.drawable.lc_arrow_down) { Store.movePlaylist(ctx, pl.id, 1); list = Store.playlists(ctx); menu = null }
-            OptionRow("Obriši playlistu", R.drawable.lc_trash_2, color = C.Danger) {
-                menu = null; if (Prefs.bool("pin_delpl") && Lock.hasPin()) pinDel = pl else del = pl
-            }
-        }
-    }
-    pinDel?.let { pl -> PinDialog(pl.name, tr("Unesi PIN"), onDismiss = { pinDel = null }) { pin -> val e = Lock.check(pin); if (e == null) { pinDel = null; del = pl }; e } }
-    del?.let { pl ->
-        Popup(trf("Obrisati %s?", pl.name), { del = null }) {
-            OptionRow("Obriši", R.drawable.lc_trash_2, color = C.Danger) {
-                val rest = Store.playlists(ctx).filter { it.id != pl.id }
-                Watch.removePlaylist(ctx, pl.id); Store.savePlaylists(ctx, rest)
-                del = null; refresh()
-            }
-            OptionRow("Odustani", R.drawable.lc_x) { del = null }
-        }
-    }
-}
 
 /* ---------------------------------------------------------------- Jezik */
 
@@ -694,8 +632,6 @@ internal fun AboutV2(onSub: (String) -> Unit, onSection: (String) -> Unit) {
 
 
 
-/** the playlist whose menu opens on the "Edit playlists" page */
-object PlMenu { var open: String? = null }
 /** the playlist whose groups/channels or EPG are being edited (null = all / the active one) */
 object PlEdit { var id: String? = null }
 

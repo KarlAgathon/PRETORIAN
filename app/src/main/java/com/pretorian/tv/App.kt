@@ -61,6 +61,14 @@ class MainActivity : ComponentActivity() {
         Prefs.init(this)
         CrashLog.install(this)
         ChannelHealth.init(this)
+        Work.watchNetwork(this)
+        Work.safeMode = CrashGuard.quick() || CrashGuard.tooMany()
+        if (Work.safeMode) {
+            // safe mode: heavy background work and channel checks wait; nothing is deleted or reset.
+            // After 3 minutes without a crash the app returns to normal by itself.
+            DiagEvents.add("app", "safe mode on after repeated crashes")  // i18n-ignore
+            window.decorView.postDelayed({ Work.safeMode = false; CrashGuard.clearQuick(); DiagEvents.add("app", "safe mode ended, 3 min without a crash") }, 180_000)  // i18n-ignore
+        }
         NewContent.appCtx = applicationContext
         Repo.diskDir = cacheDir
         CatalogDb.init(applicationContext)
@@ -103,6 +111,7 @@ class MainActivity : ComponentActivity() {
     // Android asks for memory back: drop lists that are not on the screen, they load again when needed
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
+        if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) Work.lowMemoryUntil = android.os.SystemClock.elapsedRealtime() + 5 * 60_000L
         if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) DiagEvents.add("memwarn", "memory pressure level $level on ${CrashLog.screen}")  // i18n-ignore
         if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN || level == android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW ||
             level == android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL) Repo.trim(level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW)
@@ -125,8 +134,14 @@ class MainActivity : ComponentActivity() {
         if (stoppedAt > 0 && away > 15_000 && !fromExternal) AppHome.tick++
     }
 
+    override fun onStart() {
+        super.onStart()
+        Work.background = false
+    }
+
     override fun onStop() {
         super.onStop()
+        Work.background = true
         stoppedAt = System.currentTimeMillis()
         Prefs.put("last_stop", stoppedAt)
         Stats.saveIfDirty()
@@ -285,7 +300,7 @@ fun PretorianApp() {
     // time the app is open, and the counters written down once a minute
     LaunchedEffect(Unit) { while (true) { delay(60_000); Stats.uptime(60_000); Stats.saveIfDirty() } }
     // internet speed for the automatic buffer: first start, a new network, or once a week (a 3-second test, nothing visible)
-    LaunchedEffect(Unit) { delay(20_000); try { NetProfile.refresh(ctx) } catch (_: Exception) {} }
+    LaunchedEffect(Unit) { delay(20_000); try { Work.heavy("speed profile") { NetProfile.refresh(ctx) } } catch (_: Exception) {} }
 
     val scheme = if (C.IsLight) lightColorScheme(primary = C.Red, background = C.Bg, surface = C.Bg)
                  else darkColorScheme(primary = C.Red, background = C.Bg, surface = C.Bg)
