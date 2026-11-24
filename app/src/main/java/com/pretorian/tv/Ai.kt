@@ -29,8 +29,13 @@ object SportsAI {
     )
     var provider: String get() = Prefs.str("ai_provider", "gemini"); set(v) = Prefs.put("ai_provider", v)
     val prov: Provider get() = PROVIDERS.firstOrNull { it.id == provider } ?: PROVIDERS[0]
-    fun keyOf(id: String) = Prefs.str("ai_key_$id").ifBlank { if (id == "gemini") Prefs.str("gemini_key") else "" }
-    fun setKey(id: String, v: String) = Prefs.put("ai_key_$id", v.trim())
+    /** 2.9.1: API keys are kept encrypted with the box's Keystore (like playlist passwords); an old plain key is sealed on first read */
+    fun keyOf(id: String): String {
+        val raw = Prefs.str("ai_key_$id").ifBlank { if (id == "gemini") Prefs.str("gemini_key") else "" }
+        if (raw.isNotBlank() && !Secret.isSealed(raw)) { setKey(id, raw); if (id == "gemini") Prefs.remove("gemini_key") }
+        return Secret.open(raw)
+    }
+    fun setKey(id: String, v: String) = Prefs.put("ai_key_$id", Secret.seal(v.trim()))
     var key: String get() = keyOf(provider); set(v) = setKey(provider, v)
     /** Media Center shows only verified information (Prime Directive §8): the AI estimate is switched off for good. */
     val ready: Boolean get() = false

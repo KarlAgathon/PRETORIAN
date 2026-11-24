@@ -113,7 +113,7 @@ object Chrome {
 class PinGate {
     var pending by mutableStateOf<Pair<String, () -> Unit>?>(null)
     fun run(key: String, locked: Boolean, action: () -> Unit) {
-        if (!locked || key in Lock.unlocked || !Lock.hasPin() || !Prefs.bool("pin_locked", true)) action() else pending = key to action
+        if (!locked || Lock.isOpen(key) || !Lock.hasPin() || !Prefs.bool("pin_locked", true)) action() else pending = key to action
     }
 }
 
@@ -1113,7 +1113,7 @@ fun PreviewBox(ch: Channel?, modifier: Modifier) {
     LaunchedEffect(ch?.url) {
         ready = false; failed = false
         val c = ch
-        if (c == null || (Ovr(ctx, c.pid).isChLocked(c) && "c:${c.url}" !in Lock.unlocked)) { player.stop(); return@LaunchedEffect }
+        if (c == null || (Ovr(ctx, c.pid).isChLocked(c) && !Lock.isOpen("c:${c.url}"))) { player.stop(); return@LaunchedEffect }
         player.stop()
         delay(250)   // while you move quickly over channels, only the one you stop on starts
         Preview.player = player

@@ -2927,4 +2927,16 @@ Privremeni podaci i vraćanje na početno|Временные данные и с�
 Backup nije ispravan, ništa nije deinstalirano.|Резервная копия неверна; ничего не удалено.
 Stara verzija nije cijela preuzeta, ništa nije deinstalirano.|Старая версия скачана не полностью; ничего не удалено.
 Stara verzija nije ispravna ili nije potpisana istim ključem, ništa nije deinstalirano.|Старая версия неверна или подписана другим ключом; ничего не удалено.
+odziv|задержка
+Standardna|Стандартный
+Kontrast teksta|Контраст текста
+Standardni|Стандартный
+Visok|Высокий
+Animacije|Анимации
+Isključene i u postavkama Androida|Отключены и в настройках Android
+Suptilno|Мягко
+Sat|Часы
+Privremeno otključaj|Временно разблокировать
+Otključano do izlaska iz aplikacije|Разблокировано до выхода из приложения
+Rad|Работа
 """.trimIndent()

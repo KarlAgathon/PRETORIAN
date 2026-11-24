@@ -60,3 +60,11 @@ Beta 1 (A0 + A, built from branch `redesign-beta/1`) → owner Mi Box test → o
 - HealthLamp derivedStateOf per row; TV groups illustration (pretorian_tv_set.webp, transparent); streaming tiles without white plate.
 - Removed: PlaylistsListV2, PlMenu, ToolBtn, CheckBox, mc_mark.png, ic_fill_* (4), shirt_fill.
 - Not measured on a device: startup, CPU, RAM, first-frame times (pending the owner's box).
+
+## 2.9.1 (24.11.) — gentle checks, E–G completed, testing version (feature freeze after this)
+- ChannelHealth: focused ±6 only, 4.5 s gap, 60/h budget, LIMIT stops checks until restart, results 6 h.
+- Player: VOD recovery resumes at the last position (position read before stop); "start" event with time to first frame per channel/film.
+- E–G done: LookOpts (darker overlay, high contrast greys, motion off/subtle incl. Android animator scale, clock Auto/24/12, clock and date on/off), Lock.allOpen temporary unlock + relock on onStop.
+- Ai keys sealed with Secret (old gemini_key migrated); SecretScan checks sealed and plain values.
+- RefreshCenter.resume waits for the end of STARTUP; exit reasons for update/user exit logged as info; readable screen name.
+- Not measured on a device: first-frame times are now logged; values wait for the owner's reports.

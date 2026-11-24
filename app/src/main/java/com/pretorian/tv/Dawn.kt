@@ -83,6 +83,8 @@ fun Modifier.glassCard(r: Dp = 16.dp): Modifier = this.clip(Rnd(r)).background(C
 fun DawnBackground() {
     androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.pretorian_graphite), null, Modifier.fillMaxSize(),
         contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+    // Izgled › Tema: "Tamnija" darkens the same picture (no new background)
+    if (LookOpts.darker) Box(Modifier.fillMaxSize().background(Color(0x66000000)))
 }
 
 private data class DawnItem(val screen: Screen, val icon: Int, val label: String, val badge: Int = 0, val kind: String? = null, val go: (() -> Unit)? = null)
@@ -264,9 +266,9 @@ private fun DawnTopBar(top: Screen, menu: Boolean, nav: Nav) {
         if (top == Screen.Tv && Dawn.pos.isNotEmpty()) { T(Dawn.pos, 15.sp, C.Soft); sep() }
         if (top != Screen.AddPlaylist) { NoteBell(nav); sep() }
         // right side (approved): HH:mm · dd.MM.yyyy
-        T(SimpleDateFormat("HH:mm", Locale.getDefault()).format(now), 17.sp, C.Text, FontWeight.Bold)
-        T("·", 15.sp, C.Soft)
-        T(SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(now), 15.sp, C.Soft)
+        if (LookOpts.clockOn) T(LookOpts.time(LocalContext.current, now), 17.sp, C.Text, FontWeight.Bold)
+        if (LookOpts.clockOn && LookOpts.dateOn) T("·", 15.sp, C.Soft)
+        if (LookOpts.dateOn) T(SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(now), 15.sp, C.Soft)
     }
 }
 

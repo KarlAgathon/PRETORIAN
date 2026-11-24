@@ -91,7 +91,9 @@ object CrashLog {
                     android.app.ApplicationExitInfo.REASON_CRASH -> "crash"; android.app.ApplicationExitInfo.REASON_LOW_MEMORY -> "lowmem"
                     android.app.ApplicationExitInfo.REASON_EXIT_SELF -> "exit"; android.app.ApplicationExitInfo.REASON_USER_REQUESTED -> "user"
                     android.app.ApplicationExitInfo.REASON_SIGNALED -> "signal"; else -> "other" }  // i18n-ignore
-                DiagEvents.add(if (why == "anr" || why == "native") why else "exitinfo", "previous run ended: $why · ${e.description ?: ""} · pss ${e.pss / 1024} MB")  // i18n-ignore
+                // 2.9.1: an update or a normal close is information, not an error
+                val normal = why == "exit" || why == "user" || (e.description ?: "").contains("installPackage")
+                DiagEvents.add(if (why == "anr" || why == "native") why else if (normal) "app" else "exitinfo", "previous run ended: $why · ${e.description ?: ""} · pss ${e.pss / 1024} MB")  // i18n-ignore
                 if (why == "anr" || why == "native") {
                     val trace = try { e.traceInputStream?.bufferedReader()?.use { r -> val cb = CharArray(200_000); val n = r.read(cb); if (n > 0) String(cb, 0, n) else "" } } catch (_: Throwable) { null }
                     val txt = "Media Center ${BuildInfo.VERSION} · ${android.os.Build.MODEL}\n" +  // i18n-ignore

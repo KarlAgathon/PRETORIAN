@@ -1,3 +1,14 @@
+Media Center 2.9.1 – gentler checks and finishing touches (testing version)
+
+• Channel checks are much gentler on your provider: only the channels on screen, one every 4–5 seconds, at most 60 per hour, results kept 6 hours, and they stop for the whole session as soon as the provider reports "too many connections"
+• Watching a channel counts as its check
+• A film that loses its connection now continues from the same place instead of starting over
+• Settings › Izgled: darker background, high text contrast, animations Off / Subtle, clock Automatic / 24 h / 12 h, clock and date on or off
+• Roditeljska kontrola: "Privremeno otključaj" opens locked groups until you leave the app
+• Gemini / AI keys are stored encrypted on the device
+• An unfinished playlist refresh waits until the first minute after start is over
+• Diagnostics: app updates and normal exits are no longer shown as errors, the screen name is readable, the start time of each channel and film is recorded, "ping" is now "odziv"
+
 Media Center 2.9.0 – optimization and engineering audit (testing candidate)
 
 • Background work is coordinated: guide downloads, database upkeep, speed tests and channel checks wait while anything plays (preview included), while the app is in the background, offline or low on memory, and in the first minute after start

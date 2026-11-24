@@ -264,3 +264,37 @@ object PlayOpts {
     private val KEYS = listOf("conn_timeout", "sub_behav", "auto_subs", "audio_passthrough", "buffer_mb", "recover_on", "recover_wait2", "sub_size", "sub_font", "sub_style", "skip_s", "tech_decoder", "afr_on", "ext_player")
     fun reset() { KEYS.forEach { Prefs.remove(it) }; DiagEvents.add("app", "playback settings reset") }  // i18n-ignore
 }
+
+
+/** Phase E – Izgled i jezik: darker background, text contrast, motion, clock format and date (all stored, all applied). */
+object LookOpts {
+    var rev by mutableIntStateOf(0)
+    val darker get() = rev.let { Prefs.bool("bg_dark", false) }
+    val highContrast get() = rev.let { Prefs.bool("text_contrast", false) }
+    /** animations off also when Android's own "remove animations" is on */
+    val motion get() = rev.let { Prefs.bool("motion_on", true) && sysMotion }
+    @Volatile var sysMotion = true
+    /** 0 Auto (like the device), 1 = 24 h, 2 = 12 h */
+    val clockFmt get() = rev.let { Prefs.long("clock_fmt", 0).toInt() }
+    val clockOn get() = rev.let { Prefs.bool("clock_on", true) }
+    val dateOn get() = rev.let { Prefs.bool("date_on", true) }
+    fun time(ctx: Context, d: Date): String {
+        val h24 = when (clockFmt) { 1 -> true; 2 -> false; else -> android.text.format.DateFormat.is24HourFormat(ctx) }
+        return SimpleDateFormat(if (h24) "HH:mm" else "h:mm a", Locale.getDefault()).format(d)  // i18n-ignore
+    }
+    fun set(k: String, v: Any) { when (v) { is Boolean -> Prefs.put(k, v); is Int -> Prefs.put(k, v.toLong()) }; rev++ }
+    fun readSystem(ctx: Context) { sysMotion = try { android.provider.Settings.Global.getFloat(ctx.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f } catch (_: Throwable) { true } }
+}
+
+/** Izgled › Prikaz: the five approved look options on one page */
+@Composable
+fun LookOptions() {
+    @Suppress("UNUSED_VARIABLE") val r = LookOpts.rev
+    SetSection("Prikaz")
+    SetDrop("Pozadina", null, listOf(tr("Standardna"), tr("Tamnija")), if (LookOpts.darker) 1 else 0) { LookOpts.set("bg_dark", it == 1) }
+    SetDrop("Kontrast teksta", null, listOf(tr("Standardni"), tr("Visok")), if (LookOpts.highContrast) 1 else 0) { LookOpts.set("text_contrast", it == 1) }
+    SetDrop("Animacije", if (!LookOpts.sysMotion) "Isključene i u postavkama Androida" else null, listOf(tr("Isključeno"), tr("Suptilno")), if (Prefs.bool("motion_on", true)) 1 else 0) { LookOpts.set("motion_on", it == 1) }
+    SetSwitch("Sat", null, LookOpts.clockOn) { LookOpts.set("clock_on", it) }
+    SetDrop("Format sata", null, listOf(tr("Automatski"), "24 h", "12 h"), LookOpts.clockFmt) { LookOpts.set("clock_fmt", it) }  // i18n-ignore
+    SetSwitch("Datum", null, LookOpts.dateOn) { LookOpts.set("date_on", it) }
+}

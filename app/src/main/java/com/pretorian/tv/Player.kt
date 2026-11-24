@@ -270,6 +270,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     var error by remember { mutableStateOf<String?>(null) }
     var retried by remember { mutableStateOf(false) }
     var retryToken by remember { mutableIntStateOf(0) }
+    var loadStartedAt by remember { mutableLongStateOf(0L) }
+    var firstFrameLogged by remember { mutableStateOf(false) }
     var reconnect by remember { mutableIntStateOf(0) }          // live: attempt 1..3 of getting the stream back
     val backupTried = remember { HashSet<String>() }             // links already tried as backup for this channel
     var shiftFrom by remember { mutableLongStateOf(0L) }          // live: ◀◀ in the archive, 0 = live
@@ -362,6 +364,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     }
 
     fun loadMedia(item: PlayItem, file: String?, at: Long, play: Boolean = true) {
+        loadStartedAt = android.os.SystemClock.elapsedRealtime(); firstFrameLogged = false
         val request = mediaRequest.begin()
         val selectedIndex = index
         // Stalker portal: the real address is asked for right before playing
@@ -467,6 +470,9 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 PlayState.update(s.live, player.playWhenReady, state)
                 buffering = state == Player.STATE_BUFFERING
                 if (state == Player.STATE_READY && s.live) items.getOrNull(index)?.let { ChannelHealth.mark(it.channel?.url ?: it.url, true) }
+                // 2.9.1: how long this channel / title took to start (for slow channels in the diagnostics)
+                if (state == Player.STATE_READY && !firstFrameLogged && loadStartedAt > 0) { firstFrameLogged = true
+                    DiagEvents.add("start", "ready after ${android.os.SystemClock.elapsedRealtime() - loadStartedAt} ms · " + (items.getOrNull(index)?.title ?: "")) }  // i18n-ignore
                 if (state == Player.STATE_READY) { if (reconnect > 0) StreamLog.event("ok", items.getOrNull(index)?.title ?: ""); if (reconnect > 0) StreamLog.add(listOf(items.getOrNull(index)?.title ?: "", " · ", tr("radi ponovo ✓")).joinToString("")); error = null; reconnect = 0; readyOnce[0] = true }  // i18n-ignore
                 if (state == Player.STATE_ENDED && !s.live) { saveProgress(done = true); if (index < n - 1 && Prefs.bool("next_ep", true) && !autoCancel) index++ }
             }
@@ -564,10 +570,14 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         if (retryToken == 0) return@LaunchedEffect
         delay(if (Recover.on) when (reconnect) { 1 -> 300L; 2 -> 1500L; else -> 3000L }
               else if (s.live) when (reconnect) { 2 -> 5000L; 3 -> 10_000L; else -> 2000L } else 2000L)
+        // 2.9.1: a film / episode always continues where it was – the position is taken BEFORE the stream is closed
+        // (clearing the player first set it to 0, so the third try started the film from the beginning)
+        val resumeAt = if (s.live) 0L else (player.currentPosition.takeIf { it > 0 } ?: position)
         // the last try is the hand trick: close the stream completely and open it again, like going to another channel and back
         if (Recover.on && reconnect >= 3) { try { player.stop(); player.clearMediaItems() } catch (_: Exception) {}; delay(400) }
         shiftFrom = 0L
-        loadMedia(items[index], subFile, if (s.live) 0L else player.currentPosition)
+        if (!s.live) DiagEvents.add("recover", "reconnect $reconnect, continuing at ${resumeAt / 1000} s")  // i18n-ignore
+        loadMedia(items[index], subFile, resumeAt)
     }
     // the guide of this channel was moved: now / next in the info bar follow at once
     LaunchedEffect(EpgShift.rev) { val c = item.channel; if (EpgShift.rev > 0 && s.live && c != null && p != null) nowNext = try { Repo.nowNext(p, c) } catch (_: Exception) { nowNext } }

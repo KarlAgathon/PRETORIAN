@@ -52,7 +52,11 @@ object RefreshCenter {
             if (System.currentTimeMillis() - o.optLong("at") > 12 * 3600_000L) { Prefs.put("refresh_pending", ""); return }
             val a = o.optJSONArray("ids") ?: return
             val ids = (0 until a.length()).map { a.getString(it) }
-            if (ids.isNotEmpty()) request(ctx, ids)
+            // 2.9.1 startup staggering: an unfinished refresh from last time waits until the first minute is over
+            if (ids.isNotEmpty()) scope.launch {
+                while (Work.state() == Work.State.STARTUP) delay(5000)
+                request(ctx.applicationContext, ids)
+            }
         } catch (_: Exception) {}
     }
 

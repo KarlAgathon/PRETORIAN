@@ -86,7 +86,7 @@ object SecretScan {
         try { EpgSources.list().forEach { s -> if (Regex("(?i)(user|pass|token|key)=").containsMatchIn(s.url)) out += s.url } } catch (_: Throwable) {}
         val all = Prefs.allStrings()
         all.filter { (k, _) -> k.endsWith("_key") || k.startsWith("ai_key") || k == "gemini_key" || k == "pin_hash" || k == "pin_salt" }  // i18n-ignore
-            .forEach { (_, v) -> out += v }
+            .forEach { (_, v) -> out += Secret.open(v); out += v }
         return out.map { it.trim() }.filter { it.isNotEmpty() }.distinct().sortedByDescending { it.length }
     }
 

@@ -29,7 +29,7 @@ import java.net.URL
 
 /**
  * Channel health (2.8.0). Three lamps only: green = the last reliable check worked, orange = it failed, grey = nothing
- * reliable known. A result older than one hour stays visible and is only marked for re-checking (never erased to grey).
+ * reliable known. A result older than six hours stays visible and is only marked for re-checking (never erased to grey).
  *
  * Keys: the first 16 hex characters of SHA-256(stream address) — never the address itself, so no login is stored, and a
  * changed stream or changed credentials give a new key (the old result simply stops applying and ages out).
@@ -40,7 +40,7 @@ import java.net.URL
  * shows the provider serves it, not that every segment decodes.
  *
  * Scheduler: one worker, one connection at a time (providers often allow one), paused while a preview or the full
- * player plays. Order: the focused channel, then the channels around it (what is on screen), then the rest of the group.
+ * player plays. Only the channels on screen (focused ±6), one every 4.5 s, at most 60 an hour (2.9.1).
  * Leaving a group cancels its pending work; finished results stay. No internet, timeouts, too many connections
  * (429/458/509), login refusals (401/403 on most channels) or a provider outage (5 errors in a row) are inconclusive:
  * the previous result stays and the run pauses or stops instead of painting the group orange.
@@ -48,7 +48,7 @@ import java.net.URL
  */
 object ChannelHealth {
     var rev by mutableIntStateOf(0)
-    private const val STALE_MS = 60 * 60_000L
+    private const val STALE_MS = 6 * 60 * 60_000L   // 2.9.1: a result is re-checked after 6 h, not 1 h
     private const val PLAYBACK_WINS_MS = 30 * 60_000L
     private const val MAX_ENTRIES = 20_000
 
@@ -136,13 +136,22 @@ object ChannelHealth {
     private val done = HashSet<String>()
 
     /** the focused channel goes first, its neighbours (what is on screen) next */
-    fun focus(url: String) { focusUrl = url }
+    fun focus(url: String) { focusUrl = url; if (job?.isActive != true && list.isNotEmpty() && probeOn && !limitHit) job = io.launch { run() } }
+
+    /** 2.9.1 – gentle to the provider: only the channels on screen (focused ±6), one every 4.5 s, at most 60 an hour,
+     *  and after the first "too many connections" no more checks until the app restarts. Watching is the main source. */
+    internal const val WINDOW = 6
+    private const val GAP_MS = 4500L
+    private const val PER_HOUR = 60
+    @Volatile internal var limitHit = false
+    internal val recent = ArrayDeque<Long>()
+    internal fun budgetOk(): Boolean { val now = System.currentTimeMillis(); while (recent.isNotEmpty() && now - recent.first() > 3600_000L) recent.removeFirst(); return recent.size < PER_HOUR }
 
     /** a TV group was opened: check it progressively; a previous group's pending work is cancelled */
     fun schedule(group: List<Channel>) {
         job?.cancel()
         list = group; synchronized(done) { done.clear() }
-        if (!probeOn || group.isEmpty()) return
+        if (!probeOn || group.isEmpty() || limitHit) return
         job = io.launch { run() }
     }
     /** the group was left: pending work stops, results stay */
@@ -151,8 +160,9 @@ object ChannelHealth {
     private fun next(): Channel? {
         val l = list; if (l.isEmpty()) return null
         val f = focusUrl?.let { u -> l.indexOfFirst { it.url == u } } ?: -1
-        // order: focused, then ±8 around it, then from the top
-        val order = if (f >= 0) (listOf(f) + (1..8).flatMap { listOf(f + it, f - it) } + l.indices).filter { it in l.indices }.distinct() else l.indices.toList()
+        // only what is on screen: the focused channel, then ±WINDOW around it (the first rows when nothing is focused yet)
+        val c0 = if (f >= 0) f else 0
+        val order = (listOf(c0) + (1..WINDOW).flatMap { listOf(c0 + it, c0 - it) }).filter { it in l.indices }.distinct()
         return order.asSequence().map { l[it] }.firstOrNull { c ->
             synchronized(done) { c.url !in done } && !Stalker.isLink(c.url) && (of(c.url) == null || stale(c.url))
         }
@@ -160,23 +170,25 @@ object ChannelHealth {
 
     private suspend fun run() {
         delay(1500)
-        var fails = 0; var auth = 0; var oks = 0; var backoff = 0L
+        var fails = 0; var auth = 0; var oks = 0
         while (coroutineContext.isActive) {
-            if (!probeOn) return
+            if (!probeOn || limitHit) return
             while (busy()) delay(2000)
+            if (!budgetOk()) { delay(60_000); continue }
             val c = next() ?: return
+            recent.addLast(System.currentTimeMillis())
             synchronized(done) { done.add(c.url) }
             when (val r = check(Net.udp(c.url))) {
-                Res.OK -> { put(c.url, true, 'L'); oks++; fails = 0; auth = 0; backoff = 0 }
+                Res.OK -> { put(c.url, true, 'L'); oks++; fails = 0; auth = 0 }
                 Res.BAD -> { put(c.url, false, 'L'); fails++ }
                 Res.AUTH -> { tried(c.url); auth++; if (auth >= 3 && oks == 0) { stop("login refused by the provider"); return } }  // i18n-ignore
-                Res.LIMIT -> { tried(c.url); synchronized(done) { done.remove(c.url) }; backoff = (backoff * 2).coerceIn(30_000, 300_000); DiagEvents.add("health", "provider connection limit, waiting ${backoff / 1000} s"); delay(backoff) }  // i18n-ignore
+                Res.LIMIT -> { tried(c.url); limitHit = true; stop("provider connection limit – no more checks until the app restarts"); return }  // i18n-ignore
                 Res.NO_NET -> { tried(c.url); stop("no internet"); return }  // i18n-ignore
                 Res.UNSURE -> { tried(c.url); fails++ }
             }
             // five failures in a row without any success: probably the provider, not the channels — stop, keep old results
             if (fails >= 5 && oks == 0) { stop("provider not answering"); return }  // i18n-ignore
-            delay(700)
+            delay(GAP_MS)
         }
     }
     private fun stop(why: String) { lastStop = why + " · " + DiagEvents.stamp().substring(11, 19); DiagEvents.add("health", "check stopped: $why") }  // i18n-ignore

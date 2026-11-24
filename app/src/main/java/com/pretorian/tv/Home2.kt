@@ -400,8 +400,7 @@ private fun HomeStatus(nav: Nav, modifier: Modifier) {
             T(t.toString() + "°C " + tr(Weather.condition()), 14.sp, c, maxLines = 1)
             dot()
         }
-        val h24 = android.text.format.DateFormat.is24HourFormat(ctx)
-        T(SimpleDateFormat(if (h24) "HH:mm" else "h:mm a", Locale.getDefault()).format(now), 14.sp, c)  // i18n-ignore
+        if (LookOpts.clockOn) T(LookOpts.time(ctx, now), 14.sp, c)
         Store.actives(ctx).firstOrNull()?.let { p -> dot(); PlaylistStatus(p, now.time) }
         Box(Modifier.padding(horizontal = 4.dp).width(1.dp).height(22.dp).background(Color(0x33FFFFFF)))
         NoteBell(nav)

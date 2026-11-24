@@ -124,7 +124,9 @@ fun Focusable(
     val isFocused by src.collectIsFocusedAsState()
     LaunchedEffect(isFocused) { if (isFocused) onFocus?.invoke() }
     // Lite: no zoom animation on focus (lighter for weak boxes)
-    val scale by animateFloatAsState(if (isFocused) zoom else 1f, label = "zoom")
+    // Izgled › Animacije: "Isključeno" = no zoom on focus, "Suptilno" = a short fade-like zoom (default)
+    val scale by animateFloatAsState(if (isFocused && LookOpts.motion) zoom else 1f,
+        animationSpec = androidx.compose.animation.core.tween(if (LookOpts.motion) 150 else 0), label = "zoom")
     var m = modifier
     if (focusRequester != null) m = m.focusRequester(focusRequester)
     val long = onMenu ?: onLongClick

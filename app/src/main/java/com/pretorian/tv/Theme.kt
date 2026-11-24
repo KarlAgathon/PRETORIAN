@@ -87,8 +87,9 @@ object C {
     val CardHi get() = Silver.CardHi
     val Line get() = Silver.Border
     val Text get() = Silver.Text
-    val Muted get() = Silver.TextMuted
-    val Soft get() = Silver.TextSoft
+    // Izgled › Kontrast teksta: "Visok" lifts the grey texts (titles stay white)
+    val Muted get() = if (LookOpts.highContrast) Color(0xFFB8BCC4) else Silver.TextMuted
+    val Soft get() = if (LookOpts.highContrast) Color(0xFFDDE1E6) else Silver.TextSoft
     val Tile get() = Silver.Tile
     const val IsLight = false
     /** the shell draws the background behind every screen: screens stay see-through over it */

@@ -55,6 +55,11 @@ object Prefs {
 object Lock {
     /** groups/channels unlocked with the PIN in this session */
     val unlocked = HashSet<String>()
+    /** Roditeljska kontrola › Privremeno otključaj: every locked group/channel opens until the app leaves the screen */
+    @Volatile var allOpen = false
+    fun isOpen(key: String) = allOpen || key in unlocked
+    /** called when the app goes to the background (Home, another app) */
+    fun relock() { unlocked.clear(); allOpen = false }
     private var fails = 0
     private var blockedUntil = 0L
 

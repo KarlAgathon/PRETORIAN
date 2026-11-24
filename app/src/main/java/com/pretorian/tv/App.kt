@@ -137,11 +137,13 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         Work.background = false
+        LookOpts.readSystem(this)
     }
 
     override fun onStop() {
         super.onStop()
         Work.background = true
+        Lock.relock()
         stoppedAt = System.currentTimeMillis()
         Prefs.put("last_stop", stoppedAt)
         Stats.saveIfDirty()
@@ -309,7 +311,7 @@ fun PretorianApp() {
     MaterialTheme(colorScheme = scheme) {
         CompositionLocalProvider(LocalLayoutDirection provides if (Look.lang == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr) {
             val top = stack.last()
-            CrashLog.screen = top.toString().take(80)
+            CrashLog.screen = (top::class.simpleName ?: top.toString()).take(80)   // i18n-ignore (2.9.1: short class name instead of Screen$Settings@hash)
             if (top is Screen.Player) {
                 PlayerScreen(top, nav)
             } else {

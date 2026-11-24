@@ -484,7 +484,8 @@ object NetInfo {
             c.inputStream.use { ins -> first = System.currentTimeMillis(); ping = first - t0; while (System.currentTimeMillis() - first < 4000) { val r = ins.read(buf); if (r < 0) break; n += r } }
             c.disconnect()
             val ms = (System.currentTimeMillis() - first).coerceAtLeast(1)
-            listOf(n * 8 / 1000 / ms, " Mbit/s · ping ", ping, " ms").joinToString("")  // i18n-ignore
+            // 2.9.1: "odziv" = time to the first byte, including the secure connection (not a network ping)
+            listOf(n * 8 / 1000 / ms, " Mbit/s · ", tr("odziv"), " ", ping, " ms").joinToString("")  // i18n-ignore
         } catch (e: Exception) { null } finally { Work.speedTest.unlock() }
     }
 }

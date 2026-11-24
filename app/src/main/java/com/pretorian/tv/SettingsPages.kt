@@ -431,6 +431,7 @@ internal fun ParentalV2() {
                 SetSwitch(label, sub, Parental.on(k)) { Parental.set(k, it); rev++ }
             }
             SetSection("Pregled")
+            SetSwitch("Privremeno otključaj", if (Lock.allOpen) "Otključano do izlaska iz aplikacije" else "Zaključano", Lock.allOpen) { Lock.allOpen = it; rev++ }
             SetSwitch("Prikaži sakriveno do izlaska iz aplikacije", "bez ponovnog PIN-a", Parental.unlocked) { Parental.unlocked = it; Repo.clear(); SearchIndex.reset(); rev++ }
             ResetSection("Roditeljska kontrola", Parental.KINDS.map { "par_" + it.first }) { Repo.clear(); rev++ }
         }
@@ -653,6 +654,8 @@ internal fun AppearanceV2() {
         SetPage("Izgled", "Jedan izgled za sve. Ovdje biraš samo veličinu teksta i način rada.") {
             SetSlider("Veličina teksta", "za gledanje s daljeg kauča · 90 – 120 %", Tune.textSize, 90, 120, 5, { "$it %" }) { Tune.textSize = it; Tune.save() }
             WeatherPlaceRow()
+            LookOptions()
+            SetSection("Rad")
             SetDrop("Način rada", trf("Ocjena uređaja %s/100 · %s GB RAM", Perf.score, String.format("%.1f", Perf.ramGb)),
                 Perf.MODES, Perf.mode.coerceIn(0, Perf.MODES.lastIndex)) { Perf.set(it); rev++ }
             T("Lite štedi memoriju i procesor na slabijim uređajima. Izgled i funkcije ostaju isti.", 12.sp, C.Muted, maxLines = 2)
