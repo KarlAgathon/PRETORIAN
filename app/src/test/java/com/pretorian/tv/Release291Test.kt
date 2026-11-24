@@ -24,15 +24,15 @@ class Release291Test {
 
     @Test fun aiKeyIsStoredSealed() {
         Prefs.init(RuntimeEnvironment.getApplication())
-        Ai.setKey("gemini", "AIzaTEST-1234567890")
+        SportsAI.setKey("gemini", "AIzaTEST-1234567890")
         // the test machine has no Android keystore, so only the round trip is checked here (sealing is tested on the box)
-        assertEquals("AIzaTEST-1234567890", Ai.keyOf("gemini"))
+        assertEquals("AIzaTEST-1234567890", SportsAI.keyOf("gemini"))
         Prefs.put("ai_key_gemini", "")
     }
     @Test fun oldPlainKeyIsSealedOnFirstRead() {
         Prefs.init(RuntimeEnvironment.getApplication())
         Prefs.put("ai_key_gemini", ""); Prefs.put("gemini_key", "AIzaOLD-plain")
-        assertEquals("AIzaOLD-plain", Ai.keyOf("gemini"))
+        assertEquals("AIzaOLD-plain", SportsAI.keyOf("gemini"))
         assertEquals("", Prefs.str("gemini_key"))
         Prefs.put("ai_key_gemini", "")
     }
