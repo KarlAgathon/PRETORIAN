@@ -186,8 +186,10 @@ object ChannelHealth {
             busyWhy()?.let { ProbeGuard.skip(it); while (busyWhy() != null) delay(2000) }
             val c = next() ?: return
             val acct = ProbeGuard.account(c.url)
-            ProbeGuard.blocked(acct)?.let { why -> ProbeGuard.skip(why); stop(why); return }
-            ProbeGuard.wait(acct)?.let { ms -> ProbeGuard.skip("budget"); delay(ms); continue }  // i18n-ignore
+            val why = ProbeGuard.blocked(acct)
+            if (why != null) { ProbeGuard.skip(why); stop(why); return }
+            val waitMs = ProbeGuard.wait(acct)
+            if (waitMs != null) { ProbeGuard.skip("budget"); delay(waitMs); continue }  // i18n-ignore
             synchronized(done) { done.add(c.url) }
             ProbeGuard.spend(acct)
             val r = check(Net.udp(c.url)) { ProbeGuard.wait(acct) == null && ProbeGuard.blocked(acct) == null && busyWhy() == null && ProbeGuard.spend(acct) }
