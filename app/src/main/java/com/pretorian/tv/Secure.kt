@@ -66,7 +66,9 @@ object Redact {
     private val JSON = Regex("(?i)(\"(?:password|pass|username|user|token|mac|serial|device_id|api_key|key)\"\\s*:\\s*\")[^\"]*")
     // Google API keys (Gemini) wherever they appear, also without "key="
     private val GOOGLE_KEY = Regex("AIza[0-9A-Za-z_-]{30,}")
+    // 3.0.0.7 Diagnostics II: a server given as a bare IPv4 address inside a link is not needed in a report
+    private val URL_IP = Regex("(?i)(https?://|rtmp://|rtsp://|udp://@?)(?:\\d{1,3}\\.){3}\\d{1,3}(?=[:/\\s\"']|$)")
     fun text(s: String): String = s.replace(QUERY, "$1***").replace(XTREAM, "$1***/***/").replace(XTREAM_SHORT, "$1***/***/$2")
         .replace(BASIC, "$1***:***@").replace(BEARER, "$1***").replace(COOKIE, "$1***").replace(ENC_QUERY, "$1***")
-        .replace(JSON, "$1***").replace(MAC, "**:**:**:**:**:**").replace(GOOGLE_KEY, "AIza***")
+        .replace(JSON, "$1***").replace(MAC, "**:**:**:**:**:**").replace(GOOGLE_KEY, "AIza***").replace(URL_IP, "$1[ip]")
 }

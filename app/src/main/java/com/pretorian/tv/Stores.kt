@@ -181,6 +181,8 @@ object Watch {
     }
 
     fun get(ctx: Context, url: String): Progress? = all(ctx)[url]
+    /** 3.0.0.7 diagnostics: how many entries and how many finished (counts only) */
+    fun stats(ctx: Context): Pair<Int, Int> = all(ctx).let { m -> m.size to m.values.count { it.done } }
 
     fun save(ctx: Context, current: Progress, next: Progress? = null, background: Boolean = false) {
         val entries = all(ctx)

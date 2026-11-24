@@ -1,3 +1,10 @@
+Media Center 3.0.0.7 Stable – Extended Diagnostics II (diagnostics only; playback, navigation and design unchanged)
+- FULL DIAGNOSTIC REPORT now has sections 51–70: stream connection lifecycle, network and VPN, playback quality (QoE), buffer, video decoder, audio, subtitles, UI rendering (jank), remote/focus failures, long-run memory, database, playlist quality, device and firmware, how earlier runs ended, update and data preservation, technical settings, VERSION COMPARISON (this version vs the previous one on the same box) and export security.
+- A short summary (section 70) at the top of the report: NORMAL / WARNING / CRITICAL / INSUFFICIENT DATA per area, with the section that holds the evidence.
+- The exact build commit is built into the app and shown in the report.
+- Server IP addresses inside links are now masked in reports.
+- Diagnostics only observe what the app already does: no extra provider request, no extra stream, no extra player, no test connection.
+
 Media Center 3.0.0.6 Stable – fixes
 - Movies and series player: with the controls open, Up moves to the progress bar; Left/Right there moves the film; Down goes back to the buttons.
 - Series episode row: every episode picture shows its number (E1, E2…) in the corner; the selected episode's number is white.

@@ -154,10 +154,11 @@ object DiagCollect {
     // ------------------------------------------------------------------ navigation (§19)
     @Volatile private var navAt = 0L
     @Volatile private var navTo = ""
-    fun navRequested(to: String) { navAt = SystemClock.elapsedRealtime(); navTo = to }
+    fun navRequested(to: String) { navAt = SystemClock.elapsedRealtime(); navTo = to; DiagII.navRequested() }
     /** destination composed for the first time (not proof of a drawn frame) */
     fun navComposed(screen: String) = guard("nav") {
-        if (navAt > 0 && screen == navTo) { val ms = SystemClock.elapsedRealtime() - navAt; navAt = 0; PerfLog.task("nav $screen", "composed", ms) }  // i18n-ignore
+        if (navAt > 0 && screen == navTo) { val ms = SystemClock.elapsedRealtime() - navAt; navAt = 0; PerfLog.task("nav $screen", "composed", ms); DiagII.navComposed(screen) }  // i18n-ignore
+        else if (navAt > 0 && SystemClock.elapsedRealtime() - navAt > 3_000) { DiagII.navMismatch(navTo, screen); navAt = 0 }
     }
 
     // ------------------------------------------------------------------ images (§20), from Coil's own events
@@ -168,7 +169,7 @@ object DiagCollect {
         override fun onStart(request: coil.request.ImageRequest) = guard("images") { if (imgStart.size < 2000) imgStart[request] = SystemClock.elapsedRealtime(); inc("images ${cat(request)} attempts") }  // i18n-ignore
         override fun onSuccess(request: coil.request.ImageRequest, result: coil.request.SuccessResult) = guard("images") {
             val c = cat(request); inc("images $c ok (" + result.dataSource.name.lowercase() + ")")  // i18n-ignore
-            imgStart.remove(request)?.let { t0 -> val q = imgMs.getOrPut(c) { java.util.ArrayDeque() }; synchronized(q) { q.addLast(SystemClock.elapsedRealtime() - t0); while (q.size > 500) q.removeFirst() } }
+            imgStart.remove(request)?.let { t0 -> val ms = SystemClock.elapsedRealtime() - t0; val q = imgMs.getOrPut(c) { java.util.ArrayDeque() }; synchronized(q) { q.addLast(ms); while (q.size > 500) q.removeFirst() }; DiagII.ring("img pending $c", 2000).add(ms) }
         }
         override fun onError(request: coil.request.ImageRequest, result: coil.request.ErrorResult) = guard("images") { imgStart.remove(request); inc("images ${cat(request)} failed") }  // i18n-ignore
         override fun onCancel(request: coil.request.ImageRequest) = guard("images") { imgStart.remove(request); inc("images ${cat(request)} cancelled") }  // i18n-ignore
@@ -262,8 +263,9 @@ object NetState {
             val back = if (lostAt > 0 && t != "none") " · back after " + (SystemClock.elapsedRealtime() - lostAt) + " ms" else ""  // i18n-ignore
             DiagEvents.add("net", "network $transports → $t" + (if (v) "" else " (not validated)") + back + " · " + DiagCollect.playState())  // i18n-ignore
             DiagCollect.inc("network changes"); if (t != "none") lostAt = 0
+            DiagII.netChanged(transports, t)
             transports = t; validated = v
         }
     }
-    fun lost() = DiagCollect.guard("network") { if (lostAt == 0L) lostAt = SystemClock.elapsedRealtime(); DiagCollect.inc("network lost"); transports = "none"; validated = false }  // i18n-ignore
+    fun lost() = DiagCollect.guard("network") { if (lostAt == 0L) lostAt = SystemClock.elapsedRealtime(); DiagCollect.inc("network lost"); DiagII.netChanged(transports, "none"); transports = "none"; validated = false }  // i18n-ignore
 }

@@ -220,10 +220,11 @@ fun <V> load(vararg keys: Any?, keep: Boolean = false, block: suspend () -> V): 
 /** Focus a requester whose item may still be composing: tries a few times. */
 suspend fun FocusRequester.tryFocus(attempts: Int = 12): Boolean {
     if (Chrome.inRail) return false          // the left menu keeps the focus while you move through it
-    repeat(attempts) {
-        try { requestFocus(); return true } catch (_: Exception) {}
+    repeat(attempts) { i ->
+        try { requestFocus(); if (i > 0) DiagII.focusResult(true, i + 1); return true } catch (_: Exception) {}
         kotlinx.coroutines.delay(40)
     }
+    DiagII.focusResult(false, attempts)
     return false
 }
 

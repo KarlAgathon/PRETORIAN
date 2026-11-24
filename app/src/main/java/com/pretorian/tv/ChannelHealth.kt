@@ -299,13 +299,14 @@ object ProbeGuard {
     /** records one request; false when the budget is already used up */
     @Synchronized fun spend(a: String, now: Long = System.currentTimeMillis()): Boolean {
         val live = stamps(a).filter { now - it < HOUR }
-        if (live.size >= PER_HOUR) { count("prevented: budget"); return false }  // i18n-ignore
+        if (live.size >= PER_HOUR) { count("prevented: budget"); DiagCollect.inc("requests prevented by provider protection (budget)"); return false }  // i18n-ignore
         Prefs.put("pg_t_$a", (live + now).takeLast(PER_HOUR).joinToString(","))
         count("requests"); return true  // i18n-ignore
     }
     @Synchronized fun cool(a: String, ms: Long, why: String, now: Long = System.currentTimeMillis()) {
         Prefs.put("pg_cool_$a", now + ms); Prefs.put("pg_why_$a", why); count("cooldown: $why")  // i18n-ignore
         DiagEvents.add("health", "provider protection: $why, active checks paused ${ms / 60_000} min")  // i18n-ignore
+        DiagII.cooldown(why, ms)
     }
     /** the reason active checks are paused for this provider, or null */
     fun blocked(a: String, now: Long = System.currentTimeMillis()): String? {

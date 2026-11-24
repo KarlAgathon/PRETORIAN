@@ -711,3 +711,20 @@ time,session,state,cpu_pct_one_core,java_heap_mb,pss_mb,native_heap_mb,play_stat
 time,session,db_kb,db_wal_shm_kb,image_cache_kb,cache_total_kb,logo_index_kb,diagnostics_kb,free_mb
 Audio passthrough state and the device behind HDMI are not observable.
 Freeze detection uses playback position only ([suspected]); the picture itself is never inspected.
+
+time,session,version,code,commit,build_type,sdk,device_short,first_screen_ms
+time,session,type,net,outcome,init_ms,play_ms,pause_ms,rebuf_n,rebuf_ms,rebuf_max_ms,seekbuf_n,dropped,rendered,errors,recovery,recov_ok,recov_ms,closed_by
+time,session,type,net,ms,suspected_cause
+time,session,type,min_ms,max_ms,mean_ms,bitrate_kbps,throughput_kbps,net
+time,session,type,net,requests,completed,cancelled,failed,kb,req_ms_median,req_ms_p95,kbps_median,redirects,http_codes,stream_id,closed_by
+time,session,ms,kind
+time,session,state,heap_used_mb,heap_total_mb,heap_max_mb,native_mb,pss_mb,rss_mb,graphics_mb,threads,fds,gc_count,gc_ms,avail_ram_mb,low_ram,players,uptime_min,image_cache_mb,diag_kb
+time,session,screen,frames,slow,janky,frozen,p50_ms,p95_ms,max_ms,refresh_hz
+time,session,category,code,ms,ttfb_ms,bytes,error,net
+time,session,category,n,median_ms,p95_ms,max_ms
+time,session,op,ms,rows,outcome
+time,session,source,kind,items,categories,duplicate_ids,missing_name,missing_category,missing_image,missing_epg_id,invalid,ms,previous_count,outcome
+time,session,type,class,mime,codecs,resolution,fps,hdr,decoder,hw,device,sdk,firmware
+time,session,exit_time,reason,status,importance,pss_mb,rss_mb,description,previous_session,previous_version,classification
+time,session,from_version,from_code,to_version,to_code,commit,first_screen_ms,device_id_same,before,after,verdict
+time,session,kind,ms,bytes,outcome,sha256_16

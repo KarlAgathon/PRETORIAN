@@ -137,7 +137,7 @@ object DiagReport {
         b.append("Release channel: ").append(if (BuildConfig.BUILD_TYPE == "beta") "Beta" else "Stable").append(" · session ").append(PerfLog.session).append('\n')  // i18n-ignore
         try { val pi = ctx.packageManager.getPackageInfo(ctx.packageName, 0)
             b.append("Installed: ").append(DiagEvents.stamp(pi.firstInstallTime)).append(" · last update: ").append(DiagEvents.stamp(pi.lastUpdateTime)).append('\n') } catch (_: Throwable) { b.append("Installed: unavailable\n") }  // i18n-ignore
-        b.append("Session started: ").append(DiagEvents.stamp(DiagCollect.sessionStartWall)).append(" · report schema ").append(DiagCollect.SCHEMA).append(" · build commit: unavailable\n")  // i18n-ignore
+        b.append("Session started: ").append(DiagEvents.stamp(DiagCollect.sessionStartWall)).append(" · report schema ").append(DiagCollect.SCHEMA).append(" · build commit: ").append(BuildConfig.GIT_COMMIT).append('\n')  // i18n-ignore
         b.append("Previous version: ").append(Prefs.str("diag_prev_version").ifBlank { "unknown" }).append('\n')  // i18n-ignore
         b.append("Device: ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL).append(" · Android ").append(Build.VERSION.RELEASE)
             .append(" (API ").append(Build.VERSION.SDK_INT).append(")\n")  // i18n-ignore
@@ -180,7 +180,7 @@ object DiagReport {
             if (c.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)) "internet ok" else "internet not confirmed").joinToString(" · ")  // i18n-ignore
     } catch (_: Throwable) { "unavailable" }  // i18n-ignore
 
-    private class Out(val w: java.io.Writer, val secrets: List<String>, val budget: LongArray? = null, val alive: () -> Boolean = { true }) {
+    internal class Out(val w: java.io.Writer, val secrets: List<String>, val budget: LongArray? = null, val alive: () -> Boolean = { true }) {
         var bytes = 0L
         private var n = 0
         fun line(s: String) {
@@ -194,7 +194,7 @@ object DiagReport {
 
     /** builds the export into [dest]; throws [SecretScan.Refused] when it cannot be made safe */
     /** the report reached its size ceiling: the rest of that section is left out (listed in section 31) */
-    private class Full : Exception()
+    internal class Full : Exception()
 
     fun build(ctx: Context, kind: Kind, dest: File, alive: () -> Boolean = { true }) {
         val secrets = try { SecretScan.values(ctx) } catch (e: Throwable) { throw SecretScan.Refused("secrets unreadable") }  // i18n-ignore
@@ -238,6 +238,9 @@ object DiagReport {
             o.line("MEDIA CENTER – FULL DIAGNOSTIC REPORT · schema " + DiagCollect.SCHEMA + " · report id " + java.util.UUID.randomUUID().toString().take(13))  // i18n-ignore
             o.line("Status labels: [measured] recorded here · [device] reported by Android · [provider] reported by the IPTV server · [cached] stored earlier · [suspected] indication, not proof · [unavailable] / [not observed] nothing recorded. Zero is a real value, never a stand-in for missing data.")  // i18n-ignore
             o.line("Legend: measured = recorded on this box · unavailable = not recorded or not supported here · nothing is estimated.")  // i18n-ignore
+            o.line("Build commit " + BuildConfig.GIT_COMMIT + " · Diagnostics II schema " + DiagII.SCHEMA + " · sections 1–70 · the summary (70) comes first, the evidence follows.")  // i18n-ignore
+            // 3.0.0.7: section 70 at the top, built only from what is recorded below
+            try { DiagReportII.summary(ctx, o) } catch (e: Full) { throw e } catch (e: Throwable) { o.line("[summary unavailable: " + e.javaClass.simpleName + "]") }  // i18n-ignore
             sec(1, "REPORT SUMMARY") {  // i18n-ignore
                 o.line("Created: " + SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z", Locale.US).format(Date()) + " (" + java.util.TimeZone.getDefault().id + ")")  // i18n-ignore
                 o.line("Device: " + DeviceIdentity.short() + " · " + DeviceIdentity.name().ifBlank { "name not set" } + " · Media Center " + BuildConfig.VERSION_NAME)  // i18n-ignore
@@ -386,6 +389,8 @@ object DiagReport {
         o.line("Samples exist only while the app ran with 'Praćenje dugog rada' on; playback timings from 3.0 on.")  // i18n-ignore
         o.line("Counts are this device only; other devices on the same account and provider-side counts are not visible.")  // i18n-ignore
         try { extended(ctx, o, play, samples, tasks) } catch (_: Full) { o.budget?.set(0, maxOf(o.budget?.get(0) ?: 0, 32L * 1024)); o.line("[extended sections cut at the size limit]") }  // i18n-ignore
+        // 3.0.0.7 Diagnostics II: sections 51–69 (section 70 is at the top)
+        try { DiagReportII.sections(ctx, o) } catch (_: Full) { o.budget?.set(0, maxOf(o.budget?.get(0) ?: 0, 32L * 1024)); o.line("[sections 51–69 cut at the size limit]") }  // i18n-ignore
         val total = DiagStore.eventCount()
         val left = ((o.budget?.get(0) ?: 0) - 1024) / 160
         val skip = (total - left).coerceAtLeast(0)
@@ -507,7 +512,7 @@ object DiagReport {
                 "Provider connection counts are the provider's own snapshot at login, not live and not per device.",
                 "Freeze detection uses playback position only ([suspected]); the picture itself is never inspected.",
                 "Navigation times end at first composition, not at a drawn frame.",
-                "Build commit id is not built into the app (unavailable).",
+                "Build commit id: built into the app since 3.0.0.7 (header and section 66).",
                 "Counters marked 'this session' reset when the app restarts; journal events cover up to 90 days.").forEach { o.line("- $it") }  // i18n-ignore
         }
     }
@@ -550,18 +555,24 @@ fun DiagExportDialog(start: DiagReport.Kind? = null, onDismiss: () -> Unit) {
         if (Work.state() == Work.State.LOW_MEMORY) { busy = false; refused = true; why = tr("Uređaj trenutno nema dovoljno memorije. Pokušaj ponovo za nekoliko minuta."); return@LaunchedEffect }
         val dir = File(ctx.cacheDir, "diag_export").apply { mkdirs(); listFiles()?.forEach { it.delete() } }
         val f = File(dir, DiagReport.fileName(k))
+        val t0 = android.os.SystemClock.elapsedRealtime()
         val ok = withContext(Dispatchers.IO) {
             try { if (!DiagSpace.ok(dir)) throw java.io.IOException("space"); DiagReport.build(ctx, k, f) { coroutineContext[kotlinx.coroutines.Job]?.isActive != false }; true }  // i18n-ignore
-            catch (e: Throwable) { DiagEvents.add("diag", "export failed: " + e.javaClass.simpleName); f.delete(); false }  // i18n-ignore
+            catch (e: Throwable) {
+                DiagEvents.add("diag", "export failed: " + e.javaClass.simpleName)  // i18n-ignore
+                DiagLife.export(k.name, android.os.SystemClock.elapsedRealtime() - t0, null, when (e) { is SecretScan.Refused -> "refused (sanitization not assured)"; is java.io.InterruptedIOException -> "cancelled"; else -> "failed (" + e.javaClass.simpleName + ")" })  // i18n-ignore
+                f.delete(); false }
         }
         busy = false
         // the finished file is checked before any QR appears: present, not empty, readable UTF-8
         val valid = ok && f.exists() && f.length() > 64 && try { f.inputStream().use { i -> val b = ByteArray(4096); val n = i.read(b); java.nio.charset.StandardCharsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(b, 0, maxOf(0, n - 4))); true } } catch (_: Throwable) { false }
-        if (!valid) { f.delete(); refused = true; return@LaunchedEffect }
+        if (!valid) { if (ok) DiagLife.export(k.name, android.os.SystemClock.elapsedRealtime() - t0, f, "failed integrity check (empty or not UTF-8)"); f.delete(); refused = true; return@LaunchedEffect }  // i18n-ignore
+        withContext(Dispatchers.IO) { DiagLife.export(k.name, android.os.SystemClock.elapsedRealtime() - t0, f, "ok") }  // i18n-ignore
         file = f
         until = System.currentTimeMillis() + 5 * 60_000L
-        val r = PhoneLink.startDownload(f.name, f, "text/plain; charset=utf-8") { done = true }  // i18n-ignore
+        val r = PhoneLink.startDownload(f.name, f, "text/plain; charset=utf-8") { done = true; DiagLife.transfer("file served to the phone (download completed)") }  // i18n-ignore
         url = r?.first; session = r?.second ?: 0L
+        DiagLife.transfer(if (r == null) "QR/link could not be started (no local network address)" else "QR shown")  // i18n-ignore
     }
     fun close() { PhoneLink.stop(session); File(ctx.cacheDir, "diag_export").listFiles()?.forEach { it.delete() }; onDismiss() }
     DisposableEffect(Unit) { onDispose { PhoneLink.stop(session) } }

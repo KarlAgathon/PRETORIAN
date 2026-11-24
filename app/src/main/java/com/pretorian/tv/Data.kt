@@ -260,16 +260,24 @@ object Net {
             c.readTimeout = 90000
             c.instanceFollowRedirects = false
             c.setRequestProperty("User-Agent", UA)
+            // 3.0.0.7 Diagnostics II: time, first byte, status and size of this same request (nothing else is sent)
+            val t0 = android.os.SystemClock.elapsedRealtime(); var code = -1; var ttfb = -1L; var counted: DiagII.Counting? = null
             try {
-                val code = c.responseCode
+                code = c.responseCode; ttfb = android.os.SystemClock.elapsedRealtime() - t0
                 if (code in 300..399) {
                     val loc = c.getHeaderField("Location") ?: throw IOException("Preusmjerenje bez adrese")
+                    DiagII.redirect(current)
                     current = URL(URL(current), loc).toString()
                     return@repeat
                 }
                 if (code !in 200..299) throw IOException(trf("Server je odgovorio greškom %s", code))
                 val len = c.contentLengthLong
-                return c.inputStream.use { read(it, len) }
+                val r = c.inputStream.use { val cs = DiagII.Counting(it); counted = cs; read(cs, len) }
+                DiagII.httpDone(current, code, android.os.SystemClock.elapsedRealtime() - t0, ttfb, counted?.n ?: 0, null)
+                return r
+            } catch (e: Throwable) {
+                if (code !in 300..399) DiagII.httpDone(current, code, android.os.SystemClock.elapsedRealtime() - t0, ttfb, counted?.n ?: 0, e)
+                throw e
             } finally {
                 c.disconnect()
             }
@@ -333,7 +341,7 @@ class Xtream(private val p: Playlist) {
             val id = o.str("stream_id")
             Channel(id, o.optInt("num", i + 1), o.str("name"), o.str("stream_icon").orNullIfBlank(), categoryId,
                 "$base/live/${p.user}/${p.pass}/$id.ts", o.str("epg_channel_id").orNullIfBlank(), p.id)
-        }
+        }.also { DiagII.liveQuality("XTREAM group", it) }
     }
 
     /** every live channel of the account (for the sports guide) */
@@ -345,7 +353,7 @@ class Xtream(private val p: Playlist) {
             Channel(id, o.optInt("num", i + 1), o.str("name"), o.str("stream_icon").orNullIfBlank(), o.str("category_id"),
                 "$base/live/${p.user}/${p.pass}/$id.ts", o.str("epg_channel_id").orNullIfBlank(), p.id,
                 if (o.optInt("tv_archive", 0) == 1) o.optInt("tv_archive_duration", 1).coerceAtLeast(1) else 0)
-        }
+        }.also { DiagII.liveQuality("XTREAM all channels", it) }
     }
 
     /** short list of every movie or series: id, category, name, image, rating, url (for the "new" badges) */
@@ -564,6 +572,7 @@ object M3u {
             }
         }
         if (out.isEmpty() && first?.startsWith("#EXTM3U") != true) throw IOException("Link ne vraća M3U listu")
+        DiagII.liveQuality("M3U", out)
         return out
     }
 }

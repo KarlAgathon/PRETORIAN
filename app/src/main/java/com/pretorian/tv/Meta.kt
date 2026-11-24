@@ -85,8 +85,11 @@ object Http {
                 c.setRequestProperty("Content-Type", "application/json")
                 c.outputStream.use { it.write(body.toByteArray()) }
             }
-            val code = c.responseCode
+            val t0 = android.os.SystemClock.elapsedRealtime()
+            val code = try { c.responseCode } catch (e: Throwable) { DiagII.httpDone(url, -1, android.os.SystemClock.elapsedRealtime() - t0, -1, 0, e); throw e }
+            val ttfb = android.os.SystemClock.elapsedRealtime() - t0
             val text = (if (code in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
+            DiagII.httpDone(url, code, android.os.SystemClock.elapsedRealtime() - t0, ttfb, text.length.toLong(), null)
             if (code !in 200..299) throw IOException("HTTP $code ${text.take(120)}")
             return text
         } finally { c.disconnect() }
@@ -106,16 +109,21 @@ object Http {
             val c = URL(cur).openConnection() as HttpURLConnection
             c.connectTimeout = 15_000; c.readTimeout = 60_000; c.instanceFollowRedirects = false
             c.setRequestProperty("User-Agent", ua ?: "MediaCenter/${BuildInfo.VERSION}")  // i18n-ignore
+            val t0 = android.os.SystemClock.elapsedRealtime(); var code = -1; var ttfb = -1L
             try {
-                val code = c.responseCode
-                if (code in 300..399) { cur = URL(URL(cur), c.getHeaderField("Location") ?: throw IOException("redirect")).toString(); return@repeat }
+                code = c.responseCode; ttfb = android.os.SystemClock.elapsedRealtime() - t0
+                if (code in 300..399) { DiagII.redirect(cur); cur = URL(URL(cur), c.getHeaderField("Location") ?: throw IOException("redirect")).toString(); return@repeat }
                 if (code !in 200..299) throw IOException("HTTP $code")
                 val out = java.io.ByteArrayOutputStream()
                 c.inputStream.use { input ->
                     val buf = ByteArray(32 * 1024)
                     while (true) { val n = input.read(buf); if (n < 0) break; out.write(buf, 0, n); if (out.size() > max) throw IOException("Fajl je prevelik") }
                 }
+                DiagII.httpDone(cur, code, android.os.SystemClock.elapsedRealtime() - t0, ttfb, out.size().toLong(), null)
                 return out.toByteArray()
+            } catch (e: Throwable) {
+                if (code !in 300..399) DiagII.httpDone(cur, code, android.os.SystemClock.elapsedRealtime() - t0, ttfb, 0, e)
+                throw e
             } finally { c.disconnect() }
         }
         throw IOException("Previše preusmjeravanja")
@@ -479,6 +487,12 @@ object Subs {
 
     /** downloads the subtitle and returns a UTF-8 .srt file in the cache */
     suspend fun download(ctx: Context, r: SubResult): File = withContext(Dispatchers.IO) {
+        // 3.0.0.7 Diagnostics II: how long the chosen subtitle took and whether it worked (provider name only, never the text or the link)
+        val t0 = android.os.SystemClock.elapsedRealtime()
+        try { downloadInner(ctx, r).also { DiagII.subtitleLoad(r.provider, android.os.SystemClock.elapsedRealtime() - t0, null) } }
+        catch (e: Throwable) { DiagII.subtitleLoad(r.provider, android.os.SystemClock.elapsedRealtime() - t0, e); throw e }
+    }
+    private fun downloadInner(ctx: Context, r: SubResult): File {
         val bytes = when (r.provider) {
             "OpenSubtitles" -> {
                 if (osToken == null && Prefs.osUser.isNotBlank()) {
@@ -505,7 +519,7 @@ object Subs {
                 unzipFirstSrt(zip) ?: throw IOException("U arhivi nema .srt titla")
             }
         }
-        saveSrt(ctx, bytes, r.lang)
+        return saveSrt(ctx, bytes, r.lang)
     }
 
     suspend fun fromUrl(ctx: Context, url: String): File = withContext(Dispatchers.IO) {
@@ -529,6 +543,7 @@ object Subs {
         val text = try {
             Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(b)).toString()
         } catch (e: CharacterCodingException) {
+            DiagCollect.inc("subtitle files not valid UTF-8 (read as Windows-1250)")
             String(b, Charset.forName("windows-1250"))
         }
         val dir = File(ctx.cacheDir, "subs").apply { mkdirs() }

@@ -46,10 +46,14 @@ object CatalogDb {
                 guideTables(db)
             }
             override fun onUpgrade(db: SQLiteDatabase, o: Int, n: Int) {
-                // version 2 adds the TV guide; movies and series already on the box stay
-                if (o < 2) guideTables(db)
-                // version 3: the search key (name without accents, lower case) next to every movie / series; filled later in the background
-                if (o < 3) try { db.execSQL("ALTER TABLE items ADD COLUMN k TEXT") } catch (_: Throwable) {} // i18n-ignore
+                val t0 = android.os.SystemClock.elapsedRealtime()
+                try {
+                    // version 2 adds the TV guide; movies and series already on the box stay
+                    if (o < 2) guideTables(db)
+                    // version 3: the search key (name without accents, lower case) next to every movie / series; filled later in the background
+                    if (o < 3) try { db.execSQL("ALTER TABLE items ADD COLUMN k TEXT") } catch (_: Throwable) {} // i18n-ignore
+                    DiagII.migration(o, n, android.os.SystemClock.elapsedRealtime() - t0, null)
+                } catch (e: Throwable) { DiagII.migration(o, n, android.os.SystemClock.elapsedRealtime() - t0, e); throw e }
             }
         }
     }
@@ -60,14 +64,14 @@ object CatalogDb {
         db.execSQL("CREATE TABLE IF NOT EXISTS gmeta(src TEXT PRIMARY KEY, at INTEGER, n INTEGER)") // i18n-ignore
     }
 
-    internal fun db(): SQLiteDatabase? = try { helper?.writableDatabase } catch (e: Throwable) { null }
+    internal fun db(): SQLiteDatabase? = try { helper?.writableDatabase } catch (e: Throwable) { DiagII.dbError("open", e); null }
 
     /** (time of the last full download, how many) or null when this playlist part was never downloaded */
     private fun meta(pl: String, kind: String): Pair<Long, Int>? = try {
         db()?.rawQuery("SELECT at, n FROM meta WHERE pl=? AND kind=?", arrayOf(pl, kind))?.use { c -> // i18n-ignore
             if (c.moveToFirst()) c.getLong(0) to c.getInt(1) else null
         }
-    } catch (e: Throwable) { null }
+    } catch (e: Throwable) { DiagII.dbError("read meta", e); null }
 
     fun count(pl: String, kind: String): Int = meta(pl, kind)?.second ?: -1
     /** how many titles each category has (New Dawn shows the number next to every category) */
@@ -75,7 +79,7 @@ object CatalogDb {
         db()?.rawQuery("SELECT c, COUNT(*) FROM items WHERE pl=? AND kind=? GROUP BY c", arrayOf(pl, kind))?.use { c -> // i18n-ignore
             val m = HashMap<String, Int>(); while (c.moveToNext()) m[c.getString(0) ?: ""] = c.getInt(1); m
         } ?: emptyMap()
-    } catch (e: Throwable) { emptyMap() }
+    } catch (e: Throwable) { DiagII.dbError("category counts", e); emptyMap() }
     fun has(pl: String, kind: String) = meta(pl, kind) != null
 
     /** "Refresh": everything counts as old, so it is downloaded again in the background (the old data stays until then) */
@@ -101,18 +105,25 @@ object CatalogDb {
 
     /** downloads one part (movies or series) into the database; the old rows are replaced only when the download is complete */
     fun download(p: Playlist, kind: String, progress: ((items: Int, read: Long, total: Long) -> Unit)? = null): Int {
+        // 3.0.0.7 Diagnostics II: quality counts and timing of this same import pass (nothing extra is read or asked)
+        val q = DiagII.Quality(p.type.name, kind); val prev = count(p.id, kind)
+        try { return downloadInner(p, kind, progress, q).also { q.done(prev, null) } } catch (e: Throwable) { q.done(prev, e); throw e }
+    }
+    private fun downloadInner(p: Playlist, kind: String, progress: ((items: Int, read: Long, total: Long) -> Unit)?, q: DiagII.Quality): Int {
         val d = db() ?: throw IllegalStateException("db") // i18n-ignore
         var n = 0; var lastBytes = 0L; var total = -1L
         val stage = java.io.File.createTempFile("catalog-", ".jsonl", cacheDir)
         try {
             stage.bufferedWriter().use { writer ->
                 Xtream(p).catalogEach(kind, bytes = { r, t -> lastBytes = r; total = t; progress?.invoke(n, r, t) }) { item ->
+                    DiagCollect.guard("quality") { q.item(item.optString("id"), item.optString("n"), item.optString("c"), item.optString("i")) }
                     writer.write(item.toString())
                     writer.newLine()
                     n++
                     if (n % 500 == 0) progress?.invoke(n, lastBytes, total)
                 }
             }
+            val tx = android.os.SystemClock.elapsedRealtime(); var committed = false
             d.beginTransactionNonExclusive()
             try {
                 d.delete("items", "pl=? AND kind=?", arrayOf(p.id, kind)) // i18n-ignore
@@ -128,8 +139,12 @@ object CatalogDb {
                 check(d.insertWithOnConflict("meta", null, ContentValues().apply { // i18n-ignore
                     put("pl", p.id); put("kind", kind); put("at", System.currentTimeMillis()); put("n", n) // i18n-ignore
                 }, SQLiteDatabase.CONFLICT_REPLACE) != -1L)
-                d.setTransactionSuccessful()
-            } finally { d.endTransaction() }
+                d.setTransactionSuccessful(); committed = true
+            } catch (e: Throwable) { DiagII.dbError("catalog write $kind", e); throw e }
+            finally {
+                d.endTransaction()
+                if (!committed) DiagCollect.inc("database transactions rolled back") else DiagII.db("catalog write $kind", android.os.SystemClock.elapsedRealtime() - tx, n.toLong(), null)  // i18n-ignore
+            }
         } finally { stage.delete() }
         return n
     }
@@ -153,12 +168,12 @@ object CatalogDb {
         val args = ArrayList<String>().apply { add(kind); addAll(pls) }
         // rows from before version 3 may not have their key yet: their lower-case name is used meanwhile
         words.forEach { w -> where.append(" AND COALESCE(k, lower(n)) LIKE ?"); args += "%" + w.replace("%", "").replace("_", "") + "%" } // i18n-ignore
-        return d.rawQuery("SELECT pl, id, c, n, i, r, u, k FROM items WHERE $where LIMIT $limit", args.toTypedArray()).use { c -> // i18n-ignore
+        return DiagII.timed("search", { it.size.toLong() }) { d.rawQuery("SELECT pl, id, c, n, i, r, u, k FROM items WHERE $where LIMIT $limit", args.toTypedArray()).use { c -> // i18n-ignore
             val out = ArrayList<Row>()
             while (c.moveToNext()) out += Row(c.getString(0) ?: "", c.getString(1) ?: "", c.getString(2) ?: "", c.getString(3) ?: "",
                 c.getString(4)?.ifBlank { null }, c.getString(5)?.ifBlank { null }, c.getString(6) ?: "", c.getString(7) ?: (c.getString(3) ?: "").lowercase())
             out
-        }
+        } }
     }
 
     /** the newest titles of a playlist: the provider gives no reliable "added" date in the catalog, so the
@@ -457,7 +472,9 @@ object GuideDb {
     } catch (e: Throwable) { emptyList() }
 
     /** downloads one guide into the database; the old one stays until the new one is complete (and not empty) */
-    fun download(src: String, url: String, channels: Set<String>, progress: ((Int, Long, Long) -> Unit)? = null): Int {
+    fun download(src: String, url: String, channels: Set<String>, progress: ((Int, Long, Long) -> Unit)? = null): Int =
+        DiagII.timed("EPG import", { it.toLong() }) { downloadInner(src, url, channels, progress) }
+    private fun downloadInner(src: String, url: String, channels: Set<String>, progress: ((Int, Long, Long) -> Unit)?): Int {
         val d = CatalogDb.db() ?: throw IllegalStateException("db") // i18n-ignore
         val now = System.currentTimeMillis()
         var n = 0; var lastBytes = 0L; var total = -1L

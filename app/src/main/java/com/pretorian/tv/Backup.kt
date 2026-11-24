@@ -92,7 +92,8 @@ object Backup {
         return SecretKeySpec(k, "AES")
     }
 
-    fun export(ctx: Context, password: String?, parts: Set<Int>? = null): String {
+    fun export(ctx: Context, password: String?, parts: Set<Int>? = null): String = DiagII.timed("backup export", { it.length.toLong() }) { exportInner(ctx, password, parts) }
+    private fun exportInner(ctx: Context, password: String?, parts: Set<Int>?): String {
         val data = payload(ctx, parts, encrypted = !password.isNullOrBlank())
         val out = JSONObject().put("mediacenter_backup", 1).put("app", BuildInfo.VERSION)
             .put("date", SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date()))
@@ -117,7 +118,8 @@ object Backup {
     } catch (e: Exception) { null }
 
     /** restores everything; throws with a message when the password is wrong or the file is broken */
-    fun restore(ctx: Context, text: String, password: String?) {
+    fun restore(ctx: Context, text: String, password: String?) = DiagII.timed("backup restore") { restoreInner(ctx, text, password) }
+    private fun restoreInner(ctx: Context, text: String, password: String?) {
         Watch.flush()
         val o = JSONObject(text)
         if (o.optInt("mediacenter_backup") != 1) throw IllegalArgumentException(tr("Fajl nije backup ove aplikacije"))

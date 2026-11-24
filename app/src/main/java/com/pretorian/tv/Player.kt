@@ -83,7 +83,7 @@ import java.io.File
 import androidx.media3.common.C as MC
 
 @OptIn(UnstableApi::class)
-fun buildPlayer(ctx: Context, preview: Boolean = false): ExoPlayer {
+fun buildPlayer(ctx: Context, preview: Boolean = false, diagKind: String? = null): ExoPlayer {
     val http = DefaultHttpDataSource.Factory()
         .setUserAgent(Net.UA)
         .setAllowCrossProtocolRedirects(true)
@@ -129,6 +129,8 @@ fun buildPlayer(ctx: Context, preview: Boolean = false): ExoPlayer {
     val player = builder.build()
     // 3.0.0.2: passive diagnostics only (formats, decoders, dropped frames, errors, release); playback is not touched
     try { player.addAnalyticsListener(DiagCollect.listener(preview)); DiagCollect.playerCreated(preview) } catch (_: Throwable) {}
+    // 3.0.0.7 Diagnostics II: request lifecycle, QoE, buffer, decoder, audio and subtitle observations (playback untouched)
+    try { player.addAnalyticsListener(DiagII.listener(player, preview, diagKind)) } catch (_: Throwable) {}
     val audio = Prefs.audioLangs.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toTypedArray()
     val b = player.trackSelectionParameters.buildUpon()
     if (!Prefs.bool("audio_default")) b.setPreferredAudioLanguages(*audio)
@@ -156,7 +158,7 @@ fun iso2(raw: String?): String? {
 @OptIn(UnstableApi::class)
 suspend fun probeTracks(ctx: Context, link: String): Pair<List<androidx.media3.common.Format>, List<androidx.media3.common.Format>>? {
     val url = try { Stalker.resolve(ctx, link) } catch (e: Exception) { return null }
-    val player = buildPlayer(ctx)
+    val player = buildPlayer(ctx, diagKind = "track probe")  // i18n-ignore
     return try {
         kotlinx.coroutines.withTimeoutOrNull(20_000) {
             kotlinx.coroutines.suspendCancellableCoroutine { cont ->
@@ -374,6 +376,10 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
 
     fun loadMedia(item: PlayItem, file: String?, at: Long, play: Boolean = true) {
         loadStartedAt = android.os.SystemClock.elapsedRealtime(); firstFrameLogged = false; firstPicLogged = false; resumeAsked = if (s.live) 0L else at
+        // 3.0.0.7 Diagnostics II: what kind of playback this is (for the per-type statistics; nothing else changes)
+        DiagII.fullType = when { shiftFrom != 0L || item.url.contains("timeshift", true) || item.url.contains("utc=", true) || item.url.contains("catchup", true) -> "catchup"  // i18n-ignore
+            s.live -> "tv"; item.season != null -> "series"; else -> "movie" }  // i18n-ignore
+        DiagII.subExternal = file != null
         val request = mediaRequest.begin()
         val selectedIndex = index
         // Stalker portal: the real address is asked for right before playing

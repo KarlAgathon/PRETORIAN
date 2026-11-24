@@ -25,7 +25,8 @@ object Upkeep {
         }
     }
 
-    fun clean(ctx: Context) {
+    fun clean(ctx: Context) { DiagII.timed("maintenance (cleanup)") { cleanInner(ctx) } }
+    private fun cleanInner(ctx: Context) {
         val d = CatalogDb.db() ?: return
         val now = System.currentTimeMillis()
         val pls = Store.playlists(ctx).map { it.id }.toSet()
@@ -46,7 +47,7 @@ object Upkeep {
         }
         // once a week: give the freed space back to the box
         if (now - Prefs.long("db_vacuum_at", 0) > 7 * 86_400_000L && !Import.busy()) {
-            try { d.execSQL("VACUUM"); Prefs.put("db_vacuum_at", now) } catch (_: Throwable) {} // i18n-ignore
+            try { DiagII.timed("maintenance (VACUUM)") { d.execSQL("VACUUM") }; Prefs.put("db_vacuum_at", now) } catch (_: Throwable) {} // i18n-ignore
         }
     }
 }
@@ -87,6 +88,9 @@ object Monitor {
                 val rt = Runtime.getRuntime(); val heap = ((rt.totalMemory() - rt.freeMemory()) / 1_048_576).toInt()
                 @Suppress("DEPRECATION") val pss = if (tick % 5 == 1) (android.os.Debug.getPss() / 1024).toInt().also { lastPss = it } else lastPss
                 PerfLog.sample(Work.state().name.lowercase(), cpu, heap, if (tick % 5 == 1) pss else null)
+                // 3.0.0.7 Diagnostics II: the extended memory row with the same PSS (every 5th minute), image timing summary every 30 min
+                if (tick % 5 == 1) DiagII.memSample(tick, pss)
+                if (tick % 30 == 2) DiagII.flushImages()
                 // 3.0.0.2: storage sizes every 6 h, and only while nothing plays (a short directory walk)
                 if (tick % 360 == 3 && Work.state() == Work.State.IDLE) appCtx?.let { DiagCollect.storageSnapshot(it) }
                 synchronized(samples) { samples.addLast(Sample(w, pss, cpu)); while (samples.size > 1440) samples.removeFirst() }

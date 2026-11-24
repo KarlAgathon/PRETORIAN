@@ -91,8 +91,11 @@ class MainActivity : ComponentActivity() {
             .memoryCache { coil.memory.MemoryCache.Builder(this).maxSizePercent(if (Perf.lite || Lean.images) 0.10 else 0.20).build() }
             .diskCache { coil.disk.DiskCache.Builder().directory(cacheDir.resolve("images")).maxSizeBytes(if (Perf.lite) 150L shl 20 else 400L shl 20).build() }
             .eventListener(DiagCollect.imageListener)   // 3.0.0.2: load counts and times only
+            // 3.0.0.7: the same default HTTP client, with an observer of its own phases (DNS, connect, TLS, first byte)
+            .okHttpClient { okhttp3.OkHttpClient.Builder().eventListenerFactory(DiagII.okEvents).build() }
             .build())
         DiagCollect.start(this); Monitor.appCtx = applicationContext
+        DiagII.appCtx = applicationContext; DiagLife.start(this); DiagII.attachFrames(this)
         CrashLog.watch(this)
         Stats.onStart()
         WhatsNew.check(this)
@@ -108,6 +111,7 @@ class MainActivity : ComponentActivity() {
     // TV browser: Back / ◀ in the options row under the preview go to the channel list before Compose sees them
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
         Saver.touch()
+        if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0) DiagII.key(true)
         if (TvFocus.onKey(event)) return true
         return super.dispatchKeyEvent(event)
     }
@@ -115,6 +119,7 @@ class MainActivity : ComponentActivity() {
     // Android asks for memory back: drop lists that are not on the screen, they load again when needed
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
+        DiagII.trim(level)
         if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) Work.lowMemoryUntil = android.os.SystemClock.elapsedRealtime() + 5 * 60_000L
         if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) DiagEvents.add("memwarn", "memory pressure level $level on ${CrashLog.screen}")  // i18n-ignore
         if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN || level == android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW ||

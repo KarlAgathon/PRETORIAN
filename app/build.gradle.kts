@@ -4,6 +4,12 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+fun gitCommit(): String = try {
+    val p = ProcessBuilder("git", "rev-parse", "HEAD").directory(rootDir).redirectErrorStream(true).start()
+    val out = p.inputStream.bufferedReader().readText().trim()
+    if (p.waitFor() == 0 && out.matches(Regex("[0-9a-f]{40}"))) out else (System.getenv("GITHUB_SHA") ?: "unknown")
+} catch (e: Exception) { System.getenv("GITHUB_SHA") ?: "unknown" }
+
 android {
     // unit tests on GitHub: Android calls give plain defaults instead of failing
     testOptions { unitTests.isReturnDefaultValues = true }
@@ -15,10 +21,12 @@ android {
         minSdk = 24
         targetSdk = 34
         // raise both numbers for every new version (needed for updates)
-        versionCode = 306
-        versionName = "3.0.0.6"
+        versionCode = 307
+        versionName = "3.0.0.7"
         // TMDB_KEY from GitHub Secrets: posters, cast, platform and coming episodes work for everyone without typing a key
         buildConfigField("String", "TMDB_KEY", "\"" + (System.getenv("TMDB_KEY") ?: "") + "\"")
+        // 3.0.0.7 Diagnostics II: the exact Git commit of this build, written in at build time (no network lookup in the app)
+        buildConfigField("String", "GIT_COMMIT", "\"" + gitCommit() + "\"")
     }
 
     // Private signing key (same as LEAD Launcher): written by GitHub Actions from the secrets
