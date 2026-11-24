@@ -169,9 +169,9 @@ private fun DawnMenu(nav: Nav) {
             add(DawnItem(if (series) Screen.Series else Screen.Movies, R.drawable.lc_play, "Nastavi gledati", go = { openContinue(series); nav.root(if (series) Screen.Series else Screen.Movies) }))
         }
         if (recent) add(DawnItem(Screen.Tv, R.drawable.lc_history, "Nedavno gledano", go = {
-            TvMemory.group = GroupRef(null, Category(RECENT_GROUP, tr("Nedavno gledano"))); TvMemory.channel = 0; nav.root(Screen.Tv) }))
+            TvMemory.group = GroupRef(null, Category(RECENT_GROUP, tr("Nedavno gledano"))); TvMemory.channel = 0; TvMemory.openGroup = true; nav.root(Screen.Tv) }))
         if (favs) add(DawnItem(Screen.Tv, R.drawable.lc_star, "Favoriti", go = {
-            TvMemory.group = GroupRef(null, Category(FAV_PREFIX + Favs.mainId(ctx), tr("Favoriti"))); TvMemory.channel = 0; nav.root(Screen.Tv) }))
+            TvMemory.group = GroupRef(null, Category(FAV_PREFIX + Favs.mainId(ctx), tr("Favoriti"))); TvMemory.channel = 0; TvMemory.openGroup = true; nav.root(Screen.Tv) }))
     }
     val items = shortcuts + listOf(
         DawnItem(Screen.Tv, R.drawable.lc_tv, "TV"),

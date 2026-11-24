@@ -139,10 +139,12 @@ fun DawnVod(nav: Nav, series: Boolean) {
     val p = remember { Store.active(ctx) } ?: run { NoPlaylist(nav); return }
     val kind = if (series) "series" else "vod"
     val mem = remember { VodMemory.levels.getOrPut(kind) { HashMap() } }
-    // back from a title or the player: the same level as before; a fresh visit starts at the menu
+    // 3.0.0.4: opened anew (Home, menu) → the menu, focus on the first row; back from a title, the player or Search
+    // → exactly the level and row you left (one step back)
     val stack = remember {
         val s = VodMemory.stack.getOrPut(kind) { mutableStateListOf<Any>(VL.Menu) }
-        if (!VodMemory.returning) { s.clear(); s.add(VL.Menu) }
+        val fresh = SectionEntry.take(if (series) Screen.Series else Screen.Movies)
+        if (fresh && !VodMemory.returning) { s.clear(); s.add(VL.Menu); mem.clear(); TwoColMemory.forget(mem) }
         VodMemory.returning = false
         s
     }

@@ -1,3 +1,8 @@
+Media Center 3.0.0.4 Stable – fixes (feature freeze stays)
+- Back is always one step: from a film/series, the player or Search you land on the same category or group you left.
+- TV, Movies and Series opened anew (Home, menu) always start at the top (TV: "Search channels").
+- Home › Recently watched TV (max 10) ends with a "Delete history" tile (asks first).
+
 Media Center 3.0.0.3 Stable – fixes (feature freeze stays; nothing new)
 
 • Active channel check is OFF for everyone by default. Updating from earlier versions turns it off once; it can still be switched on in Settings › Player › More options for providers that allow it. Passive lamps (from real playback) stay as they are.

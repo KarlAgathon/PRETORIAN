@@ -206,7 +206,7 @@ fun PretorianApp() {
                     }
                 }
             },
-            root = { s -> if (s != Screen.Search) SearchMem.clear() else SearchOnly.only = null; if (s == Screen.Settings) SettingsStack.opened(1, false); stack.clear(); stack.add(Screen.Home); if (s != Screen.Home) stack.add(s) },
+            root = { s -> SectionEntry.mark(s); if (s != Screen.Search) SearchMem.clear() else SearchOnly.only = null; if (s == Screen.Settings) SettingsStack.opened(1, false); stack.clear(); stack.add(Screen.Home); if (s != Screen.Home) stack.add(s) },
             playlistsChanged = { Repo.clear(); version++ },
         )
     }
@@ -239,9 +239,9 @@ fun PretorianApp() {
             delay(if (General.start == 5) 1500 else 50)
             // Settings › General › "When the app opens, you first see": Back from there goes to Home
             if (stack.lastOrNull() == Screen.Home) when (General.start) {
-                1 -> nav.push(Screen.Tv)
-                2 -> nav.push(Screen.Movies)
-                3 -> nav.push(Screen.Series)
+                1 -> { SectionEntry.mark(Screen.Tv); nav.push(Screen.Tv) }
+                2 -> { SectionEntry.mark(Screen.Movies); nav.push(Screen.Movies) }
+                3 -> { SectionEntry.mark(Screen.Series); nav.push(Screen.Series) }
                 4 -> nav.push(Screen.Sports)
                 5 -> Recent.list().firstOrNull()?.let { r -> playChannels(nav, listOf(r.ch), 0) }
             }
@@ -503,4 +503,14 @@ object Follow {
         }
         Prefs.put("follow", o.toString()); rev++
     }
+}
+
+
+/** 3.0.0.4: a section opened anew (from Home, the menu or at app start) starts at the top; coming back into it
+ *  with Back (from a title, the player, Search or a group) keeps the place you left. */
+object SectionEntry {
+    private val fresh = HashSet<String>()
+    fun mark(s: Screen) { fresh.add(s::class.java.name + s.toString()) }
+    /** true once after the section was opened anew */
+    fun take(s: Screen): Boolean = fresh.remove(s::class.java.name + s.toString())
 }

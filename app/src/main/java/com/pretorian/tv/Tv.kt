@@ -72,6 +72,8 @@ object TvMemory {
     var restore = false
     /** the channel confirmed with OK: it plays in the small picture until another one is confirmed */
     var preview: Channel? = null
+    /** a menu shortcut (Recently watched, Favourites) opens TV on that group, not at the top */
+    var openGroup = false
 }
 
 /** The small live preview: stopped before the real player starts, so the account never has two connections. */
@@ -490,12 +492,13 @@ private fun TvList(nav: Nav) {
     DisposableEffect(Unit) { onDispose { Dawn.crumb = ""; Dawn.pos = ""; Dawn.hints = emptyList() } }
     // first time on the groups: the focus goes to the last opened group (or the first one)
     var placed by remember { mutableStateOf(false) }
-    // 3.0.1: entering TV from another section (Home, Movies, Series, Settings) starts at the top ("Search channels");
-    // only coming back from the player keeps the group and channel that were playing
+    // 3.0.0.4: TV opened anew (Home, menu, another section) starts at the top ("Search channels");
+    // coming back with Back (player, Catch Up, Sport, Search) keeps the group you were on
+    val freshEntry = remember { val f = SectionEntry.take(Screen.Tv); val g = TvMemory.openGroup; TvMemory.openGroup = false; f && !coming && !g }
     LaunchedEffect(rows is Load.Ok, inChannels) {
         if (!inChannels && rows is Load.Ok && !placed) {
             placed = true
-            if (TvMemory.restore) backToGroups() else {
+            if (!freshEntry) backToGroups() else {
                 st.group = null; TvMemory.group = null; TvMemory.channel = -1
                 st.focusKey = "find"; Chrome.rail = 2; st.refocus++
                 focusScope.launch { runCatching { gState.scrollToItem(0) }; delay(180); runCatching { st.focusFr.requestFocus() } }

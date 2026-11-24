@@ -198,6 +198,7 @@ fun HomeV2(nav: Nav) {
     val frs = remember { HashMap<String, FocusRequester>() }
     fun fr(k: String) = frs.getOrPut(k) { FocusRequester() }
     var clear by remember { mutableStateOf<NavItem?>(null) }
+    var askClearRecent by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf<Progress?>(null) }
     DisposableEffect(Unit) { onDispose { Chrome.inRail = false } }
     LaunchedEffect(Unit) { Weather.refresh() }
@@ -323,8 +324,10 @@ fun HomeV2(nav: Nav) {
                 T(tr(lowerTitle).uppercase(), 17.sp, Color(0xFFE6E8EB), FontWeight.Medium)
             }
             val gap = 10.dp
-            val n = ((cw + gap) / (76.dp + gap)).toInt().coerceIn(3, 14).coerceAtMost(tiles.size.coerceAtLeast(1))
             val slots = ((cw + gap) / (76.dp + gap)).toInt().coerceIn(3, 14)
+            // 3.0.0.4: recently watched (max 10) ends with a "Delete history" tile; it takes one slot
+            val withClear = recent.isNotEmpty()
+            val n = (if (withClear) minOf(slots - 1, 10) else slots).coerceAtMost(tiles.size.coerceAtLeast(1))
             val tw = (cw - gap * (slots - 1)) / slots
             val th = (tw * 0.7f).coerceAtMost(tilesMaxH)
             Row(Modifier.offset(cx, tilesTop).width(cw), horizontalArrangement = Arrangement.spacedBy(gap)) {
@@ -337,6 +340,24 @@ fun HomeV2(nav: Nav) {
                         HomeTile(ch)
                     }
                 }
+                if (withClear) {
+                    Focusable(onClick = { HomeMem.key = "tile:clear"; askClearRecent = true }, onFocus = { HomeMem.key = "tile:clear" }, focusRequester = fr("tile:clear"),
+                        shape = Rnd(12.dp), normal = Color(0x8C14181C), focused = Color(0xB314181C), focusBorderColor = Color(0xE6FFFFFF),
+                        borderColor = Color(0x1FFFFFFF), zoom = 1.06f, modifier = Modifier.width(tw).height(th)) { f ->
+                        Column(Modifier.fillMaxSize().padding(4.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                            Ico(R.drawable.lc_trash_2, 20.dp, if (f) Color.White else Color(0xFFB0B8C4))
+                            Spacer(Modifier.height(4.dp))
+                            T(tr("Obriši historiju"), 11.sp, if (f) Color.White else Color(0xFFB0B8C4), maxLines = 2)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (askClearRecent) {
+        Popup(tr("Obrisati historiju?"), onDismiss = { askClearRecent = false }) {
+            OptionRow("Obriši historiju", R.drawable.lc_trash_2, color = C.Danger) {
+                Recent.clear(); clearPlayerChannelHistory(); askClearRecent = false; HomeMem.key = "tile:0"
             }
         }
     }

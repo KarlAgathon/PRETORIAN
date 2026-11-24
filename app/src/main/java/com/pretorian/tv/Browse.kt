@@ -36,8 +36,13 @@ class BrowseRow(
  * ▲▼ only change the right side; OK on a row moves to the button, a second OK there opens (that is the double OK);
  * ◀ or Back on the button return to the same row. Opening is guarded against repeats.
  */
-/** 3.0.1: the focused row of each two-column browser, by row id (not by index), so Back returns to the same row. */
+/** 3.0.0.4: the focused row of each two-column browser, by row id (not by index), so Back returns to the same row. */
 private val focusedRowId = HashMap<String, String>()
+
+object TwoColMemory {
+    /** a fresh visit: forget the remembered rows of this browser memory, so it starts at the top */
+    fun forget(mem: HashMap<String, Int>) { val p = System.identityHashCode(mem).toString() + "|"; focusedRowId.keys.removeAll { it.startsWith(p) } }
+}
 
 @Composable
 fun TwoColBrowser(
