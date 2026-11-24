@@ -86,6 +86,8 @@ object ChannelHealth {
     } catch (_: Throwable) { url.hashCode().toString(16) }
 
     fun init(ctx: Context) {
+        // 3.0.0.3: active checks are OFF for every user once (owner decision); the switch stays in Settings only
+        if (!Prefs.bool("ch_default_off_303")) { Prefs.put("ch_probe_active", false); Prefs.put("ch_default_off_303", true) }
         if (file != null) return
         val f = File(ctx.filesDir, "health.json"); file = f
         io.launch {

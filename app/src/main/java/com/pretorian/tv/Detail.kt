@@ -219,7 +219,8 @@ fun MediaIconsRow(open: String?, setOpen: (String?) -> Unit, subsOn: Boolean, au
     var last by remember { mutableStateOf<String?>(null) }
     // Back (or a choice) closes the menu and the focus goes back to its icon
     LaunchedEffect(open) { if (open != null) last = open else last?.let { delay(60); frs[keys.indexOf(it)].tryFocus() } }
-    Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+    // 3.0.0.3: the labels sit above the bottom safe margin, so they are never cut off
+    Row(Modifier.padding(bottom = 40.dp), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
         listOf(Triple(MI_SUBS, R.drawable.lc_captions, "Titlovi") to subsOn, Triple(MI_AUDIO, R.drawable.lc_volume, "Audio") to audioOn,
             Triple(MI_PLAYBACK, R.drawable.lc_gauge2, "Reprodukcija") to playOn, Triple(MI_PICTURE, R.drawable.lc_rectangle_horizontal, "Slika") to picOn)
             .forEachIndexed { i, (t, on) ->

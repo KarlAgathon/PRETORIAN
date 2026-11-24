@@ -174,8 +174,10 @@ sealed class GRow {
     val id get() = when (this) { is Group -> "g:" + ref.key; is Header -> "h:" + p.id; is NewFav -> "nf"; is NewGroup -> "ng:$pid"; is Sport -> "sport"; is Catchup -> "catchup"; is Find -> "find" }
 }
 
-internal fun groupFocusTarget(rows: List<GRow>, selected: GroupRef?): String? {
+internal fun groupFocusTarget(rows: List<GRow>, selected: GroupRef?, remembered: String? = null): String? {
     val groups = rows.filterIsInstance<GRow.Group>()
+    // 3.0.0.3: the row that had the focus when the user went in comes back first
+    remembered?.let { r -> groups.firstOrNull { it.id == r }?.let { return it.id } }
     return (groups.firstOrNull { it.ref.key == selected?.key } ?: groups.firstOrNull())?.id
 }
 
@@ -433,7 +435,8 @@ private fun TvList(nav: Nav) {
             if (!moving && gState.firstVisibleItemScrollOffset > 0) {
                 val first = gState.firstVisibleItemIndex
                 val f = (rowsNow.value as? Load.Ok)?.value?.indexOfFirst { it.id == st.focusKey } ?: -1
-                runCatching { gState.animateScrollToItem(if (f > first) first + 1 else first) }
+                // 3.0.0.3: no focused row found → keep the position (never jump to the top)
+                if (f >= 0) runCatching { gState.animateScrollToItem(if (f > first) first + 1 else first) }
             }
         }
     }
@@ -453,7 +456,7 @@ private fun TvList(nav: Nav) {
     val focusScope = rememberCoroutineScope()
     fun backToGroups() {
         val groupRows = (rows as? Load.Ok)?.value.orEmpty()
-        val target = groupFocusTarget(groupRows, st.group) ?: return
+        val target = groupFocusTarget(groupRows, st.group, st.focusKey.takeIf { it.startsWith("g:") }) ?: return
         st.focusKey = target
         inChannels = false
         Chrome.rail = 2

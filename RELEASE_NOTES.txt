@@ -1,3 +1,9 @@
+Media Center 3.0.0.3 Stable – fixes (feature freeze stays; nothing new)
+
+• Active channel check is OFF for everyone by default. Updating from earlier versions turns it off once; it can still be switched on in Settings › Player › More options for providers that allow it. Passive lamps (from real playback) stay as they are.
+• Movie page and player: the four option icons (Subtitles, Audio, Playback, Picture) keep a safe bottom margin, so their labels are no longer cut off.
+• TV groups: going back from a group or channel list returns to the group you came from, not to the top of the list. The list no longer jumps when the focused row is found.
+
 Media Center 3.0.0.2 Stable – extended passive diagnostics (no new features, nothing changed in how the app works)
 
 • The full diagnostic report (Diagnostics › Kreiraj kompletan izvještaj) now has sections 32–50: IPTV account limits from the existing login answer (max / active connections, expiry), video codec capabilities, the real video and audio format of each stream with the decoder used, HDR and colour information, audio outputs and their changes, display modes and frame-rate changes, network and VPN transitions with error types, dropped frames and suspected freezes, player start/release counts, standby and wake, storage growth every 6 hours, playlist refresh times, EPG time zone, screen opening times, picture and logo load times, background tasks, diagnostic health and limitations
