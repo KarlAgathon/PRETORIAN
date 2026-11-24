@@ -36,6 +36,9 @@ class BrowseRow(
  * ▲▼ only change the right side; OK on a row moves to the button, a second OK there opens (that is the double OK);
  * ◀ or Back on the button return to the same row. Opening is guarded against repeats.
  */
+/** 3.0.1: the focused row of each two-column browser, by row id (not by index), so Back returns to the same row. */
+private val focusedRowId = HashMap<String, String>()
+
 @Composable
 fun TwoColBrowser(
     rows: List<BrowseRow>, mem: HashMap<String, Int>, key: String, button: String, buttonIcon: Int,
@@ -43,7 +46,11 @@ fun TwoColBrowser(
     art: Int? = null,
 ) {
     if (rows.isEmpty()) return
-    val start = (mem[key] ?: 0).coerceIn(0, rows.size - 1)
+    val rk = System.identityHashCode(mem).toString() + "|" + key
+    val wanted = focusedRowId[rk]
+    val found = rows.indexOfFirst { it.id == wanted }
+    // a list that is still loading is shorter: the row is found by id once it is complete, never clamped to another row
+    val start = if (found >= 0) found else if (wanted == null) (mem[key] ?: 0).coerceIn(0, rows.size - 1) else 0
     var sel by remember(key) { mutableStateOf(start) }
     val cur = rows[sel.coerceIn(0, rows.size - 1)]
     val st = rememberLazyListState(initialFirstVisibleItemIndex = (start - 3).coerceAtLeast(0))
@@ -52,15 +59,15 @@ fun TwoColBrowser(
     var lastOpen by remember { mutableStateOf(0L) }
     fun openNow(r: BrowseRow) {
         val now = System.currentTimeMillis()
-        if (now - lastOpen > 1200) { lastOpen = now; mem[key] = rows.indexOf(r).coerceAtLeast(0); r.open() }
+        if (now - lastOpen > 1200) { lastOpen = now; mem[key] = rows.indexOf(r).coerceAtLeast(0); focusedRowId[rk] = r.id; r.open() }
     }
     Row(Modifier.fillMaxSize().padding(top = 8.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
         LazyColumn(Modifier.weight(0.46f).fillMaxHeight(), state = st, verticalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp, start = 4.dp, end = 4.dp)) {
             itemsIndexed(rows, key = { _, r -> r.id }) { i, r ->
                 if (r.gapBefore) Spacer(Modifier.height(14.dp))
-                Focusable(onClick = { sel = i; mem[key] = i; if (r.direct) r.open() else runCatching { btnFr.requestFocus() } }, onMenu = r.onLong,
-                    onFocus = { sel = i; mem[key] = i }, focusRequester = rowFrs[i],
+                Focusable(onClick = { sel = i; mem[key] = i; focusedRowId[rk] = r.id; if (r.direct) r.open() else runCatching { btnFr.requestFocus() } }, onMenu = r.onLong,
+                    onFocus = { sel = i; mem[key] = i; focusedRowId[rk] = r.id }, focusRequester = rowFrs[i],
                     shape = Rnd(14.dp), normal = Color(0x8C171B22), focused = Color(0x40FFFFFF),
                     borderColor = Color(0x1FFFFFFF), focusBorderColor = Color(0xD9FFFFFF), zoom = 1f,
                     modifier = Modifier.fillMaxWidth().height(58.dp)) { f ->
@@ -91,6 +98,11 @@ fun TwoColBrowser(
         }
     }
     LaunchedEffect(Unit) { runCatching { st.scrollToItem((start - 3).coerceAtLeast(0)) }; rowFrs[start].tryFocus() }
+    // the rows arrive later (provider categories, cinema row): move to the remembered row once it is in the list
+    LaunchedEffect(rows.map { it.id }) {
+        val f = rows.indexOfFirst { it.id == focusedRowId[rk] }
+        if (f >= 0 && f != sel) { sel = f; runCatching { st.scrollToItem((f - 3).coerceAtLeast(0)) }; runCatching { rowFrs[f].requestFocus() } }
+    }
 }
 
 /** The usual right-hand information block: small label, big name, a fact line, a short description. */

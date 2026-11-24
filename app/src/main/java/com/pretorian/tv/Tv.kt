@@ -490,7 +490,18 @@ private fun TvList(nav: Nav) {
     DisposableEffect(Unit) { onDispose { Dawn.crumb = ""; Dawn.pos = ""; Dawn.hints = emptyList() } }
     // first time on the groups: the focus goes to the last opened group (or the first one)
     var placed by remember { mutableStateOf(false) }
-    LaunchedEffect(rows is Load.Ok, inChannels) { if (!inChannels && rows is Load.Ok && !placed) { placed = true; backToGroups() } }
+    // 3.0.1: entering TV from another section (Home, Movies, Series, Settings) starts at the top ("Search channels");
+    // only coming back from the player keeps the group and channel that were playing
+    LaunchedEffect(rows is Load.Ok, inChannels) {
+        if (!inChannels && rows is Load.Ok && !placed) {
+            placed = true
+            if (TvMemory.restore) backToGroups() else {
+                st.group = null; TvMemory.group = null; TvMemory.channel = -1
+                st.focusKey = "find"; Chrome.rail = 2; st.refocus++
+                focusScope.launch { runCatching { gState.scrollToItem(0) }; delay(180); runCatching { st.focusFr.requestFocus() } }
+            }
+        }
+    }
     if (!inChannels) Box(Modifier.fillMaxSize().padding(start = 34.dp, top = 6.dp, bottom = 8.dp)) {
         // decorative TV set on the right, like the film reel (Movies) and the camera (Series); never focusable
         androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.pretorian_tv_set), null,
