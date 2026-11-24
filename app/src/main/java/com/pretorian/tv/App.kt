@@ -58,8 +58,9 @@ import java.util.Locale
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        CrashLog.install(this)
         Prefs.init(this)
+        CrashLog.install(this)
+        ChannelHealth.init(this)
         NewContent.appCtx = applicationContext
         Repo.diskDir = cacheDir
         CatalogDb.init(applicationContext)
@@ -101,6 +102,7 @@ class MainActivity : ComponentActivity() {
     // Android asks for memory back: drop lists that are not on the screen, they load again when needed
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
+        if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) DiagEvents.add("memwarn", "memory pressure level $level on ${CrashLog.screen}")  // i18n-ignore
         if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN || level == android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW ||
             level == android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL) Repo.trim(level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW)
         if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) try { coil.Coil.imageLoader(this).memoryCache?.clear() } catch (_: Exception) {}

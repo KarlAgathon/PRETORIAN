@@ -2837,4 +2837,26 @@ Kao playlista|Как в плейлисте
 Dodaj, uključi, poredaj ili ukloni izvore ove playliste|Добавить, включить, упорядочить или удалить источники плейлиста
 Za sve kanale ove playliste · kanal može imati svoj|Для всех каналов плейлиста · у канала может быть свой
 Osvježi EPG|Обновить EPG
+Aplikacija je imala problem|В приложении произошла ошибка
+Prošli put se aplikacija srušila ili zamrznula. Izvještaj je sačuvan na uređaju.|В прошлый раз приложение упало или зависло. Отчёт сохранён на устройстве.
+Izvezi dijagnostički izvještaj|Экспорт диагностического отчёта
+Izaberi šta želiš poslati:|Выберите, что отправить:
+Zadnji izvještaj o padu (TXT)|Последний отчёт о сбое (TXT)
+Zadnji pad ili zamrzavanje s događajima oko njega|Последний сбой или зависание с событиями вокруг
+Kompletan izvještaj (TXT)|Полный отчёт (TXT)
+Svi sačuvani padovi i događaji|Все сохранённые сбои и события
+Kompletna arhiva (ZIP)|Полный архив (ZIP)
+Sve datoteke dijagnostike u jednom fajlu|Все файлы диагностики в одном файле
+Obriši sve izvještaje|Удалить все отчёты
+Izvještaj nije napravljen: njegova sigurnost se ne može potvrditi ili nema dovoljno prostora.|Отчёт не создан: безопасность не подтверждена или мало места.
+Skeniraj telefonom (ista kućna mreža) i preuzmi fajl.|Отсканируйте телефоном (та же сеть) и скачайте файл.
+Prenos u kućnoj mreži nije šifrovan (HTTP).|Передача в домашней сети не шифруется (HTTP).
+Obrisati sve izvještaje?|Удалить все отчёты?
+Padovi, zamrzavanja i događaji na ovom uređaju bit će obrisani.|Сбои, зависания и события на устройстве будут удалены.
+Izvještaji obrisani|Отчёты удалены
+Ovaj QR kod više ne važi.|Этот QR-код больше не действует.
+✓ Poslano na TV. Provjeri podatke na TV-u i pritisni „Sačuvaj“.|✓ Отправлено на ТВ. Проверьте данные и нажмите «Сохранить».
+Dijagnostički izvještaj, bez lozinki i ključeva. Link radi jednom. Prenos u kućnoj mreži nije šifrovan.|Диагностический отчёт без паролей и ключей. Ссылка работает один раз. Передача не шифруется.
+Preuzimanje je već u toku ili je završeno.|Загрузка уже идёт или завершена.
+Sa laptopa (padovi, zamrzavanja i događaji):|С ноутбука (сбои, зависания и события):
 """.trimIndent()

@@ -520,7 +520,7 @@ private fun TvList(nav: Nav) {
             // ◀ from the preview or the options comes back to the same channel, never to the one that happens to sit beside them
             Box(Modifier.weight(0.46f).fillMaxHeight().focusRestorer().focusGroup().padding(vertical = 4.dp)) {
                 if (g != null) key(g.key, st.rev) {
-                    ChannelList(g, nav, st.gate, rows, enterTick, onFocusCh = { focusedCh = it },
+                    ChannelList(g, nav, st.gate, rows, enterTick, onFocusCh = { focusedCh = it; ChannelHealth.focus(it.url) },
                         onBackToGroups = { PreviewSel.ch = null; Preview.stop(); backToGroups() }, onChanged = { st.rev++ }, focusOnStart = true)
                 }
             }
@@ -707,7 +707,8 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                 val raw = s.value
                 val list = if (favEditable) rememberFrozen(g.key + "#" + enterTick, raw) else raw
                 val gone = if (favEditable) list.filter { c -> raw.none { it.url == c.url } }.map { it.url }.toSet() else emptySet()
-                LaunchedEffect(g.key, raw.size) { ChannelHealth.probe(raw) }
+                // 2.8.0: cached lamps show at once; the whole group is checked in the background, focused channel first
+                DisposableEffect(g.key, raw.size) { ChannelHealth.schedule(raw); onDispose { ChannelHealth.leave() } }
                 if (list.isEmpty()) {
                     if (g.cat.id == RECENT_GROUP) Message("Još nema gledanih kanala.", "Kanali koje gledaš pojavit će se ovdje · Back za grupe")
                     else Message(if (isFav) "Nema favorita" else "Grupa je prazna",

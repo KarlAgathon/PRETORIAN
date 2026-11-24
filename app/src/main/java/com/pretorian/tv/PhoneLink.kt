@@ -18,73 +18,83 @@ import java.security.SecureRandom
 object PhoneLink {
     class Data(val type: Int, val name: String, val server: String, val user: String, val pass: String, val url: String, val epg: String)
 
-    private var socket: ServerSocket? = null
-    @Volatile private var token = ""
-    @Volatile private var onData: ((Data) -> Unit)? = null
+    /**
+     * 2.8.0: every QR code is its own session — its own key, socket, expiry and mode (playlist form or one file).
+     * A callback of an older session can never close a newer one; the key is checked and used up in one atomic step.
+     * Expiry uses the monotonic clock (changing the box's time does not extend or shorten it).
+     */
+    private class Session(val id: Long, val token: String, val socket: ServerSocket, val lifetimeMs: Long,
+                          val onData: ((Data) -> Unit)?, val file: java.io.File?, val fileName: String, val mime: String, val served: (() -> Unit)?) {
+        val started = android.os.SystemClock.elapsedRealtime()
+        val used = java.util.concurrent.atomic.AtomicBoolean(false)
+        val misses = java.util.concurrent.atomic.AtomicInteger(0)
+        val busy = java.util.concurrent.atomic.AtomicInteger(0)
+        fun expired() = android.os.SystemClock.elapsedRealtime() - started > lifetimeMs
+        /** constant-time comparison of the key */
+        fun keyOk(k: String?): Boolean = k != null && token.isNotEmpty() && java.security.MessageDigest.isEqual(k.toByteArray(), token.toByteArray())
+    }
+    @Volatile private var cur: Session? = null
+    private val ids = java.util.concurrent.atomic.AtomicLong(0)
+    private val main = Handler(Looper.getMainLooper())
+    private const val DOWNLOAD_MS = 5 * 60_000L
+    /** a QR code for the playlist form works for 10 minutes and for one sent form */
+    private const val LIFETIME_MS = 10 * 60_000L
 
-    /** address for the QR code, or null when the box has no network address */
-    fun start(onReceive: (Data) -> Unit): String? {
-        val u = open() ?: return null
-        onData = onReceive
-        return u
+    /** address for the QR code, or null when the box has no home-network address */
+    fun start(onReceive: (Data) -> Unit): String? = open(LIFETIME_MS, onReceive, null, "", "", null)?.first
+
+    /**
+     * Diagnostics: serves one file for one finished download. The address shows a small page with a download button
+     * (link previews do not use up the key). An interrupted transfer can be tried again (at most 3 times) until it expires;
+     * five wrong requests, Back on the TV or 5 minutes stop it. Returns (address, session id).
+     */
+    fun startDownload(name: String, file: java.io.File, mime: String, onServed: () -> Unit): Pair<String, Long>? =
+        open(DOWNLOAD_MS, null, file, name.replace(Regex("[^A-Za-z0-9._-]"), "_"), mime, onServed)  // i18n-ignore
+
+    private fun open(life: Long, onData: ((Data) -> Unit)?, file: java.io.File?, name: String, mime: String, served: (() -> Unit)?): Pair<String, Long>? {
+        stop()
+        val ip = lanIp() ?: return null
+        val token = ByteArray(16).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
+        // only on the home network address shown in the QR code (not on VPN or other interfaces)
+        val sock = try { ServerSocket(0, 4, java.net.InetAddress.getByName(ip)) } catch (e: Exception) { return null }
+        val ses = Session(ids.incrementAndGet(), token, sock, life, onData, file, name, mime, served)
+        cur = ses
+        main.postDelayed({ stop(ses.id) }, life)
+        Thread {
+            while (!sock.isClosed) {
+                val c = try { sock.accept() } catch (e: Exception) { break }
+                // at most 4 phones talking at once; more are turned away at the door
+                if (ses.busy.incrementAndGet() > 4) { ses.busy.decrementAndGet(); try { c.close() } catch (_: Exception) {}; continue }
+                Thread { try { handle(ses, c) } catch (_: Exception) {} finally { ses.busy.decrementAndGet(); try { c.close() } catch (_: Exception) {} } }.apply { isDaemon = true }.start()
+            }
+        }.apply { isDaemon = true }.start()
+        return "http://$ip:${sock.localPort}/?k=$token" to ses.id // i18n-ignore
+    }
+
+    /** stops the current session */
+    fun stop() { cur?.let { stop(it.id) } }
+    /** stops session [id] only (an older window closing never stops a newer QR) */
+    fun stop(id: Long) {
+        val s = cur ?: return
+        if (s.id != id) return
+        cur = null
+        try { s.socket.close() } catch (_: Exception) {}
     }
 
     /**
-     * Diagnostics (A0): serves one file for one download. The address shows a small page with a download button
-     * (link previews do not use up the key); the file itself can be fetched once, then the key is gone and the server stops.
-     * Five wrong or late requests, Back on the TV or [DOWNLOAD_MS] also stop it.
+     * The home-network address: Ethernet first, then Wi-Fi; only private (RFC 1918) IPv4 addresses, never a VPN tunnel
+     * (tun, ppp, wg, ipsec, tap…) and never the carrier-grade range 100.64/10 used by some VPNs. When a VPN blocks the
+     * home network, the phone cannot reach the box: that is the VPN's own setting and is respected.
      */
-    fun startDownload(name: String, bytes: ByteArray, onServed: () -> Unit): String? {
-        val u = open() ?: return null
-        file = bytes; fileName = name.replace(Regex("[^A-Za-z0-9._-]"), "_"); served = onServed; misses = 0  // i18n-ignore
-        main.postDelayed(expire, DOWNLOAD_MS)
-        return u
-    }
-    @Volatile private var file: ByteArray? = null
-    @Volatile private var fileName = ""
-    @Volatile private var served: (() -> Unit)? = null
-    @Volatile private var misses = 0
-    private const val DOWNLOAD_MS = 5 * 60_000L
-    private val main = Handler(Looper.getMainLooper())
-    private val expire = Runnable { stop() }
-
-    /** a fresh key and a fresh server on the home network address; returns the address with the key */
-    private fun open(): String? {
-        stop()
-        val ip = lanIp() ?: return null
-        token = ByteArray(16).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
-        startedAt = System.currentTimeMillis()
-        // only on the home network address shown in the QR code (not on VPN or other interfaces)
-        val s = try { ServerSocket(0, 4, java.net.InetAddress.getByName(ip)) } catch (e: Exception) { return null }
-        socket = s
-        Thread {
-            while (!s.isClosed) {
-                val c = try { s.accept() } catch (e: Exception) { break }
-                // at most 4 phones talking at once; more are turned away at the door
-                if (busy.incrementAndGet() > 4) { busy.decrementAndGet(); try { c.close() } catch (_: Exception) {}; continue }
-                Thread { try { handle(c) } catch (_: Exception) {} finally { busy.decrementAndGet(); try { c.close() } catch (_: Exception) {} } }.apply { isDaemon = true }.start()
-            }
-        }.apply { isDaemon = true }.start()
-        return "http://$ip:${s.localPort}/?k=$token" // i18n-ignore
-    }
-
-    fun stop() {
-        onData = null; token = ""; file = null; served = null
-        main.removeCallbacks(expire)
-        try { socket?.close() } catch (_: Exception) {}; socket = null
-    }
-    private val busy = java.util.concurrent.atomic.AtomicInteger(0)
-    @Volatile private var startedAt = 0L
-    /** a QR code works for 10 minutes and for one sent form */
-    private const val LIFETIME_MS = 10 * 60_000L
-
-    private fun lanIp(): String? = try {
-        NetworkInterface.getNetworkInterfaces().toList().filter { it.isUp && !it.isLoopback }
+    internal fun lanIp(): String? = try {
+        NetworkInterface.getNetworkInterfaces().toList()
+            .filter { it.isUp && !it.isLoopback && !it.isVirtual && !Regex("^(tun|ppp|wg|ipsec|tap|utun|nordlynx|vpn)").containsMatchIn(it.name) }  // i18n-ignore
             .sortedBy { if (it.name.startsWith("eth")) 0 else if (it.name.startsWith("wlan")) 1 else 2 } // i18n-ignore
-            .flatMap { it.inetAddresses.toList() }.firstOrNull { it is Inet4Address && !it.isLoopbackAddress }?.hostAddress
+            .flatMap { it.inetAddresses.toList() }
+            .firstOrNull { it is Inet4Address && !it.isLoopbackAddress && it.isSiteLocalAddress }?.hostAddress
     } catch (e: Exception) { null }
 
-    private fun handle(c: Socket) {
+    private fun handle(ses: Session, c: Socket) {
         c.soTimeout = 10_000
         val inp = c.getInputStream().buffered()
         // request line and headers, bounded: at most 4 KB per line and 8 KB of headers in total
@@ -109,26 +119,26 @@ object PhoneLink {
             out.write(("HTTP/1.1 $code\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: ${b.size}\r\nConnection: close\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nX-Content-Type-Options: nosniff\r\nContent-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; form-action 'self'\r\n\r\n").toByteArray()) // i18n-ignore
             out.write(b); out.flush()
         }
-        if (file != null) { serveFile(req, path, q, ::send, out); return }
-        if (token.isNotEmpty() && System.currentTimeMillis() - startedAt > LIFETIME_MS) token = ""
-        if (q["k"] != token || token.isEmpty()) { send("403 Forbidden", page(tr("Ovaj QR kod više ne važi. Otvori ponovo „Dodaj playlistu“ na TV-u."), null)); return } // i18n-ignore
+        if (cur !== ses) { send("403 Forbidden", page(tr("Ovaj QR kod više ne važi."), null)); return }
+        if (ses.file != null) { serveFile(ses, req, path, q, ::send, out); return }
+        if (ses.expired() || ses.used.get() || !ses.keyOk(q["k"])) { send("403 Forbidden", page(tr("Ovaj QR kod više ne važi. Otvori ponovo „Dodaj playlistu“ na TV-u."), null)); return } // i18n-ignore
         if (req.startsWith("POST")) {
             val body = ByteArray(len.coerceIn(0, 16_000)).also { var r = 0; while (r < it.size) { val n = inp.read(it, r, it.size - r); if (n < 0) break; r += n } }
+            // one form per QR code: the key is used up atomically the moment the data arrives (no replay, no double send)
+            if (!ses.used.compareAndSet(false, true)) { send("403 Forbidden", page(tr("Ovaj QR kod više ne važi."), null)); return }
             val f = parse(String(body, Charsets.UTF_8))
             val d = Data((f["type"] ?: "0").toIntOrNull()?.coerceIn(0, 2) ?: 0, f["name"].orEmpty().trim(), f["server"].orEmpty().trim(),
                 f["user"].orEmpty().trim(), f["pass"].orEmpty(), f["url"].orEmpty().trim(), f["epg"].orEmpty().trim())
-            // one form per QR code: the code is used up the moment the data arrives (no replay)
-            token = ""
-            onData?.let { cb -> Handler(Looper.getMainLooper()).post { cb(d) } }
-            send("200 OK", page(tr("✓ Poslano na TV. Provjeri podatke na TV-u i pritisni „Spremi i učitaj“."), null)) // i18n-ignore
-        } else send("200 OK", page(null, token))
+            ses.onData?.let { cb -> main.post { if (cur === ses) cb(d) } }
+            send("200 OK", page(tr("✓ Poslano na TV. Provjeri podatke na TV-u i pritisni „Sačuvaj“."), null)) // i18n-ignore
+        } else send("200 OK", page(null, ses.token))
     }
 
-    private fun serveFile(req: String, path: String, q: Map<String, String>, send: (String, String) -> Unit, out: java.io.OutputStream) {
-        val f = file
-        val late = System.currentTimeMillis() - startedAt > DOWNLOAD_MS
-        if (f == null || token.isEmpty() || late || q["k"] != token || !req.startsWith("GET")) {
-            if (++misses >= 5) main.post { stop() }
+    private val tries = java.util.concurrent.ConcurrentHashMap<Long, Int>()
+    private fun serveFile(ses: Session, req: String, path: String, q: Map<String, String>, send: (String, String) -> Unit, out: java.io.OutputStream) {
+        val f = ses.file
+        if (f == null || !f.exists() || ses.expired() || !ses.keyOk(q["k"]) || !req.startsWith("GET")) {
+            if (ses.misses.incrementAndGet() >= 5) main.post { stop(ses.id) }
             send("403 Forbidden", page(tr("Ovaj link više ne važi. Otvori ponovo „Izvezi izvještaj“ na TV-u."), null)) // i18n-ignore
             return
         }
@@ -136,15 +146,24 @@ object PhoneLink {
             // landing page: a button for the one download (a link preview never uses up the key)
             val body = """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Media Center</title>
 <style>body{font-family:system-ui,sans-serif;background:#101B2B;color:#f2f3f5;margin:0;padding:24px}a{display:block;margin-top:24px;padding:16px;border-radius:14px;background:#dadade;color:#111113;text-align:center;font-size:18px;font-weight:600;text-decoration:none}p{color:#9aa1ad}</style></head>
-<body><h2>Media Center</h2><p>${esc(tr("Dijagnostički izvještaj (TXT), bez lozinki i ključeva. Link radi jednom."))}</p><a href="/r?k=$token">${esc(fileName)}</a></body></html>""" // i18n-ignore
+<body><h2>Media Center</h2><p>${esc(tr("Dijagnostički izvještaj, bez lozinki i ključeva. Link radi jednom. Prenos u kućnoj mreži nije šifrovan."))}</p><a href="/r?k=${ses.token}">${esc(ses.fileName)}</a></body></html>""" // i18n-ignore
             send("200 OK", body); return
         }
-        token = ""   // one download per key
-        out.write(("HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: ${f.size}\r\n" +
-            "Content-Disposition: attachment; filename=\"$fileName\"\r\nConnection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n\r\n").toByteArray()) // i18n-ignore
-        out.write(f); out.flush()
-        val cb = served
-        main.post { cb?.invoke(); stop() }
+        // the download: only one at a time (atomic); a broken transfer frees the key again for a new try (max 3)
+        if (!ses.used.compareAndSet(false, true)) { send("409 Conflict", page(tr("Preuzimanje je već u toku ili je završeno."), null)); return } // i18n-ignore
+        try {
+            out.write(("HTTP/1.1 200 OK\r\nContent-Type: ${ses.mime}\r\nContent-Length: ${f.length()}\r\n" +
+                "Content-Disposition: attachment; filename=\"${ses.fileName}\"\r\nConnection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n\r\n").toByteArray()) // i18n-ignore
+            f.inputStream().use { it.copyTo(out, 64 * 1024) }
+            out.flush()
+        } catch (e: Exception) {
+            val n = (tries[ses.id] ?: 0) + 1; tries[ses.id] = n
+            DiagEvents.add("diag", "export download interrupted ($n)")  // i18n-ignore
+            if (n < 3) ses.used.set(false) else main.post { stop(ses.id) }
+            return
+        }
+        val cb = ses.served
+        main.post { if (cur === ses) { cb?.invoke(); stop(ses.id) } }
     }
 
     private fun parse(s: String): Map<String, String> = s.split('&').mapNotNull { kv ->

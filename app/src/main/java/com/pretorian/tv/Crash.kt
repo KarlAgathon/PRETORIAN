@@ -18,57 +18,102 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.io.File
 
-/** keeps the last crash so it can be shown at the next start (no adb needed) */
+/**
+ * Crashes and freezes (2.8.0). Each one becomes an incident in [DiagStore] (up to 100 kept on the box, older than
+ * 3 days compressed). The crash handler writes it synchronously before the process ends and remembers it as
+ * "pending", so the next start shows the crash dialog with a direct export (once per incident).
+ * At start, Android's own record of how the last processes ended (API 30+) adds ANRs and native crashes that the
+ * Java crash handler cannot see. The app's own log is saved once per incident after the restart; Android only lets an
+ * app read its own log lines, and lines from before the crash may already be gone.
+ */
 object CrashLog {
-    private fun file(c: Context) = File(c.filesDir, "last_crash.txt")
-    /** every crash and freeze is also kept here (last 10), readable from a laptop: adb pull [ADB_DIR] */
-    fun dir(c: Context): File? = c.getExternalFilesDir(null)?.let { File(it, "crash") }
-    val ADB_DIR get() = "/sdcard/Android/data/" + BuildConfig.APPLICATION_ID + "/files/crash"  // i18n-ignore
+    /** the incidents, readable from a laptop: adb pull [ADB_DIR] */
+    fun dir(c: Context): File? = File(DiagStore.dir(c), "incidents")
+    val ADB_DIR get() = "/sdcard/Android/data/" + BuildConfig.APPLICATION_ID + "/files/diag"  // i18n-ignore
     private fun header(c: Context): String {
         val rt = Runtime.getRuntime()
         val am = c.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
         val mi = android.app.ActivityManager.MemoryInfo(); am.getMemoryInfo(mi)
-        return "Media Center ${BuildInfo.VERSION} · ${android.os.Build.MODEL} · Android ${android.os.Build.VERSION.RELEASE}\n" +  // i18n-ignore
-            "time ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())} · screen ${screen}\n" +  // i18n-ignore
+        return "Media Center ${BuildInfo.VERSION} (${BuildConfig.VERSION_CODE}) · ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} · Android ${android.os.Build.VERSION.RELEASE}\n" +  // i18n-ignore
+            "time ${DiagEvents.stamp()} · screen ${screen}\n" +  // i18n-ignore
             "app heap ${(rt.totalMemory() - rt.freeMemory()) / 1_048_576} / ${rt.maxMemory() / 1_048_576} MB · box free ${mi.availMem / 1_048_576} MB · low ${mi.lowMemory}\n"  // i18n-ignore
     }
     /** the screen open right now (written into the report) */
     @Volatile var screen = ""
-    fun archive(c: Context, kind: String, text: String) {
-        try {
-            val d = dir(c) ?: return
-            if (!DiagSpace.ok(d.parentFile ?: d)) return   // A0: below 20 MB free nothing is written
-            d.mkdirs()
-            File(d, kind + "_" + java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date()) + ".txt").writeText(Redact.text(text))  // i18n-ignore
-            d.listFiles()?.sortedByDescending { it.lastModified() }?.drop(10)?.forEach { it.delete() }
-        } catch (_: Throwable) {}
-    }
-    /** after a crash: the app's own log from just before, next to the report */
-    fun saveLogAfterCrash(c: Context) {
-        Thread {
-            try {
-                val log = Runtime.getRuntime().exec(arrayOf("logcat", "-d", "-t", "800")).inputStream.bufferedReader().readText()  // i18n-ignore
-                archive(c, "log", log)
-            } catch (_: Throwable) {}
-        }.start()
+
+    /** an incident (crash, freeze, import …); returns its name */
+    fun archive(c: Context, kind: String, text: String): String? = try { DiagStore.incident(kind.lowercase().filter { it in 'a'..'z' }.ifBlank { "other" }, text) } catch (_: Throwable) { null }  // i18n-ignore
+
+    /** remembered for the dialog at the next start: the incident's name and a short summary (kept small, already redacted) */
+    private fun pending(base: String?, summary: String) {
+        if (base == null) { Prefs.put("diag_pending_sum", Redact.text(summary).take(3000)); Prefs.put("diag_pending", "nofile"); return }
+        Prefs.put("diag_pending", base); Prefs.put("diag_pending_sum", Redact.text(summary).take(3000))
     }
 
     fun install(c: Context) {
         val app = c.applicationContext
+        DiagStore.init(app)
+        File(app.filesDir, "last_crash.txt").delete()   // the old single-file report is replaced by the store
         val prev = Thread.getDefaultUncaughtExceptionHandler()
         if (prev is Handler) return
         Thread.setDefaultUncaughtExceptionHandler(Handler(app, prev))
-        if (file(app).exists()) saveLogAfterCrash(app)
+        Thread({ startupChecks(app) }, "pretorian-diag-start")  // i18n-ignore
+           .apply { isDaemon = true; priority = Thread.MIN_PRIORITY }.start()
+    }
+
+    private fun startupChecks(app: Context) {
+        try {
+            // version: first start after an update is written down
+            val was = Prefs.str("diag_cur_version")
+            if (was != BuildConfig.VERSION_NAME) { if (was.isNotBlank()) Prefs.put("diag_prev_version", was); Prefs.put("diag_cur_version", BuildConfig.VERSION_NAME) }
+            DiagEvents.add("app", "start " + BuildConfig.VERSION_NAME + " (" + BuildConfig.VERSION_CODE + ")" + (if (was.isNotBlank() && was != BuildConfig.VERSION_NAME) " · updated from $was" else ""))  // i18n-ignore
+            exitReasons(app)
+            // the app log for the incident of the last run: once
+            val p = Prefs.str("diag_pending")
+            if (p.isNotBlank() && p != "nofile" && Prefs.str("diag_log_for") != p) {  // i18n-ignore
+                Prefs.put("diag_log_for", p)
+                val log = try { Runtime.getRuntime().exec(arrayOf("logcat", "-d", "-t", "1500", "-v", "threadtime")).inputStream.bufferedReader().use { r -> r.readText().takeLast(400_000) } } catch (_: Throwable) { null }  // i18n-ignore
+                if (log != null) DiagStore.attachLog(p, log)
+            }
+        } catch (_: Throwable) {}
+    }
+
+    /** Android's record of how earlier runs ended (Android 11+): ANRs, native crashes, kills for low memory */
+    private fun exitReasons(app: Context) {
+        if (android.os.Build.VERSION.SDK_INT < 30) return
+        try {
+            val am = app.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            val seen = Prefs.long("diag_exit_seen", 0)
+            val list = am.getHistoricalProcessExitReasons(app.packageName, 0, 10).filter { it.timestamp > seen }.sortedBy { it.timestamp }
+            list.forEach { e ->
+                val why = when (e.reason) {
+                    android.app.ApplicationExitInfo.REASON_ANR -> "anr"; android.app.ApplicationExitInfo.REASON_CRASH_NATIVE -> "native"
+                    android.app.ApplicationExitInfo.REASON_CRASH -> "crash"; android.app.ApplicationExitInfo.REASON_LOW_MEMORY -> "lowmem"
+                    android.app.ApplicationExitInfo.REASON_EXIT_SELF -> "exit"; android.app.ApplicationExitInfo.REASON_USER_REQUESTED -> "user"
+                    android.app.ApplicationExitInfo.REASON_SIGNALED -> "signal"; else -> "other" }  // i18n-ignore
+                DiagEvents.add(if (why == "anr" || why == "native") why else "exitinfo", "previous run ended: $why · ${e.description ?: ""} · pss ${e.pss / 1024} MB")  // i18n-ignore
+                if (why == "anr" || why == "native") {
+                    val trace = try { e.traceInputStream?.bufferedReader()?.use { r -> val cb = CharArray(200_000); val n = r.read(cb); if (n > 0) String(cb, 0, n) else "" } } catch (_: Throwable) { null }
+                    val txt = "Media Center ${BuildInfo.VERSION} · ${android.os.Build.MODEL}\n" +  // i18n-ignore
+                        "${if (why == "anr") "ANR (the app stopped answering)" else "Native crash"} at ${DiagEvents.stamp(e.timestamp)}\n${e.description ?: ""}\n\n" +  // i18n-ignore
+                        (trace ?: "(Android did not keep a trace for this one)")  // i18n-ignore
+                    val base = archive(app, why, txt)
+                    pending(base, txt.take(1500))
+                }
+            }
+            list.maxOfOrNull { it.timestamp }?.let { Prefs.put("diag_exit_seen", it) }
+        } catch (_: Throwable) {}
     }
 
     private class Handler(val app: Context, val prev: Thread.UncaughtExceptionHandler?) : Thread.UncaughtExceptionHandler {
         override fun uncaughtException(t: Thread, e: Throwable) {
             try {
-                val sw = java.io.StringWriter(); e.printStackTrace(java.io.PrintWriter(sw))
-                DiagEvents.add("crash", e.javaClass.name + ": " + e.message)  // i18n-ignore
-                val txt = header(app) + sw.toString().take(12000) + "\n\n== Recent events ==\n" + DiagEvents.lines().takeLast(60).joinToString("\n")  // i18n-ignore
-                if (DiagSpace.ok(app.filesDir)) file(app).writeText(Redact.text(txt))
-                archive(app, "crash", txt)
+                val sw = java.io.StringWriter(); e.printStackTrace(java.io.PrintWriter(sw))   // the whole trace with every "Caused by"
+                DiagEvents.add("crash", e.javaClass.name + ": " + e.message + " · thread " + t.name)  // i18n-ignore
+                DiagStore.flushNow()
+                val txt = header(app) + "thread ${t.name}\n\n" + sw.toString() + "\n\n== Recent events ==\n" + DiagEvents.lines().takeLast(200).joinToString("\n")  // i18n-ignore
+                val base = archive(app, "crash", txt)
+                pending(base, header(app) + sw.toString().take(2000))
             } catch (_: Throwable) {}
             try { CrashGuard.record() } catch (_: Throwable) {}
             prev?.uncaughtException(t, e)
@@ -85,41 +130,49 @@ object CrashLog {
         Thread({
             var reported = false
             while (true) {
-                val sent = System.currentTimeMillis()
+                val sent = android.os.SystemClock.uptimeMillis()
                 main.post { tick = sent }
                 try { Thread.sleep(6_000) } catch (_: InterruptedException) { return@Thread }
                 if (tick != sent) {
                     if (!reported) try {
                         val st = android.os.Looper.getMainLooper().thread.stackTrace.joinToString("\n") { "  at $it" }
-                        val txt = header(app) + "ZAMRZNUTO (ANR) > 6 s\n" + st.take(8000)  // i18n-ignore
-                        file(app).writeText(Redact.text(txt)); archive(app, "freeze", txt)
+                        val txt = header(app) + "FREEZE: the screen did not answer for more than 6 s\n" + st  // i18n-ignore
+                        DiagEvents.add("freeze", "main thread blocked > 6 s on " + screen)  // i18n-ignore
+                        // the storage floor applies here too (DiagStore.incident checks it)
+                        val base = archive(app, "freeze", txt)
+                        pending(base, txt.take(2000))
                         reported = true
                     } catch (_: Throwable) {}
                 } else reported = false
             }
         }, "pretorian-watchdog").apply { isDaemon = true; priority = Thread.MIN_PRIORITY }.start()
     }
-
-    fun take(c: Context): String? = try { file(c).takeIf { it.exists() }?.let { val s = it.readText(); it.delete(); s } } catch (e: Exception) { null }
 }
 
+/**
+ * After a crash or a freeze: what happened in short, and a direct export of the report (no Settings needed).
+ * Shown once per incident; Close / Back only acknowledge it — the incident stays on the box.
+ */
 @Composable
 fun CrashDialog() {
-    val ctx = LocalContext.current
-    var text by remember { mutableStateOf(CrashLog.take(ctx)) }
-    val t = text ?: return
-    Popup("Aplikacija se prošli put srušila", { text = null }, width = 900.dp) {
-        T("Slikaj ovaj ekran i pošalji ga, da se greška može popraviti.", 14.sp, C.Soft)
-        // the few lines that name the error and where it happened, readable on one photo
-        val lines = t.lines()
+    val pend = remember { Prefs.str("diag_pending").takeIf { it.isNotBlank() && it != Prefs.str("diag_ack") } }
+    var open by remember { mutableStateOf(pend != null) }
+    var export by remember { mutableStateOf(false) }
+    if (pend == null) return
+    fun ack() { Prefs.put("diag_ack", pend); open = false }
+    if (open) Popup("Aplikacija je imala problem", { ack() }, width = 820.dp) {
+        T("Prošli put se aplikacija srušila ili zamrznula. Izvještaj je sačuvan na uređaju.", 14.sp, C.Soft, maxLines = 3)
+        val lines = Prefs.str("diag_pending_sum").lines()
         val key = (lines.take(2) +
-            lines.filter { it.contains("Exception") || it.contains("Error") || it.startsWith("Caused by") }.take(3) +
-            lines.filter { it.contains("com.pretorian") }.take(4)).distinct()  // i18n-ignore
-        Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
-            key.forEach { T(it.trim(), 13.sp, C.Text, maxLines = 3) }
+            lines.filter { it.contains("Exception") || it.contains("Error") || it.startsWith("Caused by") || it.startsWith("FREEZE") || it.startsWith("ANR") }.take(3) +
+            lines.filter { it.contains("com.pretorian") }.take(3)).distinct()  // i18n-ignore
+        Column(Modifier.heightIn(max = 260.dp).verticalScroll(rememberScrollState())) {
+            key.forEach { T(it.trim(), 13.sp, C.Text, maxLines = 2) }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button("Zatvori", R.drawable.lc_x, primary = true) { text = null }
+            Button("Izvezi dijagnostički izvještaj", R.drawable.lc_download, primary = true) { ack(); export = true }
+            Button("Zatvori", R.drawable.lc_x) { ack() }
         }
     }
+    if (export) DiagExportDialog(DiagReport.Kind.LATEST) { export = false }
 }

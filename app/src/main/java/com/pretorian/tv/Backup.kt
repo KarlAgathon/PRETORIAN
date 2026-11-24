@@ -127,7 +127,7 @@ object Backup {
                 val c = Cipher.getInstance("AES/GCM/NoPadding")
                 c.init(Cipher.DECRYPT_MODE, key(password, Base64.decode(o.str("salt"), Base64.NO_WRAP), v2 = o.optString("kdf") == "pbkdf2-sha256"), GCMParameterSpec(128, Base64.decode(o.str("iv"), Base64.NO_WRAP)))
                 JSONObject(String(c.doFinal(Base64.decode(o.str("enc"), Base64.NO_WRAP))))
-            } catch (e: Exception) { throw IllegalArgumentException(tr("Pogrešna lozinka")) }
+            } catch (e: Exception) { DiagEvents.add("backup", "restore: wrong password or damaged file"); throw IllegalArgumentException(tr("Pogrešna lozinka")) }  // i18n-ignore
         } else o.getJSONObject("data")
         val p = data.getJSONObject("prefs")
         val full = data.optBoolean("full", false) // i18n-ignore

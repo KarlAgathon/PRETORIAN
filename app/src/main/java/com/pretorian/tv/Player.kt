@@ -602,7 +602,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             val waitMs = if (match) 2000L else Recover.waitMs
             val tries = if (match) 2 else 4
             if (stuck >= waitMs && reconnect < tries) {
-                stuck = 0; reconnect++; Stats.recovery()
+                stuck = 0; reconnect++; Stats.recovery(); DiagEvents.add("stall", "picture stopped, recovery try $reconnect · " + (items.getOrNull(index)?.title ?: ""))  // i18n-ignore
                 (items.getOrNull(index)?.title ?: "").let { t -> if (reconnect == 1) StreamLog.event("freeze", t); StreamLog.event("try", t) }
                 StreamLog.add(listOf(items.getOrNull(index)?.title ?: "", " · ", tr(why), " · ", trf("spajam ponovo (%s/4)", reconnect)).joinToString(""))  // i18n-ignore
                 retryToken++

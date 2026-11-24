@@ -74,7 +74,7 @@ object Updater {
         try {
             withContext(Dispatchers.IO) { download(ctx, info) }; Prefs.put("upd_file", info.name); progress = -1
             if (installWhenDone) { installWhenDone = false; install(ctx, info) }
-        } catch (e: Exception) { progress = -1; if (!paused) installWhenDone = false }
+        } catch (e: Exception) { progress = -1; if (!paused) installWhenDone = false; DiagEvents.add("update", "download failed: " + e.javaClass.simpleName + " " + e.message) }  // i18n-ignore
     }
 
     /** The list of published versions (newest first), straight from GitHub. */
@@ -96,7 +96,7 @@ object Updater {
     suspend fun installBytes(ctx: Context, bytes: ByteArray) {
         val f = File(ctx.cacheDir, "usb.apk"); withContext(Dispatchers.IO) { f.writeBytes(bytes) }
         progress = 101; installStarted = System.currentTimeMillis()
-        try { withContext(Dispatchers.IO) { commit(ctx, f) } } catch (e: Exception) { progress = -1; status = trf("Ažuriranje nije uspjelo: %s", e.message ?: "") }
+        try { withContext(Dispatchers.IO) { commit(ctx, f) } } catch (e: Exception) { DiagEvents.add("update", "install failed: " + e.message); progress = -1; status = trf("Ažuriranje nije uspjelo: %s", e.message ?: "") }
     }
 
     /** Settings into Download/PRETORIAN before the new version goes in (when chosen). */

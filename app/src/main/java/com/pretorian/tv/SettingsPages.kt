@@ -671,7 +671,7 @@ internal fun AboutV2(onSub: (String) -> Unit, onSection: (String) -> Unit) {
         }
         "crash" -> Popup("Izvještaj o greškama", { dlg = null }, width = 760.dp) {
             T((crash ?: tr("Nema grešaka")).take(1500), 11.sp, C.Soft, maxLines = 24)
-            T("Sa laptopa (zadnjih 10 padova i zamrzavanja):", 12.sp, C.Muted)
+            T("Sa laptopa (padovi, zamrzavanja i događaji):", 12.sp, C.Muted)
             T("adb pull " + CrashLog.ADB_DIR, 13.sp, C.Text, FontWeight.Bold, maxLines = 2)  // i18n-ignore
             if (crash != null) OptionRow("Obriši izvještaj", R.drawable.lc_trash_2) { java.io.File(ctx.filesDir, "last_crash.txt").delete(); dlg = null }
         }

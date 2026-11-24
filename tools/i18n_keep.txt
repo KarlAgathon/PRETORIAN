@@ -658,3 +658,5 @@ SYNC
 +5 s
 +10 s
 txt
+diag_log_for
+.log.txt
