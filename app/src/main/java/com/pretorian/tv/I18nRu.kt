@@ -2924,4 +2924,7 @@ TV: ▲ ▼ otvaraju radnje, CH+ i CH− mijenjaju kanal, ◀ lista kanala, ▶ 
 Film i serija: ◀ ▶ premotava, OK pauza.|Фильмы и сериалы: ◀ ▶ перемотка, OK пауза.
 Sat, vrijeme, mreža i Nastavi gledati|Часы, погода, сеть и Продолжить просмотр
 Privremeni podaci i vraćanje na početno|Временные данные и сброс
+Backup nije ispravan, ništa nije deinstalirano.|Резервная копия неверна; ничего не удалено.
+Stara verzija nije cijela preuzeta, ništa nije deinstalirano.|Старая версия скачана не полностью; ничего не удалено.
+Stara verzija nije ispravna ili nije potpisana istim ključem, ništa nije deinstalirano.|Старая версия неверна или подписана другим ключом; ничего не удалено.
 """.trimIndent()

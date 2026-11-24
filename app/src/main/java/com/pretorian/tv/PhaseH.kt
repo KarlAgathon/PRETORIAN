@@ -12,6 +12,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
@@ -80,10 +81,9 @@ fun SaverHost(nav: Nav) {
         }
     }
     if (Saver.showing) {
-        var failed by remember { mutableStateOf(false) }
-        if (failed) { LaunchedEffect(Unit) { Saver.showing = false }; return }
+        // data for the screen is read defensively (each source in its own try), so a missing value hides a line, never the app
         Dialog(onDismissRequest = { Saver.showing = false; Saver.touch() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-            try { SaverScreen(nav) } catch (e: Throwable) { DiagEvents.add("screen", "screensaver failed: " + e.javaClass.simpleName); failed = true }  // i18n-ignore
+            SaverScreen(nav)
         }
     }
 }
@@ -96,7 +96,7 @@ private fun SaverScreen(nav: Nav) {
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { delay(20_000); now = System.currentTimeMillis() } }
     LaunchedEffect(Unit) { try { Weather.refresh() } catch (_: Throwable) {} }
-    val cont = remember { if (Saver.mode == 0) emptyList() else Watch.continueList(ctx).filter { !ContinueHidden.hidden(it.url, it.ts) }.distinctBy { it.series ?: it.url }.take(3) }
+    val cont = remember { if (Saver.mode == 0) emptyList() else try { Watch.continueList(ctx).filter { !ContinueHidden.hidden(it.url, it.ts) }.distinctBy { it.series ?: it.url }.take(3) } catch (_: Throwable) { emptyList() } }
     val rootFr = remember { FocusRequester() }
     val firstFr = remember { FocusRequester() }
     LaunchedEffect(Unit) { delay(80); if (cont.isNotEmpty()) firstFr.tryFocus() else rootFr.tryFocus() }
@@ -129,8 +129,8 @@ private fun SaverScreen(nav: Nav) {
                 if (norm.isBlank() && vs.isBlank()) T("Brzina još nije izmjerena (Postavke › Dijagnostika)", 13.sp, C.Muted)
             }
             if (Saver.show("sys")) {
-                val h = remember { DeviceInfo.head(ctx) }
-                T(h.first + " · " + h.second, 13.sp, C.Muted)
+                val h = remember { try { DeviceInfo.head(ctx).let { it.first + " · " + it.second } } catch (_: Throwable) { "" } }
+                if (h.isNotBlank()) T(h, 13.sp, C.Muted)
             }
         }
         if (cont.isNotEmpty()) Column(Modifier.align(Alignment.CenterEnd).padding(end = 64.dp).width(420.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {

@@ -393,16 +393,35 @@ object Rollback {
     suspend fun prepare(ctx: Context, r: Release): String? = withContext(Dispatchers.IO) {
         try {
             busy = true
-            PublicFiles.save(ctx, "backup-za-${r.name}.json", Backup.export(ctx, Backup.pass.ifBlank { null }).toByteArray())
+            // 2.8.0: nothing is uninstalled unless every step below is checked: the backup is valid JSON with settings,
+            // it is saved in Download/MediaCenter (survives uninstall), and the old APK is complete, the right version and
+            // signed with the same key. Without a backup password, logins are not in the backup (they must be entered again).
+            val backup = Backup.export(ctx, Backup.pass.ifBlank { null })
+            val bj = try { JSONObject(backup) } catch (e: Exception) { null }
+            if (bj == null || bj.length() == 0) { DiagEvents.add("update", "rollback stopped: backup invalid"); return@withContext tr("Backup nije ispravan, ništa nije deinstalirano.") }  // i18n-ignore
+            PublicFiles.save(ctx, "backup-za-${r.name}.json", backup.toByteArray())
             val f = File(ctx.cacheDir, "old.apk")
             val c = URL(r.apk).openConnection() as HttpURLConnection
             c.instanceFollowRedirects = true; c.connectTimeout = 15_000; c.readTimeout = 60_000
+            val expected = c.contentLengthLong
             c.inputStream.use { ins -> f.outputStream().use { ins.copyTo(it) } }
+            if (expected > 0 && f.length() != expected) { f.delete(); return@withContext tr("Stara verzija nije cijela preuzeta, ništa nije deinstalirano.") }
+            val pm = ctx.packageManager
+            @Suppress("DEPRECATION") val old = pm.getPackageArchiveInfo(f.path, if (android.os.Build.VERSION.SDK_INT >= 28) android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES else android.content.pm.PackageManager.GET_SIGNATURES)
+            @Suppress("DEPRECATION") val mine = pm.getPackageInfo(ctx.packageName, if (android.os.Build.VERSION.SDK_INT >= 28) android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES else android.content.pm.PackageManager.GET_SIGNATURES)
+            fun sigs(p: android.content.pm.PackageInfo?): Set<String> = try {
+                @Suppress("DEPRECATION") val a = if (android.os.Build.VERSION.SDK_INT >= 28) p?.signingInfo?.apkContentsSigners else p?.signatures
+                a?.map { java.security.MessageDigest.getInstance("SHA-256").digest(it.toByteArray()).joinToString("") { b -> "%02x".format(b) } }?.toSet() ?: emptySet()
+            } catch (_: Exception) { emptySet() }
+            if (old == null || old.packageName != ctx.packageName || sigs(old).isEmpty() || sigs(old) != sigs(mine)) {
+                f.delete(); DiagEvents.add("update", "rollback stopped: old APK invalid or signed differently")  // i18n-ignore
+                return@withContext tr("Stara verzija nije ispravna ili nije potpisana istim ključem, ništa nije deinstalirano.")
+            }
             f.inputStream().use { PublicFiles.save(ctx, "MediaCenter-${r.name}.apk", it) }  // i18n-ignore
             PublicFiles.save(ctx, "vrati.json", JSONObject().put("version", r.name).put("apk", "MediaCenter-${r.name}.apk").put("backup", "backup-za-${r.name}.json").toString().toByteArray())  // i18n-ignore
             f.delete()
             null
-        } catch (e: Exception) { e.message ?: tr("nije uspjelo") } finally { busy = false }
+        } catch (e: Exception) { DiagEvents.add("update", "rollback preparation failed: " + e.message); e.message ?: tr("nije uspjelo") } finally { busy = false }  // i18n-ignore
     }
     fun uninstall(ctx: Context) {
         try { ctx.startActivity(Intent(Intent.ACTION_DELETE, android.net.Uri.parse("package:" + ctx.packageName)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {}
