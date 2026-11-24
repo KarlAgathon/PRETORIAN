@@ -84,12 +84,14 @@ object RefreshCenter {
     }
 
     private suspend fun one(ctx: Context, p: Playlist): Boolean {
+        val t0 = android.os.SystemClock.elapsedRealtime()
         val ok = try {
             val info = Repo.test(p)
             val up = if (p.type == SourceType.XTREAM) p.copy(exp = info) else p
             Store.savePlaylists(ctx, Store.playlists(ctx).map { if (it.id == up.id) up.copy(active = it.active) else it })
             PlCheck.put(p.id, true, null); true
         } catch (e: Exception) { PlCheck.put(p.id, false, e.message); false }
+        PerfLog.task("playlist refresh", if (ok) "done" else "failed", android.os.SystemClock.elapsedRealtime() - t0, p.type.name)  // i18n-ignore
         if (ok && p.active) withContext(Dispatchers.Main) {
             Repo.dropCatalogs()
             if (ServerOrder.on) Ovr(ctx, p.id).takeServerOrder()

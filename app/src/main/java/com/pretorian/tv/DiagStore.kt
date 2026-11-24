@@ -80,7 +80,7 @@ object DiagStore {
                     write(batch)
                     if (System.currentTimeMillis() - lastMaintain > 10 * 60_000L) { maintain(); lastMaintain = System.currentTimeMillis() }
                 }
-            } catch (_: InterruptedException) { return } catch (_: Throwable) {}
+            } catch (_: InterruptedException) { return } catch (_: Throwable) { DiagCollect.inc("diag write failures") }  // i18n-ignore
         }
     }
 
@@ -88,7 +88,7 @@ object DiagStore {
 
     private fun write(batch: List<String>) {
         val jd = journalDir() ?: return
-        if (!spaceOk()) { dropped += batch.size; return }
+        if (!spaceOk()) { dropped += batch.size; DiagCollect.inc("diag events dropped (low storage)", batch.size.toLong()); return }  // i18n-ignore
         val cur = File(jd, "current.log")  // i18n-ignore
         val sb = StringBuilder()
         if (dropped > 0) { sb.append(DiagEvents.stamp()).append("|W|diag|").append(dropped).append(" events not saved: low storage\n"); dropped = 0 }  // i18n-ignore
@@ -200,7 +200,15 @@ object DiagStore {
                 " (" + BuildConfig.VERSION_CODE + ", " + (if (BuildConfig.BUILD_TYPE == "beta") "Beta" else "Stable") + ") · " + android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL +  // i18n-ignore
                 " · Android " + android.os.Build.VERSION.RELEASE + " (API " + android.os.Build.VERSION.SDK_INT + ") · session " + PerfLog.session + " · " + java.util.TimeZone.getDefault().id +  // i18n-ignore
                 " · screen " + CrashLog.screen.ifBlank { "unknown" } + " · class " + kind + "\n"  // i18n-ignore
-            File(d, "$base.txt").writeText(bounded(Redact.text(who + text)))
+            // 3.0.0.2: what happened just before — the last events kept in memory, the last CPU/memory sample, what was playing
+            val ctxLines = try {
+                val last = Monitor.lastSample()
+                "\n--- context at the incident ---\nincident id " + java.lang.Long.toHexString(now) + " · play state " + DiagCollect.playState() + " · " + NetState.now() +  // i18n-ignore
+                    " · app state " + Work.state().name.lowercase() + " · players alive " + DiagCollect.playersLive.get() + "\n" +  // i18n-ignore
+                    "last sample: " + (last ?: "none yet") + "\n--- pre-incident timeline (last events, oldest first) ---\n" +  // i18n-ignore
+                    DiagEvents.lines().takeLast(40).joinToString("\n") + "\n--- end of context ---\n\n"  // i18n-ignore
+            } catch (_: Throwable) { "\n(context unavailable)\n\n" }  // i18n-ignore
+            File(d, "$base.txt").writeText(bounded(Redact.text(who + ctxLines + text)))
             Prefs.put("diag_last_sig", sig); Prefs.put("diag_last_at", now); Prefs.put("diag_last_base", base); Prefs.put("diag_last_n", 1L)
             base
         } catch (_: Throwable) { null }

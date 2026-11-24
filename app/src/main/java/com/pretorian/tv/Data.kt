@@ -295,6 +295,7 @@ class Xtream(private val p: Playlist) {
     fun login(): String {
         val o = try { JSONObject(api(null)) } catch (e: Exception) { throw IOException("Server nije vratio Xtream odgovor. Provjeri adresu.") }
         val ui = o.optJSONObject("user_info") ?: throw IOException("Server nije vratio podatke o korisniku")
+        DiagCollect.account(p.id, ui)   // 3.0.0.2: status, max/active connections, expiry from this same answer (nothing extra is asked)
         if (ui.optInt("auth", 0) != 1) throw IOException("Pogrešno korisničko ime ili lozinka")
         val status = ui.str("status")
         if (status.isNotBlank() && !status.equals("Active", true)) throw IOException(trf("Nalog nije aktivan: %s", status))

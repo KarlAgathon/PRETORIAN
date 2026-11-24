@@ -60,6 +60,7 @@ object Monitor {
     /** how long the app took from start to the first screen (ms) */
     @Volatile var startMs = 0L
     private var tick = 0
+    @Volatile var appCtx: android.content.Context? = null
     @Volatile private var lastPss = 0
     val since = System.currentTimeMillis()
 
@@ -86,11 +87,15 @@ object Monitor {
                 val rt = Runtime.getRuntime(); val heap = ((rt.totalMemory() - rt.freeMemory()) / 1_048_576).toInt()
                 @Suppress("DEPRECATION") val pss = if (tick % 5 == 1) (android.os.Debug.getPss() / 1024).toInt().also { lastPss = it } else lastPss
                 PerfLog.sample(Work.state().name.lowercase(), cpu, heap, if (tick % 5 == 1) pss else null)
+                // 3.0.0.2: storage sizes every 6 h, and only while nothing plays (a short directory walk)
+                if (tick % 360 == 3 && Work.state() == Work.State.IDLE) appCtx?.let { DiagCollect.storageSnapshot(it) }
                 synchronized(samples) { samples.addLast(Sample(w, pss, cpu)); while (samples.size > 1440) samples.removeFirst() }
             }
         }
     }
 
+    /** the newest sample as one line (for incident context); never blocks */
+    fun lastSample(): String? = synchronized(samples) { samples.lastOrNull() }?.let { "pss ${it.pssMb} MB · cpu ${it.cpu} % of one core · " + DiagEvents.stamp(it.at).substring(11, 19) }  // i18n-ignore
     fun summary(): List<Pair<String, String>> {
         val l = synchronized(samples) { samples.toList() }
         val out = ArrayList<Pair<String, String>>()

@@ -699,3 +699,15 @@ ch_probe_active
 %.1f MB
 ${maxOf(1, f.length() / 1024)} KB
 ⁨$it⁩
+H.264
+H.265/HEVC
+AV1
+VP8
+VP9
+MPEG-2
+MPEG-4
+Dolby Vision
+time,session,state,cpu_pct_one_core,java_heap_mb,pss_mb,native_heap_mb,play_state
+time,session,db_kb,db_wal_shm_kb,image_cache_kb,cache_total_kb,logo_index_kb,diagnostics_kb,free_mb
+Audio passthrough state and the device behind HDMI are not observable.
+Freeze detection uses playback position only ([suspected]); the picture itself is never inspected.

@@ -82,3 +82,8 @@ Beta 1 (A0 + A, built from branch `redesign-beta/1`) → owner Mi Box test → o
 - Full report: Kind.FULL = one UTF-8 TXT, 31 sections + journal appendix, 40 MB budget, incidents before journal, validation before QR, low-memory refusal; ZIP removed. File name PTR-…_<safe-name>_DIAGNOSTICS_<yyyy-MM-dd_HHmmss>.txt. Stale exports deleted at start.
 - Incidents carry device id/name/version/channel/model/API/session/tz/screen/class; foreground low-memory exits recorded as "oom".
 - No remote reporting code existed (verified: no SMTP/Firebase/Sentry/mailto).
+
+## 3.0.0.2 (24.11.) — Extended Passive Diagnostics (branch diagnostics/3.0.0.2 from v3.0.0.1 / 47d8ecc)
+- DiagCollect.kt: AnalyticsListener per player (decoder init + hw/sw flag, video/audio format incl. colour, dropped frames, underruns, sink/codec errors, error cause classification, release count), lifecycle counters, account fields from Xtream login (hashed playlist ref, no credentials), navigation request→composition, Coil EventListener (logos vs artwork), screen on/off + dream receiver, display listener with AFR request timing, audio device callback, 6-hourly storage snapshot while idle. NetState: transports/VPN/validation transitions with time to recover.
+- Incidents carry a context block (play state, network, app state, last sample, last 40 events). Report sections 32–50, schema 2, install/update/session times. Collector errors disable that collector only.
+- Not observable: HDMI-CEC, passthrough state, per-socket ownership, build commit id.

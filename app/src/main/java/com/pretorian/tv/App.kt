@@ -90,7 +90,9 @@ class MainActivity : ComponentActivity() {
         coil.Coil.setImageLoader(coil.ImageLoader.Builder(this)
             .memoryCache { coil.memory.MemoryCache.Builder(this).maxSizePercent(if (Perf.lite || Lean.images) 0.10 else 0.20).build() }
             .diskCache { coil.disk.DiskCache.Builder().directory(cacheDir.resolve("images")).maxSizeBytes(if (Perf.lite) 150L shl 20 else 400L shl 20).build() }
+            .eventListener(DiagCollect.imageListener)   // 3.0.0.2: load counts and times only
             .build())
+        DiagCollect.start(this); Monitor.appCtx = applicationContext
         CrashLog.watch(this)
         Stats.onStart()
         WhatsNew.check(this)
@@ -192,7 +194,7 @@ fun PretorianApp() {
     val nav = remember {
         Nav(
             // Settings keeps its own page stack per copy on the app stack (Phase A); a newly opened copy starts fresh
-            push = { if (it == Screen.Settings) SettingsStack.opened(stack.count { s -> s == Screen.Settings } + 1, stack.lastOrNull() == Screen.Search); stack.add(it) },
+            push = { DiagCollect.navRequested(it::class.simpleName ?: "?"); if (it == Screen.Settings) SettingsStack.opened(stack.count { s -> s == Screen.Settings } + 1, stack.lastOrNull() == Screen.Search); stack.add(it) },
             back = {
                 if (stack.size > 1) {
                     val left = stack.removeAt(stack.lastIndex)
@@ -314,6 +316,7 @@ fun PretorianApp() {
         CompositionLocalProvider(LocalLayoutDirection provides if (Look.lang == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr) {
             val top = stack.last()
             CrashLog.screen = (top::class.simpleName ?: top.toString()).take(80)   // i18n-ignore (2.9.1: short class name instead of Screen$Settings@hash)
+            LaunchedEffect(top) { DiagCollect.navComposed(top::class.simpleName ?: "?") }
             if (top is Screen.Player) {
                 PlayerScreen(top, nav)
             } else {

@@ -1,3 +1,9 @@
+Media Center 3.0.0.2 Stable – extended passive diagnostics (no new features, nothing changed in how the app works)
+
+• The full diagnostic report (Diagnostics › Kreiraj kompletan izvještaj) now has sections 32–50: IPTV account limits from the existing login answer (max / active connections, expiry), video codec capabilities, the real video and audio format of each stream with the decoder used, HDR and colour information, audio outputs and their changes, display modes and frame-rate changes, network and VPN transitions with error types, dropped frames and suspected freezes, player start/release counts, standby and wake, storage growth every 6 hours, playlist refresh times, EPG time zone, screen opening times, picture and logo load times, background tasks, diagnostic health and limitations
+• Every crash, freeze or ANR record now starts with what happened just before it: play state, network, app state, last memory sample and the last 40 events
+• Everything is observed only: no extra requests to your provider, no tests, no speed checks; the 50 MB / 10,000 events / 90 days limits stay
+
 Media Center 3.0.0.1 Stable – final test edition (feature freeze until at least 01.01.2027)
 
 • First start: Language → Device identity → Legal notice → Add playlist; an interrupted setup continues where it stopped

@@ -124,6 +124,8 @@ fun buildPlayer(ctx: Context, preview: Boolean = false): ExoPlayer {
         builder.setLoadControl(lc.build())
     }
     val player = builder.build()
+    // 3.0.0.2: passive diagnostics only (formats, decoders, dropped frames, errors, release); playback is not touched
+    try { player.addAnalyticsListener(DiagCollect.listener(preview)); DiagCollect.playerCreated(preview) } catch (_: Throwable) {}
     val audio = Prefs.audioLangs.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toTypedArray()
     val b = player.trackSelectionParameters.buildUpon()
     if (!Prefs.bool("audio_default")) b.setPreferredAudioLanguages(*audio)
@@ -339,7 +341,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     val item = items.getOrElse(index) { items.first() }
     // spec 16: Match Follow needs to know what is being watched (context filter, same-match check)
     LaunchedEffect(item.url) { PlayCtx.kind = if (s.live) "live" else if (item.season != null) "series" else "movie"; PlayCtx.chUrl = if (s.live) item.url else null }
-    DisposableEffect(Unit) { ChannelHealth.playerOn = true; PlayState.inPlayer = true; PlayState.update(s.live, true, Player.STATE_BUFFERING); onDispose { PlayState.inPlayer = false; PlayState.active = false; ChannelHealth.playerOn = false; PlayCtx.kind = null; PlayCtx.chUrl = null } }
+    DisposableEffect(Unit) { DiagCollect.session("fullscreen", true); ChannelHealth.playerOn = true; PlayState.inPlayer = true; PlayState.update(s.live, true, Player.STATE_BUFFERING); onDispose { DiagCollect.session("fullscreen", false); PlayState.inPlayer = false; PlayState.active = false; ChannelHealth.playerOn = false; PlayCtx.kind = null; PlayCtx.chUrl = null } }
     val p = item.channel?.let { Store.byId(ctx, it.pid) } ?: Store.ownerOf(ctx, item.url) ?: Store.active(ctx)
 
     /** audio / built-in subtitle picked on the movie page, applied when the stream's tracks are known */

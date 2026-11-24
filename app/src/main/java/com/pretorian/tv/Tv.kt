@@ -1092,6 +1092,7 @@ fun PreviewBox(ch: Channel?, modifier: Modifier) {
     val curCh by androidx.compose.runtime.rememberUpdatedState(ch)
     DisposableEffect(Unit) {
         Preview.player = player
+        DiagCollect.session("preview", true)
         val l = object : androidx.media3.common.Player.Listener {
             override fun onRenderedFirstFrame() { if (!ready && previewT0 > 0) PerfLog.firstFrame("preview", android.os.SystemClock.elapsedRealtime() - previewT0, false); ready = true; ChannelHealth.mark(curCh?.url, true) }  // i18n-ignore
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) { failed = true; ChannelHealth.mark(curCh?.url, false) }
@@ -1110,7 +1111,7 @@ fun PreviewBox(ch: Channel?, modifier: Modifier) {
             } catch (_: Exception) {}
         }
         life?.addObserver(lo)
-        onDispose { ChannelHealth.previewOn = false; life?.removeObserver(lo); player.removeListener(l); if (Preview.player === player) Preview.player = null; player.release() }
+        onDispose { DiagCollect.session("preview", false); ChannelHealth.previewOn = false; life?.removeObserver(lo); player.removeListener(l); if (Preview.player === player) Preview.player = null; player.release() }
     }
     LaunchedEffect(ch?.url) {
         ready = false; failed = false
@@ -1121,7 +1122,7 @@ fun PreviewBox(ch: Channel?, modifier: Modifier) {
         Preview.player = player
         val real = try { Stalker.resolve(ctx, c.url) } catch (e: Exception) { failed = true; return@LaunchedEffect }
         // 3.0: a probe never runs while the preview stream opens
-        ChannelHealth.previewOn = true; previewT0 = android.os.SystemClock.elapsedRealtime()
+        ChannelHealth.previewOn = true; previewT0 = android.os.SystemClock.elapsedRealtime(); DiagCollect.inc("preview channel starts")
         player.setMediaItem(androidx.media3.common.MediaItem.fromUri(real)); player.prepare(); player.playWhenReady = true
     }
     Box(modifier.aspectRatio(16f / 9f).clip(Rnd(14.dp)).background(Color.Black)) {

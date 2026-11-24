@@ -91,6 +91,8 @@ object Afr {
             if (best.modeId == cur.modeId) return
             if (original < 0) original = cur.modeId
             val lp = a.window.attributes
+            DiagCollect.afrAskedAt = android.os.SystemClock.elapsedRealtime(); DiagCollect.afrAsked = String.format(java.util.Locale.US, "%.3f fps → %.3f Hz", fps, best.refreshRate)  // i18n-ignore
+            DiagEvents.add("display", "frame-rate request: " + DiagCollect.afrAsked + " (was " + String.format(java.util.Locale.US, "%.3f Hz", cur.refreshRate) + ")")  // i18n-ignore
             lp.preferredDisplayModeId = best.modeId
             a.window.attributes = lp
         } catch (_: Throwable) {}

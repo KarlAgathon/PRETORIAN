@@ -27,7 +27,8 @@ object PerfLog {
     fun count(k: String, n: Int = 1) { counts.merge(k, n, Int::plus) }
 
     val FILES = mapOf(
-        "samples" to "time,session,state,cpu_pct_one_core,java_heap_mb,pss_mb",  // i18n-ignore
+        "samples" to "time,session,state,cpu_pct_one_core,java_heap_mb,pss_mb,native_heap_mb,play_state",  // i18n-ignore
+        "storage" to "time,session,db_kb,db_wal_shm_kb,image_cache_kb,cache_total_kb,logo_index_kb,diagnostics_kb,free_mb",  // i18n-ignore
         "playback" to "time,session,kind,event,ms,detail",  // i18n-ignore
         "tasks" to "time,session,task,event,ms,detail",  // i18n-ignore
     )
@@ -54,7 +55,9 @@ object PerfLog {
     }
 
     /** CPU / memory sample (Monitor, every minute; PSS only every 5 minutes, it is expensive) */
-    fun sample(state: String, cpu: Int, heapMb: Int, pssMb: Int?) = row("samples", listOf(state, cpu, heapMb, pssMb ?: ""))
+    fun sample(state: String, cpu: Int, heapMb: Int, pssMb: Int?) = row("samples", listOf(state, cpu, heapMb, pssMb ?: "",
+        android.os.Debug.getNativeHeapAllocatedSize() / 1_048_576, DiagCollect.playState()))
+    fun storage(vararg v: Long) = row("storage", v.map { if (it < 0) "" else it.toString() })
 
     fun firstFrame(kind: String, ms: Long, recovery: Boolean) {
         count("$kind first frame"); row("playback", listOf(kind, if (recovery) "first_frame_recovery" else "first_frame", ms, ""))  // i18n-ignore

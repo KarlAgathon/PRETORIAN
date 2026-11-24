@@ -135,6 +135,9 @@ object DiagReport {
         b.append("Device ID: ").append(DeviceIdentity.id()).append(" (").append(DeviceIdentity.short()).append(")\n")  // i18n-ignore
         b.append("Device name: ").append(DeviceIdentity.name().ifBlank { "not set" }).append('\n')  // i18n-ignore
         b.append("Release channel: ").append(if (BuildConfig.BUILD_TYPE == "beta") "Beta" else "Stable").append(" · session ").append(PerfLog.session).append('\n')  // i18n-ignore
+        try { val pi = ctx.packageManager.getPackageInfo(ctx.packageName, 0)
+            b.append("Installed: ").append(DiagEvents.stamp(pi.firstInstallTime)).append(" · last update: ").append(DiagEvents.stamp(pi.lastUpdateTime)).append('\n') } catch (_: Throwable) { b.append("Installed: unavailable\n") }  // i18n-ignore
+        b.append("Session started: ").append(DiagEvents.stamp(DiagCollect.sessionStartWall)).append(" · report schema ").append(DiagCollect.SCHEMA).append(" · build commit: unavailable\n")  // i18n-ignore
         b.append("Previous version: ").append(Prefs.str("diag_prev_version").ifBlank { "unknown" }).append('\n')  // i18n-ignore
         b.append("Device: ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL).append(" · Android ").append(Build.VERSION.RELEASE)
             .append(" (API ").append(Build.VERSION.SDK_INT).append(")\n")  // i18n-ignore
@@ -232,7 +235,8 @@ object DiagReport {
             o.line("recovery attempts: " + r.count { it.getOrNull(3) == "recovery" })  // i18n-ignore
         }
         try {
-            o.line("MEDIA CENTER – FULL DIAGNOSTIC REPORT")  // i18n-ignore
+            o.line("MEDIA CENTER – FULL DIAGNOSTIC REPORT · schema " + DiagCollect.SCHEMA + " · report id " + java.util.UUID.randomUUID().toString().take(13))  // i18n-ignore
+            o.line("Status labels: [measured] recorded here · [device] reported by Android · [provider] reported by the IPTV server · [cached] stored earlier · [suspected] indication, not proof · [unavailable] / [not observed] nothing recorded. Zero is a real value, never a stand-in for missing data.")  // i18n-ignore
             o.line("Legend: measured = recorded on this box · unavailable = not recorded or not supported here · nothing is estimated.")  // i18n-ignore
             sec(1, "REPORT SUMMARY") {  // i18n-ignore
                 o.line("Created: " + SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z", Locale.US).format(Date()) + " (" + java.util.TimeZone.getDefault().id + ")")  // i18n-ignore
@@ -360,6 +364,7 @@ object DiagReport {
         o.line("Not measured in this version: per-screen navigation times, player creation/reuse counts, artwork load times.")  // i18n-ignore
         o.line("Samples exist only while the app ran with 'Praćenje dugog rada' on; playback timings from 3.0 on.")  // i18n-ignore
         o.line("Counts are this device only; other devices on the same account and provider-side counts are not visible.")  // i18n-ignore
+        try { extended(ctx, o, play, samples, tasks) } catch (_: Full) { o.budget?.set(0, maxOf(o.budget?.get(0) ?: 0, 32L * 1024)); o.line("[extended sections cut at the size limit]") }  // i18n-ignore
         val total = DiagStore.eventCount()
         val left = ((o.budget?.get(0) ?: 0) - 1024) / 160
         val skip = (total - left).coerceAtLeast(0)
@@ -370,6 +375,120 @@ object DiagReport {
             DiagStore.eachEvent { l -> if (n++ >= skip) o.line(l) }
             o.line(""); o.line("END OF REPORT")  // i18n-ignore
         } catch (_: Full) { o.budget?.set(0, 1024); o.line("[journal cut at the size limit]") }  // i18n-ignore
+    }
+
+    /** 3.0.0.2 sections 32–50: passive observations only (see DiagCollect) */
+    private fun extended(ctx: Context, o: Out, play: List<List<String>>, samples: List<List<String>>, tasks: List<List<String>>) {
+        fun sec(n: Int, t: String, fill: () -> Unit) { o.line(""); o.line("=".repeat(72)); o.line("$n. $t"); o.line("=".repeat(72)); try { fill() } catch (e: Full) { throw e } catch (e: Throwable) { o.line("[unavailable: " + e.javaClass.simpleName + "]") } }  // i18n-ignore
+        fun ev(kinds: List<String>, max: Int = 400) { val l = ArrayList<String>(); DiagStore.eachEvent { e -> if (kinds.any { e.contains("|$it|") }) { l += e; if (l.size > max) l.removeAt(0) } }; if (l.isEmpty()) o.line("[not observed] no events yet") else { o.line("last ${l.size} events:"); l.forEach { o.line(it) } } }  // i18n-ignore
+        fun cnt(prefix: String) { val m = DiagCollect.counters.filterKeys { it.startsWith(prefix) }; if (m.isEmpty()) o.line("[not observed] this session") else m.toSortedMap().forEach { (k, v) -> o.line("[measured] $k: ${v.get()} (this session)") } }  // i18n-ignore
+        val tv = ctx.getSystemService(Context.DISPLAY_SERVICE) as android.hardware.display.DisplayManager
+        sec(32, "IPTV ACCOUNT AND CONNECTION LIMITS") {  // i18n-ignore
+            val acc = DiagCollect.accounts()
+            if (acc.isEmpty()) o.line("[not observed] no Xtream login answer recorded since 3.0.0.2 (M3U and Stalker do not report these values)")  // i18n-ignore
+            acc.forEach { (id, j) ->
+                val age = (System.currentTimeMillis() - j.optLong("at")) / 60_000
+                o.line("[provider · cached, ${age} min old] playlist ref $id: status ${j.optString("status").ifBlank { "not reported" }} · max connections ${j.optString("max").ifBlank { "not reported" }} · active connections ${j.optString("active").ifBlank { "not reported" }} · expiry ${j.optString("exp").ifBlank { "not reported" }.let { e -> e.toLongOrNull()?.let { DiagEvents.stamp(it * 1000).take(10) } ?: e }} · fields supplied: ${j.optString("fields").ifBlank { "none" }}")  // i18n-ignore
+            }
+            o.line("[measured] this app now: players alive ${DiagCollect.playersLive.get()} · " + DiagCollect.playState())  // i18n-ignore
+            o.line("Provider 'active connections' counts every device on the account at the moment of that answer; it is not this box's count and not live.")  // i18n-ignore
+        }
+        sec(33, "VIDEO CODEC CAPABILITIES") {  // i18n-ignore
+            val mimes = listOf("video/avc" to "H.264", "video/hevc" to "H.265/HEVC", "video/av01" to "AV1", "video/x-vnd.on2.vp8" to "VP8", "video/x-vnd.on2.vp9" to "VP9", "video/mpeg2" to "MPEG-2", "video/mp4v-es" to "MPEG-4", "video/dolby-vision" to "Dolby Vision")  // i18n-ignore
+            val list = android.media.MediaCodecList(android.media.MediaCodecList.ALL_CODECS).codecInfos.filter { !it.isEncoder }
+            mimes.forEach { (m, label) ->
+                val ds = list.filter { c -> c.supportedTypes.any { it.equals(m, true) } }
+                if (ds.isEmpty()) o.line("[device] $label: no decoder") else ds.forEach { c ->  // i18n-ignore
+                    val cap = try { c.getCapabilitiesForType(m) } catch (_: Throwable) { null }
+                    val v = cap?.videoCapabilities
+                    o.line("[device] $label: ${c.name} · " + (if (Build.VERSION.SDK_INT >= 29) (if (c.isHardwareAccelerated) "hardware" else if (c.isSoftwareOnly) "software" else "unknown") + " (Android flag)" else "hw/sw unknown (Android < 10)") +  // i18n-ignore
+                        (v?.let { " · up to ${it.supportedWidths.upper}×${it.supportedHeights.upper} · ${it.supportedFrameRates.upper.toInt()} fps max" } ?: "") + " · ${cap?.profileLevels?.size ?: 0} profile/levels")  // i18n-ignore
+                }
+            }
+        }
+        sec(34, "ACTUAL VIDEO FORMAT AND DECODER SELECTION") { ev(listOf("codec", "format")) }  // i18n-ignore
+        sec(35, "HDR AND COLOR INFORMATION") {  // i18n-ignore
+            val d = tv.getDisplay(0)
+            val types = if (Build.VERSION.SDK_INT >= 24) d?.hdrCapabilities?.supportedHdrTypes?.map { when (it) { 1 -> "Dolby Vision"; 2 -> "HDR10"; 3 -> "HLG"; 4 -> "HDR10+"; else -> "type $it" } } else null  // i18n-ignore
+            o.line("[device] display reports HDR: " + (types?.ifEmpty { listOf("none") }?.joinToString(", ") ?: "unavailable (Android < 7)"))  // i18n-ignore
+            o.line("Source color info per stream is in section 34 (transfer 6 = PQ/HDR10, 7 = HLG). Metadata in the source does not prove HDR output.")  // i18n-ignore
+        }
+        sec(36, "AUDIO CAPABILITIES AND ROUTING") {  // i18n-ignore
+            if (Build.VERSION.SDK_INT >= 23) {
+                val am = ctx.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+                am.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS).forEach { a ->
+                    val enc = a.encodings.map { when (it) { 2 -> "PCM16"; 4 -> "PCM float"; 5 -> "AC3"; 6 -> "E-AC3"; 7 -> "DTS"; 8 -> "DTS-HD"; 13 -> "Dolby TrueHD"; 18 -> "E-AC3 JOC"; else -> "enc $it" } }  // i18n-ignore
+                    o.line("[device] output " + DiagCollect.devType(a.type) + " · encodings " + (enc.ifEmpty { listOf("any (not listed)") }.joinToString(", ")) + " · channels " + (a.channelCounts.toList().ifEmpty { listOf("any") }.joinToString("/")) + " · rates " + (a.sampleRates.toList().ifEmpty { listOf("any") }.joinToString("/")))  // i18n-ignore
+                }
+            } else o.line("[unavailable] Android < 6")  // i18n-ignore
+            o.line("A generic HDMI output does not tell whether a soundbar or receiver is behind it. Passthrough state is not observable here.")  // i18n-ignore
+            cnt("audio"); ev(listOf("audio"))
+        }
+        sec(37, "DISPLAY MODES AND FRAME RATE MATCHING") {  // i18n-ignore
+            o.line("[device] current mode: " + DiagCollect.mode(ctx))  // i18n-ignore
+            if (Build.VERSION.SDK_INT >= 23) tv.getDisplay(0)?.supportedModes?.forEach { m -> o.line("[device] supported: ${m.physicalWidth}×${m.physicalHeight} @ " + String.format(Locale.US, "%.3f Hz", m.refreshRate)) }  // i18n-ignore
+            o.line("Auto frame rate in the app: " + if (Tech.afr) "on" else "off")  // i18n-ignore
+            ev(listOf("display"))
+        }
+        sec(38, "NETWORK AND VPN TRANSITIONS") { o.line("[device] now: " + NetState.now()); cnt("network"); cnt("player error"); cnt("preview error"); ev(listOf("net", "netwarn", "neterr")) }  // i18n-ignore
+        sec(39, "DROPPED FRAMES AND SUSPECTED VIDEO FREEZES") {  // i18n-ignore
+            cnt("dropped"); cnt("video decoder"); cnt("audio decoder"); cnt("audio underruns")
+            o.line("Position stagnation found by the existing stall watch is [suspected] freeze (it cannot see the picture itself); confirmed ANRs are in section 28.")  // i18n-ignore
+            ev(listOf("frames", "stall", "codec"))
+        }
+        sec(40, "PLAYER LIFECYCLE AND RESOURCE RELEASE") {  // i18n-ignore
+            cnt("players"); cnt("preview"); cnt("fullscreen")
+            o.line("[measured] player instances alive now: ${DiagCollect.playersLive.get()} · peak this session: ${DiagCollect.playersPeak.get()}")  // i18n-ignore
+            o.line("Player instances are not provider connections; the exact socket owner of each stream is not observable from the app.")  // i18n-ignore
+            ev(listOf("life"), 200)
+        }
+        sec(41, "STANDBY AND POWER LIFECYCLE") { cnt("screen"); o.line("HDMI-CEC itself is not visible to apps; standby is seen as 'screen off', wake as 'screen on'."); ev(listOf("power")) }  // i18n-ignore
+        sec(42, "DATABASE AND STORAGE GROWTH") {  // i18n-ignore
+            o.line(PerfLog.FILES["storage"]!!.replace("time,session,", "time,session,"))
+            var n = 0; PerfLog.each("storage") { o.line(it); n++ }; if (n == 0) o.line("[not observed] first snapshot comes after ~6 h of idle running")  // i18n-ignore
+        }
+        sec(43, "PLAYLIST IMPORT PERFORMANCE") {  // i18n-ignore
+            val r = tasks.filter { it.getOrNull(2) == "playlist refresh" }
+            if (r.isEmpty()) o.line("[not observed] no refresh since 3.0.0.2") else r.forEach { o.line("[measured] " + it.joinToString(",")) }  // i18n-ignore
+            val pls = Store.playlists(ctx); o.line("[measured] playlists ${pls.size} · active ${pls.count { it.active }}")  // i18n-ignore
+        }
+        sec(44, "EXTENDED EPG DIAGNOSTICS") {  // i18n-ignore
+            val tz = java.util.TimeZone.getDefault()
+            o.line("[device] time zone ${tz.id} · UTC offset now " + (tz.getOffset(System.currentTimeMillis()) / 60_000) + " min · daylight saving now " + tz.inDaylightTime(Date()))  // i18n-ignore
+            o.line("[measured] EPG sources: " + EpgSources.list().size)  // i18n-ignore
+            tasks.filter { (it.getOrNull(2) ?: "").contains("guide", true) || (it.getOrNull(2) ?: "").contains("epg", true) }.takeLast(50).forEach { o.line("[measured] " + it.joinToString(",")) }  // i18n-ignore
+        }
+        sec(45, "NAVIGATION PERFORMANCE") {  // i18n-ignore
+            o.line("Measured from the navigation request to the first composition of the destination screen (not a drawn frame).")  // i18n-ignore
+            tasks.filter { (it.getOrNull(2) ?: "").startsWith("nav ") }.groupBy { it[2] }.toSortedMap().forEach { (k, r) -> val v = r.mapNotNull { it.getOrNull(4)?.toLongOrNull() }; if (v.isNotEmpty()) o.line("[measured] ${k.removePrefix("nav ")}: ${v.size} samples · median ${pct(v, .5)} ms · p95 ${pct(v, .95)} ms · max ${v.max()} ms") }  // i18n-ignore
+        }
+        sec(46, "ARTWORK AND LOGO PERFORMANCE") {  // i18n-ignore
+            cnt("images")
+            DiagCollect.imgMs.forEach { (c, q) -> val v = synchronized(q) { q.toList() }; if (v.isNotEmpty()) o.line("[measured] $c load time: ${v.size} samples · median ${pct(v, .5)} ms · p95 ${pct(v, .95)} ms · max ${v.max()} ms") }  // i18n-ignore
+        }
+        sec(47, "EXTENDED BACKGROUND TASK COORDINATION") {  // i18n-ignore
+            o.line("Heavy jobs run one at a time (Work.heavy); the rows show waiting time before start and duration.")  // i18n-ignore
+            tasks.takeLast(200).forEach { o.line(it.joinToString(",")) }
+        }
+        sec(48, "INCIDENT CORRELATION AND RECOVERY TIMELINE") {  // i18n-ignore
+            o.line("Each incident in sections 27–29 now starts with its context: play state, network, app state, last sample and the last 40 events before it.")  // i18n-ignore
+            ev(listOf("recover", "stall", "player", "neterr", "resume"), 300)
+        }
+        sec(49, "DIAGNOSTIC RESOURCE USAGE AND HEALTH") {  // i18n-ignore
+            o.line("[measured] diagnostics on the box: ${DiagStore.totalBytes() / 1024} KB of 50 MB · events ${DiagStore.eventCount()} of 10,000 · incidents ${DiagStore.incidents().size} of 100 · retention 90 days · free-space floor 100 MB")  // i18n-ignore
+            cnt("diag"); cnt("suppressed"); cnt("collector")
+            o.line("collectors switched off after an internal error: " + DiagCollect.disabled().ifEmpty { setOf("none") }.joinToString(", "))  // i18n-ignore
+            o.line("metric samples dropped: ${PerfLog.dropped.get()} · exact CPU cost of diagnostics: unavailable (not separable)")  // i18n-ignore
+        }
+        sec(50, "EXTENDED MEASUREMENT LIMITATIONS") {  // i18n-ignore
+            listOf("HDMI-CEC events are not exposed to apps; standby is inferred from screen on/off.",
+                "Audio passthrough state and the device behind HDMI are not observable.",
+                "Provider connection counts are the provider's own snapshot at login, not live and not per device.",
+                "Freeze detection uses playback position only ([suspected]); the picture itself is never inspected.",
+                "Navigation times end at first composition, not at a drawn frame.",
+                "Build commit id is not built into the app (unavailable).",
+                "Counters marked 'this session' reset when the app restarts; journal events cover up to 90 days.").forEach { o.line("- $it") }  // i18n-ignore
+        }
     }
 
     private fun latest(ctx: Context, o: Out) {

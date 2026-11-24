@@ -60,7 +60,9 @@ object Work {
             val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
             cm.registerDefaultNetworkCallback(object : android.net.ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(n: android.net.Network) { if (!online) DiagEvents.add("net", "internet back"); online = true }  // i18n-ignore
-                override fun onLost(n: android.net.Network) { online = false; DiagEvents.add("netwarn", "network lost") }  // i18n-ignore
+                override fun onLost(n: android.net.Network) { online = false; DiagEvents.add("netwarn", "network lost · " + DiagCollect.playState()); NetState.lost() }  // i18n-ignore
+                // 3.0.0.2: transport / VPN / validation changes, observed only
+                override fun onCapabilitiesChanged(n: android.net.Network, c: android.net.NetworkCapabilities) { NetState.changed(c) }
             })
         } catch (_: Throwable) {}
     }
