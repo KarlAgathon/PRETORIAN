@@ -44,7 +44,11 @@ object DeviceIdentity {
     @Volatile private var nameCache: String? = null
     @Volatile private var dir: File? = null
 
-    fun init(ctx: Context) { if (dir == null) dir = ctx.noBackupFilesDir; id(); name() }
+    fun init(ctx: Context) {
+        val d = ctx.noBackupFilesDir
+        if (dir != d) { dir = d; idCache = null; nameCache = null }   // one folder per app data (tests start fresh data each time)
+        id(); name()
+    }
 
     private fun read(f: String): String? = try { val d = dir ?: return null; val af = android.util.AtomicFile(File(d, f)); if (!af.baseFile.exists()) null else String(af.readFully(), Charsets.UTF_8) } catch (_: Throwable) { null }
     private fun write(f: String, v: String): Boolean = try {
