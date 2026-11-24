@@ -68,3 +68,10 @@ Beta 1 (A0 + A, built from branch `redesign-beta/1`) → owner Mi Box test → o
 - Ai keys sealed with Secret (old gemini_key migrated); SecretScan checks sealed and plain values.
 - RefreshCenter.resume waits for the end of STARTUP; exit reasons for update/user exit logged as info; readable screen name.
 - Not measured on a device: first-frame times are now logged; values wait for the owner's reports.
+
+## 3.0.0 (24.11.) — Stable edition per 3.0 master directive; feature freeze after this (3.0.x = evidence-based fixes)
+- §4 ProbeGuard: passive default (ch_probe_active=false), 30/rolling h per provider host hash, 6 s spacing, redirects counted, persisted stamps + cooldowns (pg_*), clock-back conservative, LIMIT/AUTH → 24 h cooldown (Retry-After honoured), probe socket closed when preview/player opens, 3 s settle, only Work IDLE.
+- §5/6/9/10: zero-position guard in saveProgress, ENDED-early not marked done / no Auto Next, resume asked vs actual logged, first-frame vs READY via PerfLog. Track prefs already language/label based (verified).
+- §8 LogoResolver (iptv-org logos.json + channels.json, streamed, compact TSV index, 14-day refresh via Work.heavy, strict country/uniqueness match) + LogoTrim (transparent margins only) used by TV list, history row, Home tiles, Onyx channel logo.
+- §13–16 PerfLog (metrics/*.csv, 512 KB + 1 rotation each, inside diag ceiling), Work.heavy task rows, incident dedupe by signature (10 min), Full Diagnostic Report ZIP (incidents before events, 40 MB budget, MANIFEST with omissions, cancellable).
+- Not done / blockers: Serbian Latin (no spec found), help/remote text audit, EPG conditional requests, per-endpoint backoff for artwork/metadata, player reuse preview→fullscreen (kept: preview stops first), device measurements.

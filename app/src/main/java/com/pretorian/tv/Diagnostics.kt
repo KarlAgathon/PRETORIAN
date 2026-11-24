@@ -172,37 +172,125 @@ object DiagReport {
             if (c.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)) "internet ok" else "internet not confirmed").joinToString(" · ")  // i18n-ignore
     } catch (_: Throwable) { "unavailable" }  // i18n-ignore
 
-    private class Out(val w: java.io.Writer, val secrets: List<String>) {
+    private class Out(val w: java.io.Writer, val secrets: List<String>, val budget: LongArray? = null, val alive: () -> Boolean = { true }) {
         var bytes = 0L
-        fun line(s: String) { val c = SecretScan.clean(s, secrets); w.write(c); w.write("\n"); bytes += c.length + 1 }
+        private var n = 0
+        fun line(s: String) {
+            if (budget != null) { if (budget[0] <= 0) throw Full(); if (++n % 500 == 0 && !alive()) throw java.io.InterruptedIOException("cancelled") }  // i18n-ignore
+            val c = SecretScan.clean(s, secrets); w.write(c); w.write("\n"); bytes += c.length + 1; if (budget != null) budget[0] -= c.length + 1
+        }
         fun block(s: String) = s.lineSequence().forEach { line(it) }
     }
 
     private fun incidentText(i: DiagStore.Incident) = DiagStore.read(i.f)
 
     /** builds the export into [dest]; throws [SecretScan.Refused] when it cannot be made safe */
-    fun build(ctx: Context, kind: Kind, dest: File) {
+    /** the archive reached its size ceiling: the rest of that part is left out (listed in MANIFEST.json) */
+    private class Full : Exception()
+    /** 3.0 Full Diagnostic Report: at most 40 MB uncompressed text (the diagnostics ceiling is 50 MB including exports) */
+    private const val ZIP_BUDGET = 40L * 1024 * 1024
+
+    fun build(ctx: Context, kind: Kind, dest: File, alive: () -> Boolean = { true }) {
         val secrets = try { SecretScan.values(ctx) } catch (e: Throwable) { throw SecretScan.Refused("secrets unreadable") }  // i18n-ignore
         DiagStore.flushNow()
         if (dest.exists()) dest.delete()
         when (kind) {
             Kind.LATEST -> dest.bufferedWriter().use { w -> val o = Out(w, secrets); latest(ctx, o) }
             Kind.FULL -> dest.bufferedWriter().use { w -> val o = Out(w, secrets); full(ctx, o) }
-            Kind.ZIP -> java.util.zip.ZipOutputStream(dest.outputStream().buffered()).use { z ->
-                fun entry(name: String, fill: (Out) -> Unit) {
-                    z.putNextEntry(java.util.zip.ZipEntry(name))
-                    val w = java.io.OutputStreamWriter(object : java.io.FilterOutputStream(z) { override fun close() { flush() } }, Charsets.UTF_8)
-                    fill(Out(w, secrets)); w.flush(); z.closeEntry()
-                }
-                entry("report.txt") { o -> o.block(header(ctx)); o.line(""); o.line("== Incidents ==")  // i18n-ignore
-                    DiagStore.incidents().forEach { o.line(SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(it.time)) + "  " + it.kind + "  " + it.base) } }  // i18n-ignore
-                DiagStore.incidents().forEach { i ->
-                    entry("incidents/" + i.base + ".txt") { o -> o.block(incidentText(i)) }  // i18n-ignore
-                    DiagStore.logOf(i)?.let { lf -> entry("incidents/" + i.base + ".log.txt") { o -> o.block(DiagStore.read(lf)) } }  // i18n-ignore
-                }
-                entry("events.txt") { o -> DiagStore.eachEvent { o.line(it) } }  // i18n-ignore
-            }
+            Kind.ZIP -> java.util.zip.ZipOutputStream(dest.outputStream().buffered()).use { z -> fullZip(ctx, z, secrets, alive) }
         }
+    }
+
+    private fun pct(l: List<Long>, p: Double): Long = if (l.isEmpty()) 0 else l.sorted()[((l.size - 1) * p).toInt()]
+
+    /** one consistent snapshot of everything kept on the box, streamed entry by entry (never whole in memory) */
+    private fun fullZip(ctx: Context, z: java.util.zip.ZipOutputStream, secrets: List<String>, alive: () -> Boolean) {
+        val budget = longArrayOf(ZIP_BUDGET)
+        val omitted = ArrayList<String>(); val written = ArrayList<String>()
+        fun entry(name: String, fill: (Out) -> Unit) {
+            if (!alive()) throw java.io.InterruptedIOException("cancelled")  // i18n-ignore
+            if (budget[0] <= 0) { omitted += "$name (size ceiling reached)"; return }  // i18n-ignore
+            z.putNextEntry(java.util.zip.ZipEntry(name))
+            val w = java.io.OutputStreamWriter(object : java.io.FilterOutputStream(z) { override fun close() { flush() } }, Charsets.UTF_8)
+            try { fill(Out(w, secrets, budget, alive)) } catch (_: Full) { omitted += "$name (cut at the size ceiling)" }  // i18n-ignore
+            w.flush(); z.closeEntry(); written += name
+        }
+        fun csv(name: String, header: String, src: String, filter: (String) -> Boolean = { true }) =
+            entry(name) { o -> o.line(header); PerfLog.each(src) { if (filter(it)) o.line(it) } }
+        val inc = DiagStore.incidents()
+        val play = ArrayList<Array<String>>(); PerfLog.each("playback") { play += it.split(',').toTypedArray() }
+        val samples = ArrayList<Array<String>>(); PerfLog.each("samples") { samples += it.split(',').toTypedArray() }
+
+        entry("SUMMARY.txt") { o ->  // i18n-ignore
+            o.line("Media Center " + BuildConfig.VERSION_NAME + " – Full Diagnostic Report"); o.line("")  // i18n-ignore
+            o.line("Incidents kept: " + inc.size + " (crash " + inc.count { it.kind == "crash" || it.kind == "native" } + ", freeze " + inc.count { it.kind == "freeze" } + ", ANR " + inc.count { it.kind == "anr" } + ")")  // i18n-ignore
+            o.line("Events kept: " + DiagStore.eventCount() + " · diagnostics on the box: " + DiagStore.totalBytes() / 1024 + " KB (ceiling 50 MB)")  // i18n-ignore
+            listOf("tv", "preview", "movie", "series").forEach { k ->  // i18n-ignore
+                val ff = play.filter { it.size > 4 && it[2] == k && it[3] == "first_frame" }.mapNotNull { it[4].toLongOrNull() }  // i18n-ignore
+                if (ff.isNotEmpty()) o.line("$k first picture: ${ff.size} starts · median ${pct(ff, .5)} ms · p95 ${pct(ff, .95)} ms · max ${ff.max()} ms")  // i18n-ignore
+            }
+            o.line("Provider protection: " + (if (ChannelHealth.probeOn) "active checks on (owner opt-in)" else "passive (default)"))  // i18n-ignore
+            o.line("Values marked unavailable were not measured; nothing in this report is estimated.")  // i18n-ignore
+        }
+        entry("DEVICE_INFO.txt") { o ->  // i18n-ignore
+            o.block(header(ctx))
+            o.line("CPU cores: " + Runtime.getRuntime().availableProcessors() + " · ABI: " + Build.SUPPORTED_ABIS.joinToString(", "))  // i18n-ignore
+            try { val m = ctx.resources.displayMetrics; val d = (ctx.getSystemService(Context.DISPLAY_SERVICE) as android.hardware.display.DisplayManager).getDisplay(0)
+                o.line("Screen: " + m.widthPixels + "×" + m.heightPixels + " · " + (d?.refreshRate?.let { String.format(Locale.US, "%.0f Hz", it) } ?: "refresh unavailable")) } catch (_: Throwable) { o.line("Screen: unavailable") }  // i18n-ignore
+            o.line("Thermal: " + try { if (Build.VERSION.SDK_INT >= 29) (ctx.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager).currentThermalStatus.toString() else "unavailable" } catch (_: Throwable) { "unavailable" })  // i18n-ignore
+        }
+        entry("PERFORMANCE_SUMMARY.txt") { o ->  // i18n-ignore
+            o.line("Method: CPU = app process ticks from /proc/self/stat per minute, in % of ONE core (not the whole device). Memory: Java heap each minute, PSS every 5 minutes.")  // i18n-ignore
+            o.line("Playback times: monotonic ms from opening the stream to READY and to the first rendered picture.")  // i18n-ignore
+            Monitor.summary().forEach { (k, v) -> o.line("$k: $v") }
+            val pss = samples.mapNotNull { it.getOrNull(5)?.toLongOrNull() }
+            if (pss.isNotEmpty()) o.line("PSS samples: ${pss.size} · min ${pss.min()} · median ${pct(pss, .5)} · max ${pss.max()} MB")  // i18n-ignore
+            val cpu = samples.mapNotNull { it.getOrNull(3)?.toLongOrNull() }
+            if (cpu.isNotEmpty()) o.line("CPU samples: ${cpu.size} · median ${pct(cpu, .5)} % · p95 ${pct(cpu, .95)} % · max ${cpu.max()} %")  // i18n-ignore
+            play.groupBy { (it.getOrNull(2) ?: "") + " " + (it.getOrNull(3) ?: "") }.toSortedMap().forEach { (k, rows) ->
+                val ms = rows.mapNotNull { it.getOrNull(4)?.toLongOrNull() }
+                o.line(k + ": " + rows.size + (if (ms.isNotEmpty()) " · median ${pct(ms, .5)} ms · p95 ${pct(ms, .95)} ms · max ${ms.max()} ms" else ""))  // i18n-ignore
+            }
+            o.line(""); o.line("This session (" + PerfLog.session + "):")  // i18n-ignore
+            PerfLog.counts.toSortedMap().forEach { (k, v) -> o.line("$k: $v") }
+            o.line("metric samples dropped (queue, space or write errors): " + PerfLog.dropped.get())  // i18n-ignore
+        }
+        csv("CPU_MEMORY_HISTORY.csv", PerfLog.FILES["samples"]!!, "samples")  // i18n-ignore
+        csv("TV_PLAYBACK.csv", PerfLog.FILES["playback"]!!, "playback") { it.split(',').getOrNull(2).let { k -> k == "tv" || k == "preview" } }  // i18n-ignore
+        csv("MOVIES_PLAYBACK.csv", PerfLog.FILES["playback"]!!, "playback") { it.split(',').getOrNull(2) == "movie" }  // i18n-ignore
+        csv("SERIES_PLAYBACK.csv", PerfLog.FILES["playback"]!!, "playback") { it.split(',').getOrNull(2) == "series" }  // i18n-ignore
+        csv("BACKGROUND_TASKS.csv", PerfLog.FILES["tasks"]!!, "tasks")  // i18n-ignore
+        entry("BUFFERING_RECOVERY.txt") { o -> DiagStore.eachEvent { l -> if (l.contains("|recover|") || l.contains("|resume|") || l.contains("|stream")) o.line(l) } }  // i18n-ignore
+        entry("STARTUP_NAVIGATION.txt") { o -> o.line("Startup to first screen: " + (if (Monitor.startMs > 0) "${Monitor.startMs} ms (this session)" else "unavailable")); DiagStore.eachEvent { l -> if (l.contains("|start|") || l.contains("|screen|") || l.contains("|app|")) o.line(l) } }  // i18n-ignore
+        entry("CHANNEL_HEALTH.txt") { o -> o.line(ChannelHealth.stats()); DiagStore.eachEvent { l -> if (l.contains("|health|")) o.line(l) } }  // i18n-ignore
+        entry("PROVIDER_PROTECTION.txt") { o -> o.block(ProbeGuard.report()) }  // i18n-ignore
+        entry("LOGO_STATISTICS.txt") { o -> o.line(LogoResolver.stats(ctx)); PerfLog.counts.filterKeys { it.startsWith("logo") }.toSortedMap().forEach { (k, v) -> o.line("$k: $v") } }  // i18n-ignore
+        entry("NETWORK_VPN.txt") { o -> o.line("Network: " + network(ctx)); o.line("Cached speeds: internet " + Prefs.str("speed_norm").ifBlank { "not measured" } + " · VPN " + Prefs.str("speed_vpn").ifBlank { "not measured" }); o.line("HTTP response times are not ICMP ping."); DiagStore.eachEvent { l -> if (l.contains("|net")) o.line(l) } }  // i18n-ignore
+        entry("CACHE_STORAGE.txt") { o ->  // i18n-ignore
+            fun size(f: File?): String = try { if (f == null || !f.exists()) "unavailable" else (f.walkTopDown().maxDepth(4).filter { it.isFile }.sumOf { it.length() } / 1024).toString() + " KB" } catch (_: Throwable) { "unavailable" }  // i18n-ignore
+            o.line("pictures: " + size(File(ctx.cacheDir, "images"))); o.line("cache total: " + size(ctx.cacheDir)); o.line("app files: " + size(ctx.filesDir))  // i18n-ignore
+            o.line("diagnostics: " + DiagStore.totalBytes() / 1024 + " KB · free on the box: " + ctx.filesDir.usableSpace / 1_048_576 + " MB")  // i18n-ignore
+        }
+        entry("SECURITY_STATUS.txt") { o ->  // i18n-ignore
+            val keys = Prefs.allStrings().filter { it.first.startsWith("ai_key_") && it.second.isNotBlank() }
+            o.line("AI keys stored: " + keys.size + " · sealed with the Android keystore: " + keys.count { Secret.isSealed(it.second) })  // i18n-ignore
+            o.line("Old plain Gemini key present: " + Prefs.str("gemini_key").isNotBlank())  // i18n-ignore
+            o.line("Every line of this archive passed the secret scan; values themselves are never written here.")  // i18n-ignore
+        }
+        // incidents first: when the archive reaches its ceiling, ordinary events are cut, never crash evidence
+        inc.forEach { i ->
+            val folder = when (i.kind) { "crash", "native" -> "CRASH_REPORTS/"; "freeze" -> "FREEZE_REPORTS/"; "anr" -> "ANR_REPORTS/"; else -> "OTHER_INCIDENTS/" }  // i18n-ignore
+            entry(folder + i.base + ".txt") { o -> o.block(incidentText(i)) }  // i18n-ignore
+            DiagStore.logOf(i)?.let { lf -> entry(folder + i.base + ".log.txt") { o -> o.block(DiagStore.read(lf)) } }  // i18n-ignore
+        }
+        entry("DIAGNOSTIC_EVENTS.txt") { o -> DiagStore.eachEvent { o.line(it) } }  // i18n-ignore
+        // the manifest last, so it can list exactly what is in the archive and what was left out
+        z.putNextEntry(java.util.zip.ZipEntry("MANIFEST.json"))  // i18n-ignore
+        val m = org.json.JSONObject().put("schema", 1).put("app", "Media Center").put("version", BuildConfig.VERSION_NAME).put("versionCode", BuildConfig.VERSION_CODE)  // i18n-ignore
+            .put("created", DiagEvents.stamp()).put("session", PerfLog.session).put("units", "ms, MB, % of one CPU core")  // i18n-ignore
+            .put("files", org.json.JSONArray(written)).put("omitted", org.json.JSONArray(omitted)).put("metricSamplesDropped", PerfLog.dropped.get())  // i18n-ignore
+            .put("coverage", "samples only while the app ran and 'Praćenje dugog rada' was on; playback rows from 3.0 on")  // i18n-ignore
+        z.write(SecretScan.clean(m.toString(2), secrets).toByteArray()); z.closeEntry()
     }
 
     private fun latest(ctx: Context, o: Out) {
@@ -259,7 +347,7 @@ fun DiagExportDialog(start: DiagReport.Kind? = null, onDismiss: () -> Unit) {
         val dir = File(ctx.cacheDir, "diag_export").apply { mkdirs(); listFiles()?.forEach { it.delete() } }
         val f = File(dir, DiagReport.fileName(k))
         val ok = withContext(Dispatchers.IO) {
-            try { if (!DiagSpace.ok(dir)) throw java.io.IOException("space"); DiagReport.build(ctx, k, f); true }  // i18n-ignore
+            try { if (!DiagSpace.ok(dir)) throw java.io.IOException("space"); DiagReport.build(ctx, k, f) { coroutineContext[kotlinx.coroutines.Job]?.isActive != false }; true }  // i18n-ignore
             catch (e: Throwable) { DiagEvents.add("diag", "export failed: " + e.javaClass.simpleName); f.delete(); false }  // i18n-ignore
         }
         busy = false
@@ -278,11 +366,11 @@ fun DiagExportDialog(start: DiagReport.Kind? = null, onDismiss: () -> Unit) {
                 T("Izaberi šta želiš poslati:", 15.sp, C.Text, FontWeight.SemiBold)
                 OptionRow("Zadnji izvještaj o padu (TXT)", R.drawable.lc_file_text, sub = "Zadnji pad ili zamrzavanje s događajima oko njega") { kind = DiagReport.Kind.LATEST }
                 OptionRow("Kompletan izvještaj (TXT)", R.drawable.lc_file_text, sub = "Svi sačuvani padovi i događaji") { kind = DiagReport.Kind.FULL }
-                OptionRow("Kompletna arhiva (ZIP)", R.drawable.lc_download, sub = "Sve datoteke dijagnostike u jednom fajlu") { kind = DiagReport.Kind.ZIP }
+                OptionRow("Kreiraj kompletan dijagnostički izvještaj (ZIP)", R.drawable.lc_download, sub = "Sve sačuvano: padovi, zamrzavanja, mjerenja i događaji") { kind = DiagReport.Kind.ZIP }
                 OptionRow("Obriši sve izvještaje", R.drawable.lc_trash_2, color = C.Danger) { clear = true }
             }
             refused -> T("Izvještaj nije napravljen: njegova sigurnost se ne može potvrditi ili nema dovoljno prostora.", 15.sp, C.Danger, maxLines = 3)
-            busy || file == null -> T("Pripremam izvještaj…", 15.sp, C.Muted)
+            busy || file == null -> T("Pripremam izvještaj… Back prekida.", 15.sp, C.Muted)
             else -> {
                 Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (qr != null && !done) Image(qr, null, Modifier.size(200.dp).clip(Rnd(12.dp)).background(Color.White).padding(6.dp))

@@ -60,7 +60,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         Prefs.init(this)
         CrashLog.install(this)
-        ChannelHealth.init(this)
+        ChannelHealth.init(this); LogoResolver.init(this)
         Work.watchNetwork(this)
         Work.safeMode = CrashGuard.quick() || CrashGuard.tooMany()
         if (Work.safeMode) {

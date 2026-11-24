@@ -288,10 +288,10 @@ fun LiveHistoryPanel(list: List<Channel>, onPick: (Channel) -> Unit, onClear: ()
 
 @Composable
 private fun HistoryTile(ch: Channel) {
-    var failed by remember(ch.logo) { mutableStateOf(ch.logo.isNullOrBlank()) }
+    val src = rememberLogo(ch.logo, ch.name, ch.group)
     Column(Modifier.fillMaxSize().padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-            if (!failed) AsyncImage(model = ch.logo, contentDescription = ch.name, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(), onError = { failed = true })
+            if (src.url != null) AsyncImage(model = src.request, contentDescription = ch.name, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(), onError = { src.failed() })
             else T(shortName(ch.name), 13.sp, Color.White, FontWeight.Bold, maxLines = 2, align = TextAlign.Center)
         }
         T(ch.name.substringAfterLast('|').trim(), 11.sp, Color(0xFFDDE1E6), maxLines = 1, align = TextAlign.Center)

@@ -39,8 +39,11 @@ import java.net.URL
  * last 30 minutes. The light check reads only the start of the stream (HLS "#EXTM3U" or MPEG-TS sync bytes) — that
  * shows the provider serves it, not that every segment decodes.
  *
- * Scheduler: one worker, one connection at a time (providers often allow one), paused while a preview or the full
- * player plays. Only the channels on screen (focused ±6), one every 4.5 s, at most 60 an hour (2.9.1).
+ * 3.0 provider protection: active checks are OFF by default (passive mode — lamps come only from real playback).
+ * When the owner switches them on (Settings › Plejer › Više opcija): one connection at a time, only the channels on
+ * screen (focused ±6), at least 6 s apart, at most 30 network requests per rolling hour per provider (redirects count),
+ * never during startup, preview, playback, pause, background, offline, low memory or within 3 s of a stream opening or
+ * closing. Budget and cooldowns are kept in preferences, so a restart or a new group does not reset them (see ProbeGuard).
  * Leaving a group cancels its pending work; finished results stay. No internet, timeouts, too many connections
  * (429/458/509), login refusals (401/403 on most channels) or a provider outage (5 errors in a row) are inconclusive:
  * the previous result stays and the run pauses or stops instead of painting the group orange.
@@ -59,12 +62,24 @@ object ChannelHealth {
     @Volatile private var dirty = false
     private val io = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    /** Settings switch "Provjera kanala" (on by default) */
-    val probeOn get() = Prefs.bool("ch_probe", true)
+    /** 3.0: "Aktivna provjera kanala" — off by default (provider policy unknown → passive evidence only) */
+    val probeOn get() = Prefs.bool("ch_probe_active", false)
+    /** a stream opening or closing: probes keep away for 3 s and an open probe connection is closed at once */
     @Volatile var previewOn = false
+        set(v) { if (field != v) { field = v; settle(); if (v) abortProbe() } }
     @Volatile var playerOn = false
-    private fun busy() = previewOn || playerOn || Work.background || !Work.online || Work.safeMode ||
-        android.os.SystemClock.elapsedRealtime() < Work.lowMemoryUntil
+        set(v) { if (field != v) { field = v; settle(); if (v) abortProbe() } }
+    @Volatile private var quietUntil = 0L
+    private fun settle() { quietUntil = android.os.SystemClock.elapsedRealtime() + 3000 }
+    @Volatile private var live: HttpURLConnection? = null
+    /** user playback wins: the probe in flight is closed before the stream opens */
+    fun abortProbe() { val c = live ?: return; live = null; ProbeGuard.count("cancelled"); try { c.disconnect() } catch (_: Throwable) {} }
+    /** why a probe may not run now (null = may run) */
+    internal fun busyWhy(): String? = when {
+        Work.state() != Work.State.IDLE -> Work.state().name.lowercase()
+        android.os.SystemClock.elapsedRealtime() < quietUntil -> "stream opening or closing"  // i18n-ignore
+        else -> null
+    }
 
     fun key(url: String): String = try {
         java.security.MessageDigest.getInstance("SHA-256").digest(url.toByteArray()).take(8).joinToString("") { "%02x".format(it) }
@@ -124,7 +139,7 @@ object ChannelHealth {
     fun stats(): String {
         val now = System.currentTimeMillis()
         val (ok, bad, st) = synchronized(map) { Triple(map.values.count { it.ok }, map.values.count { !it.ok }, map.values.count { now - it.tried > STALE_MS }) }
-        return "$ok ok · $bad failed · $st waiting for re-check · scheduler " + (if (job?.isActive == true) (if (busy()) "paused (playback)" else "running") else "idle") +  // i18n-ignore
+        return "$ok ok · $bad failed · $st waiting for re-check · mode " + (if (probeOn) "active (opt-in)" else "passive") + " · scheduler " + (if (job?.isActive == true) (busyWhy()?.let { "paused ($it)" } ?: "running") else "idle") +  // i18n-ignore
             (lastStop?.let { " · last stop: $it" } ?: "")  // i18n-ignore
     }
 
@@ -138,14 +153,9 @@ object ChannelHealth {
     /** the focused channel goes first, its neighbours (what is on screen) next */
     fun focus(url: String) { focusUrl = url; if (job?.isActive != true && list.isNotEmpty() && probeOn && !limitHit) job = io.launch { run() } }
 
-    /** 2.9.1 – gentle to the provider: only the channels on screen (focused ±6), one every 4.5 s, at most 60 an hour,
-     *  and after the first "too many connections" no more checks until the app restarts. Watching is the main source. */
+    /** only the channels on screen: the focused one ±WINDOW */
     internal const val WINDOW = 6
-    private const val GAP_MS = 4500L
-    private const val PER_HOUR = 60
     @Volatile internal var limitHit = false
-    internal val recent = ArrayDeque<Long>()
-    internal fun budgetOk(): Boolean { val now = System.currentTimeMillis(); while (recent.isNotEmpty() && now - recent.first() > 3600_000L) recent.removeFirst(); return recent.size < PER_HOUR }
 
     /** a TV group was opened: check it progressively; a previous group's pending work is cancelled */
     fun schedule(group: List<Channel>) {
@@ -169,42 +179,51 @@ object ChannelHealth {
     }
 
     private suspend fun run() {
-        delay(1500)
-        var fails = 0; var auth = 0; var oks = 0
+        delay(1500)   // debounce: fast scrolling settles first
+        var fails = 0; var oks = 0
         while (coroutineContext.isActive) {
             if (!probeOn || limitHit) return
-            while (busy()) delay(2000)
-            if (!budgetOk()) { delay(60_000); continue }
+            busyWhy()?.let { ProbeGuard.skip(it); while (busyWhy() != null) delay(2000) }
             val c = next() ?: return
-            recent.addLast(System.currentTimeMillis())
+            val acct = ProbeGuard.account(c.url)
+            ProbeGuard.blocked(acct)?.let { why -> ProbeGuard.skip(why); stop(why); return }
+            ProbeGuard.wait(acct)?.let { ms -> ProbeGuard.skip("budget"); delay(ms); continue }  // i18n-ignore
             synchronized(done) { done.add(c.url) }
-            when (val r = check(Net.udp(c.url))) {
-                Res.OK -> { put(c.url, true, 'L'); oks++; fails = 0; auth = 0 }
+            ProbeGuard.spend(acct)
+            val r = check(Net.udp(c.url)) { ProbeGuard.wait(acct) == null && ProbeGuard.blocked(acct) == null && busyWhy() == null && ProbeGuard.spend(acct) }
+            ProbeGuard.count(r.name.lowercase())
+            when (r) {
+                Res.OK -> { put(c.url, true, 'L'); oks++; fails = 0 }
                 Res.BAD -> { put(c.url, false, 'L'); fails++ }
-                Res.AUTH -> { tried(c.url); auth++; if (auth >= 3 && oks == 0) { stop("login refused by the provider"); return } }  // i18n-ignore
-                Res.LIMIT -> { tried(c.url); limitHit = true; stop("provider connection limit – no more checks until the app restarts"); return }  // i18n-ignore
+                // 3.0: one login refusal or one connection-limit answer is enough — no automatic retry, cooldown kept across restarts
+                Res.AUTH -> { tried(c.url); ProbeGuard.cool(acct, 24 * 3600_000L, "login refused"); stop("login refused by the provider – active checks paused 24 h"); return }  // i18n-ignore
+                Res.LIMIT -> { tried(c.url); limitHit = true; ProbeGuard.cool(acct, maxOf(24 * 3600_000L, lastRetryAfter), "connection limit"); stop("provider connection limit – active checks paused 24 h"); return }  // i18n-ignore
                 Res.NO_NET -> { tried(c.url); stop("no internet"); return }  // i18n-ignore
                 Res.UNSURE -> { tried(c.url); fails++ }
             }
-            // five failures in a row without any success: probably the provider, not the channels — stop, keep old results
-            if (fails >= 5 && oks == 0) { stop("provider not answering"); return }  // i18n-ignore
-            delay(GAP_MS)
+            // ambiguous failures: conservative backoff, then stop for this group
+            if (fails >= 3 && oks == 0) { ProbeGuard.cool(acct, 3600_000L, "provider not answering"); stop("provider not answering – paused 1 h"); return }  // i18n-ignore
+            delay(ProbeGuard.GAP_MS + (fails * 4000L))
         }
     }
+    @Volatile private var lastRetryAfter = 0L
     private fun stop(why: String) { lastStop = why + " · " + DiagEvents.stamp().substring(11, 19); DiagEvents.add("health", "check stopped: $why") }  // i18n-ignore
 
     enum class Res { OK, BAD, AUTH, LIMIT, NO_NET, UNSURE }
 
     /** a light look at a stream, classified */
-    internal fun check(url: String): Res {
+    internal fun check(url: String, nextHop: () -> Boolean = { true }): Res {
         if (!url.startsWith("http")) return Res.UNSURE
         var cur = url
-        repeat(4) {
+        repeat(4) { hop ->
+            if (hop > 0 && !nextHop()) return Res.UNSURE   // every redirect is one more request for the budget
             val c = try { URL(cur).openConnection() as HttpURLConnection } catch (_: Throwable) { return Res.UNSURE }
+            live = c
             c.connectTimeout = 4000; c.readTimeout = 4000; c.instanceFollowRedirects = false
             c.setRequestProperty("User-Agent", Net.UA)
             try {
                 val code = c.responseCode
+                if (code == 429 || code == 503) lastRetryAfter = (c.getHeaderField("Retry-After")?.trim()?.toLongOrNull() ?: 0L).coerceIn(0, 7 * 86_400L) * 1000
                 if (code in 300..399) { cur = URL(URL(cur), c.getHeaderField("Location") ?: return Res.BAD).toString(); return@repeat }
                 return classify(code) ?: run {
                     val buf = ByteArray(2048); var n = 0
@@ -214,7 +233,7 @@ object ChannelHealth {
             } catch (e: java.net.UnknownHostException) { return Res.NO_NET
             } catch (e: java.net.SocketTimeoutException) { return Res.UNSURE
             } catch (e: Exception) { return Res.UNSURE
-            } finally { c.disconnect() }
+            } finally { live = null; c.disconnect() }
         }
         return Res.UNSURE
     }
@@ -243,5 +262,64 @@ fun HealthLamp(url: String, size: Dp = 8.dp) {
         true -> Box(Modifier.size(size).clip(CircleShape).background(Color(0xFF3FBF5F)))
         false -> Box(Modifier.size(size).clip(CircleShape).background(Color(0xFFF0A029)))
         null -> Box(Modifier.size(size).clip(CircleShape).border(1.dp, Color(0x80FFFFFF), CircleShape))
+    }
+}
+
+
+/**
+ * 3.0 provider protection — the budget for active checks, per provider (scheme + host + port, hashed; no login stored).
+ * At most PER_HOUR requests in any rolling hour (redirects count), at least GAP_MS apart, cooldowns after a connection-limit
+ * answer, a login refusal or repeated silence. Kept in preferences, so restarts, new groups or playlist changes do not reset
+ * it. A clock moved backwards keeps the old stamps counting (more careful, never less). These local counts cannot see other
+ * devices on the same account or what the provider counts.
+ */
+object ProbeGuard {
+    const val PER_HOUR = 30
+    const val GAP_MS = 6000L
+    private const val HOUR = 3600_000L
+    private val counts = java.util.concurrent.ConcurrentHashMap<String, Int>()
+
+    fun account(url: String): String = try {
+        val u = URL(url); ChannelHealth.key("acct:" + u.protocol + "://" + u.host + ":" + u.port)  // i18n-ignore
+    } catch (_: Throwable) { ChannelHealth.key("acct:?") }  // i18n-ignore
+
+    private fun stamps(a: String): List<Long> = Prefs.str("pg_t_$a").split(',').mapNotNull { it.toLongOrNull() }
+    /** ms to wait before the next request may go out, null = may go now */
+    @Synchronized fun wait(a: String, now: Long = System.currentTimeMillis()): Long? {
+        val live = stamps(a).filter { now - it < HOUR }   // a stamp in the future (clock moved back) still counts
+        val last = live.maxOrNull()
+        if (last != null && now - last < GAP_MS) return GAP_MS - (now - last).coerceAtLeast(0)
+        if (live.size >= PER_HOUR) return (HOUR - (now - live.min())).coerceIn(GAP_MS, HOUR)
+        return null
+    }
+    /** records one request; false when the budget is already used up */
+    @Synchronized fun spend(a: String, now: Long = System.currentTimeMillis()): Boolean {
+        val live = stamps(a).filter { now - it < HOUR }
+        if (live.size >= PER_HOUR) { count("prevented: budget"); return false }  // i18n-ignore
+        Prefs.put("pg_t_$a", (live + now).takeLast(PER_HOUR).joinToString(","))
+        count("requests"); return true  // i18n-ignore
+    }
+    @Synchronized fun cool(a: String, ms: Long, why: String, now: Long = System.currentTimeMillis()) {
+        Prefs.put("pg_cool_$a", now + ms); Prefs.put("pg_why_$a", why); count("cooldown: $why")  // i18n-ignore
+        DiagEvents.add("health", "provider protection: $why, active checks paused ${ms / 60_000} min")  // i18n-ignore
+    }
+    /** the reason active checks are paused for this provider, or null */
+    fun blocked(a: String, now: Long = System.currentTimeMillis()): String? {
+        val until = Prefs.long("pg_cool_$a", 0)
+        if (until <= now) return null
+        if (until - now > 8 * 86_400_000L) { Prefs.put("pg_cool_$a", now + 86_400_000L) }   // clock jumped: keep a sane 24 h
+        return "cooldown (" + Prefs.str("pg_why_$a") + ")"  // i18n-ignore
+    }
+    fun count(what: String) { counts.merge(what, 1, Int::plus) }
+    fun skip(why: String) = count("skipped: $why")  // i18n-ignore
+    /** for the Full Diagnostic Report (this session) */
+    fun report(): String = buildString {
+        append("mode: ").append(if (ChannelHealth.probeOn) "active checks on (owner opt-in)" else "passive (default) – lamps from real playback only").append('\n')  // i18n-ignore
+        append("limits: $PER_HOUR requests per rolling hour per provider, ${GAP_MS / 1000} s apart, one at a time, redirects counted\n")  // i18n-ignore
+        counts.toSortedMap().forEach { (k, v) -> append(k).append(": ").append(v).append('\n') }
+        Prefs.allKeys().filter { it.startsWith("pg_cool_") }.forEach { k ->
+            val until = Prefs.long(k, 0); if (until > System.currentTimeMillis()) append("cooldown until ").append(DiagEvents.stamp(until)).append(" · ").append(Prefs.str("pg_why_" + k.removePrefix("pg_cool_"))).append('\n')  // i18n-ignore
+        }
+        append("note: counts are this device only; other devices on the same account and provider-side counts are not visible\n")  // i18n-ignore
     }
 }

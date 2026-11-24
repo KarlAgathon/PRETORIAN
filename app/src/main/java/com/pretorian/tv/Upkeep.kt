@@ -59,6 +59,8 @@ object Monitor {
     private var started = false
     /** how long the app took from start to the first screen (ms) */
     @Volatile var startMs = 0L
+    private var tick = 0
+    @Volatile private var lastPss = 0
     val since = System.currentTimeMillis()
 
     private fun cpuTicks(): Long = try {
@@ -79,7 +81,11 @@ object Monitor {
                 // one tick = 10 ms; per cent of ONE core (like "top"), capped by the number of cores
                 val cpu = if (t >= 0 && lastT >= 0 && w > lastW) (((t - lastT) * 10.0 / (w - lastW)) * 100).toInt().coerceIn(0, 100 * cores) else 0
                 lastT = t; lastW = w
-                @Suppress("DEPRECATION") val pss = (android.os.Debug.getPss() / 1024).toInt()
+                // 3.0: PSS is expensive — every 5th minute; the cheap Java heap every minute (both go to the metrics)
+                tick++
+                val rt = Runtime.getRuntime(); val heap = ((rt.totalMemory() - rt.freeMemory()) / 1_048_576).toInt()
+                @Suppress("DEPRECATION") val pss = if (tick % 5 == 1) (android.os.Debug.getPss() / 1024).toInt().also { lastPss = it } else lastPss
+                PerfLog.sample(Work.state().name.lowercase(), cpu, heap, if (tick % 5 == 1) pss else null)
                 synchronized(samples) { samples.addLast(Sample(w, pss, cpu)); while (samples.size > 1440) samples.removeFirst() }
             }
         }

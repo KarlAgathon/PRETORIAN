@@ -409,9 +409,9 @@ private fun HomeStatus(nav: Nav, modifier: Modifier) {
 
 @Composable
 private fun HomeTile(ch: Channel) {
-    var failed by remember(ch.logo) { mutableStateOf(ch.logo.isNullOrBlank()) }
+    val src = rememberLogo(ch.logo, ch.name, ch.group)
     Box(Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
-        if (!failed) AsyncImage(model = ch.logo, contentDescription = ch.name, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(), onError = { failed = true })
+        if (src.url != null) AsyncImage(model = src.request, contentDescription = ch.name, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(), onError = { src.failed() })
         // no logo: the channel's name in clean white text (never a broken image or a TV icon)
         else T(ch.name.substringAfterLast('|').trim().ifBlank { ch.name }, 12.sp, Color.White, FontWeight.SemiBold, maxLines = 2, align = androidx.compose.ui.text.style.TextAlign.Center)
     }

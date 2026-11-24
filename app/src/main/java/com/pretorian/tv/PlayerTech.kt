@@ -33,7 +33,7 @@ object Tech {
     /** clean the box's database now and then */
     val dbClean get() = Prefs.bool("tech_dbclean", true)
     /** memory / CPU log while the app runs (Diagnostics), off on a new install */
-    val monitor get() = Prefs.bool("tech_monitor", false)
+    val monitor get() = Prefs.bool("tech_monitor", true)   // 3.0: on by default (heap each minute, PSS each 5 min)
 }
 
 /** Sound ahead / behind the picture, per channel (and per film), in milliseconds. Positive = the sound comes late. */

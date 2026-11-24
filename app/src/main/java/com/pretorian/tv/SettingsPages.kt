@@ -228,6 +228,8 @@ internal fun PlayerMoreV2() {
             SetDrop("Vrijeme čekanja na vezu", "Koliko dugo plejer čeka server prije novog pokušaja", PlayOpts.TIMEOUTS.map { if (it == 0) tr("Automatski") else "$it s" },  // i18n-ignore
                 PlayOpts.TIMEOUTS.indexOf(PlayOpts.timeout).coerceAtLeast(0)) { Prefs.put("conn_timeout", PlayOpts.TIMEOUTS[it].toLong()); rev++ }
             SetDrop("Titlovi", "Kada se titl uključuje sam", listOf(tr("Uvijek"), tr("Samo strani jezik"), tr("Isključeno")), PlayOpts.subBehaviour) { PlayOpts.setSubBehaviour(it); rev++ }
+            // 3.0 provider protection: off = passive (lamps only from what you watch)
+            SetSwitch("Aktivna provjera kanala", "samo ako tvoj provider dozvoljava više konekcija · najviše 30 na sat", Prefs.bool("ch_probe_active", false)) { Prefs.put("ch_probe_active", it); rev++ }
             SetRow("Vrati postavke reprodukcije", "Playliste, EPG, favoriti i historija ostaju") { askReset = true }
             if (askReset) SetConfirm(tr("Vratiti postavke reprodukcije?"), tr("Plejer, zvuk, titlovi i stream vraćaju se na zadane vrijednosti."), tr("Vrati"),
                 onCancel = { askReset = false }) { PlayOpts.reset(); askReset = false; rev++ }

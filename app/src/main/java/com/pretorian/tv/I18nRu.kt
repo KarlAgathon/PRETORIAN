@@ -2939,4 +2939,9 @@ Sat|Часы
 Privremeno otključaj|Временно разблокировать
 Otključano do izlaska iz aplikacije|Разблокировано до выхода из приложения
 Rad|Работа
+Kreiraj kompletan dijagnostički izvještaj (ZIP)|Создать полный диагностический отчёт (ZIP)
+Sve sačuvano: padovi, zamrzavanja, mjerenja i događaji|Всё сохранённое: сбои, зависания, измерения и события
+Pripremam izvještaj… Back prekida.|Готовлю отчёт… Назад отменяет.
+Aktivna provjera kanala|Активная проверка каналов
+samo ako tvoj provider dozvoljava više konekcija · najviše 30 na sat|только если провайдер разрешает несколько подключений · не более 30 в час
 """.trimIndent()

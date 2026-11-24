@@ -11,15 +11,6 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33])
 class Release291Test {
-    @Test fun checksStayInsideTheHourlyBudget() {
-        ChannelHealth.recent.clear()
-        val now = System.currentTimeMillis()
-        repeat(60) { ChannelHealth.recent.addLast(now) }
-        assertFalse(ChannelHealth.budgetOk())
-        ChannelHealth.recent.clear(); repeat(60) { ChannelHealth.recent.addLast(now - 3_700_000L) }
-        assertTrue("checks older than one hour no longer count", ChannelHealth.budgetOk())
-        ChannelHealth.recent.clear()
-    }
     @Test fun onlyChannelsAroundTheFocus() { assertTrue(ChannelHealth.WINDOW in 1..8) }
 
     @Test fun aiKeyIsStoredSealed() {

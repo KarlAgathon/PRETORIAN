@@ -42,10 +42,13 @@ object Work {
     suspend fun <T> heavy(label: String, block: suspend () -> T): T {
         val t0 = android.os.SystemClock.elapsedRealtime()
         awaitHeavy()
-        return heavy.lockWithWait { 
+        return heavy.lockWithWait {
             val waited = android.os.SystemClock.elapsedRealtime() - t0
             if (waited > 10 * 60_000L) DiagEvents.add("work", "$label started after waiting ${waited / 60_000} min (${state()})")  // i18n-ignore
-            block()
+            PerfLog.task(label, "start", waited)  // i18n-ignore
+            val t1 = android.os.SystemClock.elapsedRealtime()
+            try { block().also { PerfLog.task(label, "done", android.os.SystemClock.elapsedRealtime() - t1) } }  // i18n-ignore
+            catch (e: Throwable) { PerfLog.task(label, if (e is kotlinx.coroutines.CancellationException) "cancelled" else "failed", android.os.SystemClock.elapsedRealtime() - t1, e.javaClass.simpleName); throw e }  // i18n-ignore
         }
     }
     suspend fun awaitHeavy() { while (!heavyAllowed()) delay(15_000) }

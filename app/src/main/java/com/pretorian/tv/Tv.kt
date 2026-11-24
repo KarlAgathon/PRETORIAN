@@ -1037,15 +1037,16 @@ fun EpgShiftPopup(ch: Channel, onDismiss: () -> Unit) {
 @Composable
 fun ChannelLogo(url: String?, name: String) {
     val (w, h) = when (Look.rowSize) { 0 -> 50.dp to 30.dp; 2 -> 62.dp to 38.dp; else -> 56.dp to 34.dp }
-    var failed by remember(url) { mutableStateOf(false) }
+    val src = rememberLogo(url, name, null)
     val clean = name.substringAfterLast('|').substringAfterLast(':').trim().ifBlank { name }
     val hue = (clean.hashCode() and 0x7fffffff) % 360
+    val shown = src.url
     Box(Modifier.width(w).height(h).clip(Rnd(8.dp))
-        .background(if (url != null && !failed) (if (C.IsLight) C.Text else Color(0xFF1C2230))
+        .background(if (shown != null) (if (C.IsLight) C.Text else Color(0xFF1C2230))
                     else Color.hsv(hue.toFloat(), 0.45f, if (C.IsLight) 0.85f else 0.38f)),
         contentAlignment = Alignment.Center) {
-        if (url != null && !failed) {
-            AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Fit, onError = { failed = true },
+        if (shown != null) {
+            AsyncImage(model = src.request, contentDescription = null, contentScale = ContentScale.Fit, onError = { src.failed() },
                 modifier = Modifier.fillMaxSize().padding(4.dp))
         } else {
             val words = clean.split(' ', '-', '.').filter { it.isNotBlank() && it.first().isLetterOrDigit() }
@@ -1087,13 +1088,14 @@ fun PreviewBox(ch: Channel?, modifier: Modifier) {
     val player = remember { buildPlayer(ctx, preview = true) }
     var ready by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
+    var previewT0 by remember { androidx.compose.runtime.mutableLongStateOf(0L) }
     val curCh by androidx.compose.runtime.rememberUpdatedState(ch)
     DisposableEffect(Unit) {
         Preview.player = player
         val l = object : androidx.media3.common.Player.Listener {
-            override fun onRenderedFirstFrame() { ready = true; ChannelHealth.mark(curCh?.url, true) }
+            override fun onRenderedFirstFrame() { if (!ready && previewT0 > 0) PerfLog.firstFrame("preview", android.os.SystemClock.elapsedRealtime() - previewT0, false); ready = true; ChannelHealth.mark(curCh?.url, true) }  // i18n-ignore
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) { failed = true; ChannelHealth.mark(curCh?.url, false) }
-            override fun onIsPlayingChanged(isPlaying: Boolean) { ChannelHealth.previewOn = isPlaying }
+            override fun onIsPlayingChanged(isPlaying: Boolean) { ChannelHealth.previewOn = isPlaying || player.playbackState == androidx.media3.common.Player.STATE_BUFFERING }
         }
         player.addListener(l)
         // no background play: the preview stops when the app leaves the screen and starts again when it comes back
@@ -1118,6 +1120,8 @@ fun PreviewBox(ch: Channel?, modifier: Modifier) {
         delay(250)   // while you move quickly over channels, only the one you stop on starts
         Preview.player = player
         val real = try { Stalker.resolve(ctx, c.url) } catch (e: Exception) { failed = true; return@LaunchedEffect }
+        // 3.0: a probe never runs while the preview stream opens
+        ChannelHealth.previewOn = true; previewT0 = android.os.SystemClock.elapsedRealtime()
         player.setMediaItem(androidx.media3.common.MediaItem.fromUri(real)); player.prepare(); player.playWhenReady = true
     }
     Box(modifier.aspectRatio(16f / 9f).clip(Rnd(14.dp)).background(Color.Black)) {

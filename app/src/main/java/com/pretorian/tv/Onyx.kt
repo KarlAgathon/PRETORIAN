@@ -203,11 +203,12 @@ object Recent {
 /** Channel logo from the provider; without one a see-through glass tile with the first letters. */
 @Composable
 fun ChannelLogo(c: Channel, size: androidx.compose.ui.unit.Dp, onLight: Boolean = false) {
-    var failed by remember(c.logo) { mutableStateOf(c.logo.isNullOrBlank()) }
+    // 3.0: provider logo → verified catalog logo → letters (same box, same size)
+    val src = rememberLogo(c.logo, c.name, c.group)
     Box(Modifier.size(size).clip(Rnd(9.dp)).background(if (onLight) Color(0x12000000) else Color(0x1FFFFFFF))
         .border(1.dp, if (onLight) Color(0x26000000) else Color(0x38FFFFFF), Rnd(9.dp)), contentAlignment = Alignment.Center) {
-        if (!failed) AsyncImage(model = c.logo, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(4.dp),
-            onError = { failed = true })
+        if (src.url != null) AsyncImage(model = src.request, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(4.dp),
+            onError = { src.failed() })
         else T(c.name.filter { it.isLetterOrDigit() }.take(2).uppercase().ifBlank { "TV" }, (size.value * 0.32f).sp, if (onLight) Color(0xFF0A0A0A) else Color.White, FontWeight.ExtraBold)
     }
 }
@@ -232,3 +233,24 @@ object HomeCache {
     fun clear() { if (disc.isNotEmpty()) { disc.clear(); rev++ } }
 }
 
+
+
+/** one logo source for every place a channel logo is drawn: provider first, then the verified catalog, then none */
+class LogoSrc(private val ctx: android.content.Context, private val provider: String?, private val name: String, private val group: String?) {
+    private var stage by mutableIntStateOf(if (provider.isNullOrBlank() || !provider.startsWith("http")) 1 else 0)
+    val url: String? get() = when (stage) {
+        0 -> provider
+        1 -> { LogoResolver.rev; LogoResolver.peek(name, group) }
+        else -> null
+    }
+    val request get() = coil.request.ImageRequest.Builder(ctx).data(url).transformations(LogoTrim()).crossfade(false).build()
+    fun failed() {
+        PerfLog.count(if (stage == 0) "logo provider failed" else "logo catalog image failed")  // i18n-ignore
+        stage++
+    }
+}
+@Composable
+fun rememberLogo(provider: String?, name: String, group: String?): LogoSrc {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    return remember(provider, name) { LogoSrc(ctx, provider, name, group) }
+}

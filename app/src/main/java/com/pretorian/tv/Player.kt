@@ -272,6 +272,9 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     var retryToken by remember { mutableIntStateOf(0) }
     var loadStartedAt by remember { mutableLongStateOf(0L) }
     var firstFrameLogged by remember { mutableStateOf(false) }
+    var resumeAsked by remember { mutableLongStateOf(0L) }
+    var firstPicLogged by remember { mutableStateOf(false) }
+    var bufferFrom by remember { mutableLongStateOf(0L) }
     var reconnect by remember { mutableIntStateOf(0) }          // live: attempt 1..3 of getting the stream back
     val backupTried = remember { HashSet<String>() }             // links already tried as backup for this channel
     var shiftFrom by remember { mutableLongStateOf(0L) }          // live: ◀◀ in the archive, 0 = live
@@ -364,7 +367,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     }
 
     fun loadMedia(item: PlayItem, file: String?, at: Long, play: Boolean = true) {
-        loadStartedAt = android.os.SystemClock.elapsedRealtime(); firstFrameLogged = false
+        loadStartedAt = android.os.SystemClock.elapsedRealtime(); firstFrameLogged = false; firstPicLogged = false; resumeAsked = if (s.live) 0L else at
         val request = mediaRequest.begin()
         val selectedIndex = index
         // Stalker portal: the real address is asked for right before playing
@@ -402,6 +405,9 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         val it = items.getOrNull(index) ?: return
         val dur = player.duration.takeIf { d -> d > 0 } ?: return
         val pos = if (done) dur else player.currentPosition
+        // 3.0: a failed or just-reloaded stream reports 0 — never overwrite a real position with it
+        val old = Watch.get(ctx, it.url)
+        if (!done && pos < 5_000 && old != null && old.pos > 30_000 && !old.done) return
         if ((done || pos >= dur * 0.9) && Watch.get(ctx, it.url)?.watched != true) {
             if (it.season != null) Stats.episode(it.search ?: it.title, it.season) else Stats.film()
         }
@@ -468,15 +474,29 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             }
             override fun onPlaybackStateChanged(state: Int) {
                 PlayState.update(s.live, player.playWhenReady, state)
+                val kindNow = if (s.live) "tv" else if (items.getOrNull(index)?.season != null) "series" else "movie"  // i18n-ignore
+                if (state == Player.STATE_BUFFERING && !buffering) bufferFrom = android.os.SystemClock.elapsedRealtime()
+                if (state != Player.STATE_BUFFERING && buffering && bufferFrom > 0) { PerfLog.buffering(kindNow, android.os.SystemClock.elapsedRealtime() - bufferFrom, !readyOnce[0]); bufferFrom = 0 }
+                if (state == Player.STATE_READY && !firstFrameLogged && loadStartedAt > 0) PerfLog.ready(kindNow, android.os.SystemClock.elapsedRealtime() - loadStartedAt, reconnect > 0)
                 buffering = state == Player.STATE_BUFFERING
                 if (state == Player.STATE_READY && s.live) items.getOrNull(index)?.let { ChannelHealth.mark(it.channel?.url ?: it.url, true) }
                 // 2.9.1: how long this channel / title took to start (for slow channels in the diagnostics)
                 if (state == Player.STATE_READY && !firstFrameLogged && loadStartedAt > 0) { firstFrameLogged = true
-                    DiagEvents.add("start", "ready after ${android.os.SystemClock.elapsedRealtime() - loadStartedAt} ms · " + (items.getOrNull(index)?.title ?: "")) }  // i18n-ignore
+                    DiagEvents.add("start", (if (s.live) "tv" else if (items.getOrNull(index)?.season != null) "series" else "movie") + " ready after ${android.os.SystemClock.elapsedRealtime() - loadStartedAt} ms" + (if (reconnect > 0) " (recovery $reconnect)" else "") + " · " + (items.getOrNull(index)?.title ?: ""))  // i18n-ignore
+                    // 3.0: asked resume position vs where the player really is
+                    if (resumeAsked > 0) { val got = player.currentPosition; if (kotlin.math.abs(got - resumeAsked) > 10_000) DiagEvents.add("resume", "asked ${resumeAsked / 1000} s, got ${got / 1000} s · " + (items.getOrNull(index)?.title ?: "")) }  // i18n-ignore
+                }
                 if (state == Player.STATE_READY) { if (reconnect > 0) StreamLog.event("ok", items.getOrNull(index)?.title ?: ""); if (reconnect > 0) StreamLog.add(listOf(items.getOrNull(index)?.title ?: "", " · ", tr("radi ponovo ✓")).joinToString("")); error = null; reconnect = 0; readyOnce[0] = true }  // i18n-ignore
-                if (state == Player.STATE_ENDED && !s.live) { saveProgress(done = true); if (index < n - 1 && Prefs.bool("next_ep", true) && !autoCancel) index++ }
+                if (state == Player.STATE_ENDED && !s.live) {
+                    // 3.0: only a real end counts as watched (and starts Auto Next); a stream that stopped early keeps its place
+                    val d = player.duration; val at = player.currentPosition
+                    if (d <= 0 || at >= d - 120_000 || at >= d * 0.95) { saveProgress(done = true); if (index < n - 1 && Prefs.bool("next_ep", true) && !autoCancel) index++ }
+                    else { saveProgress(); DiagEvents.add("recover", "stream ended early at ${at / 1000} of ${d / 1000} s – not marked watched") }  // i18n-ignore
+                }
             }
             override fun onIsPlayingChanged(isPlaying: Boolean) { playing = isPlaying; PlayState.update(s.live, player.playWhenReady, player.playbackState) }
+            // 3.0: first picture on screen, measured separately from READY
+            override fun onRenderedFirstFrame() { if (!firstPicLogged && loadStartedAt > 0) { firstPicLogged = true; PerfLog.firstFrame(if (s.live) "tv" else if (items.getOrNull(index)?.season != null) "series" else "movie", android.os.SystemClock.elapsedRealtime() - loadStartedAt, reconnect > 0) } }  // i18n-ignore
             override fun onTracksChanged(tracks: Tracks) {
                 // Phase E: subtitles "only for a foreign language": off when the audio is already in the subtitle language
                 if (PlayOpts.subBehaviour == 1 && subFile == null && items.getOrNull(index)?.subOff != true) {
@@ -577,6 +597,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         if (Recover.on && reconnect >= 3) { try { player.stop(); player.clearMediaItems() } catch (_: Exception) {}; delay(400) }
         shiftFrom = 0L
         if (!s.live) DiagEvents.add("recover", "reconnect $reconnect, continuing at ${resumeAt / 1000} s")  // i18n-ignore
+        PerfLog.playback(if (s.live) "tv" else if (items.getOrNull(index)?.season != null) "series" else "movie", "recovery", "attempt $reconnect")  // i18n-ignore
         loadMedia(items[index], subFile, resumeAt)
     }
     // the guide of this channel was moved: now / next in the info bar follow at once

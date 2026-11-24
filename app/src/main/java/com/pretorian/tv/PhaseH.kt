@@ -202,7 +202,7 @@ object Maintenance {
         return true
     }
     /** keys that are user data, not settings: they survive "Resetuj postavke" */
-    private val KEEP = listOf("playlists", "pl_", "fav", "watch", "progress", "pin", "recent", "notes", "submem_", "epgoff_", "epg_off_v2", "diag_", "speed_", "wx_", "ch_", "first_run", "lang", "rem")
+    private val KEEP = listOf("playlists", "pl_", "fav", "watch", "progress", "pin", "recent", "notes", "submem_", "epgoff_", "epg_off_v2", "diag_", "speed_", "wx_", "ch_", "pg_", "first_run", "lang", "rem")
     fun resetSettings() {
         val keys = Prefs.allKeys().filter { k -> KEEP.none { k.startsWith(it) } }
         keys.forEach { Prefs.remove(it) }

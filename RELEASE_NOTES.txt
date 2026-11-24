@@ -1,3 +1,13 @@
+Media Center 3.0 Stable – provider protection, logos, full diagnostic report
+
+• Provider protection: channel checks are now passive by default – the lamps come only from what you really watch, no extra connections to your provider. "Aktivna provjera kanala" (Settings › Plejer › Više opcija) can switch them on: at most 30 requests per hour per provider, 6 seconds apart, one at a time, never during startup, preview or playback; a "too many connections" or login refusal pauses checks for 24 hours, even across restarts
+• Films and episodes: a broken or reloaded stream never overwrites your saved position with 0, and a stream that stops early is not marked as watched (Auto Next only after a real end)
+• Channel logos: when the provider has no logo, a verified logo from the public iptv-org channel database is shown; only exact matches, ambiguous names keep the text tile; see-through margins around logos are trimmed so the logo fills its box (nothing is cut or stretched)
+• Diagnostics › Izvezi izvještaj › "Kreiraj kompletan dijagnostički izvještaj (ZIP)": one archive with a summary, device info, CPU/memory history, TV/film/series start times, buffering and recovery, background tasks, channel health, provider protection, logos, network, storage, security status, all events and crash/freeze/ANR reports – checked for secrets, at most 40 MB, Back cancels
+• Measurements: time to READY and to the first picture (TV, preview, films, series), buffering length, recovery attempts, resume deviations; memory sampling is lighter (heap every minute, PSS every 5 minutes) and on by default
+• The same crash repeating within 10 minutes is counted on one report instead of filling the list
+• Still to measure on your box: real start times, memory over hours, logo matches – they come from your reports
+
 Media Center 2.9.1 – gentler checks and finishing touches (testing version)
 
 • Channel checks are much gentler on your provider: only the channels on screen, one every 4–5 seconds, at most 60 per hour, results kept 6 hours, and they stop for the whole session as soon as the provider reports "too many connections"

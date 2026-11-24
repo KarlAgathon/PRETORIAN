@@ -185,11 +185,27 @@ object DiagStore {
         if (!spaceOk()) return null
         return try {
             val now = System.currentTimeMillis()
+            // 3.0: the same failure again within 10 minutes (a crash loop) is counted on the first record, not a new file each time
+            val sig = signature(kind, text)
+            val lastBase = Prefs.str("diag_last_base")
+            if (sig == Prefs.str("diag_last_sig") && now - Prefs.long("diag_last_at", 0) < 10 * 60_000L && File(d, "$lastBase.txt").exists()) {
+                val n = Prefs.long("diag_last_n", 1) + 1; Prefs.put("diag_last_n", n); Prefs.put("diag_last_at", now)
+                val f = File(d, "$lastBase.txt"); if (f.length() < INCIDENT_MAX_CHARS) f.appendText("\n[repeated: occurrence $n at " + DiagEvents.stamp(now) + "]")  // i18n-ignore
+                return lastBase
+            }
             val id = java.lang.Long.toHexString(java.security.SecureRandom().nextLong() and 0xffffffL)
             val base = kind + "_" + now + "_" + id
             File(d, "$base.txt").writeText(bounded(Redact.text(text)))
+            Prefs.put("diag_last_sig", sig); Prefs.put("diag_last_at", now); Prefs.put("diag_last_base", base); Prefs.put("diag_last_n", 1L)
             base
         } catch (_: Throwable) { null }
+    }
+    /** kind + the exception line + the first stack line: equal for the same failure, without times or ids */
+    internal fun signature(kind: String, text: String): String {
+        val lines = text.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }
+        val ex = lines.firstOrNull { it.contains("Exception") || it.contains("Error") } ?: ""  // i18n-ignore
+        val at = lines.firstOrNull { it.startsWith("at ") } ?: ""  // i18n-ignore
+        return (kind + "|" + ex.take(200) + "|" + at.take(200)).hashCode().toString(16)
     }
     /** the app log for an incident; written once, never twice for the same incident */
     fun attachLog(base: String, text: String) {
