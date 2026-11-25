@@ -32,9 +32,9 @@ class BrowseRow(
 
 /**
  * The shared two-column browser (spec 13, reused by Catch-Up in spec 15):
- * left individual rows, right the information of the focused row and one button.
- * ▲▼ only change the right side; OK on a row moves to the button, a second OK there opens (that is the double OK);
- * ◀ or Back on the button return to the same row. Opening is guarded against repeats.
+ * left individual rows, right the information of the focused row.
+ * ▲▼ only change the right side; OK on a row opens it (since 3.0.0.9 there is no second step through a button;
+ * `button`/`buttonIcon` are kept for the callers but no longer shown). Opening is guarded against repeats.
  */
 /** 3.0.0.4: the focused row of each two-column browser, by row id (not by index), so Back returns to the same row. */
 private val focusedRowId = HashMap<String, String>()
@@ -60,7 +60,6 @@ fun TwoColBrowser(
     val cur = rows[sel.coerceIn(0, rows.size - 1)]
     val st = rememberLazyListState(initialFirstVisibleItemIndex = (start - 3).coerceAtLeast(0))
     val rowFrs = remember(rows.size) { List(rows.size) { FocusRequester() } }
-    val btnFr = remember { FocusRequester() }
     var lastOpen by remember { mutableStateOf(0L) }
     fun openNow(r: BrowseRow) {
         val now = System.currentTimeMillis()
@@ -71,7 +70,8 @@ fun TwoColBrowser(
             contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp, start = 4.dp, end = 4.dp)) {
             itemsIndexed(rows, key = { _, r -> r.id }) { i, r ->
                 if (r.gapBefore) Spacer(Modifier.height(14.dp))
-                Focusable(onClick = { sel = i; mem[key] = i; focusedRowId[rk] = r.id; if (r.direct) r.open() else runCatching { btnFr.requestFocus() } }, onMenu = r.onLong,
+                // 3.0.0.9 (owner): OK opens the category at once — no second step through a "Browse" button
+                Focusable(onClick = { sel = i; if (r.direct) { mem[key] = i; focusedRowId[rk] = r.id; r.open() } else openNow(r) }, onMenu = r.onLong,
                     onFocus = { sel = i; mem[key] = i; focusedRowId[rk] = r.id }, focusRequester = rowFrs[i],
                     shape = Rnd(14.dp), normal = Color(0x8C171B22), focused = Color(0x40FFFFFF),
                     borderColor = Color(0x1FFFFFFF), focusBorderColor = Color(0xD9FFFFFF), zoom = 1f,
@@ -90,13 +90,7 @@ fun TwoColBrowser(
         }
         Column(Modifier.weight(0.54f).fillMaxHeight().padding(top = 18.dp, end = 8.dp)) {
             panel(cur)
-            Spacer(Modifier.height(22.dp))
-            Box(Modifier.focusProperties { left = rowFrs[sel.coerceIn(0, rows.size - 1)] }.onPreviewKeyEvent { e ->
-                val back = e.key == Key.Back || e.key == Key.Escape
-                if (back && e.type == KeyEventType.KeyUp) { runCatching { rowFrs[sel.coerceIn(0, rows.size - 1)].requestFocus() }; true } else back
-            }) {
-                HeroBtn(button, buttonIcon, primary = false, fr = btnFr) { openNow(cur) }
-            }
+            // 3.0.0.9 (owner): the panel only describes the highlighted row; the "Browse" button is gone
             if (art != null) Box(Modifier.weight(1f).fillMaxWidth().padding(top = 18.dp), contentAlignment = Alignment.BottomEnd) {
                 Image(painterResource(art), null, Modifier.fillMaxWidth(0.82f).fillMaxHeight(), contentScale = ContentScale.Fit, alignment = Alignment.BottomEnd)
             }

@@ -213,14 +213,14 @@ fun OnyxMovieDetail(v: Vod, nav: Nav) {
 /** The four icons of the movie / series view: Subtitles · Audio · Playback · Picture; a white dot = something chosen. */
 @Composable
 fun MediaIconsRow(open: String?, setOpen: (String?) -> Unit, subsOn: Boolean, audioOn: Boolean, playOn: Boolean, picOn: Boolean,
-                  menuOf: @Composable (String) -> Unit) {
+                  modifier: Modifier = Modifier, menuOf: @Composable (String) -> Unit) {
     val keys = listOf(MI_SUBS, MI_AUDIO, MI_PLAYBACK, MI_PICTURE)
     val frs = remember { keys.map { FocusRequester() } }
     var last by remember { mutableStateOf<String?>(null) }
     // Back (or a choice) closes the menu and the focus goes back to its icon
     LaunchedEffect(open) { if (open != null) last = open else last?.let { delay(60); frs[keys.indexOf(it)].tryFocus() } }
     // 3.0.0.3: the labels sit above the bottom safe margin, so they are never cut off
-    Row(Modifier.padding(bottom = 40.dp), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+    Row(modifier.padding(bottom = 40.dp), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
         listOf(Triple(MI_SUBS, R.drawable.lc_captions, "Titlovi") to subsOn, Triple(MI_AUDIO, R.drawable.lc_volume, "Audio") to audioOn,
             Triple(MI_PLAYBACK, R.drawable.lc_gauge2, "Reprodukcija") to playOn, Triple(MI_PICTURE, R.drawable.lc_rectangle_horizontal, "Slika") to picOn)
             .forEachIndexed { i, (t, on) ->

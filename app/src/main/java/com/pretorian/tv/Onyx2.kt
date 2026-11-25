@@ -275,7 +275,10 @@ fun BulkEditor(nav: Nav) {
     val gIds = groups.map { it.id }; val cIds = chans.map { it.url }
     val shownG = if (moving != null && movingCol == "g") work.mapNotNull { id -> groups.firstOrNull { it.id == id } } else groups
     val shownC = if (moving != null && movingCol == "c") work.mapNotNull { u -> chans.firstOrNull { it.url == u } } else chans
-    fun startMove(col: String, id: String) { movingCol = col; work = if (col == "g") gIds else cIds; moving = id; refocus = id }
+    // 3.0.0.9 (owner): moving a group or channel here uses the same "Moving:" window as the TV list, so the carried row
+    // and its neighbours are always in view (before, the row could go above the top of the list and out of sight)
+    var moveDlg by remember { mutableStateOf<Pair<String, String>?>(null) }
+    fun startMove(col: String, id: String) { moveDlg = col to id }
     fun place(col: String, id: String, top: Boolean) {
         val l = (if (col == "g") gIds else cIds).toMutableList(); if (!l.remove(id)) return
         if (top) l.add(0, id) else l.add(id)
@@ -360,6 +363,18 @@ fun BulkEditor(nav: Nav) {
                 }
             }
         }
+    }
+    moveDlg?.let { (col, id) ->
+        val ids = if (col == "g") gIds else cIds
+        val names = if (col == "g") groups.map { it.name } else chans.map { ovr.chName(it) }
+        val from = ids.indexOf(id)
+        val name = names.getOrNull(from)
+        if (from < 0 || name == null) { moveDlg = null; return@let }
+        MoveDialog(name, names, from, onDone = { to ->
+            val l = ids.toMutableList(); l.removeAt(from); l.add(to.coerceIn(0, l.size), id)
+            if (col == "g") ovr.setGroupOrder(kind, l) else cur?.let { ovr.setChannelOrder(it.id, l) }
+            moveDlg = null; done(); refocus = id
+        }, onCancel = { moveDlg = null; refocus = id })
     }
     menuG?.let { g ->
         val hidden = ovr.hiddenNow(kind, g); val lk = ovr.isLocked(kind, g.id)

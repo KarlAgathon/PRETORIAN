@@ -1119,8 +1119,11 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                     }
                     T("−" + fmt((duration - position).coerceAtLeast(0)), 14.sp, Silver.TextSoft)  // i18n-ignore
                 }
-                if (bar) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                // 3.0.0.9 (owner): all seven circles on ONE line — the row is aligned at the top; the left group is 66 dp high
+                // (the big play button) and the four icons start 6 dp lower, so every circle's centre sits at 33 dp; the labels
+                // of the four icons hang below that line. Before, the row was aligned at the bottom and the labels lifted the icons.
+                if (bar) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                    Row(Modifier.height(66.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
                         @Composable fun Ctl(icon: Int, big: Boolean = false, fr: FocusRequester? = null, label: String? = null, onClick: () -> Unit) {
                             Focusable(onClick = onClick, focusRequester = fr, shape = androidx.compose.foundation.shape.CircleShape, normal = if (big) Color(0xF2FFFFFF) else Color(0x8C14181C),
                                 focused = if (big) Color.White else Dawn.pill, focusBorderColor = Color.White, borderColor = Color(0x29FFFFFF), zoom = 1.08f,
@@ -1138,7 +1141,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                     Spacer(Modifier.weight(1f))
                     val subT = tracksOf(player, MC.TRACK_TYPE_TEXT)
                     MediaIconsRow(vmenu, { vmenu = it }, subsOn = subFile != null || (!player.trackSelectionParameters.disabledTrackTypes.contains(MC.TRACK_TYPE_TEXT) && subT.any { it.selected }),
-                        audioOn = false, playOn = player.playbackParameters.speed != 1f || Sleep.until > 0, picOn = resize > 0) { k ->
+                        audioOn = false, playOn = player.playbackParameters.speed != 1f || Sleep.until > 0, picOn = resize > 0,
+                        modifier = Modifier.padding(top = 6.dp)) { k ->
                         when (k) {
                             MI_SUBS -> subsUi { vmenu = null }
                             MI_AUDIO -> Popup("Audio", { vmenu = null }) {

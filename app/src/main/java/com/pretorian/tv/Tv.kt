@@ -784,7 +784,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                     .then(if (edit && picked == ch.url) Modifier.border(1.5.dp, Color.White, Rnd(12.dp)) else Modifier),
                                 onClick = {
                                     if (ch.url in gone) return@Focusable
-                                    if (edit) { picked = if (picked == ch.url) null else ch.url; return@Focusable }
+                                    if (edit) { if (list.size > 1) { menuUrl = ch.url; favMove = ch }; return@Focusable }  // 3.0.0.9: "Moving:" window
                                     gate.run("c:${ch.url}", locked) {
                                         ovr.countWatch(ch)
                                         TvMemory.channel = i; TvMemory.group = g
@@ -902,7 +902,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                 favAsk = null; listRev++
                             }
                             if (list.size > 1) OptionRow("Promijeni redoslijed", R.drawable.lc_hand_grab, sub = "OK uzmi · ▲ ▼ pomjeri · OK spusti") {
-                                favAsk = null; edit = true; picked = ch.url
+                                favAsk = null; favMove = ch  // 3.0.0.9: the same "Moving:" window as everywhere
                             }
                             return@Popup
                         }
@@ -1145,12 +1145,33 @@ fun PreviewBox(ch: Channel?, modifier: Modifier) {
     var failed by remember { mutableStateOf(false) }
     var previewT0 by remember { androidx.compose.runtime.mutableLongStateOf(0L) }
     val curCh by androidx.compose.runtime.rememberUpdatedState(ch)
+    // 3.0.0.9 (owner): the small picture could stop on some channels and stay frozen until opened full screen; it now has
+    // its own watch: a stopped picture, an ended live stream or an error after it was playing → the SAME player reconnects
+    // (still one connection), at most 3 times per channel; never after HTTP 458/429 (the provider is limiting)
+    var realUrl by remember { mutableStateOf<String?>(null) }
+    var retryTick by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    var tries by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     DisposableEffect(Unit) {
         Preview.player = player
         DiagCollect.session("preview", true)
         val l = object : androidx.media3.common.Player.Listener {
             override fun onRenderedFirstFrame() { if (!ready && previewT0 > 0) PerfLog.firstFrame("preview", android.os.SystemClock.elapsedRealtime() - previewT0, false); ready = true; ChannelHealth.mark(curCh?.url, true) }  // i18n-ignore
-            override fun onPlayerError(error: androidx.media3.common.PlaybackException) { failed = true; ChannelHealth.mark(curCh?.url, false) }
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                if (error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
+                    // the live window moved on while the picture waited: jump to the live edge, no new connection logic
+                    DiagEvents.add("recover", "preview behind live window, back to live · " + (curCh?.name ?: ""))  // i18n-ignore
+                    try { player.seekToDefaultPosition(); player.prepare() } catch (_: Exception) {}
+                    return
+                }
+                var c: Throwable? = error.cause; var code = 0
+                while (c != null) { if (c is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException) { code = c.responseCode; break }; c = c.cause }
+                if (ready && code != 458 && code != 429 && tries < 3) { retryTick++; return }
+                failed = true; ready = false; ChannelHealth.mark(curCh?.url, false)
+            }
+            override fun onPlaybackStateChanged(state: Int) {
+                // a live stream must not end; if it does while it was playing, reconnect
+                if (state == androidx.media3.common.Player.STATE_ENDED && ready && tries < 3) retryTick++
+            }
             override fun onIsPlayingChanged(isPlaying: Boolean) { ChannelHealth.previewOn = isPlaying || player.playbackState == androidx.media3.common.Player.STATE_BUFFERING }
         }
         player.addListener(l)
@@ -1175,16 +1196,54 @@ fun PreviewBox(ch: Channel?, modifier: Modifier) {
         }
     }
     LaunchedEffect(ch?.url) {
-        ready = false; failed = false
+        ready = false; failed = false; realUrl = null; tries = 0
         val c = ch
         if (c == null || (Ovr(ctx, c.pid).isChLocked(c) && !Lock.isOpen("c:${c.url}"))) { player.stop(); return@LaunchedEffect }
         player.stop()
         delay(250)   // while you move quickly over channels, only the one you stop on starts
         Preview.player = player
         val real = try { Stalker.resolve(ctx, c.url) } catch (e: Exception) { failed = true; return@LaunchedEffect }
+        realUrl = real
         // 3.0: a probe never runs while the preview stream opens
         ChannelHealth.previewOn = true; previewT0 = android.os.SystemClock.elapsedRealtime(); DiagCollect.inc("preview channel starts")
         player.setMediaItem(androidx.media3.common.MediaItem.fromUri(real)); player.prepare(); player.playWhenReady = true
+    }
+    // reconnect of the small picture (asked by the error/ended listener or the stall watch below)
+    LaunchedEffect(retryTick) {
+        if (retryTick == 0) return@LaunchedEffect
+        val real = realUrl ?: return@LaunchedEffect
+        val c = ch ?: return@LaunchedEffect
+        tries++
+        DiagEvents.add("recover", "preview reconnect $tries/3 · " + c.name)  // i18n-ignore
+        DiagCollect.inc("preview reconnects")  // i18n-ignore
+        player.stop()
+        delay(1500)
+        if (ch?.url != c.url) return@LaunchedEffect
+        player.setMediaItem(androidx.media3.common.MediaItem.fromUri(real)); player.prepare(); player.playWhenReady = true
+    }
+    // stall watch: only while the picture was shown and should be playing (the app on screen, not paused by Android)
+    LaunchedEffect(ch?.url) {
+        var last = -1L; var lastFrames = -1; var stuck = 0L; var good = 0L
+        while (true) {
+            delay(1000)
+            val state = player.playbackState
+            val shouldPlay = ready && player.playWhenReady && (state == androidx.media3.common.Player.STATE_READY || state == androidx.media3.common.Player.STATE_BUFFERING)
+            if (!shouldPlay) { stuck = 0; last = -1; lastFrames = -1; continue }
+            val pos = player.currentPosition
+            val frames = player.videoDecoderCounters?.renderedOutputBufferCount ?: -1
+            val timeStuck = pos == last
+            val picStuck = frames >= 0 && frames == lastFrames && state == androidx.media3.common.Player.STATE_READY
+            stuck = if (last >= 0 && (timeStuck || picStuck)) stuck + 1000 else 0
+            // after 2 minutes of normal play the reconnect budget is full again
+            good = if (stuck == 0L) good + 1000 else 0
+            if (good >= 120_000L && tries > 0) { tries = 0; good = 0 }
+            last = pos; lastFrames = frames
+            if (stuck >= 8000 && tries < 3) {
+                stuck = 0; last = -1; lastFrames = -1
+                DiagEvents.add("stall", "preview picture stopped · " + (ch?.name ?: ""))  // i18n-ignore
+                retryTick++
+            }
+        }
     }
     Box(modifier.aspectRatio(16f / 9f).clip(Rnd(14.dp)).background(Color.Black)) {
         androidx.compose.ui.viewinterop.AndroidView(factory = { v ->
