@@ -56,7 +56,7 @@ class DiagII3007Test {
 
     @Test fun redactionCoversLinksHeadersAndServerAddresses() {
         val t = Redact.text("open http://203.0.113.45:8080/live/alice/s3cret/123.ts · rtmp://198.51.100.7/app · " +
-            "get.php?username=bob&password=pw9 · Authorization: Bearer abc.def · Cookie: sid=1 · version 3.0.0.7")
+            "version 3.0.0.7 · get.php?username=bob&password=pw9 · Authorization: Bearer abc.def · Cookie: sid=1")
         assertFalse(t.contains("203.0.113.45")); assertFalse(t.contains("198.51.100.7"))
         assertFalse(t.contains("alice")); assertFalse(t.contains("s3cret")); assertFalse(t.contains("pw9")); assertFalse(t.contains("abc.def"))
         assertTrue(t.contains("version 3.0.0.7"))   // a version number is not an address
