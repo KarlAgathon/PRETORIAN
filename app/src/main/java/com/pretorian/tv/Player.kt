@@ -128,7 +128,7 @@ fun buildPlayer(ctx: Context, preview: Boolean = false, diagKind: String? = null
     }
     val player = builder.build()
     // 3.0.0.2: passive diagnostics only (formats, decoders, dropped frames, errors, release); playback is not touched
-    try { player.addAnalyticsListener(DiagCollect.listener(preview)); DiagCollect.playerCreated(preview) } catch (_: Throwable) {}
+    try { player.addAnalyticsListener(DiagCollect.listener(preview, player)); DiagCollect.playerCreated(preview, player) } catch (_: Throwable) {}
     // 3.0.0.7 Diagnostics II: request lifecycle, QoE, buffer, decoder, audio and subtitle observations (playback untouched)
     try { player.addAnalyticsListener(DiagII.listener(player, preview, diagKind)) } catch (_: Throwable) {}
     val audio = Prefs.audioLangs.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toTypedArray()
@@ -175,7 +175,7 @@ suspend fun probeTracks(ctx: Context, link: String): Pair<List<androidx.media3.c
                 player.setMediaItem(MediaItem.fromUri(url)); player.prepare()
             }
         }
-    } finally { player.release() }
+    } finally { DiagCollect.playerReleasing(player); player.release() }
 }
 
 fun trackLabel(f: androidx.media3.common.Format, audio: Boolean): String {
@@ -217,6 +217,17 @@ private fun httpCode(e: PlaybackException): Int? {
     return null
 }
 
+/** 3.0.0.8 (audit): Retry-After of an HTTP 429 in ms (seconds form only; a date form or nothing → null) */
+private fun retryAfterMs(e: PlaybackException): Long? {
+    var c: Throwable? = e.cause
+    while (c != null) {
+        if (c is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)
+            return c.headerFields.entries.firstOrNull { it.key?.equals("Retry-After", true) == true }?.value?.firstOrNull()?.trim()?.toLongOrNull()?.takeIf { it >= 0 }?.times(1000)  // i18n-ignore
+        c = c.cause
+    }
+    return null
+}
+
 private inline fun <reified T : Throwable> causeOf(e: Throwable): Boolean {
     var c: Throwable? = e
     while (c != null) { if (c is T) return true; c = c.cause }
@@ -230,7 +241,7 @@ private fun errorText(e: PlaybackException, live: Boolean): String {
     try { StreamLog.add("error " + (code?.let { "HTTP $it" } ?: e.errorCodeName.removePrefix("ERROR_CODE_"))) } catch (_: Exception) {}  // i18n-ignore
     return when {
         causeOf<java.net.UnknownHostException>(e) && !Net.online() -> tr("Nema interneta")
-        code == 458 -> tr("Provajder je odbio vezu (previše konekcija odjednom) · pokušaj ponovo za koji trenutak")
+        code == 458 || code == 429 -> tr("Provajder je odbio vezu (previše konekcija odjednom) · pokušaj ponovo za koji trenutak")
         live -> tr("Kanal trenutno nije dostupan")
         else -> tr("Video se trenutno ne može pustiti")
     }
@@ -451,9 +462,13 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     }
 
     /** the quiet tries are used up: the same channel from elsewhere (backup stream), otherwise a clear message — never a silent freeze */
-    fun giveUp(e: PlaybackException?) {
+    fun giveUp(e: PlaybackException?, refused: Boolean = false) {
         val cur = items.getOrNull(index)
-        fun fail() { if (e != null) error = errorText(e, s.live) else frozenMsg = true; if (s.live) ChannelHealth.mark(cur?.channel?.url ?: cur?.url, false) }
+        fun fail() { if (e != null) error = errorText(e, s.live) else frozenMsg = true; if (s.live && !refused) ChannelHealth.mark(cur?.channel?.url ?: cur?.url, false) }
+        // 3.0.0.8 (audit): after HTTP 458/429 the provider is refusing connections; a backup-stream search would open
+        // further connections to that same provider (the report showed it running right after a 458), so it is skipped
+        // and the channel is not marked as broken — the channel is fine, the provider is limiting
+        if (refused) { fail(); return }
         if (s.live && (Tech.backup || MatchWatch.on(cur?.url)) && cur?.channel != null && shiftFrom == 0L) {
             val request = mediaRequest.begin()
             val selectedIndex = index
@@ -481,12 +496,14 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                 // 3.0.0.4 (provider safety): HTTP 458 means the provider already refused the connection (too many at once).
                 // Retrying at once would only add to the count it is complaining about, so this never auto-retries on 458:
                 // it stops here, cools this provider account for a minute, and tells the viewer plainly.
-                val code458 = httpCode(e) == 458
-                if (code458) {
+                // 3.0.0.8 (audit): HTTP 429 (too many requests) is treated the same way; its Retry-After is honoured (1–10 min)
+                val refusedCode = httpCode(e)?.takeIf { it == 458 || it == 429 }
+                if (refusedCode != null) {
                     val acct = ProbeGuard.account(items.getOrNull(index)?.channel?.url ?: items.getOrNull(index)?.url ?: "")
-                    ProbeGuard.cool(acct, 60_000L, "HTTP 458")  // i18n-ignore
-                    StreamLog.add(listOf(items.getOrNull(index)?.title ?: "", " · ", "HTTP 458 · provajder odbio vezu").joinToString(""))  // i18n-ignore
-                    reconnect = 0; giveUp(e); return
+                    val coolMs = if (refusedCode == 429) (retryAfterMs(e) ?: 60_000L).coerceIn(60_000L, 600_000L) else 60_000L
+                    ProbeGuard.cool(acct, coolMs, "HTTP $refusedCode")  // i18n-ignore
+                    StreamLog.add(listOf(items.getOrNull(index)?.title ?: "", " · ", "HTTP $refusedCode · provajder odbio vezu").joinToString(""))  // i18n-ignore
+                    reconnect = 0; giveUp(e, refused = true); return
                 }
                 // automatic recovery: up to 3 quiet tries (live and films), keeping the position of a film
                 if (Recover.on && reconnect < 4) { reconnect++; Stats.recovery(); StreamLog.event(if (reconnect == 1) "freeze" else "x", items.getOrNull(index)?.title ?: ""); StreamLog.event("try", items.getOrNull(index)?.title ?: ""); StreamLog.add(listOf(items.getOrNull(index)?.title ?: "", " · ", e.errorCodeName.removePrefix("ERROR_CODE_"), " · ", trf("spajam ponovo (%s/4)", reconnect)).joinToString("")); retryToken++ }  // i18n-ignore
@@ -562,7 +579,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
         onDispose {
             life?.removeObserver(lo)
             mediaRequest.begin()
-            saveProgress(); player.removeListener(l); player.removeAnalyticsListener(a); player.release()
+            saveProgress(); player.removeListener(l); player.removeAnalyticsListener(a); DiagCollect.playerReleasing(player); player.release()
             Afr.reset(ctx as? android.app.Activity); AudioDelay.us = 0L
             // leaving the player: big lists and pictures are let go at once (they come back from the disk when needed)
             if (Lean.trim) { Repo.trim(true); try { coil.Coil.imageLoader(ctx).memoryCache?.trimMemory(android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) } catch (_: Exception) {} }
@@ -1220,6 +1237,8 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
                                     }
                                 }
                             }
+                            // 3.0.0.8 (owner): link this channel to a channel of the guide by hand, straight from the channel
+                            if (item.channel != null && p != null) LiveRow(tr("Dodijeli EPG"), value = EpgMap.of(p.id, chUrl)?.let { "✓" }, icon = R.drawable.lc_calendar) { lv = LiveUi.NONE; dialog = "epgpick" }
                             LiveRow(tr("Informacije o streamu"), icon = R.drawable.lc_info) { lv = LiveUi.MORE_INFO }
                         }
                         LiveUi.MORE_SLEEP -> LivePanel(tr("Tajmer za spavanje"), R.drawable.lc_moon, false, panelFr) {
@@ -1458,6 +1477,7 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             if (c != null) OptionRow("EPG postavke", R.drawable.lc_calendar_clock, value = EpgShift.label(EpgShift.chMin(c.url, c.pid))) { dialog = "epgshift" }
         }
         "fav" -> item.channel?.let { FavPicker(it) { dialog = null } }
+        "epgpick" -> { val c = item.channel; if (c == null || p == null) dialog = null else GuidePick(p, c, onBack = { dialog = null }, onDone = { dialog = null }) }
         "epgshift" -> item.channel?.let { EpgShiftPopup(it) { dialog = null } }
         "zoom" -> Popup("Format", onDismiss = { dialog = null }) {
             // live Format (approved): only Auto, Fit, Zoom, Stretch

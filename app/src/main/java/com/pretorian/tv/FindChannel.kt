@@ -87,7 +87,7 @@ fun FindChannelDialog(p: Playlist, onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun GuidePick(p: Playlist, c: Channel, onBack: () -> Unit, onDone: () -> Unit) {
+internal fun GuidePick(p: Playlist, c: Channel, onBack: () -> Unit, onDone: () -> Unit) {
     val ctx = LocalContext.current
     var q by remember { mutableStateOf(c.name.replace(Regex("^[A-Z]{2,3}\\s*[|:]\\s*"), "").replace(Regex("(?i)\\b(fhd|uhd|hd|sd|4k|raw|vip)\\b"), "").trim()) }
     var typing by remember { mutableStateOf(false) }
@@ -96,7 +96,23 @@ private fun GuidePick(p: Playlist, c: Channel, onBack: () -> Unit, onDone: () ->
         value = urls.distinct().flatMap { GuideChannels.of(ctx, it) }.distinctBy { it.id.lowercase() }
     }
     val cur = EpgMap.of(p.id, c.url)
+    var chosen by remember { mutableStateOf<GuideChannels.G?>(null) }
     if (typing) { TextDialog("Traži u vodiču", "Dio naziva", q, onDismiss = { typing = false }) { v -> q = v.trim(); typing = false }; return }
+    // 3.0.0.8 (owner): pick a guide channel first, then confirm with "Assign this EPG"
+    chosen?.let { g ->
+        Popup(g.name, { chosen = null }) {
+            T(trf("Kanal: %s", c.name), 14.sp, C.Soft)
+            T(g.id, 13.sp, C.Muted)
+            OptionRow("Dodijeli ovaj EPG", R.drawable.lc_check, color = C.Green) {
+                EpgMap.set(p.id, c.url, g.id)
+                GuideSync.later(ctx, force = true)
+                Toast.makeText(ctx, tr("Povezano. EPG se osvježava u pozadini."), Toast.LENGTH_SHORT).show()
+                chosen = null; onDone()
+            }
+            OptionRow("Odustani", R.drawable.lc_x) { chosen = null }
+        }
+        return
+    }
     Popup(trf("EPG za %s", c.name), onBack) {
         OptionRow(trf("Traži: %s", q.ifBlank { "…" }), R.drawable.lc_search) { typing = true }
         if (cur != null) OptionRow("Ukloni ručno povezivanje", R.drawable.lc_x, sub = cur) { EpgMap.set(p.id, c.url, null); onBack() }
@@ -108,12 +124,7 @@ private fun GuidePick(p: Playlist, c: Channel, onBack: () -> Unit, onDone: () ->
                 val words = q.lowercase().split(' ').filter { it.isNotBlank() }
                 val hits = l.filter { g -> words.all { w -> g.name.lowercase().contains(w) || g.id.lowercase().contains(w) } }.take(60)
                 if (hits.isEmpty()) T("Nema rezultata!", 14.sp, C.Muted)
-                hits.forEach { g -> OptionRow(g.name, R.drawable.lc_calendar, sub = g.id, selected = cur == g.id.lowercase()) {
-                    EpgMap.set(p.id, c.url, g.id)
-                    GuideSync.later(ctx, force = true)
-                    Toast.makeText(ctx, tr("Povezano. EPG se osvježava u pozadini."), Toast.LENGTH_SHORT).show()
-                    onDone()
-                } }
+                hits.forEach { g -> OptionRow(g.name, R.drawable.lc_calendar, sub = g.id, selected = cur == g.id.lowercase()) { chosen = g } }
             }
         }
     }

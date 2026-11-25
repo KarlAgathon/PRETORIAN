@@ -24,7 +24,9 @@ object DiagLife {
     private fun enc(m: Map<String, Int>) = m.entries.joinToString(";") { "${it.key}=${it.value}" }  // i18n-ignore
     private fun dec(s: String): Map<String, Int> = s.split(';').mapNotNull { p -> p.split('=').takeIf { it.size == 2 }?.let { it[0] to (it[1].toIntOrNull() ?: -1) } }.toMap()
 
+    private val started = java.util.concurrent.atomic.AtomicBoolean(false)
     fun start(ctx: Context) {
+        if (!started.compareAndSet(false, true)) return  // 3.0.0.8 (audit): one session row per process
         Thread({ try { Thread.sleep(8_000); run(ctx.applicationContext) } catch (_: Throwable) {} }, "pretorian-diag2").apply { isDaemon = true; priority = Thread.MIN_PRIORITY }.start()  // i18n-ignore
     }
 

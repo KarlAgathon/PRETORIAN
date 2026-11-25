@@ -144,6 +144,37 @@ internal object DiagReportII {
                 o.line("- ${x.level} · ${x.area}: ${x.text} · see section ${x.section}" + (if (x.cause.isNotBlank()) " · possible cause: ${x.cause}" else "") + (if (x.confidence.isNotBlank()) " · confidence ${x.confidence}" else "") + " · further investigation required")  // i18n-ignore
             }
         }
+        // 3.0.0.8 (audit): measured anomalies that are too few for a status are still shown, marked as a small sample
+        try {
+            val small = ArrayList<String>()
+            val jk = rows("jank").filter { S(it, 1) == PerfLog.session }  // i18n-ignore
+            val frames = jk.sumOf { L(it, 3) ?: 0L }; val frozen = jk.sumOf { L(it, 6) ?: 0L }
+            if (frames in 1 until 500 && frozen > 0) small += "$M $frozen frozen frame(s) among only $frames frames this session (section 59)"  // i18n-ignore
+            val focusMiss = DiagCollect.counters.filterKeys { it.startsWith("focus target missing") }.values.sumOf { it.get() }  // i18n-ignore
+            if (focusMiss in 1..3) small += "$M focus could not be placed $focusMiss time(s) this session (section 60)"  // i18n-ignore
+            if (small.isNotEmpty()) { o.line("Measured, but too few to judge (small sample, no status given):"); small.forEach { o.line("  · $it") } }  // i18n-ignore
+        } catch (e: DiagReport.Full) { throw e } catch (_: Throwable) {}
+        // 3.0.0.8 (audit): what the retained event journal shows from EARLIER sessions, kept apart from this session's findings
+        try {
+            val since = DiagCollect.sessionStartWall
+            var h458 = 0; var h429 = 0; var twoPlayers = 0; var playErr = 0; var oldest = Long.MAX_VALUE
+            DiagStore.eachEvent { line ->
+                val t = DiagEvents.parseTime(line); if (t <= 0 || t >= since) return@eachEvent
+                if (t < oldest) oldest = t
+                when {
+                    line.contains("HTTP 458") -> h458++  // i18n-ignore
+                    line.contains("HTTP 429") -> h429++  // i18n-ignore
+                    line.contains("player instances alive at once") -> twoPlayers++  // i18n-ignore
+                    line.contains("|player|") -> playErr++  // i18n-ignore
+                }
+            }
+            o.line("History (earlier sessions in the retained journal" + (if (oldest != Long.MAX_VALUE) ", since ${DiagEvents.stamp(oldest)}" else "") + "; not counted in the statuses above):")  // i18n-ignore
+            if (h458 + h429 + twoPlayers + playErr == 0) o.line("  · nothing notable") else {  // i18n-ignore
+                if (h458 + h429 > 0) o.line("  · provider refusals: HTTP 458 × $h458, HTTP 429 × $h429 (section 51 / journal)")  // i18n-ignore
+                if (twoPlayers > 0) o.line("  · \"player instances alive at once\" × $twoPlayers — before 3.0.0.8 this was a measurement artefact (the old player was still counted for a moment after release()); from 3.0.0.8 the count is exact")  // i18n-ignore
+                if (playErr > 0) o.line("  · player errors × $playErr (section 29 / journal)")  // i18n-ignore
+            }
+        } catch (e: DiagReport.Full) { throw e } catch (_: Throwable) {}
     }
     /** suspicious growth in the same (idle) state within one process: heap, native, PSS, threads, file descriptors */
     private fun memSuspects(mem: List<List<String>>): List<String> {
@@ -308,6 +339,8 @@ internal object DiagReportII {
                     o.line("   $M $scr: $fr frames · slow ${share(x.sumOf { L(it, 4) ?: 0L }, fr)} · janky ${share(x.sumOf { L(it, 5) ?: 0L }, fr)} · frozen ${x.sumOf { L(it, 6) ?: 0L }} · p50 ${pct(x.mapNotNull { L(it, 7) }, .5)} ms · p95 (visit) ${pct(x.mapNotNull { L(it, 8) }, .5)} ms · worst ${x.mapNotNull { L(it, 9) }.maxOrNull() ?: 0L} ms") }  // i18n-ignore
             }
             ringLines(o, "first drawn frame after navigation ms ", none = "$NO first drawn frame after navigation (needs Android 8)"); ringLines(o, "remote key to next completed frame ms")  // i18n-ignore
+            ringLines(o, "process start to first drawn frame ms", none = "$NO process start to first drawn frame (needs Android 7)")  // i18n-ignore
+            o.line("Since 3.0.0.8 frames drawn in the first 15 s after the process started are counted as \"startup (first 15 s)\", not under the screen shown then (before 3.0.0.8 they were counted as Home).")  // i18n-ignore
             o.line("Time to first composition is in section 45 (not a drawn frame). Main-thread blocking: freezes/ANRs in section 28. Scrolling is included in the screen totals. Remote key → next frame is a lower bound of the response time.")  // i18n-ignore
         }
 

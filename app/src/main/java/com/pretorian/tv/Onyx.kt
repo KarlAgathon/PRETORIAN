@@ -208,7 +208,7 @@ fun ChannelLogo(c: Channel, size: androidx.compose.ui.unit.Dp, onLight: Boolean 
     Box(Modifier.size(size).clip(Rnd(9.dp)).background(if (onLight) Color(0x12000000) else Color(0x1FFFFFFF))
         .border(1.dp, if (onLight) Color(0x26000000) else Color(0x38FFFFFF), Rnd(9.dp)), contentAlignment = Alignment.Center) {
         if (src.url != null) AsyncImage(model = src.request, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(4.dp),
-            onError = { src.failed() })
+            onError = { src.failed(it.result.throwable) })
         else T(c.name.filter { it.isLetterOrDigit() }.take(2).uppercase().ifBlank { "TV" }, (size.value * 0.32f).sp, if (onLight) Color(0xFF0A0A0A) else Color.White, FontWeight.ExtraBold)
     }
 }
@@ -236,16 +236,32 @@ object HomeCache {
 
 
 /** one logo source for every place a channel logo is drawn: provider first, then the verified catalog, then none */
+/** 3.0.0.8 (audit): logo addresses that answered 404/403/410 are not asked again for 24 h, other HTTP errors for 1 h
+ *  (in memory, this process only). Before, the same dead address was requested again each time its row was drawn.
+ *  Network errors (no answer at all) are never remembered, so a logo comes back as soon as the network does. */
+object LogoFail {
+    private val until = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    fun dead(url: String?): Boolean { if (url == null) return false; val t = until[url] ?: return false; if (t > System.currentTimeMillis()) return true; until.remove(url); return false }
+    fun record(url: String?, t: Throwable?) {
+        if (url == null) return
+        val code = (t as? coil.network.HttpException)?.response?.code ?: return
+        val ms = if (code == 404 || code == 403 || code == 410) 24 * 3_600_000L else 3_600_000L
+        if (until.size > 5_000) until.clear()
+        until[url] = System.currentTimeMillis() + ms
+        PerfLog.count("logo address remembered as failing (HTTP $code)")  // i18n-ignore
+    }
+}
 class LogoSrc(private val ctx: android.content.Context, private val provider: String?, private val name: String, private val group: String?) {
-    private var stage by mutableIntStateOf(if (provider.isNullOrBlank() || !provider.startsWith("http")) 1 else 0)
+    private var stage by mutableIntStateOf(if (provider.isNullOrBlank() || !provider.startsWith("http") || LogoFail.dead(provider)) 1 else 0)
     val url: String? get() = when (stage) {
         0 -> provider
-        1 -> { LogoResolver.rev; LogoResolver.peek(name, group) }
+        1 -> { LogoResolver.rev; LogoResolver.peek(name, group)?.takeIf { !LogoFail.dead(it) } }
         else -> null
     }
     val request get() = coil.request.ImageRequest.Builder(ctx).data(url).transformations(LogoTrim()).crossfade(false).build()
-    fun failed() {
+    fun failed(t: Throwable? = null) {
         PerfLog.count(if (stage == 0) "logo provider failed" else "logo catalog image failed")  // i18n-ignore
+        LogoFail.record(url, t)
         stage++
     }
 }

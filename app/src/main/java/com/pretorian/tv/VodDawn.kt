@@ -433,6 +433,12 @@ fun resumeContinue(ctx: Context, nav: Nav, pr: Progress, fromStart: Boolean) {
     VodMemory.returning = true
     val q = Watch.playable(ctx, pr)
     val at = if (fromStart || !q.started) 0L else q.pos
+    // 3.0.0.8 (owner, the one exception to the one-step Back rule): an episode started from Continue watching plays at once,
+    // and Back lands on that series' page at the season and episode, not on the Continue watching list
+    if (q.series != null) seriesRowFor(ctx, q)?.let { h ->
+        if (q.season != null && q.episode != null) { SeriesJump.id = h.id; SeriesJump.season = q.season; SeriesJump.num = q.episode }
+        nav.push(Screen.SeriesDetail(SeriesItem(h.id, h.n, h.i, null, h.r)))
+    }
     nav.push(Screen.Player(listOf(PlayItem(q.title, q.url, q.poster, null, null, q.series, q.season, q.episode, startAt = at)), 0, live = false))
 }
 

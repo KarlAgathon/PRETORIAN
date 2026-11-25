@@ -524,7 +524,10 @@ object DiagII {
     @Volatile var navComposedNanos = 0L
     @Volatile private var navFor = ""  // i18n-ignore
     @Volatile var keyNanos = 0L
+    @Volatile var firstFrameMs = 0L
+    private val framesOn = java.util.Collections.newSetFromMap(java.util.WeakHashMap<android.app.Activity, Boolean>())
     fun attachFrames(a: android.app.Activity) = g("frames") {  // i18n-ignore
+        if (!synchronized(framesOn) { framesOn.add(a) }) return@g  // 3.0.0.8 (audit): one listener per window, never twice
         if (Build.VERSION.SDK_INT < 24) { inc("frame timing: not supported below Android 7"); return@g }  // i18n-ignore
         refreshHz = try { @Suppress("DEPRECATION") a.windowManager.defaultDisplay.refreshRate.toDouble().takeIf { it > 1 } ?: 60.0 } catch (_: Throwable) { 60.0 }  // i18n-ignore
         val ht = android.os.HandlerThread("pretorian-frames", android.os.Process.THREAD_PRIORITY_LOWEST).apply { start() }  // i18n-ignore
@@ -533,7 +536,11 @@ object DiagII {
     private fun frame(m: android.view.FrameMetrics) {
         val total = m.getMetric(android.view.FrameMetrics.TOTAL_DURATION) / 1_000_000.0
         val deadline = 1000.0 / refreshHz
-        val name = CrashLog.screen.ifBlank { "unknown" }  // i18n-ignore
+        // 3.0.0.8 (audit): frames of the first 15 s after the process started are app start-up work
+        // (catalog load, first composition), not the Home screen's own drawing; counted under "startup"
+        val sinceStart = if (Build.VERSION.SDK_INT >= 24) android.os.SystemClock.elapsedRealtime() - android.os.Process.getStartElapsedRealtime() else -1L
+        val name = if (sinceStart in 0 until 15_000) "startup (first 15 s)" else CrashLog.screen.ifBlank { "unknown" }  // i18n-ignore
+        if (firstFrameMs == 0L && sinceStart >= 0) { firstFrameMs = sinceStart; ring("process start to first drawn frame ms", 50).add(sinceStart) }  // i18n-ignore
         var v = visit[0]
         if (v == null || v.name != name) { v?.let { flushVisit(it) }; v = Screen(name); visit[0] = v }
         v.add(total, deadline)

@@ -21,8 +21,8 @@ android {
         minSdk = 24
         targetSdk = 34
         // raise both numbers for every new version (needed for updates)
-        versionCode = 307
-        versionName = "3.0.0.7"
+        versionCode = 308
+        versionName = "3.0.0.8"
         // TMDB_KEY from GitHub Secrets: posters, cast, platform and coming episodes work for everyone without typing a key
         buildConfigField("String", "TMDB_KEY", "\"" + (System.getenv("TMDB_KEY") ?: "") + "\"")
         // 3.0.0.7 Diagnostics II: the exact Git commit of this build, written in at build time (no network lookup in the app)

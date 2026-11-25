@@ -46,12 +46,33 @@ object DiagEvents {
     private val fmt = object : ThreadLocal<SimpleDateFormat>() { override fun initialValue() = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US) }  // i18n-ignore
     private val CRITICAL = setOf("crash", "freeze", "anr", "native", "fatal")
     private val INFO = setOf("app", "update", "start", "screen", "health")
+    // 3.0.0.8 (audit): before, every kind not listed above was stored as "E", so screen-saver, display-mode, decoder-ready
+    // and session lines filled the critical/error history (section 29). Now the level comes from the kind and the message.
+    private val ERROR_KINDS = setOf("player", "neterr")  // i18n-ignore
+    private val ERR_WORDS = listOf("error", "failed", "failure", "exception", "could not", "not supported", "corrupt", "crash")  // i18n-ignore
+    private val WARN_WORDS = listOf("warn", "slow", "timeout", "timed out", "refused", "limit", "cooldown", "restriction", "http 4", "http 5", "dropped", "ended early", "stall", "gave up", "low memory", "trim")  // i18n-ignore
+    fun level(kind: String, msg: String?): String {
+        val m = (msg ?: "").lowercase()
+        return when {
+            kind in CRITICAL -> "C"
+            kind in ERROR_KINDS -> "E"
+            kind.endsWith("warn") -> "W"
+            ERR_WORDS.any { m.contains(it) } -> "E"
+            WARN_WORDS.any { m.contains(it) } || kind == "stall" -> "W"  // i18n-ignore
+            else -> "I"
+        }
+    }
+    /** the level of a stored line, worked out again with today's rules (lines written before 3.0.0.8 carry the old "E") */
+    fun levelOf(line: String): String {
+        val p = line.split('|', limit = 4)
+        return if (p.size < 4) "I" else if (p[1] == "C") "C" else level(p[2], p[3])
+    }
     fun stamp(t: Long = System.currentTimeMillis()): String = fmt.get()!!.format(Date(t))
     fun parseTime(line: String): Long = try { fmt.get()!!.parse(line.substring(0, 23))?.time ?: 0L } catch (_: Throwable) { 0L }
 
     fun add(kind: String, msg: String?) {
         try {
-            val lvl = when { kind in CRITICAL -> "C"; kind in INFO -> "I"; kind.endsWith("warn") -> "W"; else -> "E" }
+            val lvl = if (kind in INFO && kind !in CRITICAL) "I" else level(kind, msg)
             val line = stamp() + "|" + lvl + "|" + kind + "|" + Redact.text((msg ?: "").replace('\n', ' ').replace('|', '/').take(600))
             synchronized(list) { list.addLast(line); while (list.size > MAX) list.removeFirst() }
             DiagStore.enqueue(line, lvl == "C")
@@ -137,7 +158,7 @@ object DiagReport {
         b.append("Release channel: ").append(if (BuildConfig.BUILD_TYPE == "beta") "Beta" else "Stable").append(" · session ").append(PerfLog.session).append('\n')  // i18n-ignore
         try { val pi = ctx.packageManager.getPackageInfo(ctx.packageName, 0)
             b.append("Installed: ").append(DiagEvents.stamp(pi.firstInstallTime)).append(" · last update: ").append(DiagEvents.stamp(pi.lastUpdateTime)).append('\n') } catch (_: Throwable) { b.append("Installed: unavailable\n") }  // i18n-ignore
-        b.append("Session started: ").append(DiagEvents.stamp(DiagCollect.sessionStartWall)).append(" · report schema ").append(DiagCollect.SCHEMA).append(" · build commit: ").append(BuildConfig.GIT_COMMIT).append('\n')  // i18n-ignore
+        b.append("Session started: ").append(DiagEvents.stamp(DiagCollect.sessionStartWall)).append(" · report schema ").append(DiagII.SCHEMA).append(" (event journal schema ").append(DiagCollect.SCHEMA).append(")").append(" · build commit: ").append(BuildConfig.GIT_COMMIT).append('\n')  // i18n-ignore
         b.append("Previous version: ").append(Prefs.str("diag_prev_version").ifBlank { "unknown" }).append('\n')  // i18n-ignore
         b.append("Device: ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL).append(" · Android ").append(Build.VERSION.RELEASE)
             .append(" (API ").append(Build.VERSION.SDK_INT).append(")\n")  // i18n-ignore
@@ -235,7 +256,7 @@ object DiagReport {
             o.line("recovery attempts: " + r.count { it.getOrNull(3) == "recovery" })  // i18n-ignore
         }
         try {
-            o.line("MEDIA CENTER – FULL DIAGNOSTIC REPORT · schema " + DiagCollect.SCHEMA + " · report id " + java.util.UUID.randomUUID().toString().take(13))  // i18n-ignore
+            o.line("MEDIA CENTER – FULL DIAGNOSTIC REPORT · report schema " + DiagII.SCHEMA + " (event journal schema " + DiagCollect.SCHEMA + ") · report id " + java.util.UUID.randomUUID().toString().take(13))  // i18n-ignore
             o.line("Status labels: [measured] recorded here · [device] reported by Android · [provider] reported by the IPTV server · [cached] stored earlier · [suspected] indication, not proof · [unavailable] / [not observed] nothing recorded. Zero is a real value, never a stand-in for missing data.")  // i18n-ignore
             o.line("Legend: measured = recorded on this box · unavailable = not recorded or not supported here · nothing is estimated.")  // i18n-ignore
             o.line("Build commit " + BuildConfig.GIT_COMMIT + " · Diagnostics II schema " + DiagII.SCHEMA + " · sections 1–70 · the summary (70) comes first, the evidence follows.")  // i18n-ignore
@@ -371,7 +392,8 @@ object DiagReport {
             incidents(28, "FREEZE AND ANR HISTORY", setOf("freeze", "anr", "anr_suspected"))  // i18n-ignore
             sec(29, "CRITICAL ERROR HISTORY") {  // i18n-ignore
                 inc.filter { it.kind !in setOf("crash", "native", "freeze", "anr", "anr_suspected") }.forEach { i -> o.line("--- " + i.kind + " · " + i.base + " ---"); o.block(incidentText(i)) }  // i18n-ignore
-                events { it.contains("|C|") || it.contains("|E|") }
+                // 3.0.0.8: levels are worked out again here, so older journal lines are judged by the same rules
+                events { val l = DiagEvents.levelOf(it); l == "C" || l == "E" }
             }
             sec(30, "DIAGNOSTIC SYSTEM HEALTH") {  // i18n-ignore
                 o.line("Limits: 50 MB total · 100 incidents · 10,000 events · 90 days · 100 MB free kept")  // i18n-ignore

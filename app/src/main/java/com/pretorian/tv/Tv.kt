@@ -83,6 +83,7 @@ object Preview {
      *  Called before a fullscreen channel opens, so there is never a second connection open to the same provider. */
     fun stop() {
         val p = player; player = null
+        DiagCollect.playerReleasing(p)
         try { p?.stop(); p?.clearMediaItems(); p?.release() } catch (_: Exception) {}
     }
 }
@@ -715,6 +716,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
     var picked by remember { mutableStateOf<String?>(null) }
     var lastMoveAt by remember { mutableStateOf(0L) }
     var recentAsk by remember { mutableStateOf<Channel?>(null) }
+    var quickMenu by remember { mutableStateOf<Channel?>(null) }
     val favEditable = isFavGroup(g.cat.id)
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     androidx.activity.compose.BackHandler(enabled = edit) { picked = null; edit = false; listRev++ }
@@ -771,7 +773,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                         contentPadding = PaddingValues(bottom = 30.dp)
                     ) {
                         itemsIndexed(list, key = { _, ch -> "${ch.pid}|${ch.id}|${ch.url}" }) { i, ch ->
-                            val ovr = remember(ch.pid, g.pid) { Ovr(ctx, ch.pid.ifBlank { g.pid ?: "" }) }
+                            val ovr = remember(ch.pid, g.pid) { Ovr(ctx, ch.pid.ifBlank { g.pid ?: Store.active(ctx)?.id ?: "" }) }
                             val locked = ovr.isChLocked(ch)
                             // Mark the channel actually playing (or in the confirmed mini-preview), not merely the focused row.
                             val active = PreviewSel.ch?.url == ch.url || TvMemory.preview?.url == ch.url ||
@@ -800,18 +802,12 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                                     // spec 09: in Favourites long OK only enters edit mode (removing is in the channel options);
                                     // in Recently watched it offers Remove from history / Clear history
                                     // in Favourites long OK offers: Remove from favourites · Change the order
+                                    // 3.0.0.8 (owner): long OK on a channel never changes anything by itself — it opens one menu:
+                                    // hide/show · lock · rename · move · to the top · to the bottom · add to / remove from favourites
                                     if (favEditable && ch.url in gone) {
                                         Favs.toggle(favListId(g.cat.id), ch)
                                         android.widget.Toast.makeText(ctx, tr("Vraćeno u favorite"), android.widget.Toast.LENGTH_SHORT).show()
-                                    } else if (favEditable) {
-                                        if (!edit) { menuUrl = ch.url; favAsk = ch }
-                                    } else if (g.cat.id == RECENT_GROUP) { menuUrl = ch.url; recentAsk = ch }
-                                    else if (isFav || Favs.inAny(ctx, ch)) { menuUrl = ch.url; favAsk = ch }
-                                    else {
-                                        Favs.flip(ctx, ch)
-                                        android.widget.Toast.makeText(ctx, tr("Dodano u favorite"), android.widget.Toast.LENGTH_SHORT).show()
-                                        listRev++
-                                    }
+                                    } else if (!edit) { menuUrl = ch.url; quickMenu = ch }
                                 },
                                 onFocus = { lastUrl = ch.url; if (!edit) onFocusCh(ch) },
                                 focusRequester = cWrap.requester(i, if (ch.url == menuUrl) chFr else null),
@@ -881,6 +877,18 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                         if (reload) onChanged()
                     }
                 }
+                quickMenu?.let { ch ->
+                    ChannelOptions(g, ch, list.filter { it.url !in gone }, emptyList(), onDismiss = { quickMenu = null }, quick = true, extra = {
+                        if (g.cat.id == RECENT_GROUP) {
+                            OptionRow("Ukloni iz historije", R.drawable.lc_x) { Recent.remove(ch.url); quickMenu = null; listRev++ }
+                            OptionRow("Obriši historiju", R.drawable.lc_trash_2, color = C.Danger) { Recent.clear(); clearPlayerChannelHistory(); quickMenu = null; onBackToGroups() }
+                        }
+                    }) { reload, close ->
+                        listRev++
+                        if (close) quickMenu = null
+                        if (reload) onChanged()
+                    }
+                }
                 favAsk?.let { ch ->
                     val inFavList = isFav || isFavGroup(g.cat.id)
                     Popup(ch.name, onDismiss = { favAsk = null }, width = 460.dp) {
@@ -924,7 +932,7 @@ private fun ChannelList(g: GroupRef, nav: Nav, gate: PinGate, rows: Load<List<GR
                     }, onCancel = { favMove = null })
                 }
                 // after the options close, the focus stays on that channel
-                LaunchedEffect(menu, favAsk, favMove) { if (menu == null && favAsk == null && favMove == null && menuUrl != null) { delay(60); chFr.tryFocus() } }
+                LaunchedEffect(menu, favAsk, favMove, quickMenu) { if (menu == null && favAsk == null && favMove == null && quickMenu == null && menuUrl != null) { delay(60); chFr.tryFocus() } }
             }
         }
     }
@@ -944,10 +952,12 @@ fun FavPicker(ch: Channel, onDismiss: () -> Unit) {
 /** Options of one channel: favourites, order, group, name, hide, lock. */
 @Composable
 fun ChannelOptions(g: GroupRef, ch: Channel, list: List<Channel>, groups: List<Category>,
-                   onDismiss: () -> Unit, onChanged: (reload: Boolean, close: Boolean) -> Unit) {
+                   onDismiss: () -> Unit, quick: Boolean = false, extra: (@Composable () -> Unit)? = null,
+                   onChanged: (reload: Boolean, close: Boolean) -> Unit) {
     val ctx = LocalContext.current
     val favId = if (g.pid == null) favListId(g.cat.id) else null
-    val ovr = remember(ch.pid, g.pid) { Ovr(ctx, ch.pid.ifBlank { g.pid ?: "" }) }
+    // favourites keep no playlist id: their hide / lock / name belong to the active playlist
+    val ovr = remember(ch.pid, g.pid) { Ovr(ctx, ch.pid.ifBlank { g.pid ?: Store.active(ctx)?.id ?: "" }) }
     var mode by remember { mutableStateOf("menu") }
     val pos = list.indexOfFirst { it.url == ch.url }
     // whole new order of the group (or favourites list) with this channel at [to]
@@ -1006,6 +1016,29 @@ fun ChannelOptions(g: GroupRef, ch: Channel, list: List<Channel>, groups: List<C
         }
     }
     Popup(ch.name, onDismiss) {
+        if (quick) {
+            // 3.0.0.8: long OK on a channel, anywhere — the same menu in this order
+            OptionRow(if (ovr.isChHidden(ch)) "Prikaži kanal" else "Sakrij kanal", R.drawable.lc_eye_off) {
+                ovr.toggleChHidden(ch); Toast.makeText(ctx, tr("Spremljeno"), Toast.LENGTH_SHORT).show(); onChanged(true, true)
+            }
+            OptionRow(if (ovr.isChLocked(ch)) "Otključaj kanal" else "Zaključaj PIN-om (4 broja)", R.drawable.lc_lock) {
+                if (!Lock.hasPin()) mode = "pin" else { ovr.toggleChLocked(ch); onChanged(true, true) }
+            }
+            OptionRow("Preimenuj kanal", R.drawable.lc_pencil) { mode = "rename" }
+            if (g.cat.id != ALL_GROUP && pos >= 0 && list.size > 1) {
+                OptionRow("Pomjeri", R.drawable.lc_hand_grab, sub = "▲ ▼ pa OK") { mode = "carry" }
+                OptionRow("Na sam vrh", R.drawable.lc_chevrons_up) { placeAt(0); onChanged(true, true) }
+                OptionRow("Na samo dno", R.drawable.lc_chevrons_down) { placeAt(list.lastIndex); onChanged(true, true) }
+            }
+            val inFav = if (favId != null) Favs.contains(favId, ch) else Favs.inAny(ctx, ch)
+            OptionRow(if (inFav) "Ukloni iz favorita" else "Dodaj u favorite", R.drawable.lc_star, color = if (inFav) C.Danger else C.Amber) {
+                if (favId != null) Favs.toggle(favId, ch) else Favs.flip(ctx, ch)
+                Toast.makeText(ctx, tr(if (inFav) "Uklonjeno iz favorita" else "Dodano u favorite"), Toast.LENGTH_SHORT).show()
+                onChanged(true, true)
+            }
+            extra?.invoke()
+            return@Popup
+        }
         if (favId != null) {
             OptionRow("Ukloni iz ove liste", R.drawable.lc_star) {
                 Favs.toggle(favId, ch); Toast.makeText(ctx, tr("Uklonjeno iz favorita"), Toast.LENGTH_SHORT).show(); onChanged(false, true)
@@ -1068,7 +1101,7 @@ fun ChannelLogo(url: String?, name: String) {
                     else Color.hsv(hue.toFloat(), 0.45f, if (C.IsLight) 0.85f else 0.38f)),
         contentAlignment = Alignment.Center) {
         if (shown != null) {
-            AsyncImage(model = src.request, contentDescription = null, contentScale = ContentScale.Fit, onError = { src.failed() },
+            AsyncImage(model = src.request, contentDescription = null, contentScale = ContentScale.Fit, onError = { src.failed(it.result.throwable) },
                 modifier = Modifier.fillMaxSize().padding(4.dp))
         } else {
             val words = clean.split(' ', '-', '.').filter { it.isNotBlank() && it.first().isLetterOrDigit() }
@@ -1137,6 +1170,7 @@ fun PreviewBox(ch: Channel?, modifier: Modifier) {
             DiagCollect.session("preview", false); ChannelHealth.previewOn = false; life?.removeObserver(lo); player.removeListener(l)
             if (Preview.player === player) Preview.player = null
             // Preview.stop() may already have released this same instance (provider-safety handoff to fullscreen); a second release is harmless, never fatal
+            DiagCollect.playerReleasing(player)
             try { player.release() } catch (_: Exception) {}
         }
     }

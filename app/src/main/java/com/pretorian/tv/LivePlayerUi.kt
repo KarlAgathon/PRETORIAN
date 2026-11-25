@@ -291,7 +291,7 @@ private fun HistoryTile(ch: Channel) {
     val src = rememberLogo(ch.logo, ch.name, ch.group)
     Column(Modifier.fillMaxSize().padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-            if (src.url != null) AsyncImage(model = src.request, contentDescription = ch.name, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(), onError = { src.failed() })
+            if (src.url != null) AsyncImage(model = src.request, contentDescription = ch.name, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(), onError = { src.failed(it.result.throwable) })
             else T(shortName(ch.name), 13.sp, Color.White, FontWeight.Bold, maxLines = 2, align = TextAlign.Center)
         }
         T(ch.name.substringAfterLast('|').trim(), 11.sp, Color(0xFFDDE1E6), maxLines = 1, align = TextAlign.Center)

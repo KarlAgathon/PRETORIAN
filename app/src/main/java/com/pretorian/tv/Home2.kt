@@ -383,6 +383,15 @@ fun HomeV2(nav: Nav) {
     @Suppress("UNUSED_VARIABLE") val sc = scope
 }
 
+/** the catalogue row of the series a progress entry belongs to (same matching Home always used) */
+internal fun seriesRowFor(ctx: android.content.Context, pr: Progress): CatalogDb.Row? {
+    val s = pr.series ?: return null
+    val pid = pr.pid.ifBlank { Store.active(ctx)?.id ?: "" }
+    val words = Sports.norm(cleanTitle(s).first).split(' ').filter { it.length >= 2 }.take(3)
+    val hits = try { CatalogDb.search(listOf(pid), "series", words, 60) } catch (_: Exception) { emptyList() }
+    return hits.firstOrNull { it.n == s } ?: hits.firstOrNull { cleanTitle(it.n).first.equals(cleanTitle(s).first, true) }
+}
+
 /** OK on a Home card opens the title's own view (never plays at once): a recently added film → its movie view;
  *  Continue Watching → the movie / series view with Resume (the series view waits on that episode). */
 internal fun openHomeCard(ctx: android.content.Context, nav: Nav, pr: Progress?, row: CatalogDb.Row?) {
@@ -394,7 +403,7 @@ internal fun openHomeCard(ctx: android.content.Context, nav: Nav, pr: Progress?,
     val words = Sports.norm(cleanTitle(name).first).split(' ').filter { it.length >= 2 }.take(3)
     val hits = try { CatalogDb.search(listOf(pid), if (pr.series != null) "series" else "vod", words, 60) } catch (_: Exception) { emptyList() }
     if (pr.series != null) {
-        val h = hits.firstOrNull { it.n == pr.series } ?: hits.firstOrNull { cleanTitle(it.n).first.equals(cleanTitle(pr.series).first, true) }
+        val h = seriesRowFor(ctx, pr)
         if (h != null) {
             if (pr.season != null && pr.episode != null) { SeriesJump.id = h.id; SeriesJump.season = pr.season; SeriesJump.num = pr.episode }
             nav.push(Screen.SeriesDetail(SeriesItem(h.id, h.n, h.i, null, h.r))); return
@@ -432,7 +441,7 @@ private fun HomeStatus(nav: Nav, modifier: Modifier) {
 private fun HomeTile(ch: Channel) {
     val src = rememberLogo(ch.logo, ch.name, ch.group)
     Box(Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
-        if (src.url != null) AsyncImage(model = src.request, contentDescription = ch.name, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(), onError = { src.failed() })
+        if (src.url != null) AsyncImage(model = src.request, contentDescription = ch.name, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(), onError = { src.failed(it.result.throwable) })
         // no logo: the channel's name in clean white text (never a broken image or a TV icon)
         else T(ch.name.substringAfterLast('|').trim().ifBlank { ch.name }, 12.sp, Color.White, FontWeight.SemiBold, maxLines = 2, align = androidx.compose.ui.text.style.TextAlign.Center)
     }

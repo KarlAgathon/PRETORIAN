@@ -137,12 +137,10 @@ fun OnyxSearch(nav: Nav) {
     }
     val only = SearchOnly.only
     var favAsk by remember { mutableStateOf<Channel?>(null) }
+    var chMenu by remember { mutableStateOf<Channel?>(null) }
     fun longOk(h: Hit) {
-        // long OK on a channel: into Favourites at once; only removing asks
-        if (h is Hit.Ch) {
-            if (Favs.inAny(ctx, h.ch)) favAsk = h.ch
-            else { Favs.flip(ctx, h.ch); android.widget.Toast.makeText(ctx, tr("Dodano u favorite"), android.widget.Toast.LENGTH_SHORT).show() }
-        } else pick = h
+        // 3.0.0.8 (owner): long OK on a channel opens the same channel menu as everywhere else (nothing happens by itself)
+        if (h is Hit.Ch) chMenu = h.ch else pick = h
     }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 28.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -204,6 +202,11 @@ fun OnyxSearch(nav: Nav) {
         if (busy) T(tr("učitavam…"), 11.sp, C.Muted)
     }
     pick?.let { h -> HitActions(h, nav) { pick = null } }
+    chMenu?.let { c ->
+        // a search result has no order of its own: move / top / bottom are offered inside its group, not here
+        ChannelOptions(GroupRef(c.pid.ifBlank { Store.active(ctx)?.id ?: "" }, Category(c.group, c.group)), c, emptyList(), emptyList(),
+            onDismiss = { chMenu = null }, quick = true) { _, close -> if (close) chMenu = null }
+    }
     favAsk?.let { c ->
         Popup(c.name, { favAsk = null }, width = 460.dp) {
             T("Ukloniti kanal iz favorita?", 15.sp, C.Soft)

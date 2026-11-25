@@ -53,10 +53,22 @@ object DiagCollect {
     // ------------------------------------------------------------------ player lifecycle (§12)
     val playersLive = AtomicInteger(0)
     val playersPeak = AtomicInteger(0)
-    fun playerCreated(preview: Boolean) = guard("lifecycle") {
+    /** 3.0.0.8 (audit): instances are counted by identity, and a release counts at the moment release() is called
+     *  (synchronously), not when Media3 later reports onPlayerReleased. Before 3.0.0.8 the old instance was still
+     *  counted for a moment after release(), which logged "2 player instances alive" although only one was. Idempotent. */
+    private val livePlayers = java.util.concurrent.ConcurrentHashMap<Int, Boolean>()
+    fun playerCreated(preview: Boolean, player: Any? = null) = guard("lifecycle") {
         inc(if (preview) "players created (preview)" else "players created (fullscreen)")  // i18n-ignore
-        val n = playersLive.incrementAndGet(); playersPeak.accumulateAndGet(n, ::maxOf)
+        if (player != null) livePlayers[System.identityHashCode(player)] = preview
+        val n = if (player != null) livePlayers.size.also { playersLive.set(it) } else playersLive.incrementAndGet()
+        playersPeak.accumulateAndGet(n, ::maxOf)
         if (n > 1) limited("players>1", 5_000, "life", "$n player instances alive at once (" + playState() + ")")  // i18n-ignore
+    }
+    /** call right before (or instead of waiting for) player.release(); a second call for the same instance does nothing */
+    fun playerReleasing(player: Any?) = guard("lifecycle") {
+        if (player == null) return@guard
+        val preview = livePlayers.remove(System.identityHashCode(player)) ?: return@guard
+        inc(if (preview) "players released (preview)" else "players released (fullscreen)"); playersLive.set(livePlayers.size)  // i18n-ignore
     }
     fun playerReleased(preview: Boolean) = guard("lifecycle") { inc(if (preview) "players released (preview)" else "players released (fullscreen)"); playersLive.decrementAndGet() }  // i18n-ignore
     fun session(kind: String, on: Boolean) = guard("lifecycle") { inc("$kind sessions " + if (on) "started" else "stopped"); DiagEvents.add("life", "$kind " + if (on) "started" else "stopped") }  // i18n-ignore
@@ -80,7 +92,7 @@ object DiagCollect {
         if (f.sampleRate > 0) "${f.sampleRate} Hz" else null, f.language?.let { "lang $it" }).joinToString(" · ")  // i18n-ignore
 
     /** one listener per player, added where the player is built (preview and fullscreen alike) */
-    fun listener(preview: Boolean): AnalyticsListener = object : AnalyticsListener {
+    fun listener(preview: Boolean, player: Any? = null): AnalyticsListener = object : AnalyticsListener {
         val kind = if (preview) "preview" else "player"  // i18n-ignore
         var lastV = ""; var lastA = ""
         var dropped = 0L
@@ -110,7 +122,7 @@ object DiagCollect {
             val c = classify(e); inc("$kind error: $c")
             DiagEvents.add("neterr", "$kind ${e.errorCodeName.removePrefix("ERROR_CODE_")} · cause: $c · " + NetState.now())  // i18n-ignore
         }
-        override fun onPlayerReleased(t: AnalyticsListener.EventTime) = playerReleased(preview)
+        override fun onPlayerReleased(t: AnalyticsListener.EventTime) { if (player != null) playerReleasing(player) else playerReleased(preview) }
     }
 
     /** the kind of failure, from the exception chain (no URL, no message bodies) */
@@ -178,7 +190,11 @@ object DiagCollect {
     // ------------------------------------------------------------------ Android callbacks: screen, display, audio routes (§8, §9, §14)
     @Volatile var afrAskedAt = 0L
     @Volatile var afrAsked = ""
+    /** 3.0.0.8 (audit): registered once per process. Before, every Activity onCreate added another set of
+     *  receivers, so one screen-saver event was logged two or three times within the same millisecond. */
+    private val started = java.util.concurrent.atomic.AtomicBoolean(false)
     fun start(ctx: Context) {
+        if (!started.compareAndSet(false, true)) return
         val app = ctx.applicationContext
         guard("screen") {
             val f = android.content.IntentFilter().apply {

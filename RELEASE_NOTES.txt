@@ -1,3 +1,11 @@
+Media Center 3.0.0.8 Stable – fixes and audit corrections (design unchanged, nothing removed, no data reset)
+- Long OK on a channel never adds it to favourites by itself any more — everywhere (provider groups, Search, Favourites, Recently watched). It opens a menu: Hide/Show, Lock/Unlock, Rename, Move, Move to the top, Move to the bottom, Add to/Remove from favourites. (Move rows are not offered in Search results, which have no order of their own.)
+- Live player › More › "Assign EPG": search the guide (EPG) only, pick an entry, confirm "Assign this EPG".
+- Continue watching: an episode still plays at once, but Back now goes to the series page (season and episode list) instead of the Continue watching list.
+- Provider safety: after HTTP 458 or 429 no backup stream is searched any more (that opened further connections to the same provider); the channel is not marked broken; HTTP 429 waits as long as the provider's Retry-After asks (1–10 min).
+- Logos that answered 404/403/410 are not requested again for 24 h (other HTTP errors 1 h); network errors are not remembered.
+- Diagnostics: exact player-instance count (the "2 player instances alive" warnings were a measurement artefact); screen/screen-saver events no longer logged twice; event levels now depend on what happened, so section 29 shows only real errors; frames of the first 15 s are counted as start-up, not Home; new "process start to first drawn frame"; summary shows earlier-session history and small-sample measurements separately; report schema label clarified.
+
 Media Center 3.0.0.7 Stable – Extended Diagnostics II (diagnostics only; playback, navigation and design unchanged)
 - FULL DIAGNOSTIC REPORT now has sections 51–70: stream connection lifecycle, network and VPN, playback quality (QoE), buffer, video decoder, audio, subtitles, UI rendering (jank), remote/focus failures, long-run memory, database, playlist quality, device and firmware, how earlier runs ended, update and data preservation, technical settings, VERSION COMPARISON (this version vs the previous one on the same box) and export security.
 - A short summary (section 70) at the top of the report: NORMAL / WARNING / CRITICAL / INSUFFICIENT DATA per area, with the section that holds the evidence.
